@@ -1,0 +1,75 @@
+Install jdk 24
+Create a multi-module Spring Boot project called positivity
+
+Create a module called pos-inventory, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+
+Create a module called pos-catalog, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+In pos-catalog create a Catalog class that consists of Products, Services and NonInventoryProducts. Products, Services and NonInventoryProducts should share a common Interface called CatalogItem.
+Create a controller that has a get APIs that lets you to look up CatalogItems by id or by name. Create DAO objects and Repository objects that use Spring JPA to look up CatalogItems from an h2 database.
+
+Create a module called pos-invoice, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+
+Create a module called pos-workorder, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+
+Create a module called pos-price, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+
+Create a module called pos-shopmanager, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+
+Create a module called pos-inquiry, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+
+Create a module called pos-order, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+
+Create a module called pos-accounting, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+
+Create a module called pos-events, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Create an annotation class that takes a unique id as a parameter. The annotation applies to a method. The annotation should emit an event using the unique identifier and a timestamp at the beginning and end of the annotated method.
+Integrate with Spring AOP
+
+Create a module called pos-eventreceiver, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j to log
+Add a dependency for Spring data jpa to the pom
+Inside of pos-eventreceiver create an emit reciever that has an API that posts an emitted event consisting of a id and a timestamp. The id should match an existing id that has been preregistered. The event should be stored in an h2 in-memory database. The preregistered id should be in another table in the h2 database. Use spring jpa to access the database and a dao layer to isolate the controller from the repository.
+
+
+Create a module called pos-image, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j for logging
+Configure the pom to use Spring Data JPA to the pom
+Create a controller that has a get APIs that lets you to look up an Image by id or by filename. Create DAO objects and Repository objects that use Spring JPA to look up ImageEntity from an h2 database. After looking up the ImageEntity object from the database, retrieve the image file from the filesystem and return it in the controller. The ImageEntity class has a String filename, a url image file location, a list of Strings called context and a Classification.  Classification is an enum with values of PUBLIC, CLASSIFIED, SECRET and TOPSECRET
+
+Create a module called pos-vehicle, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j for logging
+Configure the pom to use Spring Data JPA to the pom
+The pos-vehicle should post new vehicles and get, put and delete existing vehicles via API using a controller. A vehicle should be an interface implemented by several classes like Car, PassengerTruck, Van and CommercialTruck.
+Create DAO objects and Repository objects that use Spring JPA to look up Vehicles from an h2 database.
+Add a String VIN to the Vehicle interface and all of its implementations. Add contoller methods to get, delete, post and put using VIN
+
+
+Create a module called pos-customer, scaffold the src folder for the new module
+Configure the pom to use lombok and slf4j for logging
+Configure the pom to use Spring Data JPA to the pom
+The pos-customer should post new customers and get, put and delete existing customers via API using a controller. A customer should be an interface implemented by several classes like CommercialCustomer, PrivateCustomer, and GovernmentCustomer.
+Create DAO objects and Repository objects that use Spring JPA to look up Customers from an h2 database.
+Add a unique customer number, last name, first name, phone number, email and a list of vehicle vin to the customer interface and all of its implementations. Add contoller methods to get, delete, post and put using the customers unique id
+
+
+Create a module called pos-security-service to be used for Identity and access management (IAM). This module is responsible for generating, storing, validating and deleting java web tokens for use by all of the other modules. This module should use an h2 database for storage.
+Implement User Management with 4 Roles (Admin, General Manager, Manager and Customer)
+Integrate these users with JWT authentication
