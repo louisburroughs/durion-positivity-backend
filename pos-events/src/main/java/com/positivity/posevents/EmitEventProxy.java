@@ -4,9 +4,12 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
+
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@NoArgsConstructor(access = lombok.AccessLevel.PRIVATE)
 public class EmitEventProxy {
     @SuppressWarnings("unchecked")
     public static <T> T createProxy(T target, Class<T> interfaceType) {
