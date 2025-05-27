@@ -11,6 +11,12 @@
     <name>pos-inventory</name>
     <description>POS Inventory module</description>
     <dependencies>
-        <!-- Add pos-inventory-specific dependencies here -->
+        <!-- Lombok for annotation processing -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.32</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>
