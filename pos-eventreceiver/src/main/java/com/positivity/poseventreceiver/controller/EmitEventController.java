@@ -3,7 +3,6 @@ package com.positivity.poseventreceiver.controller;
 import com.positivity.poseventreceiver.api.EmitEventRequest;
 import com.positivity.poseventreceiver.dao.EventDao;
 import com.positivity.poseventreceiver.model.EmittedEvent;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 public class EmitEventController {
     private final EventDao eventDao;
 
-    @Autowired
     public EmitEventController(EventDao eventDao) {
         this.eventDao = eventDao;
     }

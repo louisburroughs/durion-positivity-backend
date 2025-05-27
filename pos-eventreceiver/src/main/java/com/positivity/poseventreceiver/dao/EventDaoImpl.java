@@ -4,7 +4,6 @@ import com.positivity.poseventreceiver.model.EmittedEvent;
 import com.positivity.poseventreceiver.model.PreregisteredEvent;
 import com.positivity.poseventreceiver.repository.EmittedEventRepository;
 import com.positivity.poseventreceiver.repository.PreregisteredEventRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
@@ -13,7 +12,6 @@ public class EventDaoImpl implements EventDao {
     private final PreregisteredEventRepository preregRepo;
     private final EmittedEventRepository emittedRepo;
 
-    @Autowired
     public EventDaoImpl(PreregisteredEventRepository preregRepo, EmittedEventRepository emittedRepo) {
         this.preregRepo = preregRepo;
         this.emittedRepo = emittedRepo;

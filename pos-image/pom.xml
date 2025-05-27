@@ -7,9 +7,9 @@
         <artifactId>positivity</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <artifactId>pos-events</artifactId>
-    <name>pos-events</name>
-    <description>POS Events module</description>
+    <artifactId>pos-image</artifactId>
+    <name>pos-image</name>
+    <description>POS Image module</description>
     <dependencies>
         <!-- Lombok for annotation processing -->
         <dependency>
@@ -31,10 +31,10 @@
             <version>2.0.13</version>
             <scope>runtime</scope>
         </dependency>
-        <!-- Spring Boot Starter AOP for AspectJ support -->
+        <!-- Spring Data JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
     </dependencies>
 </project>

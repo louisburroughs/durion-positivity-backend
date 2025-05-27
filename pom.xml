@@ -2,6 +2,12 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>3.2.5</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
 	<groupId>com.positivity</groupId>
 	<artifactId>positivity</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
@@ -20,19 +26,28 @@
 		<module>pos-accounting</module>
 		<module>pos-events</module>
 		<module>pos-eventreceiver</module>
+		<module>pos-image</module>
 	</modules>
-	<url/>
+	<url>https://your.project.url/</url>
 	<licenses>
-		<license/>
+		<license>
+			<name>The Apache License, Version 2.0</name>
+			<url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+			<distribution>repo</distribution>
+		</license>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer>
+			<id>louisburroughs</id>
+			<name>Louis Burroughs</name>
+			<email>louis.burroughs@gmail.com</email>
+		</developer>
 	</developers>
 	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
+		<connection>scm:git:git://github.com/louisburroughs/positivity.git</connection>
+		<developerConnection>scm:git:ssh://github.com:louisburroughs/positivity.git</developerConnection>
+		<tag>HEAD</tag>
+		<url>https://github.com/louisburroughs/positivity</url>
 	</scm>
 	<properties>
 		<java.version>24</java.version>

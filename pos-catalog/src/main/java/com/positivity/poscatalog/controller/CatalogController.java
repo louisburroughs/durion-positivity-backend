@@ -4,7 +4,6 @@ import com.positivity.poscatalog.dao.CatalogDao;
 import com.positivity.poscatalog.model.ProductEntity;
 import com.positivity.poscatalog.model.ServiceEntity;
 import com.positivity.poscatalog.model.NonInventoryProductEntity;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -15,7 +14,7 @@ import java.util.Optional;
 public class CatalogController {
     private final CatalogDao catalogDao;
 
-    @Autowired
+
     public CatalogController(CatalogDao catalogDao) {
         this.catalogDao = catalogDao;
     }

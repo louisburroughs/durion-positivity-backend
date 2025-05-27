@@ -1,12 +1,14 @@
 package com.positivity.poscatalog.model;
 
+import com.positivity.poscatalog.CatalogItem;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "non_inventory_product")
-public class NonInventoryProductEntity {
+public class NonInventoryProductEntity implements CatalogItem {
     @Id
     private String id;
     private String name;

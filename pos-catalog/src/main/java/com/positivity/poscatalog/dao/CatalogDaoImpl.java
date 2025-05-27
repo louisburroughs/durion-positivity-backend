@@ -6,7 +6,6 @@ import com.positivity.poscatalog.model.NonInventoryProductEntity;
 import com.positivity.poscatalog.repository.ProductRepository;
 import com.positivity.poscatalog.repository.ServiceRepository;
 import com.positivity.poscatalog.repository.NonInventoryProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
@@ -17,7 +16,6 @@ public class CatalogDaoImpl implements CatalogDao {
     private final ServiceRepository serviceRepo;
     private final NonInventoryProductRepository nonInventoryProductRepo;
 
-    @Autowired
     public CatalogDaoImpl(ProductRepository productRepo, ServiceRepository serviceRepo, NonInventoryProductRepository nonInventoryProductRepo) {
         this.productRepo = productRepo;
         this.serviceRepo = serviceRepo;
