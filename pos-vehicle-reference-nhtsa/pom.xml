@@ -7,16 +7,11 @@
         <artifactId>positivity</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <artifactId>pos-catalog</artifactId>
-    <name>pos-catalog</name>
-    <description>POS Catalog module</description>
+    <artifactId>pos-vehicle-reference-nhtsa</artifactId>
+    <name>pos-vehicle-reference-nhtsa</name>
+    <description>Vehicle reference module for NHTSA</description>
     <dependencies>
-        <!-- Spring Data JPA -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-        <!-- Lombok for annotation processing (add version and scope) -->
+        <!-- Lombok for boilerplate code reduction -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -29,14 +24,19 @@
             <artifactId>slf4j-api</artifactId>
             <version>2.0.13</version>
         </dependency>
-        <!-- SLF4J Simple implementation for local/test logging (remove in prod if using Logback/Log4j) -->
+        <!-- SLF4J Simple implementation for logging (for dev/test) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <version>2.0.13</version>
             <scope>runtime</scope>
         </dependency>
-        <!-- H2 Database for in-memory testing -->
+        <!-- Spring Data JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <!-- H2 Database -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -44,3 +44,9 @@
         </dependency>
     </dependencies>
 </project>
+
+<!-- Add standard Maven source directory structure -->
+<!-- src/main/java -->
+<!-- src/main/resources -->
+<!-- src/test/java -->
+<!-- src/test/resources -->
