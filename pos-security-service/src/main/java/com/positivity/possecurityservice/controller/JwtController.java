@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/jwt")
@@ -14,8 +15,10 @@ public class JwtController {
     private final JwtService jwtService;
 
     @PostMapping("/generate")
-    public ResponseEntity<Map<String, String>> generateToken(@RequestParam String subject) {
-        String token = jwtService.generateToken(subject);
+    public ResponseEntity<Map<String, String>> generateToken(
+            @RequestParam String subject,
+            @RequestParam(required = false) Set<String> roles) {
+        String token = jwtService.generateToken(subject, roles != null ? roles : Set.of());
         return ResponseEntity.ok(Map.of("token", token));
     }
 

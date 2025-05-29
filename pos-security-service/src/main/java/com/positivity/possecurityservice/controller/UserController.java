@@ -1,9 +1,11 @@
 package com.positivity.possecurityservice.controller;
 
 import com.positivity.possecurityservice.model.User;
+import com.positivity.possecurityservice.service.JwtService;
 import com.positivity.possecurityservice.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +18,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
+    private final JwtService jwtService;
+    private final PasswordEncoder passwordEncoder;
 
     @PostMapping
     public ResponseEntity<User> createUser(@RequestBody Map<String, Object> payload) {
@@ -35,7 +39,7 @@ public class UserController {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
         }
         User user = userOpt.get();
-        if (!userService.getPasswordEncoder().matches(password, user.getPassword())) {
+        if (!passwordEncoder.matches(password, user.getPassword())) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
         }
         Set<String> roles = user.getRoles().stream().map(r -> r.getName()).collect(java.util.stream.Collectors.toSet());

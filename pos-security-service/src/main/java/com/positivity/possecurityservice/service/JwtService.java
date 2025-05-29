@@ -3,7 +3,6 @@ package com.positivity.possecurityservice.service;
 import com.positivity.possecurityservice.model.JwtToken;
 import com.positivity.possecurityservice.repository.JwtTokenRepository;
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,17 +16,18 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class JwtService {
     private final JwtTokenRepository jwtTokenRepository;
-    private final SecretKey secretKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
-    private final long expirationMillis = 3600_000; // 1 hour
+    private final SecretKey secretKey = Jwts.SIG.HS256.key().build();
 
     public String generateToken(String username, Set<String> roles) {
         Instant now = Instant.now();
+        // 1 hour
+        long expirationMillis = 3600_000;
         Instant expiry = now.plusMillis(expirationMillis);
         String token = Jwts.builder()
-                .setSubject(username)
+                .subject(username)
                 .claim("roles", roles)
-                .setIssuedAt(Date.from(now))
-                .setExpiration(Date.from(expiry))
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiry))
                 .signWith(secretKey)
                 .compact();
         JwtToken jwtToken = new JwtToken();
@@ -41,32 +41,32 @@ public class JwtService {
 
     public boolean validateToken(String token) {
         try {
-            Jws<Claims> claims = Jwts.parserBuilder()
-                    .setSigningKey(secretKey)
+            Jwts.parser()
+                    .verifyWith(secretKey)
                     .build()
-                    .parseClaimsJws(token);
-            Optional<JwtToken> stored = jwtTokenRepository.findByToken(token);
-            return stored.isPresent() && !stored.get().getExpiresAt().isBefore(Instant.now());
+                    .parseSignedClaims(token);
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
+            Optional<JwtToken> stored = jwtTokenRepository.findByToken(token);
+            return stored.isPresent() && !stored.get().getExpiresAt().isBefore(Instant.now());
+
     }
 
     public String getUsernameFromToken(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(secretKey)
+        return Jwts.parser()
+                .verifyWith(secretKey)
                 .build()
-                .parseClaimsJws(token)
-                .getBody()
+                .parseSignedClaims(token)
+                .getPayload()
                 .getSubject();
     }
 
     public Set<String> getRolesFromToken(String token) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(secretKey)
+        Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token).getPayload();
         return new java.util.HashSet<>((java.util.List<String>) claims.get("roles"));
     }
 
@@ -74,4 +74,5 @@ public class JwtService {
         jwtTokenRepository.deleteByToken(token);
     }
 }
+
 
