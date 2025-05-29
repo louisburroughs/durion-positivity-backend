@@ -18,17 +18,20 @@
 	<modules>
 		<module>pos-catalog</module>
 		<module>pos-invoice</module>
-		<module>pos-workorder</module>
+		<module>pos-work-order</module>
 		<module>pos-price</module>
-		<module>pos-shopmanager</module>
+		<module>pos-shop-manager</module>
 		<module>pos-inquiry</module>
 		<module>pos-order</module>
 		<module>pos-accounting</module>
 		<module>pos-events</module>
-		<module>pos-eventreceiver</module>
+		<module>pos-event-receiver</module>
 		<module>pos-image</module>
-		<module>pos-vehicle</module>
+		<module>pos-vehicle-inventory</module>
 		<module>pos-inventory</module>
+		<module>pos-vehicle-fitment</module>
+		<module>pos-vehicle-reference-nhtsa</module>
+		<module>pos-vehicle-reference-carapi</module>
 	</modules>
 	<url>https://your.project.url/</url>
 	<licenses>

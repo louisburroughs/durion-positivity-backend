@@ -1,0 +1,10 @@
+package com.positivity.vehiclefitment.repository;
+
+import com.positivity.vehiclefitment.entity.Model;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface ModelRepository extends JpaRepository<Model, Long> {
+    List<Model> findByMakeId(Long makeId);
+}
+
