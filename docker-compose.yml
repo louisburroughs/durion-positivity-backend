@@ -16,27 +16,6 @@ services:
       timeout: 3s
       retries: 20 # Give it enough time to start
 
-  api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
-    depends_on:
-      eureka-server:
-        condition: service_healthy # Gateway needs Eureka
-      service-a:
-        condition: service_healthy # Gateway might need services to be up for routing
-      service-b:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   pos-accounting:
     build:
       context: ./pos-accounting
@@ -50,23 +29,6 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9001/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  pos-api-gateway:
-    build:
-      context: ./pos-api-gateway
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
-    depends_on:
-      eureka-server:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -380,3 +342,19 @@ services:
       timeout: 3s
       retries: 20
 
+  pos-api-gateway:
+    build:
+      context: ./pos-api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
