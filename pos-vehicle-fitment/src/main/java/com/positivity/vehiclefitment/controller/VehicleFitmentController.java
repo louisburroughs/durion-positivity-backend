@@ -5,20 +5,18 @@ import com.positivity.vehiclefitment.entity.Make;
 import com.positivity.vehiclefitment.entity.Model;
 import com.positivity.vehiclefitment.entity.VehicleType;
 import com.positivity.vehiclefitment.service.VehicleFitmentService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
+@Slf4j
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/vehicle-fitment")
 public class VehicleFitmentController {
 
-    private VehicleFitmentService vehicleFitmentService;
-
-    @Autowired
-    public VehicleFitmentController(VehicleFitmentService vehicleFitmentService) {
-        this.vehicleFitmentService = vehicleFitmentService;
-    }
+    private final VehicleFitmentService vehicleFitmentService;
 
     @GetMapping("/manufacturers")
     public List<Manufacturer> getManufacturers() {

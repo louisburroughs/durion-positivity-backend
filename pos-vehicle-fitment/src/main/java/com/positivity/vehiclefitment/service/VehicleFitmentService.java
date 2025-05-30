@@ -2,6 +2,9 @@ package com.positivity.vehiclefitment.service;
 
 import com.positivity.vehiclefitment.entity.*;
 import com.positivity.vehiclefitment.repository.*;
+import com.positivity.vehiclefitment.exception.VehicleFitmentException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +15,8 @@ import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.List;
 
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class VehicleFitmentService {
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
@@ -25,24 +30,6 @@ public class VehicleFitmentService {
     private final VehicleVariableRepository vehicleVariableRepository;
     private final VehicleVariableValueRepository vehicleVariableValueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    public VehicleFitmentService(
-            ManufacturerRepository manufacturerRepository,
-            MakeRepository makeRepository,
-            ModelRepository modelRepository,
-            VehicleTypeRepository vehicleTypeRepository,
-            RestTemplate restTemplate,
-            VehicleVariableRepository vehicleVariableRepository,
-            VehicleVariableValueRepository vehicleVariableValueRepository
-    ) {
-        this.manufacturerRepository = manufacturerRepository;
-        this.makeRepository = makeRepository;
-        this.modelRepository = modelRepository;
-        this.vehicleTypeRepository = vehicleTypeRepository;
-        this.restTemplate = restTemplate;
-        this.vehicleVariableRepository = vehicleVariableRepository;
-        this.vehicleVariableValueRepository = vehicleVariableValueRepository;
-    }
 
     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
@@ -63,7 +50,7 @@ public class VehicleFitmentService {
                 vehicleVariableRepository.save(variable);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse vehicle variables", e);
+            throw new VehicleFitmentException("Failed to parse vehicle variables", e);
         }
         return vehicleVariableRepository.findAll();
     }
@@ -88,10 +75,11 @@ public class VehicleFitmentService {
                 vehicleVariableValueRepository.save(value);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse vehicle variable values", e);
+            throw new VehicleFitmentException("Failed to parse vehicle variable values", e);
         }
         return vehicleVariableValueRepository.findByVariableId(variableId);
     }
+
     public List<Manufacturer> getManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
@@ -111,7 +99,7 @@ public class VehicleFitmentService {
                 manufacturerRepository.save(m);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse manufacturers", e);
+            throw new VehicleFitmentException("Failed to parse manufacturers", e);
         }
         return manufacturerRepository.findAll();
     }
@@ -138,7 +126,7 @@ public class VehicleFitmentService {
                 makeRepository.save(make);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse makes", e);
+            throw new VehicleFitmentException("Failed to parse makes", e);
         }
         return makeRepository.findByManufacturerId(manufacturerId);
     }
@@ -165,7 +153,7 @@ public class VehicleFitmentService {
                 modelRepository.save(model);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse models", e);
+            throw new VehicleFitmentException("Failed to parse models", e);
         }
         return modelRepository.findByMakeId(makeId);
     }
@@ -174,7 +162,7 @@ public class VehicleFitmentService {
         Make make = makeRepository.findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && !isCacheExpired(cached.get(0).getCacheTimestamp())) {
+        if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + "?format=json";
@@ -192,7 +180,7 @@ public class VehicleFitmentService {
                 vehicleTypeRepository.save(vt);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse vehicle types for make", e);
+            throw new VehicleFitmentException("Failed to parse vehicle types for make", e);
         }
         return vehicleTypeRepository.findByMakeId(makeId);
     }

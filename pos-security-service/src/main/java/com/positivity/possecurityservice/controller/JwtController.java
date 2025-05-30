@@ -2,12 +2,14 @@ package com.positivity.possecurityservice.controller;
 
 import com.positivity.possecurityservice.service.JwtService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/jwt")
 @RequiredArgsConstructor

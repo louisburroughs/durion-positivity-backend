@@ -1,9 +1,11 @@
 package com.positivity.possecurityservice.controller;
 
+import com.positivity.possecurityservice.model.Role;
 import com.positivity.possecurityservice.model.User;
 import com.positivity.possecurityservice.service.JwtService;
 import com.positivity.possecurityservice.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -42,7 +45,7 @@ public class UserController {
         if (!passwordEncoder.matches(password, user.getPassword())) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
         }
-        Set<String> roles = user.getRoles().stream().map(r -> r.getName()).collect(java.util.stream.Collectors.toSet());
+        Set<String> roles = user.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
         String token = jwtService.generateToken(username, roles);
         return ResponseEntity.ok(Map.of("token", token));
     }

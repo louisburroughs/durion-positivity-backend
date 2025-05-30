@@ -1,11 +1,12 @@
-package com.positivity.posworkorder;
+package com.yourcompany.gateway;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class PosWorkorderApplication {
+public class PosApiGatewayApplication {
     public static void main(String[] args) {
-        SpringApplication.run(PosWorkorderApplication.class, args);
+        SpringApplication.run(PosApiGatewayApplication.class, args);
     }
 }
+
