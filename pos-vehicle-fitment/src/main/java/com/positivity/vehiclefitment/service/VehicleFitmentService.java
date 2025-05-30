@@ -21,6 +21,8 @@ import java.util.List;
 public class VehicleFitmentService {
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
     private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
+    public static final String RESULTS = "Results";
+    public static final String FORMAT_JSON = "?format=json";
 
     private final ManufacturerRepository manufacturerRepository;
     private final MakeRepository makeRepository;
@@ -40,7 +42,7 @@ public class VehicleFitmentService {
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleVariableRepository.deleteAll();
             for (JsonNode node : results) {
                 VehicleVariable variable = new VehicleVariable();
@@ -60,11 +62,11 @@ public class VehicleFitmentService {
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + FORMAT_JSON;
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleVariableValueRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 VehicleVariableValue value = new VehicleVariableValue();
@@ -89,7 +91,7 @@ public class VehicleFitmentService {
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             manufacturerRepository.deleteAll();
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
@@ -111,7 +113,7 @@ public class VehicleFitmentService {
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + FORMAT_JSON;
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
@@ -138,7 +140,7 @@ public class VehicleFitmentService {
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + FORMAT_JSON;
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
@@ -165,7 +167,7 @@ public class VehicleFitmentService {
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + FORMAT_JSON;
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());

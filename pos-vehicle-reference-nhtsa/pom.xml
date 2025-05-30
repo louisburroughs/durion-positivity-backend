@@ -10,6 +10,7 @@
     <artifactId>pos-vehicle-reference-nhtsa</artifactId>
     <name>pos-vehicle-reference-nhtsa</name>
     <description>Vehicle reference module for NHTSA</description>
+    <packaging>jar</packaging>
     <dependencies>
         <!-- Lombok for boilerplate code reduction -->
         <dependency>
@@ -42,11 +43,32 @@
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Eureka Client -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+            <version>4.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator</artifactId>
+        </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>false</skip> </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
-
-<!-- Add standard Maven source directory structure -->
-<!-- src/main/java -->
-<!-- src/main/resources -->
-<!-- src/test/java -->
-<!-- src/test/resources -->

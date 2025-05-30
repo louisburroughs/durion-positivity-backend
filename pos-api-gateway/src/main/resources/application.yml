@@ -87,8 +87,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: gateway # Expose gateway-specific actuator endpoints
-
+        include: gateway,health,info # Expose gateway-specific actuator endpoints
+  endpoint:
+    health:
+      show-details: always
 eureka:
   client:
     serviceUrl:

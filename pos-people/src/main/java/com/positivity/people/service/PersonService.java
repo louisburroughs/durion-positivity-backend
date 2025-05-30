@@ -25,11 +25,10 @@ public class PersonService {
 
     @Transactional
     public Person savePerson(Person person) {
-        if (person.getUsername() != null && !person.getUsername().isBlank()) {
-            if (!validateUsernameWithSecurityService(person.getUsername())) {
+        if (person.getUsername() != null && !person.getUsername().isBlank() && !validateUsernameWithSecurityService(person.getUsername())) {
                 throw new IllegalArgumentException("Username is not valid or does not exist in security service");
             }
-        }
+
         return personRepository.save(person);
     }
 

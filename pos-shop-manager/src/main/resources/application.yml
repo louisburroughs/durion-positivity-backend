@@ -1,0 +1,41 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:shop_db;DB_CLOSE_DELAY=-1
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+  h2:
+    console:
+      enabled: true
+  application:
+    name: SHOP_SERVICE
+  cloud:
+    discovery:
+      enabled: true
+  boot:
+    admin:
+      client:
+        enabled: true
+logging:
+  level:
+    org.springframework: INFO
+server:
+  port: 8087
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

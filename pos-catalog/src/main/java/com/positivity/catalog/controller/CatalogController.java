@@ -18,6 +18,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/catalog")
 public class CatalogController {
+    public static final String UNSUPPORTED_ITEM_TYPE = "Unsupported item type";
     private final CatalogDao catalogDao;
 
     @GetMapping("/product/id/{id}")
@@ -78,7 +79,7 @@ public class CatalogController {
     }
 
     @PostMapping("/{catalogId}/add-item")
-    public ResponseEntity<?> addItemToCatalog(@PathVariable Long catalogId, @RequestBody CatalogItem item) {
+    public ResponseEntity<String> addItemToCatalog(@PathVariable Long catalogId, @RequestBody CatalogItem item) {
         Optional<CatalogEntity> catalogOpt = catalogDao.findCatalogById(catalogId);
         if (catalogOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -90,7 +91,7 @@ public class CatalogController {
             case NonInventoryProductEntity nonInventoryProductEntity ->
                     catalog.getNonInventoryProducts().add(nonInventoryProductEntity);
             case null, default -> {
-                return ResponseEntity.badRequest().body("Unsupported item type");
+                return ResponseEntity.badRequest().body(UNSUPPORTED_ITEM_TYPE);
             }
         }
         catalogDao.saveCatalog(catalog);
@@ -98,57 +99,47 @@ public class CatalogController {
     }
 
     @PutMapping("/{catalogId}/update-item")
-    public ResponseEntity<?> updateItemInCatalog(@PathVariable Long catalogId, @RequestBody CatalogItem item) {
-        Optional<CatalogEntity> catalogOpt = catalogDao.findCatalogById(catalogId);
-        if (catalogOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        CatalogEntity catalog = catalogOpt.get();
-        boolean updated = false;
+    public ResponseEntity<Object> updateItemInCatalog(@PathVariable Long catalogId, @RequestBody CatalogItem item) {
+        return catalogDao.findCatalogById(catalogId)
+            .map(catalog -> {
+                boolean updated = updateCatalogItem(catalog, item);
+                if (!updated) {
+                    return ResponseEntity.notFound().build();
+                }
+                catalogDao.saveCatalog(catalog);
+                return ResponseEntity.ok().build();
+            })
+            .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private boolean updateCatalogItem(CatalogEntity catalog, CatalogItem item) {
         switch (item) {
             case ProductEntity productEntity -> {
-                List<ProductEntity> products = catalog.getProducts();
-                for (int i = 0; i < products.size(); i++) {
-                    if (products.get(i).getId().equals(item.getId())) {
-                        products.set(i, productEntity);
-                        updated = true;
-                        break;
-                    }
-                }
+                return updateItemInList(catalog.getProducts(), productEntity);
             }
             case ServiceEntity serviceEntity -> {
-                List<ServiceEntity> services = catalog.getServices();
-                for (int i = 0; i < services.size(); i++) {
-                    if (services.get(i).getId().equals(item.getId())) {
-                        services.set(i, serviceEntity);
-                        updated = true;
-                        break;
-                    }
-                }
+                return updateItemInList(catalog.getServices(), serviceEntity);
             }
             case NonInventoryProductEntity nonInventoryProductEntity -> {
-                List<NonInventoryProductEntity> nonInventoryProducts = catalog.getNonInventoryProducts();
-                for (int i = 0; i < nonInventoryProducts.size(); i++) {
-                    if (nonInventoryProducts.get(i).getId().equals(item.getId())) {
-                        nonInventoryProducts.set(i, nonInventoryProductEntity);
-                        updated = true;
-                        break;
-                    }
-                }
+                return updateItemInList(catalog.getNonInventoryProducts(), nonInventoryProductEntity);
             }
-            default -> {
-                return ResponseEntity.badRequest().body("Unsupported item type");
+            default ->
+                throw new IllegalArgumentException(UNSUPPORTED_ITEM_TYPE);
+        }
+    }
+
+    private <T extends CatalogItem> boolean updateItemInList(List<T> items, T newItem) {
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i).getId().equals(newItem.getId())) {
+                items.set(i, newItem);
+                return true;
             }
         }
-        if (!updated) {
-            return ResponseEntity.notFound().build();
-        }
-        catalogDao.saveCatalog(catalog);
-        return ResponseEntity.ok().build();
+        return false;
     }
 
     @DeleteMapping("/{catalogId}/remove-item/{itemType}/{itemId}")
-    public ResponseEntity<?> removeItemFromCatalog(@PathVariable Long catalogId, @PathVariable String itemType, @PathVariable Long itemId) {
+    public ResponseEntity<String> removeItemFromCatalog(@PathVariable Long catalogId, @PathVariable String itemType, @PathVariable Long itemId) {
         Optional<CatalogEntity> catalogOpt = catalogDao.findCatalogById(catalogId);
         if (catalogOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -166,7 +157,7 @@ public class CatalogController {
                 removed = catalog.getNonInventoryProducts().removeIf(n -> n.getId().equals(itemId));
                 break;
             default:
-                return ResponseEntity.badRequest().body("Unsupported item type");
+                return ResponseEntity.badRequest().body(UNSUPPORTED_ITEM_TYPE);
         }
         if (!removed) {
             return ResponseEntity.notFound().build();
