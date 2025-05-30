@@ -1,11 +1,12 @@
-package com.positivity.posshopmanager;
+package com.positivity.people;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class PosShopmanagerApplication {
+public class PosPeopleApplication {
     public static void main(String[] args) {
-        SpringApplication.run(PosShopmanagerApplication.class, args);
+        SpringApplication.run(PosPeopleApplication.class, args);
     }
 }
+

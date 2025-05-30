@@ -34,6 +34,9 @@
 		<module>pos-vehicle-reference-nhtsa</module>
 		<module>pos-vehicle-reference-carapi</module>
 		<module>pos-security-service</module>
+		<module>pos-people</module>
+		<module>pos-location</module>
+		<module>pos-api-gateway</module>
 	</modules>
 	<url>https://your.project.url/</url>
 	<licenses>

@@ -1,0 +1,95 @@
+server:
+  port: 8080
+# This is the configuration for the API Gateway in a Spring Boot application.
+spring:
+  application:
+    name: pos-api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true # Enable discovery of routes from Eureka
+          lower-case-service-id: true # Converts service IDs to lowercase
+      routes:
+        - id: catalog_route
+          uri: lb://CATALOG_SERVICE # Use 'lb://' for load balancing with Eureka service ID http://localhost:8081
+          predicates:
+            - Path=/catalog/**
+          filters:
+            - StripPrefix=1
+        - id: customer_route
+          uri: lb://CUSTOMER_SERVICE #http://localhost:8082
+          predicates:
+            - Path=/customer/**
+          filters:
+            - StripPrefix=1
+        - id: image_route
+          uri: lb://IMAGE_SERVICE #http://localhost:8083
+          predicates:
+            - Path=/image/**
+          filters:
+            - StripPrefix=1
+        - id: location_route
+          uri: lb://LOCATION_SERVICE #http://localhost:8084
+          predicates:
+            - Path=/location/**
+          filters:
+            - StripPrefix=1
+        - id: people_route
+          uri: lb://PEOPLE_SERVICE #http://localhost:8085
+          predicates:
+            - Path=/people/**
+          filters:
+            - StripPrefix=1
+        - id: security_service_route
+          uri: lb://SECURITY_SERVICE #http://localhost:8086
+          predicates:
+            - Path=/security-service/**
+          filters:
+            - StripPrefix=1
+        - id: shop_manager_route
+          uri: lb://SHOP_SERVICE #http://localhost:8087
+          predicates:
+            - Path=/shop-manager/**
+          filters:
+            - StripPrefix=1
+        - id: vehicle_fitment_route
+          uri: lb://FITMENT_SERVICE #http://localhost:8088
+          predicates:
+            - Path=/vehicle-fitment/**
+          filters:
+            - StripPrefix=1
+        - id: vehicle_inventory_route
+          uri: lb://VEHICLE_SERVICE #http://localhost:8089
+          predicates:
+            - Path=/vehicle-inventory/**
+          filters:
+            - StripPrefix=1
+        - id: work_order_route
+          uri: lb://WORK_ORDER_SERVICE #http://localhost:8090
+          predicates:
+            - Path=/work-order/**
+          filters:
+            - StripPrefix=1
+        - id: vehicle_reference_carapi_route
+          uri: lb://CARAPI_SERVICE #http://localhost:8091
+          predicates:
+            - Path=/vehicle-reference-carapi/**
+          filters:
+            - StripPrefix=1
+        - id: vehicle_reference_nhtsa_route
+          uri: lb://NHTSA_SERVICE #http://localhost:8092
+          predicates:
+            - Path=/vehicle-reference-nhtsa/**
+          filters:
+            - StripPrefix=1
+management:
+  endpoints:
+    web:
+      exposure:
+        include: gateway # Expose gateway-specific actuator endpoints
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka # Address of your Eureka Server

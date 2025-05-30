@@ -6,21 +6,19 @@ import com.positivity.catalog.model.ServiceEntity;
 import com.positivity.catalog.model.NonInventoryProductEntity;
 import com.positivity.catalog.model.CatalogEntity;
 import com.positivity.catalog.CatalogItem;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Optional;
 
+@RequiredArgsConstructor
 @Slf4j
 @RestController
 @RequestMapping("/api/catalog")
 public class CatalogController {
     private final CatalogDao catalogDao;
-
-    public CatalogController(CatalogDao catalogDao) {
-        this.catalogDao = catalogDao;
-    }
 
     @GetMapping("/product/id/{id}")
     public ResponseEntity<ProductEntity> getProductById(@PathVariable String id) {

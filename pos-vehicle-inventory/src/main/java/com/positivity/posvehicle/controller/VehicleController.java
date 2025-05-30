@@ -2,6 +2,7 @@ package com.positivity.posvehicle.controller;
 
 import com.positivity.posvehicle.dao.VehicleDao;
 import com.positivity.posvehicle.model.VehicleEntity;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -10,15 +11,12 @@ import java.util.List;
 import java.util.Optional;
 
 @Slf4j
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/vehicles")
 public class VehicleController {
     private final VehicleDao vehicleDao;
 
-    @Autowired
-    public VehicleController(VehicleDao vehicleDao) {
-        this.vehicleDao = vehicleDao;
-    }
 
     @PostMapping
     public ResponseEntity<VehicleEntity> createVehicle(@RequestBody VehicleEntity vehicle) {

@@ -2,8 +2,11 @@ package com.positivity.vehiclereferencecarapi.service;
 
 import com.positivity.vehiclereferencecarapi.entity.CarApiMake;
 import com.positivity.vehiclereferencecarapi.entity.CarApiModel;
+import com.positivity.vehiclereferencecarapi.exception.CarApiException;
 import com.positivity.vehiclereferencecarapi.repository.CarApiMakeRepository;
 import com.positivity.vehiclereferencecarapi.repository.CarApiModelRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -15,6 +18,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class VehicleReferenceService {
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
@@ -26,15 +31,9 @@ public class VehicleReferenceService {
     @Value("${carapi.base-url:https://carapi.app/api}")
     private String carApiBaseUrl;
 
-    public VehicleReferenceService(CarApiMakeRepository makeRepository, CarApiModelRepository modelRepository, RestTemplate restTemplate) {
-        this.makeRepository = makeRepository;
-        this.modelRepository = modelRepository;
-        this.restTemplate = restTemplate;
-    }
-
     public List<CarApiMake> getMakes() {
         List<CarApiMake> cached = makeRepository.findAll();
-        if (!cached.isEmpty() && !isCacheExpired(cached.get(0).getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = carApiBaseUrl + "/makes";
@@ -53,13 +52,13 @@ public class VehicleReferenceService {
             }
             return makes;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse makes from CarAPI", e);
+            throw new CarApiException("Failed to parse makes from CarAPI", e);
         }
     }
 
     public List<CarApiModel> getModelsByMakeId(String makeId) {
         List<CarApiModel> cached = modelRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && !isCacheExpired(cached.get(0).getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = carApiBaseUrl + "/models?make_id=" + makeId;
@@ -79,12 +78,12 @@ public class VehicleReferenceService {
             }
             return models;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse models from CarAPI", e);
+            throw new CarApiException("Failed to parse models from CarAPI", e);
         }
     }
 
     private boolean isCacheExpired(LocalDateTime cacheTimestamp) {
-        return cacheTimestamp == null || cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now());
+        return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now());
     }
 }
 

@@ -1,7 +1,10 @@
 package com.positivity.nhtsa.service;
 
 import com.positivity.nhtsa.entity.*;
+import com.positivity.nhtsa.exception.CarApiException;
 import com.positivity.nhtsa.repository.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +15,8 @@ import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.List;
 
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class VehicleReferenceService {
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
@@ -26,25 +31,7 @@ public class VehicleReferenceService {
     private final VehicleVariableValueRepository vehicleVariableValueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public VehicleReferenceService(
-            ManufacturerRepository manufacturerRepository,
-            MakeRepository makeRepository,
-            ModelRepository modelRepository,
-            VehicleTypeRepository vehicleTypeRepository,
-            RestTemplate restTemplate,
-            VehicleVariableRepository vehicleVariableRepository,
-            VehicleVariableValueRepository vehicleVariableValueRepository
-    ) {
-        this.manufacturerRepository = manufacturerRepository;
-        this.makeRepository = makeRepository;
-        this.modelRepository = modelRepository;
-        this.vehicleTypeRepository = vehicleTypeRepository;
-        this.restTemplate = restTemplate;
-        this.vehicleVariableRepository = vehicleVariableRepository;
-        this.vehicleVariableValueRepository = vehicleVariableValueRepository;
-    }
-
-    public List<VehicleVariable> getVehicleVariables() {
+     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
@@ -63,7 +50,7 @@ public class VehicleReferenceService {
                 vehicleVariableRepository.save(variable);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse vehicle variables", e);
+            throw new CarApiException("Failed to parse vehicle variables", e);
         }
         return vehicleVariableRepository.findAll();
     }
@@ -88,7 +75,7 @@ public class VehicleReferenceService {
                 vehicleVariableValueRepository.save(value);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse vehicle variable values", e);
+            throw new CarApiException("Failed to parse vehicle variable values", e);
         }
         return vehicleVariableValueRepository.findByVariableId(variableId);
     }
@@ -111,7 +98,7 @@ public class VehicleReferenceService {
                 manufacturerRepository.save(m);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse manufacturers", e);
+            throw new CarApiException("Failed to parse manufacturers", e);
         }
         return manufacturerRepository.findAll();
     }
@@ -138,7 +125,7 @@ public class VehicleReferenceService {
                 makeRepository.save(make);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse makes", e);
+            throw new CarApiException("Failed to parse makes", e);
         }
         return makeRepository.findByManufacturerId(manufacturerId);
     }
@@ -165,7 +152,7 @@ public class VehicleReferenceService {
                 modelRepository.save(model);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse models", e);
+            throw new CarApiException("Failed to parse models", e);
         }
         return modelRepository.findByMakeId(makeId);
     }
@@ -192,7 +179,7 @@ public class VehicleReferenceService {
                 vehicleTypeRepository.save(vt);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse vehicle types for make", e);
+            throw new CarApiException("Failed to parse vehicle types for make", e);
         }
         return vehicleTypeRepository.findByMakeId(makeId);
     }
