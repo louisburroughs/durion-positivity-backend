@@ -3,11 +3,11 @@ package com.positivity.catalog.model;
 import com.positivity.catalog.CatalogItem;
 
 import jakarta.persistence.*;
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
-@Setter
-@Getter
+@Data
 @Entity
 @Table(name = "service")
 public class ServiceEntity implements CatalogItem{
