@@ -16,11 +16,17 @@ public class JwtToken {
     @Column(nullable = false, unique = true, length = 512)
     private String token;
 
+    @Column(nullable = false, unique = true, length = 512)
+    private String refreshToken;
+
     @Column(nullable = false)
     private Instant issuedAt;
 
     @Column(nullable = false)
     private Instant expiresAt;
+
+    @Column(nullable = false)
+    private Instant refreshExpiresAt;
 
     @Column(nullable = false)
     private String subject;

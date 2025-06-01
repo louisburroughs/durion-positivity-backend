@@ -10,5 +10,7 @@ import java.util.Optional;
 public interface JwtTokenRepository extends JpaRepository<JwtToken, Long> {
     Optional<JwtToken> findByToken(String token);
     void deleteByToken(String token);
+    Optional<JwtToken> findByRefreshToken(String refreshToken);
+    void deleteByRefreshToken(String refreshToken);
 }
 

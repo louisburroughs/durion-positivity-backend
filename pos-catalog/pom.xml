@@ -30,13 +30,6 @@
             <artifactId>slf4j-api</artifactId>
             <version>2.0.13</version>
         </dependency>
-        <!-- SLF4J Simple implementation for local/test logging (remove in prod if using Logback/Log4j) -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>2.0.13</version>
-            <scope>runtime</scope>
-        </dependency>
         <!-- H2 Database for in-memory testing -->
         <dependency>
             <groupId>com.h2database</groupId>
@@ -51,7 +44,20 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-actuator</artifactId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-events</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
     </dependencies>
     <build>

@@ -1,4 +1,4 @@
-package com.yourcompany.gateway;
+package com.positivity.gateway;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -35,7 +35,8 @@ public class ProductEntity implements CatalogItem {
     @ManyToOne(fetch = FetchType.EAGER)
     private Subcategory subcategory;
     private String type;
-    private List<Dimension> dimensions;
+    @OneToMany
+    private List<DimensionEntity> dimensions;
     private String material;
     private String color;
     private String warranty;
