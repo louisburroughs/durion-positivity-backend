@@ -5,7 +5,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
@@ -15,7 +14,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.io.IOException;
 import java.util.List;
@@ -36,19 +34,17 @@ import org.springframework.http.MediaType;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
-    @Value("${jwt.secret:secret}")
-    private String jwtSecret;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authz -> authz
+                .authorizeHttpRequests(authorizationManager -> authorizationManager
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilter(new JwtTokenFilter(jwtSecret));
+                .addFilter(new JwtTokenFilter());
         return http.build();
     }
 
@@ -60,9 +56,9 @@ public class SecurityConfig {
     static class JwtTokenFilter extends OncePerRequestFilter {
         private final RestTemplate restTemplate = new RestTemplate();
 
-        public JwtTokenFilter(String jwtSecret) {
+        public JwtTokenFilter() {
+            // Default constructor
         }
-
         @Override
         protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
                 throws IOException, ServletException {
@@ -92,7 +88,8 @@ public class SecurityConfig {
                     ResponseEntity<List<String>> rolesResponse = restTemplate.exchange(rolesUrl,
                             HttpMethod.GET,
                             null,
-                            new org.springframework.core.ParameterizedTypeReference<List<String>>() {});
+                            new org.springframework.core.ParameterizedTypeReference<>() {
+                            });
                     List<?> body = rolesResponse.getBody();
                     List<String> roles = (rolesResponse.getStatusCode().is2xxSuccessful() && body != null)
                             ? body.stream().filter(String.class::isInstance).map(String.class::cast).toList()

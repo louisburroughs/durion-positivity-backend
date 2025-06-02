@@ -1,6 +1,6 @@
-package com.positivity.poscustomer.repository;
+package com.positivity.customer.repository;
 
-import com.positivity.poscustomer.model.AbstractCustomer;
+import com.positivity.customer.model.AbstractCustomer;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

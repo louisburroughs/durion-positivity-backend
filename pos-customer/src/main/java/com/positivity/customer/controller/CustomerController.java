@@ -1,7 +1,7 @@
-package com.positivity.poscustomer.controller;
+package com.positivity.customer.controller;
 
-import com.positivity.poscustomer.model.AbstractCustomer;
-import com.positivity.poscustomer.repository.CustomerRepository;
+import com.positivity.customer.model.AbstractCustomer;
+import com.positivity.customer.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
