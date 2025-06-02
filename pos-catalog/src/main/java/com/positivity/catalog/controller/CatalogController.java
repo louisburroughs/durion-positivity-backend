@@ -34,7 +34,10 @@ import java.util.Optional;
 @RequestMapping("/api/catalog")
 @Tag(name = "Catalog API", description = "API for managing catalog items")
 public class CatalogController {
-    public static final String UNSUPPORTED_ITEM_TYPE = "Unsupported item type";
+    public static final String UNSUPPORTED_ITEM_TYPE = "Unsupported item type: {}";
+    public static final String PRODUCT = "product";
+    public static final String SERVICE = "service";
+    public static final String NONINVENTORY = "noninventory";
     private final CatalogDao catalogDao;
 
     /**
@@ -44,7 +47,7 @@ public class CatalogController {
      */
     
     @EmitEvent(id = "Catalog-000001-0000000001")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/product/id/{id}")
     @Operation(summary = "Get a product by ID", description = "Retrieves a specific product by its unique ID.")
     @ApiResponses(value = {
@@ -63,7 +66,7 @@ public class CatalogController {
      * @return List of products matching the name.
      */
     @EmitEvent(id = "Catalog-000001-0000000002")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/product/name/{name}")
     @Operation(summary = "Get products by name", description = "Retrieves a list of products matching the given name.")
     @ApiResponses(value = {
@@ -80,7 +83,7 @@ public class CatalogController {
      * @return ResponseEntity containing the service or a 404 status if not found.
      */
     @EmitEvent(id = "Catalog-000001-0000000003")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/service/id/{id}")
     @Operation(summary = "Get a service by ID", description = "Retrieves a specific service by its unique ID.")
     @ApiResponses(value = {
@@ -99,7 +102,7 @@ public class CatalogController {
      * @return List of services matching the name.
      */
     @EmitEvent(id = "Catalog-000001-0000000004")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/service/name/{name}")
     @Operation(summary = "Get services by name", description = "Retrieves a list of services matching the given name.")
     @ApiResponses(value = {
@@ -116,7 +119,7 @@ public class CatalogController {
      * @return ResponseEntity containing the non-inventory product or a 404 status if not found.
      */
     @EmitEvent(id = "Catalog-000001-0000000005")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/noninventory/id/{id}")
     @Operation(summary = "Get a non-inventory product by ID", description = "Retrieves a specific non-inventory product by its unique ID.")
     @ApiResponses(value = {
@@ -135,7 +138,7 @@ public class CatalogController {
      * @return List of non-inventory products matching the name.
      */
     @EmitEvent(id = "Catalog-000001-0000000006")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/noninventory/name/{name}")
     @Operation(summary = "Get non-inventory products by name", description = "Retrieves a list of non-inventory products matching the given name.")
     @ApiResponses(value = {
@@ -152,7 +155,7 @@ public class CatalogController {
      * @return ResponseEntity containing the catalog or a 404 status if not found.
      */
     @EmitEvent(id = "Catalog-000001-0000000007")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/catalog/id/{id}")
     @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
     @ApiResponses(value = {
@@ -171,7 +174,7 @@ public class CatalogController {
      * @return List of catalogs matching the name.
      */
     @EmitEvent(id = "Catalog-000001-0000000008")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_VIEW\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/catalog/name/{name}")
     @Operation(summary = "Get catalogs by name", description = "Retrieves a list of catalogs matching the given name.")
     @ApiResponses(value = {
@@ -189,7 +192,7 @@ public class CatalogController {
      * @return ResponseEntity containing the created item or an error status.
      */
     @EmitEvent(id = "Catalog-000001-0000000009")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_EDIT\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/{type}")
     @Operation(summary = "Add a new catalog item", description = "Adds a new product, service, or non-inventory product to the catalog.")
     @ApiResponses(value = {
@@ -200,26 +203,26 @@ public class CatalogController {
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
             @RequestBody CatalogItem item) { // Swapped order for clarity with @RequestBody
         switch (type.toLowerCase()) {
-            case "product":
-                if (item instanceof ProductEntity) {
-                    ProductEntity createdProduct = catalogDao.saveProduct((ProductEntity) item);
+            case PRODUCT:
+                if (item instanceof ProductEntity productEntity) {
+                    ProductEntity createdProduct = catalogDao.saveProduct(productEntity);
                     return ResponseEntity.status(201).body(createdProduct);
                 }
                 break;
-            case "service":
-                if (item instanceof ServiceEntity) {
-                    ServiceEntity createdService = catalogDao.saveService((ServiceEntity) item);
+            case SERVICE:
+                if (item instanceof ServiceEntity serviceEntity) {
+                    ServiceEntity createdService = catalogDao.saveService(serviceEntity);
                     return ResponseEntity.status(201).body(createdService);
                 }
                 break;
-            case "noninventory":
-                if (item instanceof NonInventoryProductEntity) {
-                    NonInventoryProductEntity createdNonInventoryProduct = catalogDao.saveNonInventoryProduct((NonInventoryProductEntity) item);
+            case NONINVENTORY:
+                if (item instanceof NonInventoryProductEntity nonInventoryProductEntity) {
+                    NonInventoryProductEntity createdNonInventoryProduct = catalogDao.saveNonInventoryProduct(nonInventoryProductEntity);
                     return ResponseEntity.status(201).body(createdNonInventoryProduct);
                 }
                 break;
             default:
-                log.error("Unsupported item type: {}", type);
+                log.error(UNSUPPORTED_ITEM_TYPE, type);
                 return ResponseEntity.badRequest().body(UNSUPPORTED_ITEM_TYPE);
         }
         return ResponseEntity.badRequest().body("Mismatched item type and payload");
@@ -234,7 +237,7 @@ public class CatalogController {
      * @return ResponseEntity containing the updated item or an error status.
      */
     @EmitEvent(id = "Catalog-000001-0000000010")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_EDIT\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/{type}/{id}")
     @Operation(summary = "Update an existing catalog item", description = "Updates an existing product, service, or non-inventory product in the catalog.")
     @ApiResponses(value = {
@@ -247,26 +250,26 @@ public class CatalogController {
             @Parameter(description = "ID of the catalog item to update") @PathVariable Long id, // Changed to Long
             @RequestBody CatalogItem item) { // Swapped order
         switch (type.toLowerCase()) {
-            case "product":
-                if (item instanceof ProductEntity) {
-                    ProductEntity updatedProduct = catalogDao.updateProduct(id, (ProductEntity) item);
+            case PRODUCT:
+                if (item instanceof ProductEntity productEntity) {
+                    ProductEntity updatedProduct = catalogDao.updateProduct(id, productEntity);
                     return updatedProduct != null ? ResponseEntity.ok(updatedProduct) : ResponseEntity.notFound().build();
                 }
                 break;
-            case "service":
-                if (item instanceof ServiceEntity) {
-                    ServiceEntity updatedService = catalogDao.updateService(id, (ServiceEntity) item);
+            case SERVICE:
+                if (item instanceof ServiceEntity serviceEntity) {
+                    ServiceEntity updatedService = catalogDao.updateService(id, serviceEntity);
                     return updatedService != null ? ResponseEntity.ok(updatedService) : ResponseEntity.notFound().build();
                 }
                 break;
-            case "noninventory":
-                if (item instanceof NonInventoryProductEntity) {
-                    NonInventoryProductEntity updatedNonInventory = catalogDao.updateNonInventoryProduct(id, (NonInventoryProductEntity) item);
+            case NONINVENTORY:
+                if (item instanceof NonInventoryProductEntity nonInventoryProductEntity) {
+                    NonInventoryProductEntity updatedNonInventory = catalogDao.updateNonInventoryProduct(id, nonInventoryProductEntity);
                     return updatedNonInventory != null ? ResponseEntity.ok(updatedNonInventory) : ResponseEntity.notFound().build();
                 }
                 break;
             default:
-                log.error("Unsupported item type: {}", type);
+                log.error(UNSUPPORTED_ITEM_TYPE, type);
                 return ResponseEntity.badRequest().body(UNSUPPORTED_ITEM_TYPE);
         }
         return ResponseEntity.badRequest().body("Mismatched item type and payload");
@@ -279,7 +282,7 @@ public class CatalogController {
      * @return ResponseEntity indicating success or failure.
      */
     @EmitEvent(id = "Catalog-000001-0000000011")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_DELETE\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
     @DeleteMapping("/{type}/{id}")
     @Operation(summary = "Delete a catalog item", description = "Deletes a product, service, or non-inventory product from the catalog by its ID.")
     @ApiResponses(value = {
@@ -292,17 +295,17 @@ public class CatalogController {
             @Parameter(description = "ID of the catalog item to delete") @PathVariable Long id) { // Changed to Long
         boolean deleted = false;
         switch (type.toLowerCase()) {
-            case "product":
+            case PRODUCT:
                 deleted = catalogDao.deleteProduct(id);
                 break;
-            case "service":
+            case SERVICE:
                 deleted = catalogDao.deleteService(id);
                 break;
-            case "noninventory":
+            case NONINVENTORY:
                 deleted = catalogDao.deleteNonInventoryProduct(id);
                 break;
             default:
-                log.error("Unsupported item type: {}", type);
+                log.error(UNSUPPORTED_ITEM_TYPE, type);
                 return ResponseEntity.badRequest().build();
         }
         return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
@@ -314,7 +317,7 @@ public class CatalogController {
      * @return ResponseEntity containing the created catalog or an error status.
      */
     @EmitEvent(id = "Catalog-000001-0000000012")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_EDIT\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/catalog")
     @Operation(summary = "Add a new catalog", description = "Adds a new catalog.")
     @ApiResponses(value = {
@@ -334,7 +337,7 @@ public class CatalogController {
      * @return ResponseEntity containing the updated catalog or an error status.
      */
     @EmitEvent(id = "Catalog-000001-0000000013")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_EDIT\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/catalog/{id}")
     @Operation(summary = "Update an existing catalog", description = "Updates an existing catalog.")
     @ApiResponses(value = {
@@ -356,7 +359,7 @@ public class CatalogController {
      * @return ResponseEntity indicating success or failure.
      */
     @EmitEvent(id = "Catalog-000001-0000000014")
-    @PreAuthorize("hasRole(\'ADMIN\') or hasRole(\'CATALOG_DELETE\')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
     @DeleteMapping("/catalog/{id}")
     @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
     @ApiResponses(value = {
