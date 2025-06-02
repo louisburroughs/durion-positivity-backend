@@ -27,10 +27,12 @@ public class Location {
     // Reference to Person (responsible) by ID from pos-people
     private Long responsiblePersonId;
 
+    @Builder.Default
     // Bi-directional parent-child relationship
     @OneToMany(mappedBy = "child", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<LocationParent> parents = new HashSet<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<LocationParent> children = new HashSet<>();
 }
