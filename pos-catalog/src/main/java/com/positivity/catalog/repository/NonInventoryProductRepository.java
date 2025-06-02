@@ -4,6 +4,6 @@ import com.positivity.catalog.model.NonInventoryProductEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
-public interface NonInventoryProductRepository extends JpaRepository<NonInventoryProductEntity, String> {
+public interface NonInventoryProductRepository extends JpaRepository<NonInventoryProductEntity, Long> { // Changed String to Long
     List<NonInventoryProductEntity> findByName(String name);
 }

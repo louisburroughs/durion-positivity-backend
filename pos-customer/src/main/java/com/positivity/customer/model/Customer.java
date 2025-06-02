@@ -1,4 +1,4 @@
-package com.positivity.poscustomer.model;
+package com.positivity.customer.model;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package com.positivity.poscustomer.model;
+package com.positivity.customer.model;
 
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
@@ -10,8 +10,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @Entity
-@DiscriminatorValue("PRIVATE")
-public class PrivateCustomer extends AbstractCustomer {
-    // Additional fields or methods specific to private customers can be added here
+@DiscriminatorValue("GOVERNMENT")
+public class GovernmentCustomer extends AbstractCustomer {
+    // Additional fields or methods specific to government customers can be added here
 }
 
