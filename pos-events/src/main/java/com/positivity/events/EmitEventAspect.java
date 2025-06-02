@@ -1,4 +1,4 @@
-package com.positivity.posevents;
+package com.positivity.events;
 
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -13,7 +13,7 @@ import java.time.Instant;
 @Aspect
 @Component
 public class EmitEventAspect {
-    @Around("@annotation(com.positivity.posevents.EmitEvent)")
+    @Around("@annotation(com.positivity.events.EmitEvent)")
     public Object emitEvent(ProceedingJoinPoint joinPoint) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();

@@ -117,7 +117,7 @@ public class VehicleFitmentService {
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             makeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Make make = new Make();
@@ -144,7 +144,7 @@ public class VehicleFitmentService {
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             modelRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Model model = new Model();
@@ -171,7 +171,7 @@ public class VehicleFitmentService {
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleTypeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 VehicleType vt = new VehicleType();

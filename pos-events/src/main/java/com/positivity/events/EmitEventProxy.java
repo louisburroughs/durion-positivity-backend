@@ -1,4 +1,4 @@
-package com.positivity.posevents;
+package com.positivity.events;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
