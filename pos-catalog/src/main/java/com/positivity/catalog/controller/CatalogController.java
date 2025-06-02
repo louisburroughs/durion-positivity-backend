@@ -6,7 +6,7 @@ import com.positivity.catalog.model.ServiceEntity;
 import com.positivity.catalog.model.NonInventoryProductEntity;
 import com.positivity.catalog.model.CatalogEntity;
 import com.positivity.catalog.CatalogItem;
-import com.positivity.posevents.EmitEvent;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -293,7 +293,7 @@ public class CatalogController {
     public ResponseEntity<Void> deleteCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
             @Parameter(description = "ID of the catalog item to delete") @PathVariable Long id) { // Changed to Long
-        boolean deleted = false;
+        boolean deleted;
         switch (type.toLowerCase()) {
             case PRODUCT:
                 deleted = catalogDao.deleteProduct(id);

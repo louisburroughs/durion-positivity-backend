@@ -1,11 +1,11 @@
-package com.positivity.posaccounting;
+package com.positivity.events;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class PosAccountingApplication {
+public class PosEventsApplication {
     public static void main(String[] args) {
-        SpringApplication.run(PosAccountingApplication.class, args);
+        SpringApplication.run(PosEventsApplication.class, args);
     }
 }
