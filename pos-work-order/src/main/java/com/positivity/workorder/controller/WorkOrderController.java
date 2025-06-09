@@ -5,7 +5,6 @@ import com.positivity.workorder.service.WorkOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,14 +26,11 @@ public class WorkOrderController {
     }
 
     @Operation(summary = "Get work order by ID", description = "Retrieve a work order by its unique ID.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Work order found and returned."),
-        @ApiResponse(responseCode = "404", description = "Work order not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Work order found and returned.")
+    @ApiResponse(responseCode = "404", description = "Work order not found.")
     @GetMapping("/{id}")
     public ResponseEntity<WorkOrder> getWorkOrderById(
-            @Parameter(description = "ID of the work order to retrieve", example = "1")
-            @PathVariable Long id) {
+            @Parameter(description = "ID of the work order to retrieve", example = "1") @PathVariable Long id) {
         return workOrderService.getWorkOrderById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -44,23 +40,18 @@ public class WorkOrderController {
     @ApiResponse(responseCode = "200", description = "Work order created successfully.")
     @PostMapping
     public ResponseEntity<WorkOrder> createWorkOrder(
-            @Parameter(description = "Work order object to be created")
-            @RequestBody WorkOrder workOrder) {
+            @Parameter(description = "Work order object to be created") @RequestBody WorkOrder workOrder) {
         WorkOrder created = workOrderService.createWorkOrder(workOrder);
         return ResponseEntity.ok(created);
     }
 
     @Operation(summary = "Delete a work order", description = "Delete a work order by its unique ID.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "204", description = "Work order deleted successfully."),
-        @ApiResponse(responseCode = "404", description = "Work order not found.")
-    })
+    @ApiResponse(responseCode = "204", description = "Work order deleted successfully.")
+    @ApiResponse(responseCode = "404", description = "Work order not found.")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteWorkOrder(
-            @Parameter(description = "ID of the work order to delete", example = "1")
-            @PathVariable Long id) {
+            @Parameter(description = "ID of the work order to delete", example = "1") @PathVariable Long id) {
         workOrderService.deleteWorkOrder(id);
         return ResponseEntity.noContent().build();
     }
 }
-
