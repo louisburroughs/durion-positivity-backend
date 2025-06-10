@@ -285,6 +285,7 @@ scrape_configs:
 This design provides a robust, scalable, and flexible observability solution for a microservices architecture built with Spring Boot and Docker, all leveraging the power of Open Source software and the OpenTelemetry standard.
 
 ![Observability Architecture](aws_observability_diagram.png)
+
 The image shows a comprehensive AWS Observability Architecture 
 diagram with the following 
 components:
