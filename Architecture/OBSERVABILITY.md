@@ -283,3 +283,40 @@ scrape_configs:
 * **Cost-Effective:** By leveraging open-source tools, you can reduce licensing costs associated with commercial APM solutions. While operational costs for managing the infrastructure exist, open-source provides flexibility and control.
 
 This design provides a robust, scalable, and flexible observability solution for a microservices architecture built with Spring Boot and Docker, all leveraging the power of Open Source software and the OpenTelemetry standard.
+
+![Observability Architecture](aws_observability_diagram.png)
+The image shows a comprehensive AWS Observability Architecture 
+diagram with the following 
+components:
+
+## Application Layer
+• **Application Services (ECS Fargate)**: Contains three microservices (Service 1, Service 2, and Service 3) running in AWS Fargate containers
+
+## Data Collection Layer
+• **OpenTelemetry Collector Cluster**: Contains two OpenTelemetry collectors (OTel Collector 1 and OTel Collector 2) that receive telemetry data from the application services
+• The collectors are represented with the OpenTelemetry logo (green hexagon with "N")
+• Green arrows indicate log data flow, blue arrows indicate trace data flow, and orange arrows indicate metrics data flow
+
+## Observability Stack (ECS Fargate)
+• **Logging**: Loki for log aggregation and management
+• **Tracing**: Jaeger for distributed tracing visualization
+• **Metrics**: Prometheus for metrics collection and alerting
+• **Visualization**: Grafana dashboard that integrates with all three data sources
+
+## Storage Layer
+• **Logs Storage**: S3-compatible storage for log data (represented by the S3 bucket icon)
+• **Traces Storage**: ElastiCache-compatible storage for trace data
+• **Metrics Storage**: DynamoDB-compatible storage for metrics data
+
+## Network Layer
+• **Application Load Balancer**: Provides external access to the Grafana dashboard
+
+The diagram effectively illustrates the complete observability pipeline:
+1. Application services generate telemetry data
+2. OpenTelemetry collectors receive, process, and route the data
+3. Specialized backends (Loki, Jaeger, Prometheus) store and process specific types of telemetry
+4. Each backend uses appropriate storage solutions
+5. Grafana provides unified visualization of all telemetry data
+
+This architecture provides a comprehensive observability solution with distributed tracing, metrics monitoring, and log aggregation, all running in containers on AWS Fargate for scalability and ease of
+management.
