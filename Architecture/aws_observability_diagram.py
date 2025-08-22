@@ -3,9 +3,10 @@ from diagrams.aws.compute import ECS, Fargate
 from diagrams.aws.storage import S3
 from diagrams.aws.database import ElastiCache, Dynamodb
 from diagrams.aws.network import ELB
-from diagrams.onprem.monitoring import Prometheus, Grafana, Loki, OpenTelemetry
+from diagrams.onprem.monitoring import Prometheus, Grafana
 from diagrams.onprem.tracing import Jaeger
-from diagrams.onprem.network import Nginx
+from diagrams.onprem.logging import Loki
+from diagrams.custom import Custom
 
 # Initialize diagram
 with Diagram("AWS Observability Architecture", show=False, filename="aws_observability_diagram"):
@@ -23,10 +24,9 @@ with Diagram("AWS Observability Architecture", show=False, filename="aws_observa
     
     # OpenTelemetry Collector
     with Cluster("OpenTelemetry Collector Cluster"):
-        # Using Nginx icon as a substitute for OpenTelemetry Collector
         otel_collectors = [
-            OpenTelemetry("OTel Collector 1"),
-            OpenTelemetry("OTel Collector 2")
+            Custom("Collector\n(Receivers)", "./icons/otel_collector_receiver.png"),
+            Custom("Collector\n(Receivers)", "./icons/otel_collector_receiver.png")
         ]
     
     # Observability Stack
@@ -38,7 +38,6 @@ with Diagram("AWS Observability Architecture", show=False, filename="aws_observa
             prometheus = Prometheus("Prometheus")
         
         with Cluster("Logging"):
-            # Using Nginx icon as a substitute for Loki
             loki = Loki("Loki")
         
         with Cluster("Visualization"):
