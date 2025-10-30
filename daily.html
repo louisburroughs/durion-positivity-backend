@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>daily.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h2 id="%F0%9F%8C%84-morning-%E2%80%93-energy-focus-stress-resilience">🌄 Morning – Energy, Focus, Stress Resilience</h2>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Supplement</th>
+<th>Form / Standardization</th>
+<th>Dose</th>
+<th>Purpose / Effects</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>07:30 AM (with breakfast)</strong></td>
+<td><strong>Rhodiola rosea</strong></td>
+<td>Standardized extract (<em>SHR-5</em> or <em>WS 1375</em>) – 3 % rosavins / 1 % salidroside</td>
+<td><strong>200–400 mg once daily</strong></td>
+<td>Supports alertness, stamina, stress resilience; reduces fatigue.</td>
+</tr>
+<tr>
+<td><em>Optional</em></td>
+<td><strong>B-Complex / adaptogen blend</strong></td>
+<td>B5, B6, B12, Vitamin C</td>
+<td>—</td>
+<td>Cofactor support for adrenal &amp; mitochondrial function.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>🕒 Take earlier in the day to avoid sleep interference.
+⚠️ Avoid doubling the dose on stressful days; consistency beats spikes.</p>
+</blockquote>
+<hr>
+<h2 id="%E2%98%80%EF%B8%8F-midday-%E2%80%93-maintenance--modulation">☀️ Midday – Maintenance &amp; Modulation</h2>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Supplement</th>
+<th>Form</th>
+<th>Dose</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1:00 PM (optional)</strong></td>
+<td>Rhodiola (micro-dose)</td>
+<td>Same extract as AM</td>
+<td><strong>100–150 mg</strong></td>
+<td>Optional boost if mental fatigue reappears after long focus sessions. Skip if jittery or sleep-sensitive.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="%F0%9F%8C%99-evening-%E2%80%93-calm-recovery-sleep-quality">🌙 Evening – Calm, Recovery, Sleep Quality</h2>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Supplement</th>
+<th>Form / Standardization</th>
+<th>Dose</th>
+<th>Purpose / Effects</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>8:00 PM (after dinner / before bed)</strong></td>
+<td><strong>Ashwagandha (Withania somnifera)</strong></td>
+<td><em>KSM-66</em> (root-only 5 % withanolides) → calmer<br><em>Sensoril</em> (root + leaf 10 % withanolides) → stronger anti-stress</td>
+<td><strong>300–600 mg nightly</strong></td>
+<td>Reduces cortisol, promotes relaxation, enhances sleep depth &amp; quality.</td>
+</tr>
+<tr>
+<td><em>Optional</em></td>
+<td><strong>Magnesium glycinate + L-theanine</strong></td>
+<td>Mg 200–400 mg + Theanine 100–200 mg</td>
+<td>—</td>
+<td>Enhances parasympathetic tone; complements Ashwagandha’s calming profile.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>💤 Choose <strong>KSM-66</strong> if you want smooth daytime energy carry-over.
+🧘‍♂️ Choose <strong>Sensoril</strong> if stronger evening calming is needed.</p>
+</blockquote>
+<hr>
+<h2 id="%F0%9F%94%81-cycling-guidelines">🔁 Cycling Guidelines</h2>
+<table>
+<thead>
+<tr>
+<th>Duration</th>
+<th>Practice</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>5 days on / 2 days off</strong></td>
+<td>Take weekends / low-stress days off</td>
+<td>Maintains receptor sensitivity &amp; prevents habituation</td>
+</tr>
+<tr>
+<td><strong>8 weeks on / 2 weeks off</strong></td>
+<td>Medium-term cycle</td>
+<td>Evaluate effectiveness &amp; reset response</td>
+</tr>
+<tr>
+<td><strong>Reassess every 3 months</strong></td>
+<td>Review stress, sleep, productivity metrics</td>
+<td>Ensures proportional benefit &amp; adjusts dose/timing</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="%F0%9F%92%A1-expected-subjective-results-over-time">💡 Expected Subjective Results Over Time</h2>
+<table>
+<thead>
+<tr>
+<th>Timeframe</th>
+<th>Rhodiola Effect</th>
+<th>Ashwagandha Effect</th>
+<th>Combined Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>First 3–5 days</strong></td>
+<td>Noticeable alertness &amp; motivation</td>
+<td>Calmer evenings &amp; easier sleep onset</td>
+<td>Balanced circadian rhythm emerging</td>
+</tr>
+<tr>
+<td><strong>2–4 weeks</strong></td>
+<td>Reduced afternoon energy dip</td>
+<td>Lower stress, improved recovery</td>
+<td>Smooth energy + better resilience</td>
+</tr>
+<tr>
+<td><strong>6–8 weeks</strong></td>
+<td>Sustained focus &amp; mental endurance</td>
+<td>Deeper sleep &amp; morning freshness</td>
+<td>Optimal “calm energy” equilibrium</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="%E2%9A%A0%EF%B8%8F-precautions">⚠️ Precautions</h2>
+<ul>
+<li>Avoid combining with other strong adaptogens (ginseng, eleuthero, licorice) unless supervised.</li>
+<li>Monitor if using <strong>SSRIs, thyroid medication, or immunosuppressants</strong>.</li>
+<li>Both herbs modulate cortisol—overuse can cause fatigue / low BP.</li>
+<li>Not recommended during <strong>pregnancy or breastfeeding</strong>.</li>
+<li>Choose high-quality standardized extracts from reputable manufacturers.</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%A7%A9-daily-summary-card">🧩 Daily Summary Card</h2>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Morning</th>
+<th>Midday</th>
+<th>Evening</th>
+<th>Key Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Focus &amp; Stress Balance</strong></td>
+<td>Rhodiola 200 mg</td>
+<td>(optional 150 mg boost)</td>
+<td>Ashwagandha 300–600 mg</td>
+<td>Energy ↑  •  Focus ↑  •  Calm ↑  •  Recovery ↑</td>
+</tr>
+</tbody>
+</table>
+<hr>
+
+</body>
+</html>
