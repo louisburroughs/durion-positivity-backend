@@ -1,11 +1,13 @@
-package com.positivity.positivity.agent;
+package com.positivity.agent;
 
-import com.positivity.positivity.agent.registry.AgentRegistry;
-import com.positivity.positivity.agent.registry.DefaultAgentRegistry;
+import com.positivity.agent.registry.AgentRegistry;
+import com.positivity.agent.registry.DefaultAgentRegistry;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.NotEmpty;
 import net.jqwik.api.constraints.Size;
 import org.junit.jupiter.api.BeforeEach;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.util.List;
@@ -48,22 +50,27 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
         Duration responseTime = Duration.ofNanos(endTime - startTime);
         
         // Then: Response time should be within 1 second
-        Assertions.assertThat(responseTime).isLessThanOrEqualTo(Duration.ofSeconds(1));
+        assertThat(responseTime.compareTo(Duration.ofSeconds(1)) <= 0)
+                .describedAs("Response time should be within 1 second")
+                .isTrue();
         
         // And: At least one agent should be available for the domain
-        Assertions.assertThat(availableAgents).isNotEmpty();
+        assertThat(availableAgents.isEmpty())
+                .describedAs("At least one agent should be available for domain: " + domain)
+                .isFalse();
         
         // And: All returned agents should be available
-        Assertions.assertThat(availableAgents)
-                .allMatch(Agent::isAvailable, "All agents should be available");
+        assertThat(availableAgents.stream().allMatch(Agent::isAvailable))
+                .describedAs("All agents should be available")
+                .isTrue();
         
         // And: All returned agents should handle the domain
         AgentConsultationRequest testRequest = AgentConsultationRequest.create(
                 domain, "test query", Map.of());
         
-        Assertions.assertThat(availableAgents)
-                .allMatch(agent -> agent.canHandle(testRequest), 
-                        "All agents should be able to handle the domain");
+        assertThat(availableAgents.stream().allMatch(agent -> agent.canHandle(testRequest)))
+                .describedAs("All agents should be able to handle the domain")
+                .isTrue();
     }
     
     @Property(tries = 100)
@@ -75,13 +82,13 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
         List<Agent> agents = registry.getAgentsForDomain(domain);
         
         // Then: There should be 100% coverage (at least one agent per domain)
-        Assertions.assertThat(agents)
-                .as("Domain %s should have at least one agent", domain)
-                .isNotEmpty();
+        assertThat(agents.isEmpty())
+                .describedAs("Domain %s should have at least one agent", domain)
+                .isFalse();
         
         // And: At least one agent should be available
-        Assertions.assertThat(agents.stream().anyMatch(Agent::isAvailable))
-                .as("Domain %s should have at least one available agent", domain)
+        assertThat(agents.stream().anyMatch(Agent::isAvailable))
+                .describedAs("Domain %s should have at least one available agent", domain)
                 .isTrue();
     }
     
@@ -97,16 +104,18 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
         Duration discoveryTime = Duration.ofNanos(endTime - startTime);
         
         // Then: Discovery should complete within 1 second
-        Assertions.assertThat(discoveryTime).isLessThanOrEqualTo(Duration.ofSeconds(1));
+        assertThat(discoveryTime.compareTo(Duration.ofSeconds(1)) <= 0)
+                .describedAs("Discovery should complete within 1 second")
+                .isTrue();
         
         // And: If an agent is found, it should be available and capable
         if (bestAgent.isPresent()) {
             Agent agent = bestAgent.get();
-            Assertions.assertThat(agent.isAvailable())
-                    .as("Selected agent should be available")
+            assertThat(agent.isAvailable())
+                    .describedAs("Selected agent should be available")
                     .isTrue();
-            Assertions.assertThat(agent.canHandle(request))
-                    .as("Selected agent should be able to handle the request")
+            assertThat(agent.canHandle(request))
+                    .describedAs("Selected agent should be able to handle the request")
                     .isTrue();
         }
     }

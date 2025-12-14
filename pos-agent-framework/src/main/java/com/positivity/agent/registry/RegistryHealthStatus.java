@@ -1,4 +1,4 @@
-package com.positivity.positivity.agent.registry;
+package com.positivity.agent.registry;
 
 import java.time.Instant;
 import java.util.Map;

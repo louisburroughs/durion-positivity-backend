@@ -1,18 +1,22 @@
-package com.positivity.positivity.agent;
+package com.positivity.agent;
 
-import com.positivity.positivity.agent.collaboration.AgentCollaborationProtocol;
-import com.positivity.positivity.agent.collaboration.CollaborativeGuidanceResponse;
-import com.positivity.positivity.agent.collaboration.ConsistencyValidationResult;
-import com.positivity.positivity.agent.collaboration.DefaultCollaborationProtocol;
-import com.positivity.positivity.agent.registry.AgentRegistry;
-import com.positivity.positivity.agent.registry.DefaultAgentRegistry;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.Size;
 import org.junit.jupiter.api.BeforeEach;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.positivity.agent.collaboration.AgentCollaborationProtocol;
+import com.positivity.agent.collaboration.CollaborativeGuidanceResponse;
+import com.positivity.agent.collaboration.ConsistencyValidationResult;
+import com.positivity.agent.collaboration.DefaultCollaborationProtocol;
+import com.positivity.agent.registry.AgentRegistry;
+import com.positivity.agent.registry.DefaultAgentRegistry;
+
+
+
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -60,30 +64,30 @@ class AgentCollaborationConsistencyPropertyTest {
         Duration collaborationTime = Duration.ofNanos(endTime - startTime);
         
         // Then: Collaboration should complete within 3 seconds
-        Assertions.assertThat(collaborationTime)
-                .as("Collaboration should complete within 3 seconds")
-                .isLessThanOrEqualTo(Duration.ofSeconds(3));
+        assertThat(collaborationTime.compareTo(Duration.ofSeconds(3)) <= 0)
+                .describedAs("Collaboration should complete within 3 seconds")
+                .isTrue();
         
         // And: Response should be successful
-        Assertions.assertThat(response.isSuccessful())
-                .as("Collaborative response should be successful")
+        assertThat(response.isSuccessful())
+                .describedAs("Collaborative response should be successful")
                 .isTrue();
         
         // And: Consistency validation should pass (zero conflicting recommendations)
         ConsistencyValidationResult consistency = response.consistencyResult();
-        Assertions.assertThat(consistency.isConsistent())
-                .as("Agent recommendations should be consistent (zero conflicts)")
+        assertThat(consistency.isConsistent())
+                .describedAs("Agent recommendations should be consistent (zero conflicts)")
                 .isTrue();
         
         // And: Consistency score should indicate 100% pattern compliance
-        Assertions.assertThat(consistency.consistencyScore())
-                .as("Consistency score should indicate high pattern compliance")
-                .isGreaterThanOrEqualTo(0.8); // 80% threshold for practical consistency
+        assertThat(consistency.consistencyScore() >= 0.8)
+                .describedAs("Consistency score should indicate high pattern compliance")
+                .isTrue(); // 80% threshold for practical consistency
         
         // And: All individual responses should be successful
-        Assertions.assertThat(response.individualResponses())
-                .allMatch(AgentGuidanceResponse::isSuccessful, 
-                        "All individual agent responses should be successful");
+        assertThat(response.individualResponses().stream().allMatch(AgentGuidanceResponse::isSuccessful))
+                .describedAs("All individual agent responses should be successful")
+                .isTrue();
     }
     
     @Property(tries = 100)
@@ -99,20 +103,19 @@ class AgentCollaborationConsistencyPropertyTest {
         Duration validationTime = Duration.ofNanos(endTime - startTime);
         
         // Then: Validation should complete within 3 seconds
-        Assertions.assertThat(validationTime)
-                .as("Consistency validation should complete within 3 seconds")
-                .isLessThanOrEqualTo(Duration.ofSeconds(3));
+        assertThat(validationTime.compareTo(Duration.ofSeconds(3)) <= 0)
+                .describedAs("Consistency validation should complete within 3 seconds")
+                .isTrue();
         
         // And: Result should have a valid consistency score
-        Assertions.assertThat(result.consistencyScore())
-                .as("Consistency score should be between 0 and 1")
-                .isBetween(0.0, 1.0);
+        assertThat(result.consistencyScore() >= 0.0 && result.consistencyScore() <= 1.0)
+                .describedAs("Consistency score should be between 0 and 1")
+                .isTrue();
         
         // And: Validation time should be recorded
-        Assertions.assertThat(result.validationTime())
-                .as("Validation time should be recorded")
-                .isNotNull()
-                .isPositive();
+        assertThat(result.validationTime() != null && !result.validationTime().isNegative())
+                .describedAs("Validation time should be recorded and positive")
+                .isTrue();
     }
     
     @Property(tries = 100)
@@ -125,8 +128,8 @@ class AgentCollaborationConsistencyPropertyTest {
         AgentGuidanceResponse resolved = collaborationProtocol.resolveConflicts(conflictingResponses);
         
         // Then: Resolved response should be successful
-        Assertions.assertThat(resolved.isSuccessful())
-                .as("Resolved response should be successful")
+        assertThat(resolved.isSuccessful())
+                .describedAs("Resolved response should be successful")
                 .isTrue();
         
         // And: Resolved response should have high confidence
@@ -135,14 +138,14 @@ class AgentCollaborationConsistencyPropertyTest {
                 .max()
                 .orElse(0.0);
         
-        Assertions.assertThat(resolved.confidence())
-                .as("Resolved response should maintain high confidence")
-                .isGreaterThanOrEqualTo(Math.min(maxOriginalConfidence, 0.95));
+        assertThat(resolved.confidence() >= Math.min(maxOriginalConfidence, 0.95))
+                .describedAs("Resolved response should maintain high confidence")
+                .isTrue();
         
         // And: Resolved response should contain guidance
-        Assertions.assertThat(resolved.guidance())
-                .as("Resolved response should contain guidance")
-                .isNotEmpty();
+        assertThat(resolved.guidance().isEmpty())
+                .describedAs("Resolved response should contain guidance")
+                .isFalse();
     }
     
     @Property(tries = 50)
@@ -154,15 +157,15 @@ class AgentCollaborationConsistencyPropertyTest {
         
         // Then: Workflow should be consistent across multiple calls
         List<String> secondCall = collaborationProtocol.getCollaborationWorkflow(domain);
-        Assertions.assertThat(workflow)
-                .as("Workflow should be consistent across calls")
-                .isEqualTo(secondCall);
+        assertThat(workflow.equals(secondCall))
+                .describedAs("Workflow should be consistent across calls")
+                .isTrue();
         
         // And: If workflow exists, all agents should be valid
         if (!workflow.isEmpty()) {
-            Assertions.assertThat(workflow)
-                    .allMatch(agentId -> registry.getAgent(agentId).isPresent(),
-                            "All agents in workflow should exist in registry");
+            assertThat(workflow.stream().allMatch(agentId -> registry.getAgent(agentId).isPresent()))
+                    .describedAs("All agents in workflow should exist in registry")
+                    .isTrue();
         }
     }
     

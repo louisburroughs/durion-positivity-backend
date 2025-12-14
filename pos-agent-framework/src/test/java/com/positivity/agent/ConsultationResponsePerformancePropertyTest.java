@@ -1,14 +1,15 @@
-package com.positivity.positivity.agent;
+package com.positivity.agent;
 
-import com.positivity.positivity.agent.registry.AgentRegistry;
-import com.positivity.positivity.agent.registry.DefaultAgentRegistry;
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.NotEmpty;
 import org.junit.jupiter.api.BeforeEach;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.positivity.agent.registry.AgentRegistry;
+import com.positivity.agent.registry.DefaultAgentRegistry;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -44,29 +45,29 @@ class ConsultationResponsePerformancePropertyTest {
         Duration responseTime = Duration.ofNanos(endTime - startTime);
         
         // Then: Response time should be within 2 seconds
-        Assertions.assertThat(responseTime)
-                .as("Response time should be within 2 seconds")
-                .isLessThanOrEqualTo(Duration.ofSeconds(2));
+        assertThat(responseTime.compareTo(Duration.ofSeconds(2)) <= 0)
+                .describedAs("Response time should be within 2 seconds")
+                .isTrue();
         
         // And: Response should be successful
-        Assertions.assertThat(response.isSuccessful())
-                .as("Response should be successful")
+        assertThat(response.isSuccessful())
+                .describedAs("Response should be successful")
                 .isTrue();
         
         // And: Response should have high accuracy (>= 95%)
-        Assertions.assertThat(response.confidence())
-                .as("Response confidence should be >= 95%")
-                .isGreaterThanOrEqualTo(0.95);
+        assertThat(response.confidence() >= 0.95)
+                .describedAs("Response confidence should be >= 95%")
+                .isTrue();
         
         // And: Response should contain domain-specific guidance
-        Assertions.assertThat(response.guidance())
-                .as("Response should contain guidance")
-                .isNotEmpty();
+        assertThat(response.guidance().isEmpty())
+                .describedAs("Response should contain guidance")
+                .isFalse();
         
         // And: Response should contain recommendations
-        Assertions.assertThat(response.recommendations())
-                .as("Response should contain recommendations")
-                .isNotEmpty();
+        assertThat(response.recommendations().isEmpty())
+                .describedAs("Response should contain recommendations")
+                .isFalse();
     }
     
     @Property(tries = 100)
@@ -78,8 +79,8 @@ class ConsultationResponsePerformancePropertyTest {
         AgentGuidanceResponse response = future.join();
         
         // Then: Response should follow Spring Boot patterns
-        Assertions.assertThat(response.isSuccessful()).isTrue();
-        Assertions.assertThat(response.confidence()).isGreaterThanOrEqualTo(0.96); // 96% for Spring Boot
+        assertThat(response.isSuccessful()).isTrue();
+        assertThat(response.confidence() >= 0.96).isTrue(); // 96% for Spring Boot
         
         // And: Guidance should mention Spring Boot concepts
         String guidance = response.guidance().toLowerCase();
@@ -88,8 +89,8 @@ class ConsultationResponsePerformancePropertyTest {
                                        guidance.contains("microservice") ||
                                        guidance.contains("service");
         
-        Assertions.assertThat(hasSpringBootConcepts)
-                .as("Spring Boot guidance should contain relevant concepts")
+        assertThat(hasSpringBootConcepts)
+                .describedAs("Spring Boot guidance should contain relevant concepts")
                 .isTrue();
     }
     
@@ -102,8 +103,8 @@ class ConsultationResponsePerformancePropertyTest {
         AgentGuidanceResponse response = future.join();
         
         // Then: Response should follow AWS patterns
-        Assertions.assertThat(response.isSuccessful()).isTrue();
-        Assertions.assertThat(response.confidence()).isGreaterThanOrEqualTo(0.95);
+        assertThat(response.isSuccessful()).isTrue();
+        assertThat(response.confidence() >= 0.95).isTrue();
         
         // And: Guidance should mention AWS concepts
         String guidance = response.guidance().toLowerCase();
@@ -113,8 +114,8 @@ class ConsultationResponsePerformancePropertyTest {
                                guidance.contains("elasticache") ||
                                guidance.contains("cloud");
         
-        Assertions.assertThat(hasAwsConcepts)
-                .as("AWS guidance should contain relevant concepts")
+        assertThat(hasAwsConcepts)
+                .describedAs("AWS guidance should contain relevant concepts")
                 .isTrue();
     }
     
@@ -139,17 +140,19 @@ class ConsultationResponsePerformancePropertyTest {
         // Then: All requests should complete within reasonable time
         // Allow more time for concurrent requests but still maintain performance
         Duration maxExpectedTime = Duration.ofSeconds(2).multipliedBy(requests.size()).dividedBy(2);
-        Assertions.assertThat(totalTime)
-                .as("Concurrent requests should complete efficiently")
-                .isLessThanOrEqualTo(maxExpectedTime);
+        assertThat(totalTime.compareTo(maxExpectedTime) <= 0)
+                .describedAs("Concurrent requests should complete efficiently")
+                .isTrue();
         
         // And: All responses should be successful
-        Assertions.assertThat(responses)
-                .allMatch(AgentGuidanceResponse::isSuccessful, "All responses should be successful");
+        assertThat(responses.stream().allMatch(AgentGuidanceResponse::isSuccessful))
+                .describedAs("All responses should be successful")
+                .isTrue();
         
         // And: All responses should meet accuracy threshold
-        Assertions.assertThat(responses)
-                .allMatch(r -> r.confidence() >= 0.95, "All responses should meet accuracy threshold");
+        assertThat(responses.stream().allMatch(r -> r.confidence() >= 0.95))
+                .describedAs("All responses should meet accuracy threshold")
+                .isTrue();
     }
     
     @Provide

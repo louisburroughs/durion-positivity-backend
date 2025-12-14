@@ -18,5 +18,13 @@ public class NonInventoryProductEntity implements CatalogItem {
     private String longDescription;
     private String shortDescription;
 
+    @Override
+    public String getLongDescription() {
+        return this.longDescription;
+    }
 
+    @Override
+    public void setId(Long id) {
+        this.id = id;
+    }
 }

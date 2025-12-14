@@ -1,4 +1,4 @@
-package com.positivity.positivity.agent;
+package com.positivity.agent;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -21,7 +21,7 @@ public record AgentGuidanceResponse(
 ) {
     
     public enum ResponseStatus {
-        SUCCESS, PARTIAL_SUCCESS, FAILURE, TIMEOUT;
+        SUCCESS, PARTIAL_SUCCESS, FAILURE, TIMEOUT
     }
     
     public static AgentGuidanceResponse success(String requestId, String agentId, String guidance, 

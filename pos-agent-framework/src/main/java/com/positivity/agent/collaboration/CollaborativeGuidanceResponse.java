@@ -1,6 +1,6 @@
-package com.positivity.positivity.agent.collaboration;
+package com.positivity.agent.collaboration;
 
-import com.positivity.positivity.agent.AgentGuidanceResponse;
+import com.positivity.agent.AgentGuidanceResponse;
 
 import java.time.Duration;
 import java.time.Instant;

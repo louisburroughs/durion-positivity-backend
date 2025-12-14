@@ -1,9 +1,9 @@
-package com.positivity.positivity.agent.collaboration;
+package com.positivity.agent.collaboration;
 
-import com.positivity.positivity.agent.Agent;
-import com.positivity.positivity.agent.AgentConsultationRequest;
-import com.positivity.positivity.agent.AgentGuidanceResponse;
-import com.positivity.positivity.agent.registry.AgentRegistry;
+import com.positivity.agent.Agent;
+import com.positivity.agent.AgentConsultationRequest;
+import com.positivity.agent.AgentGuidanceResponse;
+import com.positivity.agent.registry.AgentRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

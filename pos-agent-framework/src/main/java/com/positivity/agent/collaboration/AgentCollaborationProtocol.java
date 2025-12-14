@@ -1,7 +1,7 @@
-package com.positivity.positivity.agent.collaboration;
+package com.positivity.agent.collaboration;
 
-import com.positivity.positivity.agent.AgentConsultationRequest;
-import com.positivity.positivity.agent.AgentGuidanceResponse;
+import com.positivity.agent.AgentConsultationRequest;
+import com.positivity.agent.AgentGuidanceResponse;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

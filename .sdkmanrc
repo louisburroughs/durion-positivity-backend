@@ -1,0 +1,6 @@
+# Enable auto-env
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]] && source "$SDKMAN_DIR/bin/sdkman-init.sh"
+
+# Java version for this project
+java=21.0.5-tem

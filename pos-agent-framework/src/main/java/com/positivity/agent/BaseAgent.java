@@ -1,4 +1,4 @@
-package com.positivity.positivity.agent;
+package com.positivity.agent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

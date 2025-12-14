@@ -50,6 +50,16 @@ public class ProductEntity implements CatalogItem {
     @Schema(description = "Brand of the manufacturer", example = "AcmePro")
     private String manufacturerBrand;
 
+    @Override
+    public String getLongDescription() {
+        return this.longDescription;
+    }
+
+    @Override
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     @Schema(description = "Country of origin for the product", example = "USA")
     private String countryOfOrigin;
 
