@@ -1,10 +1,9 @@
-package com.positivity.positivity.agent.config;
+package com.positivity.agent.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
-import java.util.Map;
 
 /**
  * Configuration properties for the agent framework

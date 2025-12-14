@@ -1,9 +1,9 @@
-package com.positivity.positivity.agent.registry;
+package com.positivity.agent.registry;
 
-import com.positivity.positivity.agent.Agent;
-import com.positivity.positivity.agent.AgentConsultationRequest;
-import com.positivity.positivity.agent.AgentGuidanceResponse;
-import com.positivity.positivity.agent.AgentHealthStatus;
+import com.positivity.agent.Agent;
+import com.positivity.agent.AgentConsultationRequest;
+import com.positivity.agent.AgentGuidanceResponse;
+import com.positivity.agent.AgentHealthStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;

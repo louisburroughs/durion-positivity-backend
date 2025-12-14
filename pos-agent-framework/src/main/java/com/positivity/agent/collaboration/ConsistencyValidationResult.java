@@ -1,4 +1,4 @@
-package com.positivity.positivity.agent.collaboration;
+package com.positivity.agent.collaboration;
 
 import java.time.Duration;
 import java.time.Instant;

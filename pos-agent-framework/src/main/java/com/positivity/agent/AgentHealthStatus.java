@@ -1,4 +1,4 @@
-package com.positivity.positivity.agent;
+package com.positivity.agent;
 
 import java.time.Instant;
 import java.util.Map;
