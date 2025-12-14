@@ -1,0 +1,46 @@
+{
+  "mcpServers": {
+    "moqui-context": {
+      "command": "node",
+      "args": ["/home/n541342/IdeaProjects/moqui_example/.github/mcp-servers/moqui-context-server.js"],
+      "env": {
+        "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example",
+        "MOQUI_COMPONENTS_PATH": "runtime/component",
+        "MOQUI_FRAMEWORK_PATH": "framework"
+      }
+    },
+    "moqui-entities": {
+      "command": "node",
+      "args": ["/home/n541342/IdeaProjects/moqui_example/.github/mcp-servers/moqui-entities-server.js"],
+      "env": {
+        "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example",
+        "ENTITY_DEFINITIONS_PATH": "framework/entity,runtime/component/*/entity"
+      }
+    },
+    "moqui-services": {
+      "command": "node",
+      "args": ["/home/n541342/IdeaProjects/moqui_example/.github/mcp-servers/moqui-services-server.js"],
+      "env": {
+        "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example",
+        "SERVICE_DEFINITIONS_PATH": "runtime/component/*/service"
+      }
+    },
+    "moqui-agents": {
+      "command": "node",
+      "args": ["/home/n541342/IdeaProjects/moqui_example/.github/mcp-servers/moqui-agents-server.js"],
+      "env": {
+        "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example",
+        "AGENTS_PATH": ".github/agents",
+        "DOCUMENTATION_PATH": ".github/docs"
+      }
+    },
+    "project-analysis": {
+      "command": "node",
+      "args": ["/home/n541342/IdeaProjects/moqui_example/.github/mcp-servers/project-analysis-server.js"],
+      "env": {
+        "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example",
+        "DURION_COMPONENTS": "durion-common,durion-crm,durion-product,durion-inventory,durion-accounting,durion-workexec,durion-experience,durion-positivity,durion-theme,durion-demo-data,durion-mcp"
+      }
+    }
+  }
+}

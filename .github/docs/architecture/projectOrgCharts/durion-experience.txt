@@ -1,0 +1,16 @@
+runtime/component/durion-experience/
+  service/
+    DurExperienceWorkExec.xml
+    DurExperienceInventory.xml
+    DurExperienceProduct.xml
+    DurExperienceCrm.xml
+    DurExperienceAccounting.xml
+  script/
+    groovy/
+      DurExperienceWorkExec.groovy
+      DurExperienceInventory.groovy
+      DurExperienceProduct.groovy
+      DurExperienceCrm.groovy
+      DurExperienceAccounting.groovy
+  rest/
+    durion-experience-rest.xml     # REST mappings for experience services

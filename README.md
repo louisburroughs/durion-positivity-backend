@@ -61,13 +61,13 @@ Each module will be its own independent Spring Boot application.
 
 **Security Service (Identity & Access Management - IAM)**  
 - **Purpose:** Centralized user authentication (AuthN) and authorization (AuthZ). Manages user roles, permissions, and module access grants.
-- **Technology:** Spring Boot with Spring Security, OAuth2 (or JWT-based authentication).
+- **Technology:** Spring Boot with Spring Security and JWT-based authentication.
 - **Key Functionality:**
   - User registration and management.
   - Role-based access control (RBAC) or attribute-based access control (ABAC).
   - Module-specific access grants (e.g., a user might have access to 'Inventory' but not 'Sales').
-  - Issue and validate JWTs (JSON Web Tokens) or OAuth2 tokens. Tokens contain claims about the user's identity and granted permissions.
-  - **API:** Endpoints for authentication (e.g., `/oauth/token`, `/login`), user/role/permission management.
+  - Issue and validate JWTs (JSON Web Tokens). Tokens contain claims about the user's identity and granted permissions.
+  - **API:** Endpoints for authentication (e.g., `/auth/login`, `/auth/refresh`), user/role/permission management.
   - **Data Store:** Its own database to store user credentials, roles, and permissions.
 
 **Metrics Service**  
@@ -142,7 +142,7 @@ pos-system/
 
 - `controller/`: Exposes the REST APIs for the module.
   - **Security Integration:** Controllers rely on the shared Security Service for authentication and authorization.
-  - **@PreAuthorize:** Use Spring Security's `@PreAuthorize` annotations for fine-grained access rules based on roles/permissions from the JWT/OAuth2 token.  
+  - **@PreAuthorize:** Use Spring Security's `@PreAuthorize` annotations for fine-grained access rules based on roles/permissions from the JWT token.  
     Example: `@PreAuthorize("hasAuthority('INVENTORY_READ') or hasRole('ADMIN')")`
 - `service/`: Contains the core business logic.
   - **MetricsEmitter:** Inject and use your metrics-emitter-lib here to send functional metrics.
@@ -179,8 +179,8 @@ These are Maven/Gradle sub-modules that produce JARs to be included as dependenc
 - **Key Functionality:**
   - **Routing:** Routes incoming requests to the appropriate microservice based on paths (e.g., `/inventory/**` to pos-inventory-service).
   - **Authentication & Authorization:** 
-    - Intercepts incoming requests, extracts the JWT/OAuth2 token.
-    - Calls the Security Service to validate the token and obtain user permissions/roles.
+    - Intercepts incoming requests, extracts the JWT token.
+    - Validates the JWT signature and extracts user permissions/roles from token claims.
     - Based on these permissions and the requested path, decides whether to forward the request.
     - The validated token (or extracted user info) can then be propagated to the downstream microservices via request headers.
   - **Load Balancing:** Distributes requests among multiple instances of the same microservice.
@@ -216,14 +216,15 @@ Your Angular UI should mirror the backend module structure.
 
 1. **User Login (Angular UI):** The Angular UI sends login credentials to the API Gateway.
 2. **API Gateway to Security Service:** The API Gateway forwards these credentials to the Security Service's authentication endpoint.
-3. **Security Service Validation & Token Issuance:** The Security Service authenticates the user, checks their roles/permissions (including module-specific grants), and issues a JWT (or OAuth2 token) containing claims about the user and their granted authorities. This token is returned to the API Gateway.
+3. **Security Service Validation & Token Issuance:** The Security Service authenticates the user, checks their roles/permissions (including module-specific grants), and issues a JWT containing claims about the user and their granted authorities. This token is returned to the API Gateway.
 4. **API Gateway to Angular UI:** The API Gateway passes the token back to the Angular UI. The Angular UI stores this token (e.g., in localStorage or sessionStorage).
 5. **Subsequent Requests (Angular UI/Subscribers):** For every subsequent API call, the Angular UI (or external subscriber) includes this JWT in the Authorization header (e.g., `Bearer <JWT>`).
 6. **API Gateway Interception & Token Validation:** The API Gateway intercepts the request:
-    - Extracts the JWT.
-    - Can either directly validate the JWT's signature (if it holds the public key) or call the Security Service's introspection endpoint to validate the token and get the user's claims.
-    - Based on the token's claims (permissions/roles) and the target API path, decides if the user is authorized to access that specific module's endpoint.
-    - If authorized, routes the request to the correct backend microservice, potentially forwarding the validated JWT or relevant user context in request headers.
+    - Extracts the JWT from the Authorization header.
+    - Validates the JWT's signature using the shared secret or public key.
+    - Extracts user claims (permissions/roles) from the JWT payload.
+    - Based on the token's claims and the target API path, decides if the user is authorized to access that specific module's endpoint.
+    - If authorized, routes the request to the correct backend microservice, forwarding the validated JWT in request headers.
 7. **Module-Level Authorization (Optional but Recommended):** The individual business logic modules (e.g., Inventory Service) receive the request with the JWT (or user context). They can perform secondary, granular authorization checks using Spring Security's `@PreAuthorize` annotations on their controller methods, ensuring that even if the API Gateway lets something through, the specific action is allowed. This provides defense-in-depth.
 
 ---

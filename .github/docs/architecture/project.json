@@ -1,0 +1,277 @@
+{
+  "project": {
+    "name": "Durion POS – Prototype",
+    "description": "Master project for Durion POS 6-month prototype: Moqui base, Experience layer, UI/Mobile, MCP, and Positivity integration.",
+    "fields": [
+      {
+        "name": "Status",
+        "dataType": "single_select",
+        "options": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "defaultOption": "Backlog"
+      },
+      {
+        "name": "Priority",
+        "dataType": "single_select",
+        "options": ["P0", "P1", "P2", "P3"],
+        "defaultOption": "P2"
+      },
+      {
+        "name": "Domain",
+        "dataType": "single_select",
+        "options": [
+          "Work Execution",
+          "Inventory",
+          "Product & Pricing",
+          "CRM",
+          "Accounting",
+          "Shop Management",
+          "Positivity",
+          "UI",
+          "MCP"
+        ]
+      },
+      {
+        "name": "Layer",
+        "dataType": "single_select",
+        "options": [
+          "Moqui Base",
+          "Experience",
+          "UI – Web",
+          "UI – Mobile",
+          "MCP",
+          "Positivity",
+          "AI Support"
+        ]
+      },
+      {
+        "name": "Owner",
+        "dataType": "text"
+      },
+      {
+        "name": "Target Iteration",
+        "dataType": "iteration"
+      },
+      {
+        "name": "Estimate (points)",
+        "dataType": "number"
+      },
+      {
+        "name": "AI Role",
+      "dataType": "single_select",
+      "options": [
+        "Clarification",
+        "Scaffolding",
+        "Regression",
+        "None"
+      ]
+      }
+    ],
+    "views": [
+      {
+        "name": "Board – All Domains",
+        "type": "board",
+        "default": true,
+        "groupByField": "Status",
+        "sort": {
+          "field": "Priority",
+          "direction": "asc"
+        },
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": ""
+      },
+      {
+        "name": "Table – All Items",
+        "type": "table",
+        "default": false,
+        "columns": [
+          "Title",
+          "Status",
+          "Priority",
+          "Domain",
+          "Layer",
+          "Owner",
+          "Target Iteration",
+          "Estimate (points)",
+          "AI Role"
+        ],
+        "filters": "",
+        "sort": {
+          "field": "Priority",
+          "direction": "asc"
+        }
+      },
+      {
+        "name": "Board – Work Execution",
+        "type": "board",
+        "default": false,
+        "groupByField": "Status",
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": "label:domain:workexec"
+      },
+      {
+        "name": "Board – Inventory",
+        "type": "board",
+        "groupByField": "Status",
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": "label:domain:inventory"
+      },
+      {
+        "name": "Board – Product & Pricing",
+        "type": "board",
+        "groupByField": "Status",
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": "label:domain:product"
+      },
+      {
+        "name": "Board – CRM",
+        "type": "board",
+        "groupByField": "Status",
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": "label:domain:crm"
+      },
+      {
+        "name": "Board – Accounting",
+        "type": "board",
+        "groupByField": "Status",
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": "label:domain:accounting"
+      },
+      {
+        "name": "Board – Positivity",
+        "type": "board",
+        "groupByField": "Status",
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": "label:domain:positivity"
+      },
+      {
+        "name": "Board – UI & MCP",
+        "type": "board",
+        "groupByField": "Status",
+        "columns": [
+          "Backlog",
+          "Ready",
+          "Analysis",
+          "Design",
+          "Dev: Moqui",
+          "Dev: Experience",
+          "Testing",
+          "UI/MCP Integration",
+          "Demo Ready",
+          "Done"
+        ],
+        "filters": "label:domain:ui OR label:domain:ui-mobile OR label:domain:mcp"
+      }
+    ],
+    "automation": [
+      {
+        "name": "Move to Done when closed",
+        "event": "issue_closed",
+        "action": {
+          "type": "set_field",
+          "field": "Status",
+          "value": "Done"
+        }
+      },
+      {
+        "name": "Set Status to Ready on label added",
+        "event": "label_added",
+        "condition": {
+          "label": "ready"
+        },
+        "action": {
+          "type": "set_field",
+          "field": "Status",
+          "value": "Ready"
+        }
+      }
+    ]
+  }
+}

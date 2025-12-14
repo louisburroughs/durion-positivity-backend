@@ -1,0 +1,8 @@
+runtime/component/durion-mcp/
+  service/
+    DurMcpTools.xml
+  script/
+    groovy/
+      DurMcpTools.groovy          # calls experience services
+  data/
+    DurMcpToolConfig.xml          # configuration for MCP tools

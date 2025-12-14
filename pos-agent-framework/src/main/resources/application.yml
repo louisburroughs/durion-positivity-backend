@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: positivity-agent-framework
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=5m
+
+positivity:
+  agent:
+    registry:
+      discovery-timeout: 1s
+      max-agents: 100
+      enable-caching: true
+      cache-timeout: 5m
+    performance:
+      default-response-timeout: 3s
+      default-accuracy-threshold: 0.95
+      default-availability-threshold: 0.999
+      default-max-concurrent-requests: 100
+      enable-metrics: true
+    collaboration:
+      consistency-validation-timeout: 3s
+      consistency-threshold: 0.8
+      max-participating-agents: 5
+      enable-conflict-resolution: true
+    failover:
+      recovery-timeout: 30s
+      max-backup-agents: 3
+      enable-automatic-failover: true
+      health-check-interval: 60s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      simple:
+        enabled: true
+
+logging:
+  level:
+    com.positivity.positivity.agent: DEBUG
+    root: INFO

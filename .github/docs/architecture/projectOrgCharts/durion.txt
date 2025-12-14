@@ -1,0 +1,13 @@
+runtime/
+  component/
+    durion-common/
+    durion-theme/
+    durion-crm/
+    durion-product/
+    durion-inventory/
+    durion-workexec/
+    durion-accounting/
+    durion-experience/
+    durion-mcp/
+    durion-positivity/       # ⬅ NEW: integration façade
+    durion-demo-data/

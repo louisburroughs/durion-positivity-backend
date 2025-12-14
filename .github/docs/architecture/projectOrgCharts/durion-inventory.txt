@@ -1,0 +1,20 @@
+runtime/component/durion-inventory/
+  entity/
+    DurInventoryItem.xml
+    DurInventoryLocation.xml
+    DurInventoryReceipt.xml
+    DurInventoryReservation.xml
+  service/
+    DurInventoryServices.xml
+  script/
+    groovy/
+      DurInventoryServices.groovy
+  screen/
+    durion/
+      inventory/
+        InventoryItemFind.xml
+        InventoryItemSummary.xml
+        Receiving.xml
+        Adjustment.xml
+  data/
+    DurInventoryDemoData.xml
