@@ -1,0 +1,14 @@
+runtime/component/durion-theme/
+  screen/
+    durion/
+      layout/
+        MainLayout.xml
+      widget/
+        CommonHeader.xml
+        CommonFooter.xml
+  template/
+    durion/
+      css/
+        durion-theme.css.ftl
+  data/
+    DurThemePreference.xml

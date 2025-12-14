@@ -1,0 +1,16 @@
+runtime/component/durion-accounting/
+  entity/
+    DurArTransaction.xml
+    DurPayment.xml
+  service/
+    DurAccountingServices.xml
+  script/
+    groovy/
+      DurAccountingServices.groovy
+  screen/
+    durion/
+      accounting/
+        ArTransactionFind.xml
+        PaymentEntry.xml
+  data/
+    DurAccountingDemoData.xml

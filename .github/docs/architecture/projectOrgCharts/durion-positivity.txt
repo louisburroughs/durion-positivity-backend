@@ -1,0 +1,19 @@
+runtime/component/durion-positivity/
+  entity/
+    DurPositivityConfig.xml         # Endpoint configs, provider metadata
+    DurPositivityProvider.xml      # Optional: registered providers
+  service/
+    DurPositivityVehicle.xml       # Vehicle data façade
+    DurPositivityTire.xml          # Tire/OEM/distributor façade
+    DurPositivityParts.xml         # Parts distributors
+    DurPositivityExternal.xml      # Misc 3rd-party integrations
+  script/
+    groovy/
+      DurPositivityVehicle.groovy
+      DurPositivityTire.groovy
+      DurPositivityParts.groovy
+      DurPositivityExternal.groovy
+  data/
+    DurPositivityStubData.xml      # Stubbed responses / canned mappings
+  config/
+    positivity-endpoints.xml       # Future real endpoints, auth, etc.

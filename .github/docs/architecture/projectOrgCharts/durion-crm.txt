@@ -1,0 +1,20 @@
+runtime/component/durion-crm/
+  entity/
+    DurCustomer.xml
+    DurVehicle.xml
+    DurFleet.xml
+    DurContactMech.xml
+  service/
+    DurCrmServices.xml
+  script/
+    groovy/
+      DurCrmServices.groovy
+  screen/
+    durion/
+      crm/
+        CustomerFind.xml
+        CustomerEdit.xml
+        VehicleFind.xml
+        VehicleEdit.xml
+  data/
+    DurCrmDemoData.xml

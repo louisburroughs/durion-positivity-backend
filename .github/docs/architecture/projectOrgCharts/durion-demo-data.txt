@@ -1,0 +1,7 @@
+runtime/component/durion-demo-data/
+  data/
+    DurDemoCrm.xml
+    DurDemoProduct.xml
+    DurDemoInventory.xml
+    DurDemoWorkExec.xml
+    DurDemoAccounting.xml

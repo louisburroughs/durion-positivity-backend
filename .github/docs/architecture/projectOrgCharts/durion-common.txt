@@ -1,0 +1,12 @@
+runtime/component/durion-common/
+  entity/
+    DurCommonType.xml          # enums, status types
+    DurUom.xml                 # units of measure
+    DurGeo.xml                 # basic region/country if needed
+  service/
+    DurCommonServices.xml      # helper services
+  script/
+    groovy/
+      DurCommonServices.groovy
+  data/
+    DurCommonSeed.xml

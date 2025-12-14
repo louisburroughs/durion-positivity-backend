@@ -1,0 +1,20 @@
+runtime/component/durion-product/
+  entity/
+    DurProduct.xml
+    DurServiceOperation.xml
+    DurPriceList.xml
+    DurPriceListItem.xml
+  service/
+    DurProductServices.xml
+  script/
+    groovy/
+      DurProductServices.groovy
+  screen/
+    durion/
+      product/
+        ProductFind.xml
+        ProductEdit.xml
+        PriceListFind.xml
+        PriceListEdit.xml
+  data/
+    DurProductDemoData.xml
