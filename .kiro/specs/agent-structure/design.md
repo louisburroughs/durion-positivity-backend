@@ -1,863 +1,679 @@
-# Agent Structure Design Document
+# Positivity Agent Structure Design
 
 ## Overview
 
-This design document outlines a comprehensive agent framework for the positivity POS backend system. The framework provides specialized AI agents that offer domain-specific expertise for developing, testing, deploying, and maintaining the 23+ Spring Boot microservices that comprise the system. Each agent is designed to work independently while maintaining consistency through shared patterns and integration protocols.
+The Positivity Agent Structure System is a comprehensive framework that provides specialized AI agents for Spring Boot microservices development, testing, deployment, and operations. The system is designed to support a distributed POS system with 23+ microservices deployed on Kubernetes, providing domain-specific guidance while maintaining consistency across all services.
 
-The agent structure follows a layered approach with core infrastructure agents, domain-specific implementation agents, and cross-cutting quality assurance agents. This design ensures comprehensive coverage of all aspects of the distributed system while maintaining clear boundaries and responsibilities.
+The design follows a modular, extensible architecture that allows for easy addition of new agents while ensuring seamless collaboration between existing agents. The system emphasizes practical guidance delivery, performance optimization, and production-ready patterns for enterprise-scale microservices.
 
 ## Architecture
 
-The agent architecture is organized into six primary layers with enhanced performance, reliability, and security specifications:
+### High-Level Architecture
 
-### 1. Foundation Layer
+```mermaid
+graph TB
+    subgraph "Agent Framework Core"
+        AR[Agent Registry]
+        AM[Agent Manager]
+        CC[Collaboration Controller]
+        CM[Context Manager]
+    end
+    
+    subgraph "Core Development Agents"
+        AA[Architecture Agent]
+        IA[Implementation Agent]
+        TA[Testing Agent]
+        DA[Deployment Agent]
+    end
+    
+    subgraph "Specialized Agents"
+        SA[Security Agent]
+        OA[Observability Agent]
+        EA[Event-Driven Agent]
+        CA[CI/CD Agent]
+        RA[Resilience Agent]
+    end
+    
+    subgraph "Support Agents"
+        DOC[Documentation Agent]
+        BUS[Business Domain Agent]
+        PAIR[Pair Navigator Agent]
+        CONF[Configuration Agent]
+        INT[Integration Agent]
+    end
+    
+    subgraph "External Integrations"
+        SB[Spring Boot Services]
+        K8S[Kubernetes]
+        AWS[AWS Services]
+        MON[Monitoring Tools]
+    end
+    
+    AR --> AM
+    AM --> CC
+    CC --> CM
+    
+    AM --> AA
+    AM --> IA
+    AM --> TA
+    AM --> DA
+    AM --> SA
+    AM --> OA
+    AM --> EA
+    AM --> CA
+    AM --> RA
+    AM --> DOC
+    AM --> BUS
+    AM --> PAIR
+    AM --> CONF
+    AM --> INT
+    
+    AA --> SB
+    IA --> SB
+    DA --> K8S
+    SA --> AWS
+    OA --> MON
+```
 
-- **Architecture Agent**: Provides system-wide architectural governance and design patterns with 100% domain boundary enforcement
-- **Security Agent**: Ensures comprehensive security across all services with JWT authentication and 256-bit encryption
+### Layered Architecture
 
-### 2. Implementation Layer  
+The system follows a three-tier architecture:
 
-- **Spring Boot Developer Agent**: Core microservice implementation expertise with 96% pattern accuracy
-- **API Gateway Agent**: REST API design and gateway integration with 100% OpenAPI compliance
-- **Data Access Agent**: Database and caching layer expertise with differentiated DynamoDB/ElastiCache guidance
+1. **Presentation Layer**: Agent interfaces and collaboration protocols
+2. **Business Logic Layer**: Agent implementations and domain expertise
+3. **Data Layer**: Context management, knowledge bases, and integration adapters
 
-### 3. Infrastructure Layer
+### Agent Collaboration Model
 
-- **DevOps Agent**: Container orchestration and AWS Fargate deployment with 98% deployment success rate
-- **SRE Agent**: Observability, monitoring, and reliability engineering with 100% RED metrics coverage
-- **Database Agent**: Data store optimization and management with 20% average performance improvement
+Agents operate in three collaboration modes:
 
-### 4. Quality Assurance Layer
-
-- **Testing Agent**: Comprehensive testing strategies with 95% test coverage accuracy
-- **Code Quality Agent**: Static analysis, formatting, and best practices with 98% quality compliance
-- **Performance Agent**: System optimization and scalability with 25% average performance improvement
-
-### 5. Domain Layer
-
-- **POS Business Agent**: Domain-specific business logic with 96% business process accuracy
-- **Integration Agent**: External service integration with 98% integration success rate
-
-### 6. Documentation Layer
-
-- **Documentation Agent**: Technical documentation with 95% documentation completeness
-- **API Documentation Agent**: Swagger/OpenAPI specifications with 100% specification coverage
-
-### Performance Architecture
-
-#### Response Time Requirements
-
-- Agent consultation responses: ≤ 3 seconds for 99% of requests
-- Domain-specific guidance: ≤ 2 seconds with 95% accuracy
-- Security validation: ≤ 2 seconds with 100% compliance
-- Error recovery: ≤ 30 seconds with automatic failover
-
-#### Scalability Architecture
-
-- Concurrent user support: Up to 100 developers with <15% performance degradation
-- Request throughput: 2000 guidance requests per hour with automatic load balancing
-- System availability: 99.9% uptime during business hours
-
-#### Reliability Architecture
-
-- Automatic failover: 30-second recovery time with backup agents
-- Data consistency: 100% accuracy across all agent interactions
-- Graceful degradation: 75% functionality when AWS services unavailable
-- Backup frequency: Every 6 hours with 99.99% data integrity
+1. **Independent Mode**: Single agent provides specialized guidance
+2. **Collaborative Mode**: Multiple agents work together on complex tasks
+3. **Pair Programming Mode**: Primary agent paired with navigator for quality assurance
 
 ## Components and Interfaces
 
-### Core Agent Interface
+### Core Framework Components
 
-All agents implement a common interface that provides:
+#### Agent Registry
+- **Purpose**: Central registry for all available agents
+- **Responsibilities**:
+  - Agent discovery and registration
+  - Capability mapping and routing
+  - Agent lifecycle management
+  - Health monitoring and failover
 
-```yaml
-AgentInterface:
-  - name: string (unique identifier)
-  - description: string (agent purpose and capabilities)
-  - domain: string (primary domain of expertise)
-  - dependencies: array (other agents this agent collaborates with)
-  - capabilities: array (specific skills and knowledge areas)
-  - integration_patterns: array (how this agent works with others)
+#### Agent Manager
+- **Purpose**: Orchestrates agent interactions and resource allocation
+- **Responsibilities**:
+  - Request routing and load balancing
+  - Agent instantiation and pooling
+  - Performance monitoring and optimization
+  - Error handling and recovery
+
+#### Collaboration Controller
+- **Purpose**: Manages multi-agent collaboration and conflict resolution
+- **Responsibilities**:
+  - Collaboration workflow orchestration
+  - Conflict detection and resolution
+  - Consensus building and decision making
+  - Quality assurance coordination
+
+#### Context Manager
+- **Purpose**: Maintains context across agent interactions
+- **Responsibilities**:
+  - Session context storage and retrieval
+  - Context sharing between agents
+  - Context validation and integrity
+  - Temporary context cleanup
+
+### Agent Interface Specifications
+
+#### Base Agent Interface
+
+```java
+public interface Agent {
+    String getAgentId();
+    String getAgentName();
+    Set<String> getCapabilities();
+    AgentResponse processRequest(AgentRequest request);
+    boolean canHandle(AgentRequest request);
+    AgentHealth getHealth();
+}
 ```
 
-### Agent Collaboration Patterns
-
-#### Primary Development Workflow
-
-1. **Architecture Agent** → defines system boundaries and patterns
-2. **Spring Boot Developer Agent** → implements core business logic
-3. **API Gateway Agent** → designs and implements REST endpoints
-4. **Data Access Agent** → implements data persistence and caching
-5. **Testing Agent** → validates functionality and integration
-6. **DevOps Agent** → packages and deploys services
-
-#### Cross-Cutting Concerns
-
-- **Security Agent** → consulted by all implementation agents
-- **SRE Agent** → instruments all services with observability
-- **Performance Agent** → optimizes critical paths and bottlenecks
-- **Code Quality Agent** → enforces standards across all code
-
-### Agent Specifications
-
-#### 1. Architecture Agent
-**Purpose**: System-wide architectural governance and design consistency
-
-**Capabilities**:
-
-- Domain-driven design principles for POS system
-- Microservice boundary definition and enforcement
-- Integration pattern specification (API Gateway, messaging, events)
-- Technology stack decisions and constraints
-- Dependency management and circular dependency prevention
-
-**Integration Points**:
-
-- Consulted by all implementation agents before major design decisions
-- Provides architectural review for cross-service integrations
-- Defines patterns for Spring Boot Developer Agent to follow
-
-#### 2. Spring Boot Developer Agent  
-**Purpose**: Core microservice implementation using Spring Boot and Java/Groovy
-
-**Capabilities**:
-
-- Spring Boot application structure and configuration
-- Business logic implementation following DDD patterns
-- Service layer design and transaction management
-- Exception handling and error propagation
-- Integration with Spring Security for authentication/authorization
-
-**Integration Points**:
-
-- Follows patterns defined by Architecture Agent
-- Collaborates with Data Access Agent for persistence
-- Works with API Gateway Agent for endpoint exposure
-- Coordinates with Security Agent for authentication flows
-
-#### 3. API Gateway Agent
-**Purpose**: REST API design and API Gateway integration
-
-**Capabilities**:
-
-- OpenAPI specification design and documentation
-- HTTP method and status code best practices
-- Request/response payload design and validation
-- API versioning and backward compatibility
-- Rate limiting and throttling configuration
-
-**Integration Points**:
-
-- Implements endpoints designed by Spring Boot Developer Agent
-- Follows security patterns from Security Agent
-- Coordinates with Performance Agent for optimization
-- Works with Testing Agent for contract validation
-
-#### 4. Data Access Agent
-**Purpose**: Database and caching layer expertise
-
-**Capabilities**:
-
-- DynamoDB table design and optimization (20 services)
-- ElastiCache configuration and usage patterns (3 vehicle reference services)
-- Spring Data integration and repository patterns
-- Data consistency patterns for distributed systems
-- Query optimization and performance tuning
-
-**Integration Points**:
-
-- Implements data access for Spring Boot Developer Agent
-- Coordinates with Database Agent for infrastructure concerns
-- Works with Performance Agent for query optimization
-- Follows security patterns for data encryption
-
-#### 5. Security Agent
-**Purpose**: Comprehensive security across all services
-
-**Capabilities**:
-
-- JWT-based authentication and authorization with pos-security-service
-- Spring Security configuration and customization
-- API security patterns (authentication, authorization, input validation)
-- AWS IAM roles and policies for service-to-service communication
-- Secrets management with AWS Secrets Manager
-
-**Integration Points**:
-
-- Consulted by all agents for security concerns
-- Provides security review for API Gateway Agent
-- Defines authentication patterns for Spring Boot Developer Agent
-- Coordinates with DevOps Agent for secure deployment
-
-#### 6. DevOps Agent
-**Purpose**: Container orchestration and AWS deployment
-
-**Capabilities**:
-
-- Docker containerization and multi-stage builds
-- AWS Fargate task definitions and service configuration
-- ECS cluster management and auto-scaling policies
-- CI/CD pipeline design with automated testing and deployment
-- Infrastructure as Code with CloudFormation/CDK
-
-**Integration Points**:
-
-- Packages applications from Spring Boot Developer Agent
-- Implements security policies from Security Agent
-- Coordinates with SRE Agent for monitoring integration
-- Works with Database Agent for data store provisioning
-
-#### 7. SRE Agent
-**Purpose**: Observability, monitoring, and reliability engineering
-
-**Capabilities**:
-
-- OpenTelemetry instrumentation for all microservices
-- Grafana dashboard design and Prometheus metrics configuration
-- Jaeger distributed tracing implementation
-- Loki log aggregation and structured logging
-- Alerting rules and incident response procedures
-
-**Integration Points**:
-
-- Instruments code from Spring Boot Developer Agent
-- Monitors infrastructure managed by DevOps Agent
-- Tracks performance metrics with Performance Agent
-- Provides observability for all other agents' implementations
-
-#### 8. Testing Agent
-**Purpose**: Comprehensive testing strategies and implementation
-
-**Capabilities**:
-
-- Unit testing with JUnit 5 and Mockito
-- Integration testing for Spring Boot applications
-- Contract testing with Pact for API validation
-- End-to-end testing across microservice boundaries
-- Performance testing and load testing strategies
-
-**Integration Points**:
-
-- Tests implementations from Spring Boot Developer Agent
-- Validates API contracts from API Gateway Agent
-- Tests data access patterns from Data Access Agent
-- Coordinates with SRE Agent for test observability
-
-#### 9. Database Agent
-**Purpose**: Data store infrastructure and optimization
-
-**Capabilities**:
-
-- DynamoDB table provisioning and configuration
-- ElastiCache cluster setup and maintenance
-- Backup and disaster recovery procedures
-- Performance monitoring and capacity planning
-- Data migration and schema evolution strategies
-
-**Integration Points**:
-
-- Provides infrastructure for Data Access Agent
-- Coordinates with DevOps Agent for provisioning
-- Works with SRE Agent for database monitoring
-- Supports Performance Agent with optimization recommendations
-
-#### 10. Performance Agent
-**Purpose**: System optimization and scalability
-
-**Capabilities**:
-
-- Application performance profiling and optimization
-- Database query optimization and indexing strategies
-- Caching strategies and cache invalidation patterns
-- Load testing and capacity planning
-- Auto-scaling configuration and tuning
-
-**Integration Points**:
-
-- Optimizes code from Spring Boot Developer Agent
-- Tunes queries with Data Access Agent
-- Configures scaling with DevOps Agent
-- Monitors performance with SRE Agent
-
-#### 11. Code Quality Agent
-**Purpose**: Code standards and static analysis
-
-**Capabilities**:
-
-- Java/Groovy code formatting and style enforcement
-- Static analysis with SonarQube and SpotBugs
-- Code review guidelines and best practices
-- Technical debt identification and remediation
-- Documentation standards and generation
-
-**Integration Points**:
-
-- Reviews code from all implementation agents
-- Enforces standards defined by Architecture Agent
-- Coordinates with Testing Agent for quality gates
-- Works with Security Agent for security code analysis
-
-#### 12. POS Business Agent
-**Purpose**: Domain-specific business logic and processes
-
-**Capabilities**:
-
-- POS domain modeling (sales, inventory, customers, payments)
-- Business rule implementation and validation
-- Workflow design for order processing and fulfillment
-- Integration with automotive service processes
-- Regulatory compliance and business requirements
-
-**Integration Points**:
-
-- Provides domain expertise to Spring Boot Developer Agent
-- Defines business APIs with API Gateway Agent
-- Specifies data models for Data Access Agent
-- Validates business logic with Testing Agent
-
-#### 13. Integration Agent
-**Purpose**: External service integration and API management
-
-**Capabilities**:
-
-- Third-party API integration patterns
-- Payment processor integration (Stripe, PayPal, etc.)
-- Vehicle reference API integration (NHTSA, CarAPI)
-- Event-driven integration with SNS/SQS
-- Circuit breaker and retry patterns for resilience
-
-**Integration Points**:
-
-- Implements integrations for Spring Boot Developer Agent
-- Designs external APIs with API Gateway Agent
-- Handles integration security with Security Agent
-- Monitors integration health with SRE Agent
-
-#### 14. Documentation Agent
-**Purpose**: Technical documentation and system documentation
-
-**Capabilities**:
-
-- Technical documentation standards and best practices
-- README file structure and content guidelines
-- Architectural documentation and decision records
-- Code documentation and inline comments
-- Documentation maintenance and synchronization with code changes
-
-**Integration Points**:
-
-- Documents implementations from all development agents
-- Coordinates with Architecture Agent for architectural documentation
-- Works with API Documentation Agent for comprehensive coverage
-- Ensures documentation standards are followed by all agents
-
-#### 15. API Documentation Agent
-**Purpose**: Swagger/OpenAPI specifications and interactive API documentation
-
-**Capabilities**:
-
-- Swagger/OpenAPI 3.0 specification creation and maintenance
-- Interactive API documentation with Swagger UI
-- Request/response schema definitions and examples
-- Error code documentation and troubleshooting guides
-- API versioning documentation and migration guides
-
-**Integration Points**:
-
-- Documents APIs designed by API Gateway Agent
-- Works with Spring Boot Developer Agent for endpoint documentation
-- Coordinates with Documentation Agent for comprehensive API coverage
-- Ensures API documentation stays synchronized with implementation
-
-#### 16. Spring Boot Pair Navigator Agent
-**Purpose**: Pair programming partner for Spring Boot development with continuous collaboration and quality improvement
-
-**Capabilities**:
-
-- Implementation loop detection and interruption with mandatory stop-phrases
-- Architectural drift prevention and design constraint enforcement
-- Scope creep detection and simplification guidance provision
-- Alternative approach suggestion when implementation stalls
-- Creative counterbalance and flow guardian for development processes
-
-**Behavioral Directives**:
-
-- Detects implementation loops, circular refactors, or repeated dead-ends within 5 seconds
-- Questions architectural drift from original intent or established guidance
-- Proposes simpler, more idiomatic Spring Boot approaches when over-engineering appears
-- Suggests alternative designs, patterns, or sequencing when progress stalls
-- Identifies hidden coupling, premature optimization, or leaky abstractions
-- Encourages incremental delivery and "thin slice" implementations
-
-**Mandatory Stop-Phrases**:
-
-- "We are looping." - when same solution attempted more than twice
-- "This is over-engineered for the current goal." - when abstractions exceed requirements
-- "We are drifting from the intended architecture." - when violating design constraints
-- "This is scope creep." - when adding features without driving requirements
-- "Momentum has stalled." - when progress slows due to decision churn
-- "This responsibility is duplicated." - when logic appears in multiple layers
-
-**Integration Points**:
-
-- Works in continuous pairing with Spring Boot Developer Agent
-- Aligns with Architecture Agent intent and constraints
-- Surfaces concerns early to prevent compensation by test, security, and ops agents
-- Escalates to architectural reset when two different stop-phrases triggered
+#### Specialized Agent Interfaces
+
+```java
+public interface ArchitectureAgent extends Agent {
+    DomainBoundaryValidation validateDomainBoundaries(ServiceDefinition service);
+    ArchitecturalDecision reviewArchitecturalDecision(DecisionRequest request);
+    IntegrationPattern recommendIntegrationPattern(IntegrationContext context);
+}
+
+public interface ImplementationAgent extends Agent {
+    SpringBootGuidance provideSpringBootGuidance(ImplementationContext context);
+    ServiceBoundaryValidation validateServiceBoundaries(ServiceImplementation service);
+    APIDesignGuidance provideAPIDesignGuidance(APIContext context);
+}
+
+public interface PairNavigatorAgent extends Agent {
+    LoopDetectionResult detectImplementationLoops(ImplementationContext context);
+    ArchitecturalDriftResult detectArchitecturalDrift(ArchitecturalContext context);
+    SimplificationGuidance provideScopeCreepGuidance(ScopeContext context);
+}
+```
 
 ## Data Models
 
-### Enhanced Agent Registry with Performance Specifications
-```yaml
-AgentRegistry:
-  agents:
-    - id: architecture-agent
-      name: "Architecture Agent"
-      domain: "system-architecture"
-      capabilities: ["ddd", "microservices", "integration-patterns"]
-      dependencies: []
-      performance:
-        response_time: "2s"
-        accuracy: "100%"
-        availability: "99.9%"
-      
-    - id: spring-boot-developer-agent  
-      name: "Spring Boot Developer Agent"
-      domain: "implementation"
-      capabilities: ["spring-boot", "java", "business-logic"]
-      dependencies: ["architecture-agent", "security-agent"]
-      performance:
-        response_time: "2s"
-        accuracy: "96%"
-        pattern_compliance: "100%"
-      
-    - id: security-agent
-      name: "Security Agent"
-      domain: "security"
-      capabilities: ["jwt", "spring-security", "aws-iam", "encryption"]
-      dependencies: []
-      performance:
-        response_time: "2s"
-        security_compliance: "100%"
-        authentication_success: "100%"
-        
-    - id: sre-agent
-      name: "SRE Agent"
-      domain: "observability"
-      capabilities: ["opentelemetry", "grafana", "prometheus", "jaeger"]
-      dependencies: ["devops-agent"]
-      performance:
-        response_time: "2s"
-        metrics_coverage: "100%"
-        observability_accuracy: "95%"
-      
-    - id: documentation-agent
-      name: "Documentation Agent"
-      domain: "documentation"
-      capabilities: ["technical-docs", "readme", "architecture-docs"]
-      dependencies: ["architecture-agent"]
-      performance:
-        response_time: "3s"
-        completeness: "95%"
-        synchronization_accuracy: "99%"
-      
-    - id: api-documentation-agent
-      name: "API Documentation Agent"
-      domain: "api-documentation"
-      capabilities: ["swagger", "openapi", "interactive-docs"]
-      dependencies: ["api-gateway-agent", "spring-boot-developer-agent"]
-      performance:
-        response_time: "4s"
-        openapi_coverage: "100%"
-        specification_accuracy: "100%"
-      
-    - id: spring-boot-pair-navigator-agent
-      name: "Spring Boot Pair Navigator Agent"
-      domain: "pair-programming"
-      capabilities: ["loop-detection", "architectural-drift-prevention", "simplification-guidance", "stop-phrase-enforcement","spring-boot", "java", "business-logic"]
-      dependencies: ["spring-boot-developer-agent", "architecture-agent"]
-      performance:
-        response_time: "1s"
-        loop_detection_accuracy: "98%"
-        intervention_time: "5s"
-        pairing_session_success: "95%"
-      
-    # ... additional agents with performance specifications
+### Core Data Models
+
+#### Agent Request Model
+
+```java
+public class AgentRequest {
+    private String requestId;
+    private String requestType;
+    private String sourceAgent;
+    private Map<String, Object> parameters;
+    private RequestContext context;
+    private Priority priority;
+    private Timestamp timestamp;
+}
 ```
 
-### Enhanced Collaboration Matrix with Performance Requirements
-```yaml
-CollaborationMatrix:
-  primary_workflows:
-    - name: "microservice-development"
-      sequence: ["architecture-agent", "spring-boot-developer-agent", "api-gateway-agent", "data-access-agent", "testing-agent"]
-      performance:
-        total_workflow_time: "10s"
-        consistency_validation: "100%"
-        pattern_compliance: "96%"
-      
-    - name: "deployment-pipeline"
-      sequence: ["devops-agent", "security-agent", "sre-agent", "performance-agent"]
-      performance:
-        deployment_success_rate: "98%"
-        security_validation: "100%"
-        monitoring_coverage: "100%"
-      
-    - name: "documentation-workflow"
-      sequence: ["documentation-agent", "api-documentation-agent"]
-      performance:
-        documentation_completeness: "95%"
-        synchronization_accuracy: "99%"
-        openapi_coverage: "100%"
-      
-    - name: "pair-programming-workflow"
-      sequence: ["spring-boot-developer-agent", "spring-boot-pair-navigator-agent"]
-      collaboration_type: "continuous-pairing"
-      performance:
-        loop_detection_time: "5s"
-        architectural_drift_prevention: "100%"
-        consensus_achievement: "92%"
-        session_establishment: "100%"
-      
-  cross_cutting_concerns:
-    - agent: "security-agent"
-      consulted_by: ["all"]
-      performance:
-        security_validation_time: "2s"
-        compliance_rate: "100%"
-    - agent: "sre-agent"  
-      instruments: ["all-implementation-agents"]
-      performance:
-        instrumentation_coverage: "100%"
-        metrics_accuracy: "95%"
-    - agent: "performance-agent"
-      optimizes: ["all-implementation-agents"]
-      performance:
-        optimization_improvement: "25%"
-        response_time: "2s"
-        
-  failover_mechanisms:
-    - primary_agent: "architecture-agent"
-      backup_agents: ["spring-boot-developer-agent"]
-      failover_time: "30s"
-    - primary_agent: "security-agent"
-      backup_agents: ["architecture-agent"]
-      failover_time: "30s"
-    - primary_agent: "sre-agent"
-      backup_agents: ["devops-agent"]
-      failover_time: "30s"
+#### Agent Response Model
+
+```java
+public class AgentResponse {
+    private String responseId;
+    private String requestId;
+    private String respondingAgent;
+    private ResponseStatus status;
+    private Object payload;
+    private List<String> recommendations;
+    private Map<String, Object> metadata;
+    private Timestamp timestamp;
+}
 ```
 
-### Enhanced Service-Agent Mapping with Data Store Specifications
-```yaml
-ServiceAgentMapping:
-  # DynamoDB Services (20 services)
-  pos-catalog:
-    primary: ["spring-boot-developer-agent", "api-gateway-agent"]
-    supporting: ["data-access-agent", "pos-business-agent", "sre-agent"]
-    data_store: "dynamodb"
-    performance_requirements:
-      response_time: "2s"
-      pattern_accuracy: "96%"
-      
-  pos-customer:
-    primary: ["spring-boot-developer-agent", "pos-business-agent"]
-    supporting: ["data-access-agent", "security-agent", "sre-agent"]
-    data_store: "dynamodb"
-    performance_requirements:
-      response_time: "2s"
-      business_accuracy: "96%"
-      
-  pos-inventory:
-    primary: ["spring-boot-developer-agent", "pos-business-agent"]
-    supporting: ["data-access-agent", "integration-agent", "sre-agent"]
-    data_store: "dynamodb"
-    performance_requirements:
-      response_time: "2s"
-      integration_success: "98%"
-      
-  pos-order:
-    primary: ["spring-boot-developer-agent", "pos-business-agent"]
-    supporting: ["data-access-agent", "integration-agent", "sre-agent"]
-    data_store: "dynamodb"
-    performance_requirements:
-      response_time: "2s"
-      workflow_accuracy: "95%"
-      
-  pos-accounting:
-    primary: ["spring-boot-developer-agent", "pos-business-agent"]
-    supporting: ["data-access-agent", "security-agent", "sre-agent"]
-    data_store: "dynamodb"
-    performance_requirements:
-      response_time: "2s"
-      financial_accuracy: "99%"
-      
-  # ElastiCache Services (3 vehicle reference services)
-  pos-vehicle-reference-nhtsa:
-    primary: ["spring-boot-developer-agent", "integration-agent"]
-    supporting: ["data-access-agent", "performance-agent", "sre-agent"]
-    data_store: "elasticache"
-    performance_requirements:
-      response_time: "1s"
-      cache_hit_rate: "95%"
-      
-  pos-vehicle-reference-carapi:
-    primary: ["spring-boot-developer-agent", "integration-agent"]
-    supporting: ["data-access-agent", "performance-agent", "sre-agent"]
-    data_store: "elasticache"
-    performance_requirements:
-      response_time: "1s"
-      api_integration_success: "98%"
-      
-  pos-vehicle-fitment:
-    primary: ["spring-boot-developer-agent", "integration-agent"]
-    supporting: ["data-access-agent", "performance-agent", "sre-agent"]
-    data_store: "elasticache"
-    performance_requirements:
-      response_time: "1s"
-      fitment_accuracy: "97%"
-      
-  # Security Service
-  pos-security-service:
-    primary: ["security-agent", "spring-boot-developer-agent"]
-    supporting: ["api-gateway-agent", "devops-agent"]
-    data_store: "dynamodb"
-    performance_requirements:
-      response_time: "2s"
-      security_compliance: "100%"
-      jwt_validation: "100%"
-      
-  # API Gateway
-  pos-api-gateway:
-    primary: ["api-gateway-agent", "security-agent"]
-    supporting: ["performance-agent", "sre-agent"]
-    data_store: "none"
-    performance_requirements:
-      response_time: "1s"
-      routing_accuracy: "99%"
-      rate_limiting: "100%"
-      
-  # ... mappings for remaining 13+ services with similar specifications
+#### Context Models
+
+```java
+public class ImplementationContext {
+    private String serviceId;
+    private String microserviceName;
+    private TechnologyStack technologyStack;
+    private List<Dependency> dependencies;
+    private Map<String, Object> configuration;
+    private List<String> constraints;
+}
+
+public class ArchitecturalContext {
+    private String systemId;
+    private List<ServiceDefinition> services;
+    private List<IntegrationPoint> integrations;
+    private ArchitecturalPrinciples principles;
+    private List<QualityAttribute> qualityAttributes;
+}
+```
+
+### Domain-Specific Models
+
+#### Spring Boot Service Model
+
+```java
+public class SpringBootService {
+    private String serviceName;
+    private String version;
+    private List<String> profiles;
+    private DatabaseConfiguration database;
+    private SecurityConfiguration security;
+    private ObservabilityConfiguration observability;
+    private List<Dependency> dependencies;
+}
+```
+
+#### Microservice Integration Model
+
+```java
+public class MicroserviceIntegration {
+    private String sourceService;
+    private String targetService;
+    private IntegrationType type; // REST, Event, Message
+    private SecurityRequirements security;
+    private PerformanceRequirements performance;
+    private ResiliencePatterns resilience;
+}
 ```
 
 ## Correctness Properties
 
-*A property is a characteristic or behavior that should hold true across all valid executions of a system-essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+*A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-Based on the prework analysis, the following correctness properties have been identified to validate the agent structure implementation:
-
-### Property Reflection
-
-After reviewing all properties identified in the prework, several areas of redundancy were identified:
-
-- Properties about "agent availability" can be consolidated into system availability validation
-- Properties about "response time consistency" can be combined where they cover similar performance patterns
-- Properties about "accuracy validation" can be unified under comprehensive guidance validation
-
-### Core Properties
-
-**Property 1: Agent availability and domain coverage**
-*For any* request for specialized agent guidance, the system should provide agents for all major domain areas within 1 second with 100% coverage of architecture, implementation, testing, deployment, and observability domains
+### Property 1: Agent Domain Coverage
+*For any* development request within the POS system domain, the Agent Structure System should provide at least one specialized agent capable of handling that request type
 **Validates: Requirements REQ-001.1**
 
-**Property 2: Consultation response performance**
-*For any* developer consultation request, the system should provide domain-specific recommendations within 2 seconds with 95% accuracy following established Spring Boot and AWS patterns
+### Property 2: Domain-Specific Guidance Quality
+*For any* agent consultation request, the provided guidance should be specific to Spring Boot microservices patterns and AWS deployment practices
 **Validates: Requirements REQ-001.2**
 
-**Property 3: Agent collaboration consistency**
-*For any* development task involving multiple agents, all agent recommendations should be compatible within 3 seconds with zero conflicting recommendations and 100% pattern compliance
+### Property 3: Agent Collaboration Consistency
+*For any* multi-agent collaboration scenario, all participating agents should provide consistent, non-conflicting guidance
 **Validates: Requirements REQ-001.3**
 
-**Property 4: Spring Boot pattern accuracy**
-*For any* microservice implementation guidance request, the system should provide specialized Spring Boot development patterns within 2 seconds with 96% pattern accuracy and 100% microservice integration compliance
+### Property 4: Data Store Guidance Appropriateness
+*For any* data access implementation request, the guidance should reference appropriate PostgreSQL or ElastiCache patterns based on the use case
+**Validates: Requirements REQ-001.4, REQ-002.3**
+
+### Property 5: Spring Boot Pattern Provision
+*For any* microservice implementation request, the Implementation Agent should provide Spring Boot-specific development patterns
 **Validates: Requirements REQ-002.1**
 
-**Property 5: Data store guidance differentiation**
-*For any* data access guidance request, the system should provide different and appropriate guidance for DynamoDB services (20 services) versus ElastiCache services (3 vehicle reference services) within 2 seconds with 100% accuracy
-**Validates: Requirements REQ-002.3**
+### Property 6: Service Boundary Validation
+*For any* business logic implementation, the Implementation Agent should enforce proper service boundary validation
+**Validates: Requirements REQ-002.4**
 
-**Property 6: Security pattern compliance**
-*For any* security-related guidance request, the system should ensure JWT, Spring Security, and token-based authentication guidance within 2 seconds with 100% security pattern compliance and complete authentication validation
-**Validates: Requirements REQ-007.1**
+### Property 7: Domain Boundary Enforcement
+*For any* architectural decision, the Architecture Agent should enforce domain-driven design principles and prevent boundary violations
+**Validates: Requirements REQ-005.1**
 
-**Property 7: Observability metrics completeness**
-*For any* microservice monitoring guidance request, the system should ensure all services emit RED metrics guidance within 2 seconds with 100% Rate, Errors, Duration metric coverage and complete business work metrics validation
-**Validates: Requirements REQ-008.2**
+### Property 8: API Gateway Integration Consistency
+*For any* service integration design, the Integration Agent should ensure consistent API Gateway, SNS/SQS messaging, and event-driven architecture usage
+**Validates: Requirements REQ-005.2, REQ-006.2**
 
-**Property 8: API documentation specification coverage**
-*For any* API documentation request, the system should ensure comprehensive documentation within 4 seconds with 100% Swagger/OpenAPI specification coverage, complete request/response examples, error codes, and interactive documentation
-**Validates: Requirements REQ-009.2**
+### Property 9: Security Compliance Validation
+*For any* authentication or API security implementation, the Security Agent should ensure JWT, Spring Security, and OWASP compliance
+**Validates: Requirements REQ-007.1, REQ-007.2**
 
-**Property 9: System performance under load**
-*For any* set of developer queries under normal load conditions, the system should respond within 3 seconds for 99% of requests with maintained accuracy and functionality
-**Validates: Requirements REQ-011.1**
+### Property 10: Observability Instrumentation Completeness
+*For any* microservice instrumentation request, the Observability Agent should ensure comprehensive OpenTelemetry integration and RED metrics implementation
+**Validates: Requirements REQ-008.1, REQ-008.2**
 
-**Property 10: Fault tolerance and recovery**
-*For any* agent failure scenario, the system should recover within 30 seconds with automatic failover to backup agents and 100% request preservation
-**Validates: Requirements REQ-012.1**
+### Property 11: Documentation Synchronization
+*For any* code or API change, the Documentation Agent should ensure corresponding documentation updates and synchronization
+**Validates: Requirements REQ-009.3**
 
-**Property 11: Authentication security enforcement**
-*For any* developer access request, the system should authenticate using JWT tokens with 256-bit encryption and 100% security compliance
-**Validates: Requirements REQ-013.1**
+### Property 12: POS Domain Pattern Adherence
+*For any* business process modeling request, the Business Domain Agent should ensure adherence to POS domain patterns and business rule validation
+**Validates: Requirements REQ-010.1, REQ-010.4**
 
-**Property 12: Failover request preservation**
-*For any* agent service failure, the system should automatically redirect requests to backup agents within 5 seconds with 100% request preservation and complete functionality maintenance
-**Validates: Requirements REQ-016.2**
+### Property 13: Pair Programming Loop Detection
+*For any* implementation progress that stalls or exhibits repetitive patterns, the Pair Navigator Agent should detect loops and provide mandatory stop-phrase interruptions
+**Validates: Requirements REQ-011.2, REQ-011.4**
 
-**Property 13: Pair programming session establishment**
-*For any* Spring Boot developer implementation start scenario, the system should activate paired agent collaboration within 1 second with 100% pairing session establishment and complete navigator agent availability
-**Validates: Requirements REQ-011.1**
+### Property 14: Event Schema Consistency
+*For any* event-driven integration design, the Event-Driven Architecture Agent should ensure consistent event schemas and idempotent processing patterns
+**Validates: Requirements REQ-012.1, REQ-012.2**
 
-**Property 14: Implementation loop detection and intervention**
-*For any* implementation scenario where the same approach is attempted multiple times, the system should detect and interrupt with mandatory stop-phrases within 5 seconds with 98% loop detection accuracy and 100% stop-phrase compliance
-**Validates: Requirements REQ-011.2**
-
-**Property 15: Architectural drift detection and enforcement**
-*For any* implementation that deviates from intended architecture, the system should enforce design constraints within 2 seconds with 100% constraint validation and complete architectural alignment preservation
-**Validates: Requirements REQ-011.3**
-
-**Property 16: Scope creep detection and simplification**
-*For any* implementation that becomes over-engineered or adds unnecessary features, the system should provide simplification guidance within 3 seconds with 95% complexity reduction effectiveness and 100% requirement boundary enforcement
-**Validates: Requirements REQ-011.4**
-
-**Property 17: Pairing agent conflict resolution**
-*For any* scenario where pairing agents disagree on approach, the system should facilitate resolution within 10 seconds with 92% consensus achievement and complete alternative path provision
-**Validates: Requirements REQ-011.5**
+### Property 15: CI/CD Security Integration
+*For any* pipeline configuration, the CI/CD Pipeline Agent should ensure security scanning, testing automation, and deployment security validation
+**Validates: Requirements REQ-013.2, REQ-013.4**
 
 ## Error Handling
 
-### Enhanced Fault Tolerance and Recovery
+### Error Classification
 
-#### Agent Availability and Failover
+1. **Agent Unavailable**: Target agent is not responding or healthy
+2. **Invalid Request**: Request format or parameters are invalid
+3. **Context Insufficient**: Required context information is missing
+4. **Capability Mismatch**: Request exceeds agent capabilities
+5. **Collaboration Conflict**: Multiple agents provide conflicting guidance
+6. **Resource Exhaustion**: System resources are insufficient for request processing
 
-- **Agent Unavailability**: When primary agents are unavailable, the system SHALL provide cached guidance within 3 seconds and notify developers of limited functionality with 75% capability retention
-- **Automatic Failover**: When agent services fail, the system SHALL automatically redirect requests to backup agents within 5 seconds with 100% request preservation and complete functionality maintenance
-- **Graceful Degradation**: When AWS services are unavailable, the system SHALL maintain local functionality with 75% capability retention and proper user notification
+### Error Handling Strategies
 
-#### Performance and Load Management
+#### Graceful Degradation
+- **Fallback Agents**: Secondary agents for critical capabilities
+- **Reduced Functionality**: Provide basic guidance when specialized agents unavailable
+- **Cached Responses**: Use previously successful responses for similar requests
 
-- **Resource Exhaustion**: When system resources are exhausted, the system SHALL implement graceful degradation with priority-based request handling and maintain critical functionality
-- **Load Balancing**: The system SHALL distribute requests across available agents to maintain response times under high load conditions
-- **Caching Strategy**: The system SHALL provide cached responses within 200ms for frequently requested guidance patterns
+#### Automatic Recovery
+- **Health Monitoring**: Continuous agent health checks and automatic restart
+- **Circuit Breakers**: Prevent cascading failures between agents
+- **Retry Logic**: Exponential backoff for transient failures
 
-#### Security and Data Protection
-
-- **Authentication Failures**: When JWT authentication fails, the system SHALL deny access within 1 second and provide clear error messages with 96% error classification accuracy
-- **Data Corruption Detection**: When data corruption is detected, the system SHALL isolate affected components within 10 seconds and restore from backup within 10 minutes
-- **Security Breach Response**: The system SHALL detect and prevent unauthorized access attempts within 5 seconds with 99% accuracy
-
-#### Integration and Service Failures
-
-- **AWS Service Failures**: When AWS service integrations fail, the system SHALL maintain local functionality with 85% capability retention and provide alternative approaches
-- **Microservice Conflicts**: When Spring Boot version conflicts occur, the system SHALL provide migration guidance within 15 seconds with 92% compatibility resolution
-- **External API Failures**: When external API integrations fail, the system SHALL provide alternative approaches within 3 seconds with 87% workaround success rate
-
-#### Consistency and Validation
-
-- **Cross-Agent Validation**: Before providing guidance, agents SHALL validate recommendations against related agents' patterns within 1 second with 100% consistency checking
-- **Pattern Drift Detection**: The system SHALL detect when agent guidance deviates from established patterns and flag for review within 2 seconds
-- **Dependency Validation**: Agents SHALL validate that guidance doesn't create invalid dependencies between microservices with 100% validation accuracy
-
-#### Recovery and Rollback Mechanisms
-
-- **Guidance Rollback**: If agent guidance leads to system issues, the system SHALL provide mechanisms to identify and rollback problematic recommendations within 5 minutes
-- **Pattern Updates**: When architectural patterns evolve, all affected agents SHALL be updated consistently within 1 hour with 100% synchronization
-- **Validation Failures**: When property validation fails, the system SHALL provide specific corrective guidance within 2 seconds with 95% resolution accuracy
-
-#### Pair Programming Error Handling
-
-- **Pairing Session Recovery**: When pair programming agents lose synchronization, the system SHALL re-establish pairing within 10 seconds with 100% session recovery and complete context preservation
-- **Stop-Phrase Enforcement**: When mandatory stop-phrases are ignored or bypassed, the system SHALL escalate intervention within 3 seconds with 100% enforcement compliance and complete workflow interruption
-- **Conflict Resolution**: When pairing agents provide conflicting guidance, the system SHALL resolve conflicts within 15 seconds with 95% resolution accuracy and complete alternative path provision
-- **Loop Prevention**: When implementation loops exceed 3 iterations, the system SHALL force architectural reset within 5 seconds with 100% loop detection and complete design re-evaluation
-- **Solo Development Fallback**: When pair programming session fails, the system SHALL provide solo development fallback within 2 seconds with 80% functionality retention and complete guidance continuity
+#### Error Reporting
+- **Structured Logging**: Comprehensive error logging with correlation IDs
+- **Metrics Collection**: Error rate and type metrics for monitoring
+- **Alert Integration**: Integration with monitoring systems for critical errors
 
 ## Testing Strategy
 
-### Dual Testing Approach
+### Unit Testing Approach
 
-The agent structure will be validated using both unit testing and property-based testing approaches:
+**Framework**: JUnit 5 with Mockito for mocking dependencies
 
-**Unit Testing**:
+**Coverage Areas**:
+- Individual agent logic and decision-making algorithms
+- Request/response processing and validation
+- Error handling and edge cases
+- Context management and state transitions
 
-- Specific agent consultation scenarios with known expected outcomes
-- Integration points between agents for common workflows
-- Error handling and edge cases for invalid requests
-- Agent registry functionality and agent discovery mechanisms
+**Test Structure**:
+```java
+@ExtendWith(MockitoExtension.class)
+class ImplementationAgentTest {
+    @Mock private SpringBootPatternProvider patternProvider;
+    @Mock private ServiceBoundaryValidator boundaryValidator;
+    
+    @InjectMocks private ImplementationAgent implementationAgent;
+    
+    @Test
+    void shouldProvideSpringBootGuidanceForValidRequest() {
+        // Test implementation
+    }
+}
+```
 
-**Property-Based Testing**:
+### Property-Based Testing Approach
 
-- Universal properties that should hold across all agent interactions
-- Consistency validation across multiple agents working on the same scenario
-- Architectural constraint enforcement across random development scenarios
-- Security pattern compliance across all security-related guidance
+**Framework**: jqwik for Java property-based testing with minimum 100 iterations per property
 
-**Property-Based Testing Framework**: 
-The implementation will use **QuickCheck for Java** (or **jqwik**) as the property-based testing library, configured to run a minimum of 100 iterations per property test.
+**Property Test Implementation**:
+Each correctness property will be implemented as a separate property-based test with explicit tagging:
 
-**Property Test Tagging**:
-Each property-based test will be tagged with comments explicitly referencing the correctness property from this design document using the format: `**Feature: agent-structure, Property {number}: {property_text}**`
+```java
+@Property
+@Label("Feature: agent-structure, Property 1: Agent domain coverage")
+void agentDomainCoverageProperty(@ForAll("developmentRequests") DevelopmentRequest request) {
+    // Property implementation
+    AgentResponse response = agentRegistry.handleRequest(request);
+    assertThat(response.getStatus()).isEqualTo(ResponseStatus.SUCCESS);
+    assertThat(response.getRespondingAgent()).isNotNull();
+}
+```
 
-**Testing Requirements**:
+**Property Test Configuration**:
+- Minimum 100 iterations per property test
+- Custom generators for domain-specific test data
+- Shrinking enabled for failure case minimization
+- Explicit property numbering and requirement traceability
 
-- All correctness properties must be implemented as property-based tests
-- Each property test should run at least 100 iterations to ensure statistical confidence
-- Property tests should generate realistic consultation scenarios and validate agent responses
-- Unit tests should cover specific examples and integration workflows
-- Both test types are essential for comprehensive validation of the agent structure
+### Integration Testing
 
-### Test Implementation Strategy
+**Scope**: Multi-agent collaboration scenarios and external system integration
 
-**Agent Behavior Testing**:
+**Test Categories**:
+- Agent collaboration workflows
+- Context sharing and consistency
+- External service integration (Spring Boot services, Kubernetes, AWS)
+- Performance and scalability validation
 
-- Mock consultation scenarios with various microservice contexts
-- Validate agent responses for domain-specific accuracy
-- Test agent collaboration workflows for consistency
-- Verify error handling and graceful degradation
+### Contract Testing
 
-**Integration Testing**:
+**Framework**: Spring Cloud Contract for service interaction validation
 
-- Test agent interactions in realistic development workflows
-- Validate cross-agent consistency in complex scenarios
-- Test agent registry and discovery mechanisms
-- Verify agent guidance leads to valid system implementations
+**Coverage**:
+- Agent interface contracts
+- External service integration contracts
+- Event schema validation for event-driven agents
 
-**Performance Testing**:
+## Performance Optimization
 
-- Measure agent response times for consultation requests
-- Test system behavior under high consultation load
-- Validate agent caching and optimization strategies
-- Ensure agent guidance doesn't introduce performance bottlenecks
+### Caching Strategy
 
-### Validation Criteria
+#### Agent Response Caching
+- **Cache Layer**: Redis-based distributed cache
+- **Cache Keys**: Request fingerprint + context hash
+- **TTL Strategy**: Variable TTL based on request type and volatility
+- **Invalidation**: Context-aware cache invalidation
 
-**Functional Validation**:
+#### Knowledge Base Caching
+- **Pattern Cache**: Frequently accessed patterns and best practices
+- **Decision Cache**: Architectural decisions and rationales
+- **Configuration Cache**: Common configuration templates
 
-- All agents provide guidance within their defined domain expertise
-- Agent recommendations are consistent and non-conflicting
-- Architectural constraints are properly enforced
-- Security patterns are consistently applied
+### Load Balancing
 
-**Quality Validation**:
+#### Agent Pool Management
+- **Pool Sizing**: Dynamic pool sizing based on demand
+- **Load Distribution**: Round-robin with health-aware routing
+- **Resource Isolation**: Separate pools for different agent types
 
-- Agent guidance follows established best practices
-- Documentation is complete and accurate
-- Error messages are clear and actionable
-- System maintains consistency under various load conditions
+#### Request Prioritization
+- **Priority Queues**: Separate queues for different priority levels
+- **SLA Management**: Response time guarantees based on priority
+- **Resource Allocation**: Priority-based resource allocation
 
-**Integration Validation**:
+### Performance Monitoring
 
-- Agents work together effectively in development workflows
-- Cross-agent dependencies are properly managed
-- System gracefully handles agent failures or unavailability
-- Agent updates don't break existing functionality
+#### Metrics Collection
+- **Response Times**: P50, P95, P99 response time percentiles
+- **Throughput**: Requests per second by agent type
+- **Error Rates**: Error rates by agent and error type
+- **Resource Utilization**: CPU, memory, and network utilization
 
-**Pair Programming Validation**:
+#### Performance Alerting
+- **SLA Violations**: Alerts for response time SLA breaches
+- **Error Rate Spikes**: Alerts for abnormal error rate increases
+- **Resource Exhaustion**: Alerts for resource utilization thresholds
 
-- Pairing sessions establish successfully and maintain synchronization
-- Loop detection accurately identifies repeated implementation attempts
-- Architectural drift detection prevents design constraint violations
-- Stop-phrase enforcement interrupts problematic implementation patterns
-- Conflict resolution achieves consensus between paired agents
-- Solo development fallback maintains functionality when pairing fails
+## Security Considerations
+
+### Authentication and Authorization
+
+#### Agent Authentication
+- **Service-to-Service**: JWT-based authentication between agents
+- **API Security**: OAuth 2.0 for external API access
+- **Certificate Management**: Mutual TLS for secure communication
+
+#### Authorization Model
+- **Role-Based Access**: Agent capabilities mapped to roles
+- **Request Authorization**: Fine-grained authorization for sensitive operations
+- **Audit Logging**: Comprehensive audit trail for all agent interactions
+
+### Data Protection
+
+#### Sensitive Data Handling
+- **Data Classification**: Classification of sensitive vs. non-sensitive data
+- **Encryption**: Encryption at rest and in transit for sensitive data
+- **Data Masking**: Automatic masking of sensitive data in logs and responses
+
+#### Secrets Management
+- **AWS Secrets Manager**: Integration for secure secret storage
+- **Secret Rotation**: Automatic rotation of credentials and certificates
+- **Access Control**: Strict access control for secret retrieval
+
+### Security Monitoring
+
+#### Threat Detection
+- **Anomaly Detection**: ML-based anomaly detection for unusual patterns
+- **Intrusion Detection**: Detection of unauthorized access attempts
+- **Behavioral Analysis**: Analysis of agent behavior for security threats
+
+#### Incident Response
+- **Automated Response**: Automated response to detected security threats
+- **Incident Logging**: Comprehensive logging of security incidents
+- **Forensic Capabilities**: Data retention and analysis for forensic investigation
+
+## Deployment Architecture
+
+### Container Strategy
+
+#### Docker Configuration
+- **Base Images**: Distroless images for security and size optimization
+- **Multi-Stage Builds**: Optimized build process with minimal runtime images
+- **Health Checks**: Comprehensive health check endpoints for container orchestration
+
+#### Kubernetes Deployment
+- **Namespace Isolation**: Separate namespaces for different environments
+- **Resource Limits**: CPU and memory limits for predictable performance
+- **Auto-Scaling**: Horizontal Pod Autoscaler based on CPU and custom metrics
+
+### Service Mesh Integration
+
+#### Istio Configuration
+- **Traffic Management**: Intelligent routing and load balancing
+- **Security Policies**: Mutual TLS and authorization policies
+- **Observability**: Distributed tracing and metrics collection
+
+### High Availability
+
+#### Redundancy Strategy
+- **Multi-Zone Deployment**: Deployment across multiple availability zones
+- **Agent Replication**: Multiple instances of critical agents
+- **Data Replication**: Replicated storage for context and knowledge bases
+
+#### Disaster Recovery
+- **Backup Strategy**: Regular backups of agent configurations and knowledge bases
+- **Recovery Procedures**: Automated recovery procedures for different failure scenarios
+- **RTO/RPO Targets**: Recovery Time Objective of 30 seconds, Recovery Point Objective of 5 minutes
+
+## Monitoring and Observability
+
+### Metrics Strategy
+
+#### Application Metrics
+- **Business Metrics**: Agent utilization, guidance quality scores, user satisfaction
+- **Technical Metrics**: Response times, error rates, throughput, resource utilization
+- **Custom Metrics**: Domain-specific metrics for specialized agents
+
+#### Infrastructure Metrics
+- **Container Metrics**: CPU, memory, network, and storage utilization
+- **Kubernetes Metrics**: Pod status, node health, cluster resource utilization
+- **Network Metrics**: Service-to-service communication patterns and performance
+
+### Logging Strategy
+
+#### Structured Logging
+- **Log Format**: JSON-structured logs with consistent schema
+- **Correlation IDs**: Request correlation across agent interactions
+- **Log Levels**: Appropriate log levels for different types of events
+
+#### Log Aggregation
+- **ELK Stack**: Elasticsearch, Logstash, and Kibana for log aggregation and analysis
+- **Log Retention**: Configurable retention policies based on log type and compliance requirements
+- **Search Capabilities**: Full-text search and filtering capabilities for troubleshooting
+
+### Distributed Tracing
+
+#### OpenTelemetry Integration
+- **Trace Collection**: Comprehensive trace collection across all agent interactions
+- **Span Attributes**: Rich span attributes for detailed analysis
+- **Sampling Strategy**: Intelligent sampling to balance observability and performance
+
+#### Jaeger Configuration
+- **Trace Storage**: Scalable trace storage with configurable retention
+- **Trace Analysis**: Advanced trace analysis and visualization capabilities
+- **Performance Insights**: Performance bottleneck identification and optimization recommendations
+
+## Integration Patterns
+
+### Spring Boot Service Integration
+
+#### Service Discovery
+- **Eureka Integration**: Service registration and discovery for Spring Boot services
+- **Health Checks**: Integration with Spring Boot Actuator health endpoints
+- **Load Balancing**: Client-side load balancing with Ribbon or Spring Cloud LoadBalancer
+
+#### Configuration Management
+- **Spring Cloud Config**: Centralized configuration management for all services
+- **Environment Profiles**: Environment-specific configuration profiles
+- **Dynamic Refresh**: Runtime configuration refresh without service restart
+
+### AWS Services Integration
+
+#### Compute Services
+- **ECS Integration**: Container orchestration with Amazon ECS
+- **Lambda Integration**: Serverless function integration for lightweight agents
+- **Auto Scaling**: Integration with AWS Auto Scaling for dynamic capacity management
+
+#### Data Services
+- **RDS Integration**: Managed PostgreSQL database integration
+- **ElastiCache Integration**: Redis cluster integration for caching
+- **S3 Integration**: Object storage for knowledge bases and artifacts
+
+#### Security Services
+- **IAM Integration**: Role-based access control with AWS IAM
+- **Secrets Manager**: Secure secret storage and retrieval
+- **WAF Integration**: Web Application Firewall for API protection
+
+### Event-Driven Integration
+
+#### Message Brokers
+- **Apache Kafka**: High-throughput event streaming for real-time agent communication
+- **Amazon SNS/SQS**: Managed messaging services for reliable event delivery
+- **RabbitMQ**: Message queuing for complex routing scenarios
+
+#### Event Patterns
+- **Event Sourcing**: Event-based state management for agent interactions
+- **CQRS**: Command Query Responsibility Segregation for scalable read/write operations
+- **Saga Pattern**: Distributed transaction management across multiple agents
+
+## Scalability Considerations
+
+### Horizontal Scaling
+
+#### Agent Scaling
+- **Stateless Design**: Stateless agent implementations for easy horizontal scaling
+- **Load Distribution**: Intelligent load distribution across agent instances
+- **Auto-Scaling**: Automatic scaling based on demand and performance metrics
+
+#### Data Scaling
+- **Database Sharding**: Horizontal database scaling for large datasets
+- **Cache Scaling**: Distributed caching with Redis Cluster
+- **Storage Scaling**: Scalable object storage for knowledge bases and artifacts
+
+### Performance Optimization
+
+#### Caching Strategy
+- **Multi-Level Caching**: Application-level, distributed, and CDN caching
+- **Cache Warming**: Proactive cache warming for frequently accessed data
+- **Cache Invalidation**: Intelligent cache invalidation strategies
+
+#### Database Optimization
+- **Query Optimization**: Optimized database queries with proper indexing
+- **Connection Pooling**: Efficient database connection management
+- **Read Replicas**: Read replica scaling for read-heavy workloads
+
+### Resource Management
+
+#### Memory Management
+- **Memory Profiling**: Regular memory profiling and optimization
+- **Garbage Collection**: Optimized garbage collection settings for JVM-based agents
+- **Memory Limits**: Appropriate memory limits and monitoring
+
+#### CPU Optimization
+- **Thread Pool Management**: Optimized thread pool configurations
+- **Async Processing**: Asynchronous processing for I/O-bound operations
+- **CPU Affinity**: CPU affinity optimization for performance-critical agents
+
+## Future Extensibility
+
+### Plugin Architecture
+
+#### Agent Plugin System
+- **Plugin Interface**: Standardized plugin interface for new agent types
+- **Dynamic Loading**: Runtime plugin loading and unloading
+- **Plugin Registry**: Central registry for available plugins and their capabilities
+
+#### Extension Points
+- **Custom Handlers**: Extension points for custom request handlers
+- **Custom Validators**: Extension points for custom validation logic
+- **Custom Integrations**: Extension points for custom external service integrations
+
+### API Evolution
+
+#### Versioning Strategy
+- **Semantic Versioning**: Semantic versioning for API compatibility
+- **Backward Compatibility**: Backward compatibility guarantees for stable APIs
+- **Deprecation Policy**: Clear deprecation policy and migration paths
+
+#### Schema Evolution
+- **Schema Registry**: Centralized schema registry for data model evolution
+- **Migration Tools**: Automated migration tools for schema changes
+- **Compatibility Testing**: Automated compatibility testing for schema changes
+
+### Technology Adaptation
+
+#### Framework Updates
+- **Spring Boot Updates**: Regular updates to latest Spring Boot versions
+- **Kubernetes Updates**: Adaptation to new Kubernetes features and APIs
+- **AWS Updates**: Integration with new AWS services and features
+
+#### Emerging Technologies
+- **AI/ML Integration**: Integration with machine learning platforms for intelligent guidance
+- **Serverless Adoption**: Adoption of serverless technologies for lightweight agents
+- **Edge Computing**: Edge deployment capabilities for distributed environments

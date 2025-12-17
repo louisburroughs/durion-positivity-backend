@@ -1,0 +1,201 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pos-agent-framework
+  namespace: positivity
+  labels:
+    app: pos-agent-framework
+    version: v1.0.0
+    component: agent-framework
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: pos-agent-framework
+  template:
+    metadata:
+      labels:
+        app: pos-agent-framework
+        version: v1.0.0
+        component: agent-framework
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: pos-agent-framework
+      containers:
+      - name: pos-agent-framework
+        image: positivity/pos-agent-framework:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: pos-config
+              key: kafka.bootstrap.servers
+        - name: SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pos-config
+              key: schema.registry.url
+        - name: CONFIG_SERVER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pos-config
+              key: config.server.url
+        - name: RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: pos-config
+              key: rabbitmq.host
+        - name: RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: pos-secrets
+              key: rabbitmq.username
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pos-secrets
+              key: rabbitmq.password
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pos-secrets
+              key: jwt.secret
+        - name: CONFIG_SERVER_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: pos-secrets
+              key: config.server.username
+        - name: CONFIG_SERVER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pos-secrets
+              key: config.server.password
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: logs-volume
+          mountPath: /app/logs
+      volumes:
+      - name: config-volume
+        configMap:
+          name: pos-agent-framework-config
+      - name: logs-volume
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - pos-agent-framework
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pos-agent-framework-service
+  namespace: positivity
+  labels:
+    app: pos-agent-framework
+    component: agent-framework
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: pos-agent-framework
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pos-agent-framework
+  namespace: positivity
+  labels:
+    app: pos-agent-framework
+    component: agent-framework
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: positivity
+  name: pos-agent-framework-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pos-agent-framework-rolebinding
+  namespace: positivity
+subjects:
+- kind: ServiceAccount
+  name: pos-agent-framework
+  namespace: positivity
+roleRef:
+  kind: Role
+  name: pos-agent-framework-role
+  apiGroup: rbac.authorization.k8s.io

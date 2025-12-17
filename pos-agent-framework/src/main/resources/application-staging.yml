@@ -1,0 +1,129 @@
+spring:
+  profiles:
+    active: staging
+
+positivity:
+  agent:
+    registry:
+      discovery-timeout: 1s
+      max-agents: 150  # Between development and production
+      enable-caching: true
+      cache-timeout: 7m
+    performance:
+      default-response-timeout: 3s
+      default-accuracy-threshold: 0.97
+      default-availability-threshold: 0.999
+      default-max-concurrent-requests: 200
+      enable-metrics: true
+    collaboration:
+      consistency-validation-timeout: 3s
+      consistency-threshold: 0.85
+      max-participating-agents: 7
+      enable-conflict-resolution: true
+    failover:
+      recovery-timeout: 20s
+      max-backup-agents: 4
+      enable-automatic-failover: true
+      health-check-interval: 45s
+    # Staging-specific agent configurations
+    agents:
+      architecture:
+        max-instances: 3
+      implementation:
+        max-instances: 7
+      deployment:
+        max-instances: 4
+      testing:
+        max-instances: 4
+      security:
+        max-instances: 3
+      observability:
+        max-instances: 3
+      documentation:
+        max-instances: 2
+      business-domain:
+        max-instances: 4
+      integration-gateway:
+        max-instances: 4
+      pair-programming:
+        max-instances: 2
+      event-driven:
+        max-instances: 4
+        kafka:
+          bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-staging:9092}
+          schema-registry-url: ${SCHEMA_REGISTRY_URL:http://schema-registry-staging:8081}
+        rabbitmq:
+          host: ${RABBITMQ_HOST:rabbitmq-staging}
+          port: ${RABBITMQ_PORT:5672}
+          username: ${RABBITMQ_USERNAME:staging-user}
+          password: ${RABBITMQ_PASSWORD}
+      cicd-pipeline:
+        max-instances: 2
+        security-scanning:
+          sast-enabled: true
+          dast-enabled: true
+          dependency-check-enabled: true
+          container-scanning-enabled: false  # Optional in staging
+        deployment-strategies:
+          - blue-green
+          - canary
+          - rolling
+      configuration-management:
+        max-instances: 2
+        spring-cloud-config:
+          enabled: true
+          server-url: ${CONFIG_SERVER_URL:http://config-server-staging:8888}
+        secrets-management:
+          aws-secrets-manager: true
+          hashicorp-vault: false  # Simplified for staging
+          kubernetes-secrets: true
+        feature-flags:
+          enabled: true
+          provider: ${FEATURE_FLAG_PROVIDER:local}
+      resilience-engineering:
+        max-instances: 2
+        circuit-breaker:
+          failure-threshold: 5
+          timeout: 8s
+          reset-timeout: 45s
+        retry:
+          max-attempts: 4
+          backoff-multiplier: 1.8
+          max-delay: 20s
+        chaos-engineering:
+          enabled: ${CHAOS_ENGINEERING_ENABLED:true}  # Enable for testing
+          failure-injection-rate: 0.005  # Higher rate for testing
+
+logging:
+  level:
+    com.positivity.agent: INFO
+    org.springframework.cloud: INFO
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,prometheus,env  # More endpoints for staging testing
+  endpoint:
+    health:
+      show-details: always  # Full details for staging debugging
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+      simple:
+        enabled: true
+
+# Staging-specific security (less strict than production)
+security:
+  jwt:
+    secret: ${JWT_SECRET:staging-secret-key}
+    expiration: 7200000  # 2 hours for easier testing
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:4200,https://staging.positivity.com}
+    allowed-methods: GET,POST,PUT,DELETE,PATCH
+    allowed-headers: "*"
+    allow-credentials: true

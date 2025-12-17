@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pos-agent-framework-config
+  namespace: positivity
+  labels:
+    app: pos-agent-framework
+    component: agent-framework
+data:
+  application.yml: |
+    spring:
+      application:
+        name: positivity-agent-framework
+      profiles:
+        active: production
+      cache:
+        type: caffeine
+        caffeine:
+          spec: maximumSize=2000,expireAfterWrite=10m
+
+    positivity:
+      agent:
+        registry:
+          discovery-timeout: 1s
+          max-agents: 200
+          enable-caching: true
+          cache-timeout: 10m
+        performance:
+          default-response-timeout: 2s
+          default-accuracy-threshold: 0.99
+          default-availability-threshold: 0.999
+          default-max-concurrent-requests: 500
+          enable-metrics: true
+        collaboration:
+          consistency-validation-timeout: 2s
+          consistency-threshold: 0.9
+          max-participating-agents: 10
+          enable-conflict-resolution: true
+        failover:
+          recovery-timeout: 15s
+          max-backup-agents: 5
+          enable-automatic-failover: true
+          health-check-interval: 30s
+        agents:
+          architecture:
+            enabled: true
+            max-instances: 5
+            response-timeout: 2s
+          implementation:
+            enabled: true
+            max-instances: 10
+            response-timeout: 1s
+          deployment:
+            enabled: true
+            max-instances: 5
+            response-timeout: 2s
+          testing:
+            enabled: true
+            max-instances: 5
+            response-timeout: 1s
+          security:
+            enabled: true
+            max-instances: 5
+            response-timeout: 1s
+          observability:
+            enabled: true
+            max-instances: 5
+            response-timeout: 1s
+          documentation:
+            enabled: true
+            max-instances: 3
+            response-timeout: 2s
+          business-domain:
+            enabled: true
+            max-instances: 5
+            response-timeout: 1s
+          integration-gateway:
+            enabled: true
+            max-instances: 5
+            response-timeout: 1s
+          pair-programming:
+            enabled: true
+            max-instances: 3
+            response-timeout: 1s
+          event-driven:
+            enabled: true
+            max-instances: 5
+            response-timeout: 2s
+          cicd-pipeline:
+            enabled: true
+            max-instances: 3
+            response-timeout: 2s
+            security-scanning:
+              sast-enabled: true
+              dast-enabled: true
+              dependency-check-enabled: true
+              container-scanning-enabled: true
+            deployment-strategies:
+              - blue-green
+              - canary
+              - rolling
+              - recreate
+          configuration-management:
+            enabled: true
+            max-instances: 3
+            response-timeout: 1s
+            spring-cloud-config:
+              enabled: true
+            secrets-management:
+              aws-secrets-manager: true
+              hashicorp-vault: true
+              kubernetes-secrets: true
+            feature-flags:
+              enabled: true
+              provider: consul
+          resilience-engineering:
+            enabled: true
+            max-instances: 3
+            response-timeout: 1s
+            circuit-breaker:
+              failure-threshold: 3
+              timeout: 5s
+              reset-timeout: 30s
+            retry:
+              max-attempts: 5
+              backoff-multiplier: 1.5
+              max-delay: 30s
+            chaos-engineering:
+              enabled: false
+              failure-injection-rate: 0.001
+
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,metrics,info,prometheus
+      endpoint:
+        health:
+          show-details: when-authorized
+      metrics:
+        export:
+          prometheus:
+            enabled: true
+
+    logging:
+      level:
+        com.positivity.agent: INFO
+        root: WARN
+      pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pos-config
+  namespace: positivity
+  labels:
+    app: pos-system
+    component: configuration
+data:
+  kafka.bootstrap.servers: "kafka-cluster:9092"
+  schema.registry.url: "http://schema-registry:8081"
+  config.server.url: "http://config-server:8888"
+  rabbitmq.host: "rabbitmq-cluster"
+  rabbitmq.port: "5672"
+  consul.url: "http://consul:8500"
+  prometheus.url: "http://prometheus:9090"
+  grafana.url: "http://grafana:3000"

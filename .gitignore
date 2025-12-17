@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### AI Session Files ###
+.ai/session.md
+.ai/session-*.md

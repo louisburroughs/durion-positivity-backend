@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pos-agent-framework
+  labels:
+    app: pos-agent-framework
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pos-agent-framework
+  template:
+    metadata:
+      labels:
+        app: pos-agent-framework
+        version: v1
+    spec:
+      containers:
+      - name: pos-agent-framework
+        image: pos-agent-framework:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://eureka-server:8761/eureka/"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: agent-config
+              key: kafka.bootstrap.servers
+        - name: SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agent-config
+              key: schema.registry.url
+        - name: RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: agent-config
+              key: rabbitmq.host
+        - name: RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: agent-secrets
+              key: rabbitmq.username
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: agent-secrets
+              key: rabbitmq.password
+        - name: CONFIG_SERVER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agent-config
+              key: config.server.url
+        - name: CONSUL_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agent-config
+              key: consul.url
+        - name: VAULT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agent-config
+              key: vault.url
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      securityContext:
+        fsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pos-agent-framework
+  labels:
+    app: pos-agent-framework
+spec:
+  selector:
+    app: pos-agent-framework
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-config
+data:
+  kafka.bootstrap.servers: "kafka-cluster:9092"
+  schema.registry.url: "http://schema-registry:8081"
+  rabbitmq.host: "rabbitmq-cluster"
+  config.server.url: "http://config-server:8888"
+  consul.url: "http://consul:8500"
+  vault.url: "http://vault:8200"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: agent-secrets
+type: Opaque
+data:
+  rabbitmq.username: cHJvZC11c2Vy  # base64 encoded 'prod-user'
+  rabbitmq.password: cHJvZC1wYXNz  # base64 encoded 'prod-pass'

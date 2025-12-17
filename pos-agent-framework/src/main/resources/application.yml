@@ -29,7 +29,98 @@ positivity:
       max-backup-agents: 3
       enable-automatic-failover: true
       health-check-interval: 60s
-
+    # Agent-specific configurations
+    agents:
+      architecture:
+        enabled: true
+        max-instances: 2
+        response-timeout: 2s
+      implementation:
+        enabled: true
+        max-instances: 5
+        response-timeout: 1s
+      deployment:
+        enabled: true
+        max-instances: 3
+        response-timeout: 2s
+      testing:
+        enabled: true
+        max-instances: 3
+        response-timeout: 1s
+      security:
+        enabled: true
+        max-instances: 2
+        response-timeout: 1s
+      observability:
+        enabled: true
+        max-instances: 2
+        response-timeout: 1s
+      documentation:
+        enabled: true
+        max-instances: 2
+        response-timeout: 2s
+      business-domain:
+        enabled: true
+        max-instances: 3
+        response-timeout: 1s
+      integration-gateway:
+        enabled: true
+        max-instances: 3
+        response-timeout: 1s
+      pair-programming:
+        enabled: true
+        max-instances: 2
+        response-timeout: 1s
+      event-driven:
+        enabled: true
+        max-instances: 3
+        response-timeout: 2s
+        kafka:
+          bootstrap-servers: localhost:9092
+          schema-registry-url: http://localhost:8081
+        rabbitmq:
+          host: localhost
+          port: 5672
+      cicd-pipeline:
+        enabled: true
+        max-instances: 2
+        response-timeout: 3s
+        security-scanning:
+          sast-enabled: true
+          dast-enabled: true
+          dependency-check-enabled: true
+        deployment-strategies:
+          - blue-green
+          - canary
+          - rolling
+      configuration-management:
+        enabled: true
+        max-instances: 2
+        response-timeout: 1s
+        spring-cloud-config:
+          enabled: true
+          server-url: http://localhost:8888
+        secrets-management:
+          aws-secrets-manager: true
+          hashicorp-vault: true
+        feature-flags:
+          enabled: true
+          provider: consul
+      resilience-engineering:
+        enabled: true
+        max-instances: 2
+        response-timeout: 1s
+        circuit-breaker:
+          failure-threshold: 5
+          timeout: 10s
+          reset-timeout: 30s
+        retry:
+          max-attempts: 3
+          backoff-multiplier: 2
+          max-delay: 10s
+        chaos-engineering:
+          enabled: false
+          failure-injection-rate: 0.01
 management:
   endpoints:
     web:
