@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The positivity project is a Spring Boot microservices POS system with 23+ services deployed on Kubernetes. To effectively manage development across this distributed system, we need a simplified agent framework that provides specialized expertise for the most critical development tasks: architecture guidance, implementation support, testing assistance, and deployment help.
+The durion-positivity-backend project is a Spring Boot microservices POS system with 23+ services deployed on Kubernetes. To effectively manage development across this distributed system, we need a simplified agent framework that provides specialized expertise for the most critical development tasks: architecture guidance, implementation support, testing assistance, and deployment help.
 
 This requirements document follows EARS (Easy Approach to Requirements Syntax) patterns to ensure clear, testable requirements.
 
