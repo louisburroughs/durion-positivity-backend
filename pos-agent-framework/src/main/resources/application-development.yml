@@ -1,0 +1,68 @@
+spring:
+  profiles:
+    active: development
+
+positivity:
+  agent:
+    registry:
+      discovery-timeout: 2s
+      enable-caching: true
+      cache-timeout: 2m
+    performance:
+      default-response-timeout: 5s
+      enable-metrics: true
+    collaboration:
+      consistency-validation-timeout: 5s
+      enable-conflict-resolution: true
+    # Development-specific agent configurations
+    agents:
+      event-driven:
+        kafka:
+          bootstrap-servers: localhost:9092
+          schema-registry-url: http://localhost:8081
+        rabbitmq:
+          host: localhost
+          port: 5672
+          username: guest
+          password: guest
+      cicd-pipeline:
+        security-scanning:
+          sast-enabled: false  # Disabled for faster development
+          dast-enabled: false
+          dependency-check-enabled: true
+        deployment-strategies:
+          - rolling  # Simpler strategy for development
+      configuration-management:
+        spring-cloud-config:
+          enabled: true
+          server-url: http://localhost:8888
+        secrets-management:
+          aws-secrets-manager: false  # Use local secrets in development
+          hashicorp-vault: false
+        feature-flags:
+          enabled: true
+          provider: local  # Local feature flag provider
+      resilience-engineering:
+        circuit-breaker:
+          failure-threshold: 10  # More lenient in development
+          timeout: 30s
+          reset-timeout: 60s
+        chaos-engineering:
+          enabled: false  # Disabled in development
+
+logging:
+  level:
+    com.positivity.agent: DEBUG
+    org.springframework.cloud: DEBUG
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"  # Expose all endpoints in development
+  endpoint:
+    health:
+      show-details: always

@@ -1,0 +1,136 @@
+spring:
+  profiles:
+    active: production
+
+positivity:
+  agent:
+    registry:
+      discovery-timeout: 1s
+      max-agents: 200  # Higher capacity for production
+      enable-caching: true
+      cache-timeout: 10m  # Longer cache for production
+    performance:
+      default-response-timeout: 2s  # Stricter timeout for production
+      default-accuracy-threshold: 0.99  # Higher accuracy requirement
+      default-availability-threshold: 0.999
+      default-max-concurrent-requests: 500  # Higher concurrency
+      enable-metrics: true
+    collaboration:
+      consistency-validation-timeout: 2s  # Stricter timeout
+      consistency-threshold: 0.9  # Higher consistency requirement
+      max-participating-agents: 10  # Allow more agents in production
+      enable-conflict-resolution: true
+    failover:
+      recovery-timeout: 15s  # Faster recovery in production
+      max-backup-agents: 5  # More backup agents
+      enable-automatic-failover: true
+      health-check-interval: 30s  # More frequent health checks
+    # Production-specific agent configurations
+    agents:
+      architecture:
+        max-instances: 5  # More instances for production load
+      implementation:
+        max-instances: 10
+      deployment:
+        max-instances: 5
+      testing:
+        max-instances: 5
+      security:
+        max-instances: 5
+      observability:
+        max-instances: 5
+      documentation:
+        max-instances: 3
+      business-domain:
+        max-instances: 5
+      integration-gateway:
+        max-instances: 5
+      pair-programming:
+        max-instances: 3
+      event-driven:
+        max-instances: 5
+        kafka:
+          bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-cluster:9092}
+          schema-registry-url: ${SCHEMA_REGISTRY_URL:http://schema-registry:8081}
+          security-protocol: SASL_SSL
+          sasl-mechanism: PLAIN
+        rabbitmq:
+          host: ${RABBITMQ_HOST:rabbitmq-cluster}
+          port: ${RABBITMQ_PORT:5672}
+          username: ${RABBITMQ_USERNAME}
+          password: ${RABBITMQ_PASSWORD}
+          ssl-enabled: true
+      cicd-pipeline:
+        max-instances: 3
+        response-timeout: 2s  # Stricter timeout for production
+        security-scanning:
+          sast-enabled: true
+          dast-enabled: true
+          dependency-check-enabled: true
+          container-scanning-enabled: true
+        deployment-strategies:
+          - blue-green
+          - canary
+          - rolling
+          - recreate
+      configuration-management:
+        max-instances: 3
+        spring-cloud-config:
+          enabled: true
+          server-url: ${CONFIG_SERVER_URL:http://config-server:8888}
+          username: ${CONFIG_SERVER_USERNAME}
+          password: ${CONFIG_SERVER_PASSWORD}
+        secrets-management:
+          aws-secrets-manager: true
+          hashicorp-vault: true
+          kubernetes-secrets: true
+        feature-flags:
+          enabled: true
+          provider: ${FEATURE_FLAG_PROVIDER:consul}
+          consul-url: ${CONSUL_URL:http://consul:8500}
+      resilience-engineering:
+        max-instances: 3
+        circuit-breaker:
+          failure-threshold: 3  # Stricter failure threshold
+          timeout: 5s
+          reset-timeout: 30s
+        retry:
+          max-attempts: 5  # More retry attempts in production
+          backoff-multiplier: 1.5
+          max-delay: 30s
+        chaos-engineering:
+          enabled: ${CHAOS_ENGINEERING_ENABLED:false}
+          failure-injection-rate: 0.001  # Very low rate for production
+
+logging:
+  level:
+    com.positivity.agent: INFO  # Less verbose logging in production
+    root: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,prometheus  # Limited endpoints for security
+  endpoint:
+    health:
+      show-details: when-authorized  # Secure health endpoint
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+      simple:
+        enabled: false  # Disable simple metrics in production
+
+# Security configurations for production
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 3600000  # 1 hour
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:https://pos.positivity.com}
+    allowed-methods: GET,POST,PUT,DELETE
+    allowed-headers: "*"
+    allow-credentials: true

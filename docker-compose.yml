@@ -342,6 +342,36 @@ services:
       timeout: 3s
       retries: 20
 
+  pos-agent-framework:
+    build:
+      context: ./pos-agent-framework
+      dockerfile: Dockerfile
+    ports:
+      - "8093:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_PROFILES_ACTIVE: dev
+      # Event-driven agent configurations
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      # Configuration management
+      CONFIG_SERVER_URL: http://config-server:8888
+      # Feature flags
+      CONSUL_URL: http://consul:8500
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   pos-api-gateway:
     build:
       context: ./pos-api-gateway

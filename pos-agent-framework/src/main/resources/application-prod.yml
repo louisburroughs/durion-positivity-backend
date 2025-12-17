@@ -1,0 +1,295 @@
+# Production Configuration for Agent Framework
+spring:
+  application:
+    name: pos-agent-framework
+  profiles:
+    active: prod
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DATABASE_HOST:postgres}:${DATABASE_PORT:5432}/${DATABASE_NAME:pos_agents}
+    username: ${DATABASE_USERNAME:pos_user}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      leak-detection-threshold: 60000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+  
+  # Redis Configuration
+  redis:
+    host: ${REDIS_HOST:redis}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 2000ms
+  
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-cluster:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+    consumer:
+      group-id: agent-framework
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.positivity.agent.*"
+  
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq-cluster}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: /
+    connection-timeout: 30000
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
+          max-interval: 10000ms
+          multiplier: 2.0
+
+# Server Configuration
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+  http2:
+    enabled: true
+  error:
+    include-stacktrace: never
+    include-message: always
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    metadata-map:
+      version: ${spring.application.version:1.0.0}
+      environment: production
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    kafka:
+      enabled: true
+    rabbitmq:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+      slo:
+        http.server.requests: 100ms,200ms,500ms,1s,2s
+
+# Logging Configuration
+logging:
+  level:
+    com.positivity.agent: INFO
+    org.springframework.kafka: WARN
+    org.springframework.amqp: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: /var/log/agent-framework/application.log
+    max-size: 100MB
+    max-history: 30
+
+# Agent Framework Configuration
+pos:
+  agent:
+    framework:
+      enabled: true
+      registry:
+        health-check-interval: 30s
+        discovery-timeout: 10s
+        max-agents-per-type: 5
+        cleanup-interval: 300s
+      manager:
+        request-timeout: 30s
+        max-concurrent-requests: 100
+        load-balancing-strategy: round-robin
+        circuit-breaker:
+          enabled: true
+          failure-threshold: 5
+          recovery-timeout: 30s
+      context:
+        max-context-size: 10MB
+        context-ttl: 3600s
+        cleanup-interval: 300s
+      performance:
+        enable-metrics: true
+        enable-tracing: true
+        cache-enabled: true
+        cache-ttl: 300s
+      security:
+        jwt:
+          secret: ${JWT_SECRET:your-secret-key}
+          expiration: 3600
+        tls:
+          enabled: true
+          keystore: ${TLS_KEYSTORE_PATH:/etc/ssl/keystore.p12}
+          keystore-password: ${TLS_KEYSTORE_PASSWORD}
+          truststore: ${TLS_TRUSTSTORE_PATH:/etc/ssl/truststore.p12}
+          truststore-password: ${TLS_TRUSTSTORE_PASSWORD}
+      agents:
+        architecture:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+        implementation:
+          enabled: true
+          max-instances: 5
+          timeout: 30s
+        deployment:
+          enabled: true
+          max-instances: 2
+          timeout: 45s
+        testing:
+          enabled: true
+          max-instances: 3
+          timeout: 60s
+        security:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+        observability:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+        documentation:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+        business-domain:
+          enabled: true
+          max-instances: 3
+          timeout: 30s
+        integration-gateway:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+        pair-programming:
+          enabled: true
+          max-instances: 3
+          timeout: 30s
+        event-driven:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+        cicd-pipeline:
+          enabled: true
+          max-instances: 2
+          timeout: 45s
+        configuration-management:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+        resilience-engineering:
+          enabled: true
+          max-instances: 2
+          timeout: 30s
+
+# Distributed Tracing
+spring.sleuth:
+  zipkin:
+    base-url: ${ZIPKIN_BASE_URL:http://zipkin:9411}
+  sampler:
+    probability: 0.1
+  kafka:
+    enabled: true
+  rabbitmq:
+    enabled: true
+
+# External Service Configuration
+external:
+  services:
+    config-server:
+      url: ${CONFIG_SERVER_URL:http://config-server:8888}
+      timeout: 10s
+    consul:
+      url: ${CONSUL_URL:http://consul:8500}
+      timeout: 5s
+    vault:
+      url: ${VAULT_URL:http://vault:8200}
+      timeout: 10s
+      token: ${VAULT_TOKEN}
+    schema-registry:
+      url: ${SCHEMA_REGISTRY_URL:http://schema-registry:8081}
+      timeout: 5s

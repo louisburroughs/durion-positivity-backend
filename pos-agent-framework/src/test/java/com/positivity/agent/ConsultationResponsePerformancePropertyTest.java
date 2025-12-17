@@ -210,18 +210,18 @@ class ConsultationResponsePerformancePropertyTest {
     }
     
     private void setupPerformanceTestAgents() {
-        // Create high-performance test agents
-        registry.registerAgent(createHighPerformanceAgent("spring-boot-1", "Spring Boot Developer", 
-                "implementation", Set.of("spring-boot", "microservices", "rest-api")));
+        // Create high-performance test agents using our actual agent IDs
+        registry.registerAgent(createHighPerformanceAgent("implementation-agent", "Implementation Agent", 
+                "implementation", Set.of("spring-boot", "microservices", "rest-api", "business-logic")));
         
-        registry.registerAgent(createHighPerformanceAgent("aws-1", "AWS DevOps Agent", 
-                "deployment", Set.of("aws", "fargate", "dynamodb", "elasticache")));
+        registry.registerAgent(createHighPerformanceAgent("deployment-agent", "Deployment Agent", 
+                "deployment", Set.of("aws-fargate", "docker", "ecs", "dynamodb", "elasticache")));
         
-        registry.registerAgent(createHighPerformanceAgent("arch-1", "Architecture Agent", 
-                "architecture", Set.of("ddd", "patterns", "microservices")));
+        registry.registerAgent(createHighPerformanceAgent("architecture-agent", "Architecture Agent", 
+                "architecture", Set.of("ddd", "integration-patterns", "microservices", "system-design")));
         
-        registry.registerAgent(createHighPerformanceAgent("test-1", "Testing Agent", 
-                "testing", Set.of("unit-testing", "integration-testing")));
+        registry.registerAgent(createHighPerformanceAgent("testing-agent", "Testing Agent", 
+                "testing", Set.of("unit-testing", "integration-testing", "contract-testing")));
         
         registry.registerAgent(createHighPerformanceAgent("sec-1", "Security Agent", 
                 "security", Set.of("jwt", "spring-security", "owasp")));

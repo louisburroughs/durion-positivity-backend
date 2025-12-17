@@ -167,18 +167,18 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
         }
 
         private void setupMajorDomainAgents() {
-                // Create test agents for all major domains
-                registry.registerAgent(createTestAgent("arch-1", "Architecture Agent", "architecture",
-                                Set.of("ddd", "microservices", "patterns")));
+                // Create test agents for all major domains using our actual agent IDs
+                registry.registerAgent(createTestAgent("architecture-agent", "Architecture Agent", "architecture",
+                                Set.of("ddd", "microservices", "integration-patterns", "system-design", "boundaries")));
 
-                registry.registerAgent(createTestAgent("impl-1", "Spring Boot Developer", "implementation",
-                                Set.of("spring-boot", "java", "business-logic")));
+                registry.registerAgent(createTestAgent("implementation-agent", "Implementation Agent", "implementation",
+                                Set.of("spring-boot", "java", "business-logic", "data-access", "rest-api")));
 
-                registry.registerAgent(createTestAgent("test-1", "Testing Agent", "testing",
-                                Set.of("unit-testing", "integration-testing", "quality")));
+                registry.registerAgent(createTestAgent("testing-agent", "Testing Agent", "testing",
+                                Set.of("unit-testing", "integration-testing", "contract-testing", "quality-assurance")));
 
-                registry.registerAgent(createTestAgent("deploy-1", "DevOps Agent", "deployment",
-                                Set.of("docker", "aws", "ci-cd")));
+                registry.registerAgent(createTestAgent("deployment-agent", "Deployment Agent", "deployment",
+                                Set.of("docker", "aws-fargate", "ecs", "ci-cd", "containerization")));
 
                 registry.registerAgent(createTestAgent("obs-1", "SRE Agent", "observability",
                                 Set.of("monitoring", "metrics", "tracing")));

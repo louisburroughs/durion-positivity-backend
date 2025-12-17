@@ -1,0 +1,40 @@
+# Development environment configuration
+positivity:
+  agent:
+    agents:
+      event-driven:
+        kafka:
+          bootstrap-servers: localhost:9092
+          schema-registry-url: http://localhost:8081
+        rabbitmq:
+          host: localhost
+          port: 5672
+          username: guest
+          password: guest
+      cicd-pipeline:
+        security-scanning:
+          sast-enabled: true
+          dast-enabled: false  # Disabled in dev for faster builds
+          dependency-check-enabled: true
+        deployment-strategies:
+          - rolling  # Simplified for dev
+      configuration-management:
+        spring-cloud-config:
+          enabled: true
+          server-url: http://localhost:8888
+        secrets-management:
+          aws-secrets-manager: false  # Use local secrets in dev
+          hashicorp-vault: false
+        feature-flags:
+          enabled: true
+          provider: local  # Local feature flags for dev
+      resilience-engineering:
+        chaos-engineering:
+          enabled: true  # Enable for testing
+          failure-injection-rate: 0.05  # Higher rate for dev testing
+
+logging:
+  level:
+    com.positivity.positivity.agent: DEBUG
+    org.springframework.cloud: DEBUG
+    org.springframework.security: DEBUG
