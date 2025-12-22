@@ -25,6 +25,11 @@ This requirements document follows EARS (Easy Approach to Requirements Syntax) p
 - **Service Mesh**: Infrastructure layer that handles service-to-service communication
 - **RED Metrics**: Rate, Errors, Duration - key metrics for monitoring service health
 - **SLI/SLO**: Service Level Indicators/Objectives - metrics and targets for service reliability
+- **Story-Driven Development**: Development workflow where agents read GitHub issues labeled [STORY] and execute build steps based on story requirements
+- **durion-positivity-backend**: Spring Boot backend repository at https://github.com/louisburroughs/durion-positivity-backend.git providing POS microservices
+- **Agent Contract**: Formal specification of what an agent may change, read, and must never do
+- **Loop-Breaker**: Mechanism to prevent agent from infinite iteration (max iterations, escalation, context summarization)
+- **Escalate to Human**: Condition that requires human intervention to resolve agent decision points
 
 ### Agent & Test Classes Location
 
@@ -305,6 +310,124 @@ When implementing or modifying agents, always reference and update code in this 
 - Data corruption isolation and 10-minute recovery
 ---
 
+### REQ-016: Frozen Agent Responsibilities and Contracts
+
+**ID**: REQ-016  
+**Priority**: Critical  
+**Dependencies**: REQ-001 through REQ-015  
+**Verification Method**: Code review + Automated testing + Contract verification  
+**Validation Method**: Inspection  
+
+**User Story:** As a system architect, I want frozen agent responsibilities with clear contracts, so that I can ensure predictable, safe, and maintainable agent behavior across the durion-positivity-backend agent system.
+
+#### Acceptance Criteria
+
+1. WHEN an agent class is implemented, THE agent SHALL have a single, explicit purpose defined in its contract AND SHALL not perform operations outside its defined scope with 100% enforcement
+2. WHEN an agent is initialized, THE agent SHALL declare clear inputs, outputs, and defined stop conditions in its contract with 100% documentation completeness
+3. WHEN an agent executes operations, THE agent SHALL operate only within its contractual permissions with 100% enforcement across:
+   - **What it MAY change**: Specified files, directories, and configurations only
+   - **What it MAY read**: Specified input files, context, and system state only
+   - **What it MUST never do**: Prohibited operations explicitly listed in contract (e.g., delete source files, modify protected configs)
+4. WHEN an agent exceeds its iteration limit, THE agent SHALL stop execution with 100% reliability and escalate to human review with detailed context
+5. WHEN an agent encounters ambiguous conditions, THE agent SHALL escalate to human with specific questions rather than making assumptions with 100% escalation coverage
+6. WHEN context grows too large, THE agent SHALL summarize and continue with 95% information retention accuracy
+
+### REQ-017: Loop-Breaker Patterns and Iteration Control
+
+**ID**: REQ-017  
+**Priority**: Critical  
+**Dependencies**: REQ-016  
+**Verification Method**: Automated testing + Runtime monitoring  
+**Validation Method**: Demonstration  
+
+**User Story:** As a development team lead, I want loop-breaker patterns enforced, so that I can ensure agents don't infinitely loop and always escalate complex decisions to humans when needed.
+
+#### Acceptance Criteria
+
+1. WHEN an agent begins execution, THE agent SHALL initialize a per-execution iteration counter set to zero AND increment it on each step with 100% accuracy
+2. WHEN an agent reaches its maximum iteration count (default 10 iterations, configurable per agent type), THE agent SHALL:
+   - Stop all further processing with 100% reliability
+   - Log all context and decisions made to date
+   - Escalate to human with detailed execution history
+   - Provide specific recommendation for human decision with 95% clarity
+3. WHEN an agent detects recurring patterns (same state/action > 2 times consecutively), THE agent SHALL escalate to human immediately rather than continue iteration with 100% detection accuracy
+4. WHEN an agent encounters a human escalation condition, THE agent SHALL:
+   - Document the exact condition triggering escalation
+   - Ask specific clarifying questions (not open-ended)
+   - Wait for human input before proceeding
+   - Incorporate human decision into subsequent execution
+5. WHEN context size exceeds limit (default 50KB per request, configurable), THE agent SHALL:
+   - Identify and preserve critical information (decisions, constraints, blockers)
+   - Summarize non-critical information (exploration paths, alternatives, historical attempts)
+   - Create summary with 95% information retention of critical context
+   - Continue execution with summarized context
+   - Reference summary location for full history if needed
+6. WHEN an agent completes execution, THE agent SHALL provide complete execution trace including:
+   - Total iterations used (N/MAX_ITERATIONS)
+   - Escalations triggered (if any)
+   - Context summarizations performed (if any)
+   - Final state and recommendation
+
+### REQ-018: Story-Driven Development and Issue Processing
+
+**ID**: REQ-018  
+**Priority**: High  
+**Dependencies**: REQ-001, REQ-016, REQ-017  
+**Verification Method**: Integration testing + GitHub integration testing  
+**Validation Method**: Demonstration  
+
+**User Story:** As a development team, I want agents to process [STORY] labeled GitHub issues from durion-positivity-backend, so that I can execute build steps against appropriate modules based on story requirements.
+
+#### Acceptance Criteria
+
+1. WHEN the agent system initializes, THE agent SHALL connect to https://github.com/louisburroughs/durion-positivity-backend.git repository with appropriate authentication with 100% connection reliability
+2. WHEN querying for work, THE agent SHALL search for issues labeled `[STORY]` with open state AND no assignee with 100% query accuracy
+3. WHEN a story issue is selected, THE agent SHALL:
+   - Read the complete issue title, description, and comments
+   - Extract module requirements (which microservice(s) are affected)
+   - Identify acceptance criteria and test requirements
+   - Determine build steps needed (test, build, deploy, etc.)
+4. WHEN determining module-specific build steps, THE agent SHALL execute against the appropriate microservice module based on story content with 100% accuracy, including:
+   - Running `mvn clean install` for affected module
+   - Running module-specific test suites
+   - Validating integration points with dependent services
+   - Generating build artifacts as required
+5. WHEN build steps fail, THE agent SHALL:
+   - Log failure details and error messages
+   - Attempt to resolve common issues (dependency conflicts, missing resources)
+   - Escalate to human with specific failure details if resolution fails after 3 attempts
+   - Preserve all diagnostic output for human review
+6. WHEN story completion is achieved, THE agent SHALL:
+   - Document all build steps executed
+   - Record test results and coverage metrics
+   - Update issue with completion status and links to artifacts
+   - Provide human-readable summary of work completed
+7. WHEN processing stories, THE agent SHALL respect story dependencies where:
+   - Stories marked with dependency labels are processed in order
+   - Dependent stories wait for prerequisites to complete
+   - Circular dependencies trigger human escalation
+
+### REQ-019: Agent Context Integrity and Session Management
+
+**ID**: REQ-019  
+**Priority**: High  
+**Dependencies**: REQ-016, REQ-017  
+**Verification Method**: Automated testing + Code review  
+**Validation Method**: Inspection  
+
+**User Story:** As a development team, I want agents to maintain context integrity across sessions, so that I can reliably continue work and avoid context conflicts.
+
+#### Acceptance Criteria
+
+1. WHEN an agent session begins, THE agent SHALL check for `.ai/session.md` in the workspace AND use recent session context if available with 100% reliability
+2. WHEN session context is missing or stale, THE agent SHALL re-anchor to `.ai/context.md` and `.ai/glossary.md` with 100% completeness
+3. WHEN agent makes architectural decisions, THE agent SHALL record decisions in `.ai/session.md` with timestamp and rationale with 100% documentation
+4. WHEN context contradictions are detected, THE agent SHALL trust permanent project files (code, `.ai/context.md`, `.ai/glossary.md`) over session context with 100% priority
+5. WHEN required inputs are missing from current context, THE agent SHALL SAY "Context insufficient – re-anchor needed" AND stop processing to request human clarification
+6. WHEN referring to architecture decisions, THE agent SHALL only reference decisions found in current files, `/ai/context.md`, or `/ai/glossary.md` - otherwise STOP AND request clarification
+
+---
+
 ## Requirements Traceability Matrix
 
 | Requirement ID | Title | Priority | Design Components |
@@ -324,11 +447,18 @@ When implementing or modifying agents, always reference and update code in this 
 | REQ-013 | CI/CD Pipeline Agent | High | Build Automation, Deployment Pipelines, Security Scanning |
 | REQ-014 | Configuration Management Agent | Medium | Config Management, Feature Flags, Secrets Management |
 | REQ-015 | Resilience Engineering Agent | High | Circuit Breakers, Retry Patterns, Chaos Engineering |
-
-## Requirements Dependencies
+| REQ-016 | Frozen Agent Responsibilities and Contracts | Critical | Agent Contract Enforcement, Scope Validation |
+| REQ-017 | Loop-Breaker Patterns and Iteration Control | Critical | Iteration Limits, Escalation Rules, Context Management |
+| REQ-018 | Story-Driven Development and Issue Processing | High | GitHub Integration, Story Processing, Module Build Execution |
+| REQ-019 | Agent Context Integrity and Session Management | High | Session Management, Context Re-anchoring, Decision Tracking |
 
 ```mermaid
 graph TD
+    REQ-016[REQ-016: Frozen Agent Responsibilities & Contracts]:::critical
+    REQ-017[REQ-017: Loop-Breaker Patterns & Iteration Control]:::critical
+    REQ-018[REQ-018: Story-Driven Development & Issue Processing]:::high
+    REQ-019[REQ-019: Agent Context Integrity & Session Management]:::high
+    
     REQ-001[REQ-001: Core Agent Framework] --> REQ-002[REQ-002: Implementation Agent]
     REQ-001 --> REQ-003[REQ-003: Deployment Agent]
     REQ-001 --> REQ-004[REQ-004: Testing Agent]
@@ -343,6 +473,13 @@ graph TD
     REQ-001 --> REQ-013[REQ-013: CI/CD Pipeline Agent]
     REQ-001 --> REQ-014[REQ-014: Configuration Management Agent]
     REQ-001 --> REQ-015[REQ-015: Resilience Engineering Agent]
+    
+    REQ-001 --> REQ-016
+    REQ-016 --> REQ-017
+    REQ-016 --> REQ-019
+    REQ-017 --> REQ-018
+    REQ-017 --> REQ-019
+    
     REQ-002 --> REQ-011[REQ-002 pairs with REQ-011]
     REQ-003 --> REQ-013[REQ-003 integrates with REQ-013]
     REQ-004 --> REQ-015[REQ-004 validates REQ-015]
@@ -356,10 +493,14 @@ graph TD
     REQ-012 --> REQ-015[REQ-012 requires REQ-015]
     REQ-013 --> REQ-014[REQ-013 uses REQ-014]
     REQ-014 --> REQ-007[REQ-014 secured by REQ-007]
+    
+    classDef critical fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    classDef high fill:#ffa94d,stroke:#fd7e14,color:#fff
+    classDef medium fill:#74c0fc,stroke:#1971c2,color:#fff
 ```
 
 ---
 
-**Document Version**: 1.0 (Simplified)  
-**Last Updated**: [Current Date]  
-**Document Status**: Draft - Simplified for Implementation
+**Document Version**: 2.0 (Enhanced with Agent Contracts, Loop-Breakers, and Story-Driven Execution)  
+**Last Updated**: December 22, 2025  
+**Document Status**: Complete - Ready for Implementation
