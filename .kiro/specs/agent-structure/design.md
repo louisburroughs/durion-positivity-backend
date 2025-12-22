@@ -2,9 +2,22 @@
 
 ## Overview
 
-The Positivity Agent Structure System is a comprehensive framework that provides specialized AI agents for Spring Boot microservices development, testing, deployment, and operations. The system is designed to support a distributed POS system with 23+ microservices deployed on Kubernetes, providing domain-specific guidance while maintaining consistency across all services.
+The durion-positivity-backend Agent Structure System is a comprehensive framework that provides specialized AI agents for Spring Boot microservices development, testing, deployment, and operations. The system is designed to support a distributed POS system with 23+ microservices deployed on Kubernetes, providing domain-specific guidance while maintaining consistency across all services.
 
-The design follows a modular, extensible architecture that allows for easy addition of new agents while ensuring seamless collaboration between existing agents. The system emphasizes practical guidance delivery, performance optimization, and production-ready patterns for enterprise-scale microservices.
+The design follows a modular, extensible architecture that allows for easy addition of new agents while ensuring seamless collaboration between existing agents. The system emphasizes practical guidance delivery, performance optimization, and production-ready patterns for enterprise Moqui applications with modern frontend integration.
+
+**Core Design Principles:**
+
+- **Story-Driven Development**: Automated detection and analysis of [STORY] issues from durion-positivity-backend repository with module-based build execution (REQ-018)
+- **Component-Based Architecture**: Build is based on maven and springboot modules. Currently all modules are in the same repository.
+- **Frozen Agent Responsibilities**: All agents follow explicit contracts (REQ-016) with single purpose, clear inputs/outputs, defined stop conditions, read/write permissions, and escalation rules
+- **Loop-Breaker Patterns**: All agents enforce iteration limits (default 10), recurring pattern detection, human escalation conditions, and context summarization (REQ-017)
+- **Context Integrity Management**: Agents maintain session context, re-anchor to permanent files on conflict, and document architectural decisions (REQ-019)
+- **GitHub-First Automation**: Webhook-driven issue detection with Redis-backed build queues and agent registry
+- **Performance-First**: All agent responses delivered within specified timeframes (2-5 seconds for 95% of requests)
+- **Security-by-Design**: JWT integration, secure API communication, and comprehensive access control
+- **Code Generation Standards**: All code generation uses Java 21 as target version for microservices compatibility
+- **Agent Implementation Location**: All agent framework implementation classes located in `positivity/pos-agent-framework/src/main/java`, test classes in `positivity/pos-agent-framework/src/test/java/`
 
 ## Architecture
 
@@ -90,6 +103,245 @@ Agents operate in three collaboration modes:
 1. **Independent Mode**: Single agent provides specialized guidance
 2. **Collaborative Mode**: Multiple agents work together on complex tasks
 3. **Pair Programming Mode**: Primary agent paired with navigator for quality assurance
+
+## Agent Contracts and Responsibilities (REQ-016)
+
+Every agent in the system must implement a formal contract that specifies:
+
+### Contract Elements
+
+#### 1. Single Explicit Purpose
+- Each agent has one primary responsibility
+- All operations must align with that responsibility
+- Operations outside scope trigger human escalation
+
+#### 2. Input/Output Specifications
+- **Inputs**: Explicitly defined input types, formats, and constraints
+- **Outputs**: Expected response types, formats, and validation rules
+- **Stop Conditions**: Specific conditions that terminate processing
+
+#### 3. Permission Boundaries (Contractual)
+- **What it MAY change**: 
+  - Specific file paths and directories
+  - Configuration values within scope
+  - Build artifacts and temporary files
+- **What it MAY read**: 
+  - Input parameters and context
+  - GitHub issues and repository state
+  - Configuration and environment variables
+- **What it MUST never do**:
+  - Delete source files or core components
+  - Modify protected configuration files
+  - Execute commands outside its domain
+  - Access secrets without authorization
+
+#### 4. Escalation Triggers
+- Ambiguous or missing required inputs
+- Constraints that conflict with recommendations
+- Repeated failures in resolution attempts
+- Resource exhaustion or timeout conditions
+
+### Story Processing Agent Contract Example
+
+```
+Agent: StoryProcessingAgent
+Purpose: Read [STORY] labeled GitHub issues and execute build steps
+
+Inputs:
+  - GitHub repository URL (string)
+  - Issue ID (integer)
+  - Module name (string, validated)
+
+Outputs:
+  - Build status (SUCCESS | FAILURE)
+  - Test results (JSON)
+  - Build artifacts (file paths)
+
+CAN change:
+  - Build output directories
+  - Issue status and comments
+  - Temporary build artifacts
+
+CAN read:
+  - Issue content (title, description, comments)
+  - pom.xml and build configs
+  - Environment variables
+
+MUST NEVER:
+  - Delete source code
+  - Modify repository structure
+  - Execute arbitrary shell commands
+  - Access private secrets
+
+Stop conditions:
+  - Build succeeds or fails definitively
+  - Max 5 build attempts reached
+  - Required dependencies unavailable
+  - Human escalation triggered
+```
+
+## Loop-Breaker Patterns and Iteration Control (REQ-017)
+
+All agents implement mandatory loop-breaker patterns to prevent infinite iteration:
+
+### Iteration Management
+
+#### Per-Execution Iteration Counter
+- Initialized at 0 before execution begins
+- Incremented on each processing step
+- Checked against maximum before each iteration
+- Logged with complete execution trace
+
+#### Maximum Iteration Limits
+- **Default**: 10 iterations per execution
+- **Configurable**: Per agent type via configuration
+- **Enforcement**: Automatic stop and escalation at limit
+
+#### Hard Stop Protocol
+When maximum iterations reached:
+1. All processing ceases immediately
+2. Complete execution history is logged
+3. Human escalation triggered with context
+4. Execution trace includes:
+   - Total iterations (N/MAX)
+   - All decisions made
+   - Current state
+   - Recommended next steps
+
+### Recurring Pattern Detection
+
+#### Pattern Recognition
+- **Threshold**: Same state/action repeated > 2 consecutive times
+- **Detection**: Automatic on each iteration
+- **Action**: Immediate escalation to human
+
+#### Examples
+- Build fails for same reason → escalate
+- Dependency conflict unresolved → escalate
+- Test fails on same assertion → escalate
+
+### Human Escalation Protocol
+
+#### Escalation Triggers
+1. Iteration limit reached
+2. Recurring pattern detected
+3. Ambiguous conditions (missing inputs)
+4. Resource exhaustion (timeout, memory)
+5. Conflicting constraints
+
+#### Escalation Format
+```
+Reason: [specific condition]
+Iterations Used: N/MAX
+Current State: [complete context]
+
+Clarifying Questions:
+  1. [Specific question 1]
+  2. [Specific question 2]
+  
+Recommendation:
+  [Specific recommended action]
+```
+
+### Context Size Management
+
+#### Context Limits
+- **Threshold**: 50KB per request (configurable)
+- **Monitoring**: Tracked during execution
+- **Action**: Summarization when exceeded
+
+#### Summarization Strategy
+1. **Preserve critical information**: Decisions, constraints, blockers
+2. **Summarize non-critical**: Exploration paths, alternatives
+3. **Create summary**: 95% information retention of critical context
+4. **Continue execution**: With summarized context
+
+## Story-Driven Development and Issue Processing (REQ-018)
+
+Agents process [STORY] labeled GitHub issues from durion-positivity-backend repository:
+
+### Story Processing Workflow
+
+#### 1. Story Detection
+- Repository: https://github.com/louisburroughs/durion-positivity-backend.git
+- Labels: `[STORY]` AND open AND no assignee
+- Detection: Webhook-triggered (real-time)
+
+#### 2. Story Analysis
+- Read issue title, description, comments
+- Extract module requirements
+- Identify acceptance criteria
+- Determine build steps needed
+
+#### 3. Module-Based Build Execution
+- **Build**: `mvn clean install` for affected module
+- **Test**: Run module-specific test suites
+- **Integration**: Validate dependent services
+- **Artifacts**: Generate and archive outputs
+
+#### 4. Failure Handling
+- Log failures with complete diagnostics
+- Attempt resolution (max 3 attempts)
+- Escalate to human with specific details
+- Preserve all diagnostic output
+
+#### 5. Completion Reporting
+- Document build steps executed
+- Record test results and coverage
+- Update issue with completion status
+- Provide human-readable summary
+
+### Story Dependencies
+- **Sequential processing**: Prerequisites complete first
+- **Blocking detection**: Dependent stories wait
+- **Circular dependencies**: Escalate immediately
+
+## Agent Context Integrity and Session Management (REQ-019)
+
+Agents maintain context integrity across sessions with clear conflict resolution:
+
+### Session Context Management
+
+#### Session Initialization
+1. Check for `.ai/session.md` in workspace
+2. If recent (current session): Use session context
+3. If missing or stale: Re-anchor to permanent files
+
+#### Permanent Files (Authoritative)
+- Source code
+- `.ai/context.md`
+- `.ai/glossary.md`
+- GitHub issues
+
+#### Session Context (Temporary)
+- Current task objective
+- Architectural decisions
+- Discovered patterns
+- Open questions
+
+### Decision Recording
+
+Record decisions in `.ai/session.md`:
+```
+## Decision: [Title]
+- **Timestamp**: [ISO 8601]
+- **Rationale**: [Why]
+- **Context**: [Circumstances]
+- **Implications**: [Effects]
+```
+
+### Conflict Resolution
+
+#### When Contradictions Exist
+1. **Trust permanent files** (source code, context.md, glossary.md)
+2. **Update session.md** to reflect authoritative state
+3. **Log contradiction** for investigation
+
+#### Context Insufficiency
+- **Detection**: Required inputs not available
+- **Action**: SAY "Context insufficient – re-anchor needed"
+- **Stop processing** and request clarification
+- **DO NOT GUESS**
 
 ## Components and Interfaces
 
@@ -310,6 +562,22 @@ public class MicroserviceIntegration {
 ### Property 15: CI/CD Security Integration
 *For any* pipeline configuration, the CI/CD Pipeline Agent should ensure security scanning, testing automation, and deployment security validation
 **Validates: Requirements REQ-013.2, REQ-013.4**
+
+### Property 16: Frozen Agent Responsibility Enforcement
+*For any* agent execution, the agent SHALL operate only within its contractual permissions with 100% enforcement, preventing operations outside its defined scope
+**Validates: Requirements REQ-016.1, REQ-016.3**
+
+### Property 17: Loop-Breaker Iteration Limits
+*For any* agent execution, the agent SHALL enforce maximum iteration limits (default 10) with automatic stop and human escalation, preventing infinite loops
+**Validates: Requirements REQ-017.2, REQ-017.3, REQ-017.6**
+
+### Property 18: Story-Driven Build Execution
+*For any* [STORY] labeled GitHub issue from durion-positivity-backend, the agent SHALL process the issue, extract module requirements, and execute module-specific build steps with appropriate failure handling
+**Validates: Requirements REQ-018.1, REQ-018.4, REQ-018.5**
+
+### Property 19: Context Integrity and Session Management
+*For any* agent session, the agent SHALL maintain context integrity by re-anchoring to permanent files on conflict and requesting clarification when context is insufficient
+**Validates: Requirements REQ-019.1, REQ-019.4, REQ-019.5**
 
 ## Error Handling
 
@@ -677,3 +945,7 @@ void agentDomainCoverageProperty(@ForAll("developmentRequests") DevelopmentReque
 - **AI/ML Integration**: Integration with machine learning platforms for intelligent guidance
 - **Serverless Adoption**: Adoption of serverless technologies for lightweight agents
 - **Edge Computing**: Edge deployment capabilities for distributed environments
+
+**Document Version**: 2.0 (Enhanced with Agent Contracts, Loop-Breakers, and Story-Driven Execution)  
+**Last Updated**: December 22, 2025  
+**Document Status**: Complete - Ready for Implementation
