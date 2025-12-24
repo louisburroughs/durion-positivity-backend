@@ -339,8 +339,8 @@ grep -r "jdbc:" --include="*.properties" --include="*.gradle" .
 #### 1. Setup Development Environment
 ```bash
 # Clone repository
-git clone https://github.com/louisburroughs/moqui_example.git
-cd moqui_example
+git clone https://github.com/louisburroughs/durion-moqui-frontend.git
+cd durion-moqui-frontend
 
 # Create .env.local with development secrets (NEVER commit)
 cat > .env.local << EOF

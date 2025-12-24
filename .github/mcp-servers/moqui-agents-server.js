@@ -21,7 +21,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-const projectRoot = process.env.MOQUI_PROJECT_ROOT || '/home/n541342/IdeaProjects/moqui_example';
+const projectRoot = process.env.MOQUI_PROJECT_ROOT || '/home/n541342/IdeaProjects/durion-moqui-frontend';
 const agentsPath = path.join(projectRoot, process.env.AGENTS_PATH || '.github/agents');
 
 const server = new Server({

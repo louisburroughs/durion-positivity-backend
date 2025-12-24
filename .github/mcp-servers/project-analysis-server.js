@@ -20,7 +20,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-const projectRoot = process.env.MOQUI_PROJECT_ROOT || '/home/n541342/IdeaProjects/moqui_example';
+const projectRoot = process.env.MOQUI_PROJECT_ROOT || '/home/n541342/IdeaProjects/durion-moqui-frontend';
 const docsPath = path.join(projectRoot, process.env.DOCUMENTATION_PATH || '.github/docs');
 
 const server = new Server({

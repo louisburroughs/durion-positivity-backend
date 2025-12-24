@@ -177,21 +177,21 @@ This is the **recommended** approach for Moqui development:
          "command": "node",
          "args": ["/path/to/mcp-servers/moqui-agents-server.js"],
          "env": {
-           "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example"
+           "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/durion-moqui-frontend"
          }
        },
        "mcp-instructions": {
          "command": "node",
          "args": ["/path/to/mcp-servers/mcp-instructions-server.js"],
          "env": {
-           "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example"
+           "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/durion-moqui-frontend"
          }
        },
        "project-analysis": {
          "command": "node",
          "args": ["/path/to/mcp-servers/project-analysis-server.js"],
          "env": {
-           "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/moqui_example"
+           "MOQUI_PROJECT_ROOT": "/home/n541342/IdeaProjects/durion-moqui-frontend"
          }
        }
      }
@@ -241,7 +241,7 @@ Response: Lists i18n-agent and language-specific agents
 
 All MCP servers read these environment variables:
 
-- `MOQUI_PROJECT_ROOT` - Root directory of the Moqui project (default: `/home/n541342/IdeaProjects/moqui_example`)
+- `MOQUI_PROJECT_ROOT` - Root directory of the Moqui project (default: `/home/n541342/IdeaProjects/durion-moqui-frontend`)
 - `AGENTS_PATH` - Path to agent definitions relative to root (default: `.github/agents`)
 - `INSTRUCTIONS_PATH` - Path to instruction files relative to root (default: `.github/instructions`)
 - `PROMPTS_PATH` - Path to prompt templates relative to root (default: `.github/prompts`)

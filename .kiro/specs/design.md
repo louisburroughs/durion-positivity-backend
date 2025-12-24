@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design document outlines the technical architecture for the Positivity POS Backend System, a comprehensive Point of Sale backend system built with Spring Boot microservices architecture. The system is designed for AWS Fargate deployment and provides business logic and data persistence services for tire service management operations. The system consists of 23+ microservices that serve the moqui_example frontend through REST APIs via an API Gateway.
+This design document outlines the technical architecture for the Positivity POS Backend System, a comprehensive Point of Sale backend system built with Spring Boot microservices architecture. The system is designed for AWS Fargate deployment and provides business logic and data persistence services for tire service management operations. The system consists of 23+ microservices that serve the durion-moqui-frontend frontend through REST APIs via an API Gateway.
 
 The design follows microservice architecture principles with clear service boundaries, uses DynamoDB for transactional data and ElastiCache for reference data caching, and implements comprehensive observability through OpenTelemetry integration.
 
