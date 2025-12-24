@@ -120,7 +120,7 @@ Your MCP servers use these environment variables (from VS Code settings):
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `MOQUI_PROJECT_ROOT` | `/home/n541342/IdeaProjects/moqui_example` | Project root directory |
+| `MOQUI_PROJECT_ROOT` | `/home/n541342/IdeaProjects/durion-moqui-frontend` | Project root directory |
 | `MOQUI_COMPONENTS_PATH` | `runtime/component` | Components location |
 | `MOQUI_FRAMEWORK_PATH` | `framework` | Framework location |
 | `AGENTS_PATH` | `.github/agents` | Agents configuration |

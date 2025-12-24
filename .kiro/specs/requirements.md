@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Positivity POS Backend System is a comprehensive Point of Sale backend system built with Spring Boot microservices architecture, designed for AWS Fargate deployment. The system provides business logic and data persistence services for tire service management operations, supporting the moqui_example frontend through REST APIs. The system consists of 23+ microservices including catalog management, customer management, inventory control, order processing, accounting, and vehicle reference services.
+The Positivity POS Backend System is a comprehensive Point of Sale backend system built with Spring Boot microservices architecture, designed for AWS Fargate deployment. The system provides business logic and data persistence services for tire service management operations, supporting the durion-moqui-frontend frontend through REST APIs. The system consists of 23+ microservices including catalog management, customer management, inventory control, order processing, accounting, and vehicle reference services.
 
 ## Glossary
 

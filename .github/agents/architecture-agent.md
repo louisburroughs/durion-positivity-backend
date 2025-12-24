@@ -1063,7 +1063,7 @@ done
 ### Communication
 - Forum: https://forum.moqui.org
 - Google Group: https://groups.google.com/d/forum/moqui
-- GitHub Issues: https://github.com/louisburroughs/moqui_example/issues
+- GitHub Issues: https://github.com/louisburroughs/durion-moqui-frontend/issues
 
 ## Integration with Other Agents
 
