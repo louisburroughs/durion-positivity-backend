@@ -35,3 +35,7 @@ build/
 ### AI Session Files ###
 .ai/session.md
 .ai/session-*.md
+
+#Kiro logs
+.kiro/run-logs/*
+.kiro/run-logs
