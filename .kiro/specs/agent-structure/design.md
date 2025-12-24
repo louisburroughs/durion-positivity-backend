@@ -296,6 +296,35 @@ Agents process [STORY] labeled GitHub issues from durion-positivity-backend repo
 - **Blocking detection**: Dependent stories wait
 - **Circular dependencies**: Escalate immediately
 
+### Workspace Story Orchestration Integration (REQ-016)
+
+The Agent Structure System participates in the workspace-level story orchestration model maintained in the durion repository. Backend agents MUST consult the orchestration documents before selecting which [STORY] issues to process, ensuring that backend work is sequenced to unblock the maximum amount of frontend work while avoiding unnecessary stub creation.
+
+#### Orchestration Artifacts Consumed
+
+- `durion/.github/orchestration/story-sequence.md`: Canonical ordering and dependency graph for all cross-repository [STORY] issues, including classification as Backend-First, Frontend-First, or Parallel.
+- `durion/.github/orchestration/backend-coordination.md`: Backend-focused projection that prioritizes backend stories by their unblock potential for frontend work and documents expected contracts (endpoints, payloads, error handling) for Parallel stories.
+
+Backend agents SHALL treat these documents as authoritative for story readiness and priority and SHALL NOT infer sequencing solely from local repository state.
+
+#### Backend Planning and Execution Rules
+
+1. **Backend-First Stories**  
+  - When a story is classified as Backend-First in the orchestration artifacts, backend agents MUST prioritize implementing the required service, endpoint, or data model before frontend agents begin dependent UI work.
+  - Completion of a Backend-First story includes updating tests, documentation, and any contract notes referenced in the orchestration documents so that frontend agents can safely proceed without stubs.
+
+2. **Parallel Stories**  
+  - For stories marked as Parallel, backend agents implement APIs and contracts as specified in the orchestration documents, in coordination with the story description and "Notes for Agents" metadata.
+  - Backend and frontend may work concurrently, but backend agents MUST avoid making uncoordinated changes to contracts that would break the assumptions documented in the orchestration artifacts.
+
+3. **Siloed Operation and Stub Avoidance**  
+  - Backend agents operate strictly from the orchestration artifacts and [STORY] issues and do not rely on direct communication with frontend agents.
+  - Stub endpoints or placeholder implementations SHALL only be introduced when explicitly requested in the orchestration documents or story metadata; otherwise, agents MUST wait for the sequencing model to mark a story as ready.
+
+4. **Feedback Loop to Orchestration**  
+  - When backend implementation reveals missing contracts, ambiguous requirements, or new dependencies, agents MUST record these findings as comments or updates on the corresponding [STORY] issues.
+  - The workspace orchestration system can then reclassify or resequence stories, updating `story-sequence.md` and `backend-coordination.md` so that subsequent agent runs operate on an accurate model.
+
 ## Agent Context Integrity and Session Management (REQ-019)
 
 Agents maintain context integrity across sessions with clear conflict resolution:

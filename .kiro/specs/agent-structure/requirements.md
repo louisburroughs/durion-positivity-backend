@@ -30,6 +30,9 @@ This requirements document follows EARS (Easy Approach to Requirements Syntax) p
 - **Agent Contract**: Formal specification of what an agent may change, read, and must never do
 - **Loop-Breaker**: Mechanism to prevent agent from infinite iteration (max iterations, escalation, context summarization)
 - **Escalate to Human**: Condition that requires human intervention to resolve agent decision points
+ - **Workspace Orchestration Documents**: Coordination artifacts maintained in the durion workspace repository, including .github/orchestration/story-sequence.md and .github/orchestration/backend-coordination.md, which describe cross-project story sequencing and dependencies
+ - **Backend-First Story**: A story where backend APIs, domain models, or services must be implemented before any dependent frontend work can proceed
+ - **Parallel Story**: A story where backend implementation can proceed in parallel with frontend work based on defined API contracts
 
 ### Agent & Test Classes Location
 
@@ -225,6 +228,20 @@ When implementing or modifying agents, always reference and update code in this 
 3. WHEN a DevOps engineer configures deployment pipelines, THE Agent Structure System SHALL provide blue-green, canary, and rolling deployment strategies
 4. WHEN a DevOps engineer implements security scanning, THE Agent Structure System SHALL provide SAST, DAST, and dependency vulnerability scanning guidance
 5. WHEN a DevOps engineer manages pipeline orchestration, THE Agent Structure System SHALL provide Jenkins, GitHub Actions, and GitLab CI/CD configuration guidance
+
+### REQ-016: Workspace Story Orchestration Integration
+
+**User Story:** As a backend agent, I want to follow workspace-level story sequencing and coordination documents, so that I implement backend stories in an order that maximally unblocks frontend work while avoiding unnecessary stubbed endpoints.
+
+**Design Reference:** Workspace Story Orchestration Integration (REQ-016) in [positivity/.kiro/specs/agent-structure/design.md](positivity/.kiro/specs/agent-structure/design.md#workspace-story-orchestration-integration-req-016).
+
+#### Acceptance Criteria
+
+1. WHEN the Backend Agent plans work against durion-positivity-backend THEN it SHALL read .github/orchestration/story-sequence.md and .github/orchestration/backend-coordination.md from the durion workspace repository AND use these documents as the primary source of truth for Backend-First and Parallel story ordering
+2. WHEN backend-coordination.md indicates that a backend story unblocks multiple frontend stories THEN the Backend Agent SHALL prioritize that backend story ahead of backend stories with no dependent frontend work, unless overridden by higher-priority operational or architectural requirements
+3. WHEN a story is classified as Backend-First in story-sequence.md THEN the Backend Agent SHALL complete the required APIs, domain models, and persistence logic BEFORE any dependent frontend stories are expected to start, as indicated in backend-coordination.md
+4. WHEN a story is classified as Parallel in story-sequence.md THEN the Backend Agent SHALL implement APIs that conform to the contracts and example payloads referenced in the orchestration documents, ensuring that frontend and backend can integrate without additional breaking changes
+5. WHEN operating in a silo THEN the Backend Agent SHALL rely on workspace orchestration documents and story metadata (including Notes for Agents) for coordination with frontend teams and SHALL avoid creating ad-hoc stub endpoints unless explicitly requested in those documents
 
 ### REQ-014: Configuration Management Agent
 **User Story:** As a system administrator, I want configuration management guidance, so that I can manage application settings, feature flags, and environment-specific configurations across all microservices consistently and securely.
