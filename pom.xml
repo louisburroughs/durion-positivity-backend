@@ -51,6 +51,7 @@
 		<module>pos-location</module>
 		<module>pos-api-gateway</module>
 		<module>pos-service-discovery</module>
+		<module>pos-mcp-server</module>
 	</modules>
 	<url>https://your.project.url/</url>
 	<licenses>
