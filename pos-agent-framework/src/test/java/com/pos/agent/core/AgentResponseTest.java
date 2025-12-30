@@ -20,24 +20,22 @@ class AgentResponseTest {
                 .output("Test output")
                 .confidence(0.95)
                 .recommendations(List.of("recommendation1", "recommendation2"))
-                .metadata(Map.of("key", "value"))
                 .build();
 
         // Verify fields
-        assertEquals(AgentStatus.SUCCESS, response.statusEnum());
+        assertEquals(AgentStatus.SUCCESS, response.getStatus());
         assertEquals("SUCCESS", response.getStatus());
         assertEquals("Test output", response.getOutput());
         assertEquals(0.95, response.getConfidence());
         assertEquals(2, response.getRecommendations().size());
         assertTrue(response.getRecommendations().contains("recommendation1"));
-        assertEquals("value", response.getMetadata().get("key"));
     }
 
     @Test
     void testSuccessFactoryMethod() {
         AgentResponse response = AgentResponse.success("Success message", 0.9);
 
-        assertEquals(AgentStatus.SUCCESS, response.statusEnum());
+        assertEquals(AgentStatus.SUCCESS, response.getStatus());
         assertEquals("Success message", response.getOutput());
         assertEquals(0.9, response.getConfidence());
         assertTrue(response.isSuccess());
@@ -49,7 +47,7 @@ class AgentResponseTest {
     void testFailureFactoryMethod() {
         AgentResponse response = AgentResponse.failure("Error occurred");
 
-        assertEquals(AgentStatus.FAILURE, response.statusEnum());
+        assertEquals(AgentStatus.FAILURE, response.getStatus());
         assertEquals("Error occurred", response.getOutput());
         assertEquals(0.0, response.getConfidence());
         assertFalse(response.isSuccess());
@@ -65,7 +63,7 @@ class AgentResponseTest {
                 .build();
 
         assertEquals("SUCCESS", response.getStatus());
-        assertEquals(AgentStatus.SUCCESS, response.statusEnum());
+        assertEquals(AgentStatus.SUCCESS, response.getStatus());
     }
 
     @Test
@@ -76,7 +74,7 @@ class AgentResponseTest {
                 .build();
 
         assertTrue(success.isSuccess());
-        assertEquals(AgentStatus.SUCCESS, success.statusEnum());
+        assertEquals(AgentStatus.SUCCESS, success.getStatus());
 
         AgentResponse failure = AgentResponse.builder()
                 .success(false)
@@ -84,7 +82,7 @@ class AgentResponseTest {
                 .build();
 
         assertFalse(failure.isSuccess());
-        assertEquals(AgentStatus.FAILURE, failure.statusEnum());
+        assertEquals(AgentStatus.FAILURE, failure.getStatus());
     }
 
     @Test
@@ -93,7 +91,7 @@ class AgentResponseTest {
                 .errorMessage("Error message")
                 .build();
 
-        assertEquals(AgentStatus.FAILURE, response.statusEnum());
+        assertEquals(AgentStatus.FAILURE, response.getStatus());
         assertEquals("Error message", response.getOutput());
     }
 
@@ -164,11 +162,11 @@ class AgentResponseTest {
         AgentResponse response = AgentResponse.builder()
                 .status(AgentStatus.SUCCESS)
                 .output("Output")
-                .metadata(null)
+                .context(null)
                 .build();
 
-        assertNotNull(response.getMetadata());
-        assertTrue(response.getMetadata().isEmpty());
+        assertNotNull(response.getContext());
+        assertTrue(response.getContext().isEmpty());
     }
 
     @Test
