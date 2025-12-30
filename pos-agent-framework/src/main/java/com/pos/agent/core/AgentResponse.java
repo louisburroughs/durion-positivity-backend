@@ -5,10 +5,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Response object for agent processing
- * Part of frozen contract specification (REQ-016)
- * Enhanced with security features and builder pattern while maintaining
- * backward compatibility
+ * Response object for agent processing.
+ * Part of frozen contract specification (REQ-016).
+ * This class maintains backward compatibility with setter-based construction
+ * while providing an immutable builder pattern and record-like semantics.
  */
 public class AgentResponse {
     // Core fields
@@ -62,8 +62,12 @@ public class AgentResponse {
         return status != null ? status.name() : null;
     }
 
-    public String getOutput() {
-        return output;
+    /**
+     * Creates a failure response with error message
+     */
+    public static AgentResponse failure(String errorMessage) {
+        return new AgentResponse(AgentStatus.FAILURE, errorMessage, 0.0, 
+                               Collections.emptyList(), Collections.emptyMap());
     }
 
     public double getConfidence() {
@@ -155,6 +159,9 @@ public class AgentResponse {
         return new Builder();
     }
 
+    /**
+     * Builder class for AgentResponse
+     */
     public static class Builder {
         private AgentStatus status;
         private String output;
@@ -189,8 +196,21 @@ public class AgentResponse {
             return this;
         }
 
+        public Builder status(String status) {
+            // Backward compatibility: convert string to enum
+            if (status != null) {
+                try {
+                    this.status = AgentStatus.valueOf(status.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    // Default to SUCCESS if unknown status
+                    this.status = AgentStatus.SUCCESS;
+                }
+            }
+            return this;
+        }
+
         public Builder output(String output) {
-            this.output = output;
+            this.output = output != null ? output : "";
             return this;
         }
 
@@ -200,42 +220,59 @@ public class AgentResponse {
         }
 
         public Builder recommendations(List<String> recommendations) {
-            this.recommendations = recommendations;
+            this.recommendations = recommendations != null ? new ArrayList<>(recommendations) : new ArrayList<>();
             return this;
         }
 
-        public Builder escalationReason(String escalationReason) {
-            this.escalationReason = escalationReason;
+        public Builder metadata(Map<String, Object> metadata) {
+            this.metadata = metadata != null ? new HashMap<>(metadata) : new HashMap<>();
             return this;
         }
 
-        public Builder context(Map<String, Object> context) {
-            this.context = context;
-            return this;
-        }
-
+        // Backward compatibility methods
         public Builder success(boolean success) {
-            this.success = success;
+            this.status = success ? AgentStatus.SUCCESS : AgentStatus.FAILURE;
             return this;
         }
 
         public Builder errorMessage(String errorMessage) {
-            this.errorMessage = errorMessage;
+            if (errorMessage != null && !errorMessage.isEmpty()) {
+                this.output = errorMessage;
+                this.status = AgentStatus.FAILURE;
+                this.metadata.put("errorMessage", errorMessage);
+            }
             return this;
         }
 
         public Builder securityValidation(AgentManager.SecurityValidation securityValidation) {
-            this.securityValidation = securityValidation;
+            if (securityValidation != null) {
+                this.metadata.put("securityValidation", securityValidation);
+            }
             return this;
         }
 
         public Builder processingTimeMs(long processingTimeMs) {
-            this.processingTimeMs = processingTimeMs;
+            this.metadata.put("processingTimeMs", processingTimeMs);
+            return this;
+        }
+
+        public Builder escalationReason(String escalationReason) {
+            if (escalationReason != null) {
+                this.metadata.put("escalationReason", escalationReason);
+            }
+            return this;
+        }
+
+        public Builder context(Map<String, Object> context) {
+            if (context != null) {
+                this.metadata.put("context", context);
+            }
             return this;
         }
 
         public AgentResponse build() {
-            return new AgentResponse(this);
+            return new AgentResponse(status, output, confidence, recommendations, metadata);
         }
     }
 }
+
