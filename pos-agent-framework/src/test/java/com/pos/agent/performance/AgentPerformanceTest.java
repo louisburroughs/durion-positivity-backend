@@ -1,15 +1,11 @@
 package com.pos.agent.performance;
 
-import com.positivity.agent.Agent;
-import com.positivity.agent.AgentConsultationRequest;
-import com.positivity.agent.AgentGuidanceResponse;
-import com.positivity.agent.registry.AgentRegistry;
-import com.positivity.agent.controller.AgentConsultationController;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.framework.model.AgentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -22,20 +18,15 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
 public class AgentPerformanceTest {
 
-    @Autowired
-    private AgentConsultationController agentController;
-
-    @Autowired
-    private AgentRegistry agentRegistry;
+    private AgentManager agentManager;
 
     private ExecutorService executorService;
 
     @BeforeEach
     void setUp() {
+        agentManager = new AgentManager();
         executorService = Executors.newFixedThreadPool(50);
     }
 
@@ -95,9 +86,6 @@ public class AgentPerformanceTest {
     void testAgentResponseTimePerformance() {
         // Test individual agent response times
         for (AgentType agentType : AgentType.values()) {
-            Agent agent = agentRegistry.findAgent(agentType);
-            assertNotNull(agent, "Agent should be available: " + agentType);
-
             AgentRequest request = createTestRequest(agentType);
             Instant startTime = Instant.now();
 
@@ -148,22 +136,23 @@ public class AgentPerformanceTest {
     }
 
     @Test
-    void testAgentRegistryPerformance() {
-        // Test agent discovery performance
+    void testAgentRequestProcessingPerformance() {
+        // Test agent request processing performance
         Instant startTime = Instant.now();
 
         for (int i = 0; i < 1000; i++) {
             AgentType agentType = getRandomAgentType(i);
-            Agent agent = agentRegistry.findAgent(agentType);
-            assertNotNull(agent);
+            AgentRequest request = createTestRequest(agentType);
+            AgentResponse response = agentManager.processRequest(request);
+            assertNotNull(response);
         }
 
         Instant endTime = Instant.now();
-        long discoveryTime = Duration.between(startTime, endTime).toMillis();
+        long processingTime = Duration.between(startTime, endTime).toMillis();
 
-        // Agent discovery should be very fast (< 100ms for 1000 lookups)
-        assertTrue(discoveryTime < 100,
-                "Agent discovery should be fast. 1000 lookups took: " + discoveryTime + "ms");
+        // Request processing should be very fast (< 2000ms for 1000 requests)
+        assertTrue(processingTime < 2000,
+                "Request processing should be fast. 1000 requests took: " + processingTime + "ms");
     }
 
     @Test
@@ -216,54 +205,48 @@ public class AgentPerformanceTest {
 
     private AgentRequest createTestRequest(AgentType agentType) {
         AgentRequest request = new AgentRequest();
-        request.setAgentType(agentType);
-        request.setRequestId("perf-test-" + System.nanoTime());
+        request.setType(agentType.name());
+        request.setDescription("perf-test-" + System.nanoTime());
 
         switch (agentType) {
             case ARCHITECTURE:
-                request.setQuery("Design microservice architecture for inventory service");
+                request.setDescription("Design microservice architecture for inventory service");
                 break;
             case IMPLEMENTATION:
-                request.setQuery("Implement REST controller for product management");
-                break;
-            case DEPLOYMENT:
-                request.setQuery("Configure Kubernetes deployment for order service");
+                request.setDescription("Implement REST controller for product management");
                 break;
             case TESTING:
-                request.setQuery("Create unit tests for customer service");
+                request.setDescription("Create unit tests for customer service");
                 break;
             case SECURITY:
-                request.setQuery("Implement JWT authentication for API gateway");
-                break;
-            case OBSERVABILITY:
-                request.setQuery("Configure monitoring for payment service");
+                request.setDescription("Implement JWT authentication for API gateway");
                 break;
             case DOCUMENTATION:
-                request.setQuery("Generate API documentation for catalog service");
+                request.setDescription("Generate API documentation for catalog service");
                 break;
             case BUSINESS_DOMAIN:
-                request.setQuery("Validate business rules for pricing service");
+                request.setDescription("Validate business rules for pricing service");
                 break;
             case INTEGRATION_GATEWAY:
-                request.setQuery("Configure API gateway routing for inventory");
-                break;
-            case PAIR_PROGRAMMING_NAVIGATOR:
-                request.setQuery("Review code quality for order processing");
+                request.setDescription("Configure API gateway routing for inventory");
                 break;
             case EVENT_DRIVEN_ARCHITECTURE:
-                request.setQuery("Design event schema for order events");
+                request.setDescription("Design event schema for order events");
                 break;
             case CICD_PIPELINE:
-                request.setQuery("Configure CI/CD pipeline for customer service");
+                request.setDescription("Configure CI/CD pipeline for customer service");
                 break;
             case CONFIGURATION_MANAGEMENT:
-                request.setQuery("Manage configuration for payment service");
+                request.setDescription("Manage configuration for payment service");
                 break;
             case RESILIENCE_ENGINEERING:
-                request.setQuery("Implement circuit breaker for external API");
+                request.setDescription("Implement circuit breaker for external API");
+                break;
+            case PERFORMANCE:
+                request.setDescription("Optimize performance for payment service");
                 break;
             default:
-                request.setQuery("Generic performance test query");
+                request.setDescription("Generic performance test query");
         }
 
         return request;

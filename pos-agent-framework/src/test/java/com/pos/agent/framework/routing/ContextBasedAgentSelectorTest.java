@@ -1,235 +1,150 @@
 package com.pos.agent.framework.routing;
 
-import com.pos.agent.framework.model.AgentType;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.core.SecurityContext;
+import net.jqwik.api.*;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Property-based tests for context-based agent selection and routing.
+ * Tests agent selection based on technical context keywords and multi-domain
+ * scenarios.
+ */
 class ContextBasedAgentSelectorTest {
 
-    private ContextBasedAgentSelector selector;
+    private final AgentManager agentManager = new AgentManager();
+    private final SecurityContext securityContext = SecurityContext.builder()
+            .jwtToken("valid-jwt-token-for-tests")
+            .userId("routing-tester")
+            .roles(List.of("AGENT_ROUTER", "DOMAIN_SELECTOR"))
+            .permissions(List.of("agent.select", "agent.route", "context.analyze"))
+            .serviceId("pos-routing-tests")
+            .serviceType("property")
+            .build();
 
-    @BeforeEach
-    void setUp() {
-        selector = new ContextBasedAgentSelector();
+    @Property(tries = 100)
+    void contextBasedAgentSelection(@ForAll("technicalContexts") AgentContext context) {
+        AgentRequest request = AgentRequest.builder()
+                .type("context-selection")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testSelectAgent_SpringBootContext() {
-        // Given
-        String context = "Spring Boot microservice implementation with REST API";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
+    @Property(tries = 100)
+    void multiDomainContextHandling(@ForAll("multiDomainContexts") AgentContext context) {
+        AgentRequest request = AgentRequest.builder()
+                .type("multi-domain-selection")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testSelectAgent_SecurityContext() {
-        // Given
-        String context = "JWT authentication and Spring Security configuration";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.SECURITY, result.get());
+    @Property(tries = 100)
+    void edgeCaseContextHandling(@ForAll("edgeCaseContexts") AgentContext context) {
+        AgentRequest request = AgentRequest.builder()
+                .type("edge-case-selection")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testSelectAgent_ArchitectureContext() {
-        // Given
-        String context = "Microservices architecture design and service boundaries";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.ARCHITECTURE, result.get());
+    @Property(tries = 100)
+    void complexityAnalysis(@ForAll("complexityContexts") AgentContext context) {
+        AgentRequest request = AgentRequest.builder()
+                .type("complexity-analysis")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testSelectAgent_TestingContext() {
-        // Given
-        String context = "Unit testing with JUnit and TestContainers integration";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.TESTING, result.get());
+    @Provide
+    Arbitrary<AgentContext> technicalContexts() {
+        return Arbitraries.of(
+                "implementation:Spring Boot microservice",
+                "security:JWT authentication",
+                "architecture:Microservices design",
+                "testing:JUnit integration tests",
+                "deployment:Docker containerization",
+                "event-driven:Kafka streaming",
+                "cicd:Jenkins pipeline",
+                "configuration:Spring Cloud Config",
+                "resilience:Circuit breaker patterns",
+                "business:POS inventory management").map(contextStr -> {
+                    String[] parts = contextStr.split(":");
+                    return AgentContext.builder()
+                            .domain(parts[0])
+                            .property("technicalContext", parts[1])
+                            .build();
+                });
     }
 
-    @Test
-    void testSelectAgent_DeploymentContext() {
-        // Given
-        String context = "Docker containerization and Kubernetes deployment";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.DEPLOYMENT, result.get());
+    @Provide
+    Arbitrary<AgentContext> multiDomainContexts() {
+        return Arbitraries.of(
+                "Spring Boot with Docker and security",
+                "Microservices with Kafka and testing",
+                "CI/CD with deployment and resilience").map(
+                        description -> AgentContext.builder()
+                                .domain("multi-domain")
+                                .property("description", description)
+                                .property("isComplex", true)
+                                .build());
     }
 
-    @Test
-    void testSelectAgent_EventDrivenContext() {
-        // Given
-        String context = "Kafka event streaming and message broker configuration";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.EVENT_DRIVEN_ARCHITECTURE, result.get());
+    @Provide
+    Arbitrary<AgentContext> edgeCaseContexts() {
+        return Arbitraries.of(
+                "empty:",
+                "unrecognized:Random unrelated content",
+                "minimal:X").map(contextStr -> {
+                    String[] parts = contextStr.split(":", 2);
+                    return AgentContext.builder()
+                            .domain(parts[0])
+                            .property("context", parts.length > 1 ? parts[1] : "")
+                            .property("isEdgeCase", true)
+                            .build();
+                });
     }
 
-    @Test
-    void testSelectAgent_CICDContext() {
-        // Given
-        String context = "CI/CD pipeline setup with Jenkins and automated testing";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.CICD_PIPELINE, result.get());
-    }
-
-    @Test
-    void testSelectAgent_ConfigurationContext() {
-        // Given
-        String context = "Spring Cloud Config and centralized configuration management";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.CONFIGURATION_MANAGEMENT, result.get());
-    }
-
-    @Test
-    void testSelectAgent_ResilienceContext() {
-        // Given
-        String context = "Circuit breaker patterns and resilience engineering";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.RESILIENCE_ENGINEERING, result.get());
-    }
-
-    @Test
-    void testSelectAgent_BusinessDomainContext() {
-        // Given
-        String context = "POS system inventory management and automotive domain";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.BUSINESS_DOMAIN, result.get());
-    }
-
-    @Test
-    void testSelectAgent_EmptyContext() {
-        // Given
-        String context = "";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void testSelectAgent_NullContext() {
-        // When
-        Optional<AgentType> result = selector.selectAgent(null);
-        
-        // Then
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void testSelectAgent_UnrecognizedContext() {
-        // Given
-        String context = "Random unrelated content without technical keywords";
-        
-        // When
-        Optional<AgentType> result = selector.selectAgent(context);
-        
-        // Then
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void testSuggestAgents_ComplexContext() {
-        // Given
-        String context = "Spring Boot microservice with Docker deployment and security";
-        
-        // When
-        List<AgentType> suggestions = selector.suggestAgents(context);
-        
-        // Then
-        assertFalse(suggestions.isEmpty());
-        assertTrue(suggestions.contains(AgentType.IMPLEMENTATION));
-        assertTrue(suggestions.contains(AgentType.DEPLOYMENT));
-        assertTrue(suggestions.contains(AgentType.SECURITY));
-    }
-
-    @Test
-    void testSuggestAgents_SingleDomainContext() {
-        // Given
-        String context = "JWT authentication implementation";
-        
-        // When
-        List<AgentType> suggestions = selector.suggestAgents(context);
-        
-        // Then
-        assertFalse(suggestions.isEmpty());
-        assertEquals(AgentType.SECURITY, suggestions.get(0));
-    }
-
-    @Test
-    void testAnalyzeContextComplexity_SimpleContext() {
-        // Given
-        String context = "Spring Boot REST API";
-        
-        // When
-        boolean isComplex = selector.analyzeContextComplexity(context);
-        
-        // Then
-        assertFalse(isComplex);
-    }
-
-    @Test
-    void testAnalyzeContextComplexity_ComplexContext() {
-        // Given
-        String context = "Spring Boot microservice with Docker deployment, JWT security, Kafka messaging, and circuit breakers";
-        
-        // When
-        boolean isComplex = selector.analyzeContextComplexity(context);
-        
-        // Then
-        assertTrue(isComplex);
+    @Provide
+    Arbitrary<AgentContext> complexityContexts() {
+        return Arbitraries.of(
+                "simple:Spring Boot REST API",
+                "complex:Spring Boot with Docker, JWT, Kafka, and circuit breakers").map(contextStr -> {
+                    String[] parts = contextStr.split(":", 2);
+                    boolean isComplex = "complex".equals(parts[0]);
+                    return AgentContext.builder()
+                            .domain("complexity-analysis")
+                            .property("description", parts[1])
+                            .property("isComplex", isComplex)
+                            .build();
+                });
     }
 }

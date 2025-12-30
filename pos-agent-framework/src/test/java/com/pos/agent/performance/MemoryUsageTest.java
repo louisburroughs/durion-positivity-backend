@@ -1,15 +1,12 @@
 package com.pos.agent.performance;
 
-import com.positivity.agent.controller.AgentConsultationController;
-import com.positivity.agent.AgentConsultationRequest;
-import com.positivity.agent.AgentGuidanceResponse;
-import java.util.HashMap;
-import java.util.Map;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -23,18 +20,25 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
 public class MemoryUsageTest {
 
-    @Autowired
-    private AgentConsultationController agentController;
-
+    private AgentManager agentManager;
+    private SecurityContext securityContext;
     private MemoryMXBean memoryBean;
     private ExecutorService executorService;
 
     @BeforeEach
     void setUp() {
+        agentManager = new AgentManager();
+        securityContext = SecurityContext.builder()
+                .jwtToken("test-token-12345")
+                .userId("test-user")
+                .roles(List.of("developer", "architect"))
+                .permissions(List.of("memory:test", "domain:access"))
+                .serviceId("test-service")
+                .serviceType("test")
+                .build();
+
         memoryBean = ManagementFactory.getMemoryMXBean();
         executorService = Executors.newFixedThreadPool(20);
 
@@ -49,8 +53,15 @@ public class MemoryUsageTest {
 
     @Test
     void testMemoryUsagePerAgent() {
-        // Test memory usage for each agent type individually
-        for (AgentType agentType : AgentType.values()) {
+        // Test memory usage for each agent type
+        String[] agentTypes = {
+                "architecture", "implementation", "deployment", "testing", "security",
+                "observability", "documentation", "business-domain", "integration-gateway",
+                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                "configuration-management", "resilience-engineering"
+        };
+
+        for (String agentType : agentTypes) {
             MemoryUsage beforeHeap = memoryBean.getHeapMemoryUsage();
             long beforeUsed = beforeHeap.getUsed();
 
@@ -83,6 +94,13 @@ public class MemoryUsageTest {
 
     @Test
     void testMemoryLeakDetection() throws Exception {
+        String[] domains = {
+                "architecture", "implementation", "deployment", "testing", "security",
+                "observability", "documentation", "business-domain", "integration-gateway",
+                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                "configuration-management", "resilience-engineering"
+        };
+
         MemoryUsage initialHeap = memoryBean.getHeapMemoryUsage();
         long initialUsed = initialHeap.getUsed();
 
@@ -92,8 +110,8 @@ public class MemoryUsageTest {
 
             // Create concurrent requests
             for (int i = 0; i < 20; i++) {
-                AgentType agentType = AgentType.values()[i % AgentType.values().length];
-                AgentRequest request = createTestRequest(agentType, i);
+                String domain = domains[i % domains.length];
+                AgentRequest request = createTestRequest(domain, i);
 
                 CompletableFuture<AgentResponse> future = CompletableFuture.supplyAsync(() -> {
                     return agentManager.processRequest(request);
@@ -123,6 +141,13 @@ public class MemoryUsageTest {
 
     @Test
     void testMemoryUsageUnderSustainedLoad() throws Exception {
+        String[] domains = {
+                "architecture", "implementation", "deployment", "testing", "security",
+                "observability", "documentation", "business-domain", "integration-gateway",
+                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                "configuration-management", "resilience-engineering"
+        };
+
         MemoryUsage beforeHeap = memoryBean.getHeapMemoryUsage();
         long beforeUsed = beforeHeap.getUsed();
 
@@ -131,8 +156,8 @@ public class MemoryUsageTest {
         int requestCount = 0;
 
         while (System.currentTimeMillis() < endTime) {
-            AgentType agentType = AgentType.values()[requestCount % AgentType.values().length];
-            AgentRequest request = createTestRequest(agentType, requestCount);
+            String domain = domains[requestCount % domains.length];
+            AgentRequest request = createTestRequest(domain, requestCount);
 
             AgentResponse response = agentManager.processRequest(request);
             assertNotNull(response);
@@ -164,15 +189,22 @@ public class MemoryUsageTest {
 
     @Test
     void testMemoryEfficiencyWithAllAgents() throws Exception {
+        String[] domains = {
+                "architecture", "implementation", "deployment", "testing", "security",
+                "observability", "documentation", "business-domain", "integration-gateway",
+                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                "configuration-management", "resilience-engineering"
+        };
+
         MemoryUsage beforeHeap = memoryBean.getHeapMemoryUsage();
         long beforeUsed = beforeHeap.getUsed();
 
-        // Test all 15 agents simultaneously
+        // Test all agents simultaneously
         List<CompletableFuture<AgentResponse>> futures = new ArrayList<>();
 
         for (int round = 0; round < 10; round++) {
-            for (AgentType agentType : AgentType.values()) {
-                AgentRequest request = createTestRequest(agentType, round);
+            for (String domain : domains) {
+                AgentRequest request = createTestRequest(domain, round);
 
                 CompletableFuture<AgentResponse> future = CompletableFuture.supplyAsync(() -> {
                     return agentManager.processRequest(request);
@@ -209,8 +241,18 @@ public class MemoryUsageTest {
                 .mapToLong(future -> {
                     try {
                         AgentResponse response = future.get();
+                        if (response == null) {
+                            System.err.println("Response is null");
+                            return 0;
+                        }
+                        if (!response.isSuccess()) {
+                            System.err.println("Response failed: status=" + response.getStatus() +
+                                    ", error=" + response.getErrorMessage());
+                        }
                         return response.isSuccess() ? 1 : 0;
                     } catch (Exception e) {
+                        System.err.println("Exception getting response: " + e.getMessage());
+                        e.printStackTrace();
                         return 0;
                     }
                 })
@@ -219,21 +261,15 @@ public class MemoryUsageTest {
         assertEquals(futures.size(), successfulRequests, "All requests should succeed");
     }
 
-    private AgentConsultationRequest createTestRequest(String domain, int index) {
-        Map<String, Object> context = new HashMap<>();
-        context.put("testIndex", index);
-
-        String query = "Memory test query for " + domain + " iteration " + index;
-        return AgentConsultationRequest.create(domain, query, context);
-    }
-
-    private String getDomain(int index) {
-        String[] domains = {
-                "architecture", "implementation", "deployment", "testing", "security",
-                "observability", "documentation", "business-domain", "integration-gateway",
-                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
-                "configuration-management", "resilience-engineering"
-        };
-        return domains[index % domains.length];
+    private AgentRequest createTestRequest(String domain, int index) {
+        return AgentRequest.builder()
+                .type("memory-test")
+                .context(AgentContext.builder()
+                        .domain(domain)
+                        .property("testIndex", index)
+                        .property("query", "Memory test query for " + domain + " iteration " + index)
+                        .build())
+                .securityContext(securityContext)
+                .build();
     }
 }

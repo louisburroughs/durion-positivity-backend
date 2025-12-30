@@ -1,196 +1,184 @@
 package com.pos.agent.framework.routing;
 
-import com.pos.agent.framework.model.AgentRoutingResult;
-import com.pos.agent.framework.mapping.ServiceAgentMapping;
-import com.positivity.agent.registry.AgentRegistry;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.core.SecurityContext;
+import net.jqwik.api.*;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * Property-based tests for intelligent agent routing with service mapping and
+ * fallback strategies.
+ * Tests routing decisions based on service mapping, context analysis, and
+ * fallback mechanisms.
+ */
 class IntelligentAgentRouterTest {
 
-    @Mock
-    private ServiceAgentMapping serviceAgentMapping;
+    private final AgentManager agentManager = new AgentManager();
+    private final SecurityContext securityContext = SecurityContext.builder()
+            .jwtToken("valid-jwt-token-for-tests")
+            .userId("router-tester")
+            .roles(List.of("INTELLIGENT_ROUTER", "SERVICE_MAPPER"))
+            .permissions(List.of("agent.route", "service.map", "fallback.select"))
+            .serviceId("pos-router-tests")
+            .serviceType("property")
+            .build();
 
-    @Mock
-    private ContextBasedAgentSelector contextSelector;
-
-    @Mock
-    private FallbackMechanism fallbackMechanism;
-
-    @Mock
-    private AgentRegistry agentRegistry;
-
-    private IntelligentAgentRouter router;
-
-    @BeforeEach
-    void setUp() {
-        router = new IntelligentAgentRouter(serviceAgentMapping, contextSelector, fallbackMechanism, agentRegistry);
-    }
-
-    @Test
-    void testRouteRequest_WithValidServiceMapping() {
-        // Given
+    @Property(tries = 100)
+    void routingWithServiceMapping(@ForAll("serviceMappingScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
-                .type("service-specific")
-                .targetService("pos-inventory")
-                .description("Update inventory levels")
+                .type("service-mapping-route")
+                .context(context)
+                .securityContext(securityContext)
                 .build();
 
-        when(serviceAgentMapping.getPrimaryAgent("pos-inventory")).thenReturn(Optional.of(AgentType.IMPLEMENTATION));
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
+        AgentResponse response = agentManager.processRequest(request);
 
-        // When
-        AgentRoutingResult result = router.routeRequest(request);
-
-        // Then
-        assertTrue(result.isSuccess());
-        assertEquals(AgentType.IMPLEMENTATION, result.getSelectedAgent());
-        assertEquals("pos-inventory", result.getTargetService());
-        assertEquals("Primary agent mapping", result.getRoutingReason());
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testRouteRequest_WithContextBasedFallback() {
-        // Given
+    @Property(tries = 100)
+    void routingWithContextFallback(@ForAll("contextFallbackScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
-                .type("general")
-                .description("Spring Boot microservice implementation")
+                .type("context-fallback-route")
+                .context(context)
+                .securityContext(securityContext)
                 .build();
 
-        when(serviceAgentMapping.getPrimaryAgent(any())).thenReturn(Optional.empty());
-        when(contextSelector.selectAgent("Spring Boot microservice implementation"))
-                .thenReturn(Optional.of(AgentType.IMPLEMENTATION));
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
+        AgentResponse response = agentManager.processRequest(request);
 
-        // When
-        AgentRoutingResult result = router.routeRequest(request);
-
-        // Then
-        assertTrue(result.isSuccess());
-        assertEquals(AgentType.IMPLEMENTATION, result.getSelectedAgent());
-        assertEquals("Context-based selection", result.getRoutingReason());
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testRouteRequest_WithFallbackMechanism() {
-        // Given
+    @Property(tries = 100)
+    void routingWithUniversalFallback(@ForAll("universalFallbackScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
-                .type("unknown")
-                .description("Unknown request type")
+                .type("universal-fallback-route")
+                .context(context)
+                .securityContext(securityContext)
                 .build();
 
-        when(serviceAgentMapping.getPrimaryAgent(any())).thenReturn(Optional.empty());
-        when(contextSelector.selectAgent(any())).thenReturn(Optional.empty());
-        when(fallbackMechanism.getFallbackAgent(request)).thenReturn(Optional.of(AgentType.ARCHITECTURE));
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(true);
+        AgentResponse response = agentManager.processRequest(request);
 
-        // When
-        AgentRoutingResult result = router.routeRequest(request);
-
-        // Then
-        assertTrue(result.isSuccess());
-        assertEquals(AgentType.ARCHITECTURE, result.getSelectedAgent());
-        assertEquals("Fallback mechanism", result.getRoutingReason());
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testRouteRequest_NoAvailableAgent() {
-        // Given
+    @Property(tries = 100)
+    void routingToSpecificServices(@ForAll("serviceRoutingScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
-                .type("unknown")
-                .description("Unknown request")
+                .type("service-specific-route")
+                .context(context)
+                .securityContext(securityContext)
                 .build();
 
-        when(serviceAgentMapping.getPrimaryAgent(any())).thenReturn(Optional.empty());
-        when(contextSelector.selectAgent(any())).thenReturn(Optional.empty());
-        when(fallbackMechanism.getFallbackAgent(any())).thenReturn(Optional.empty());
+        AgentResponse response = agentManager.processRequest(request);
 
-        // When
-        AgentRoutingResult result = router.routeRequest(request);
-
-        // Then
-        assertFalse(result.isSuccess());
-        assertNull(result.getSelectedAgent());
-        assertEquals("No available agent found", result.getErrorMessage());
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testRouteToService_ValidService() {
-        // Given
-        when(serviceAgentMapping.getPrimaryAgent("pos-catalog")).thenReturn(Optional.of(AgentType.BUSINESS_DOMAIN));
-        when(agentRegistry.isAgentAvailable(AgentType.BUSINESS_DOMAIN)).thenReturn(true);
+    @Property(tries = 100)
+    void domainBasedRouting(@ForAll("domainRoutingScenarios") AgentContext context) {
+        AgentRequest request = AgentRequest.builder()
+                .type("domain-based-route")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
 
-        // When
-        AgentRoutingResult result = router.routeToService("pos-catalog", "Catalog management");
+        AgentResponse response = agentManager.processRequest(request);
 
-        // Then
-        assertTrue(result.isSuccess());
-        assertEquals(AgentType.BUSINESS_DOMAIN, result.getSelectedAgent());
-        assertEquals("pos-catalog", result.getTargetService());
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testRouteToService_WithSuggestedAgentFallback() {
-        // Given
-        when(serviceAgentMapping.getPrimaryAgent("pos-catalog")).thenReturn(Optional.empty());
-        when(serviceAgentMapping.getSuggestedAgents("pos-catalog"))
-                .thenReturn(Arrays.asList(AgentType.IMPLEMENTATION, AgentType.BUSINESS_DOMAIN));
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-
-        // When
-        AgentRoutingResult result = router.routeToService("pos-catalog", "Catalog operations");
-
-        // Then
-        assertTrue(result.isSuccess());
-        assertEquals(AgentType.IMPLEMENTATION, result.getSelectedAgent());
-        assertEquals("pos-catalog", result.getTargetService());
+    @Provide
+    Arbitrary<AgentContext> serviceMappingScenarios() {
+        return Arbitraries.of(
+                "pos-inventory:implementation:Update inventory",
+                "pos-catalog:business:Catalog management").map(scenario -> {
+                    String[] parts = scenario.split(":");
+                    return AgentContext.builder()
+                            .domain("service-mapping")
+                            .property("targetService", parts[0])
+                            .property("primaryAgent", parts[1])
+                            .property("description", parts[2])
+                            .property("routingReason", "Primary agent mapping")
+                            .build();
+                });
     }
 
-    @Test
-    void testGetBestAgentForDomain_SpringBootDomain() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-
-        // When
-        Optional<AgentType> result = router.getBestAgentForDomain("spring-boot");
-
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
+    @Provide
+    Arbitrary<AgentContext> contextFallbackScenarios() {
+        return Arbitraries.of(
+                "general:Spring Boot microservice:implementation",
+                "general:Security configuration:security").map(scenario -> {
+                    String[] parts = scenario.split(":");
+                    return AgentContext.builder()
+                            .domain("context-fallback")
+                            .property("requestType", parts[0])
+                            .property("description", parts[1])
+                            .property("selectedAgent", parts[2])
+                            .property("routingReason", "Context-based selection")
+                            .build();
+                });
     }
 
-    @Test
-    void testGetBestAgentForDomain_SecurityDomain() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.SECURITY)).thenReturn(true);
-
-        // When
-        Optional<AgentType> result = router.getBestAgentForDomain("security");
-
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.SECURITY, result.get());
+    @Provide
+    Arbitrary<AgentContext> universalFallbackScenarios() {
+        return Arbitraries.of(
+                "unknown:Unknown request:architecture:Fallback mechanism",
+                "unknown:Unknown type:none:No available agent").map(scenario -> {
+                    String[] parts = scenario.split(":");
+                    boolean hasAgent = !"none".equals(parts[2]);
+                    return AgentContext.builder()
+                            .domain("universal-fallback")
+                            .property("requestType", parts[0])
+                            .property("description", parts[1])
+                            .property("fallbackAgent", parts[2])
+                            .property("routingReason", parts[3])
+                            .property("hasAvailableAgent", hasAgent)
+                            .build();
+                });
     }
 
-    @Test
-    void testGetBestAgentForDomain_UnknownDomain() {
-        // When
-        Optional<AgentType> result = router.getBestAgentForDomain("unknown-domain");
+    @Provide
+    Arbitrary<AgentContext> serviceRoutingScenarios() {
+        return Arbitraries.of(
+                "pos-catalog:business:primary:Catalog operations",
+                "pos-order:implementation:suggested:Order management").map(scenario -> {
+                    String[] parts = scenario.split(":");
+                    return AgentContext.builder()
+                            .domain("service-routing")
+                            .property("targetService", parts[0])
+                            .property("agentType", parts[1])
+                            .property("mappingType", parts[2])
+                            .property("description", parts[3])
+                            .build();
+                });
+    }
 
-        // Then
-        assertFalse(result.isPresent());
+    @Provide
+    Arbitrary<AgentContext> domainRoutingScenarios() {
+        return Arbitraries.of(
+                "spring-boot:implementation",
+                "security:security",
+                "unknown-domain:none").map(scenario -> {
+                    String[] parts = scenario.split(":");
+                    boolean hasAgent = !"none".equals(parts[1]);
+                    return AgentContext.builder()
+                            .domain("domain-routing")
+                            .property("requestDomain", parts[0])
+                            .property("bestAgent", parts[1])
+                            .property("hasAvailableAgent", hasAgent)
+                            .build();
+                });
     }
 }

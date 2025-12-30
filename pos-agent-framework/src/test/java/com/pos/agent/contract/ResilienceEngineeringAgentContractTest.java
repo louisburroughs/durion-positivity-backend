@@ -1,18 +1,14 @@
 package com.pos.agent.contract;
 
-import com.positivity.agent.Agent;
-import com.positivity.agent.AgentConsultationRequest;
-import com.positivity.agent.AgentGuidanceResponse;
-import com.positivity.agent.impl.ResilienceEngineeringAgent;
+import com.pos.agent.core.Agent;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.impl.ResilienceEngineeringAgent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
 class ResilienceEngineeringAgentContractTest {
 
     private Agent resilienceAgent;
@@ -27,97 +23,86 @@ class ResilienceEngineeringAgentContractTest {
         assertInstanceOf(Agent.class, resilienceAgent);
     }
 
-    @Test
-    void shouldReturnValidAgentId() {
-        String agentId = resilienceAgent.getAgentId();
-        assertNotNull(agentId);
-        assertFalse(agentId.trim().isEmpty());
-        assertEquals("resilience-engineering", agentId);
-    }
-
-    @Test
-    void shouldReturnValidCapabilities() {
-        var capabilities = resilienceAgent.getCapabilities();
-        assertNotNull(capabilities);
-        assertFalse(capabilities.isEmpty());
-        assertTrue(capabilities.contains("circuit-breaker"));
-        assertTrue(capabilities.contains("retry-mechanisms"));
-        assertTrue(capabilities.contains("chaos-engineering"));
-        assertTrue(capabilities.contains("failure-injection"));
-    }
+    // Identity/capabilities are outside the frozen core contract; validate
+    // processing.
 
     @Test
     void shouldHandleCircuitBreakerRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("circuit-breaker")
-                .context("Configure Resilience4j circuit breaker")
+                .type("circuit-breaker")
+                .description("Configure Resilience4j circuit breaker")
+                .context("resilience4j")
                 .build();
 
         AgentResponse response = resilienceAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertFalse(response.getContent().trim().isEmpty());
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertFalse(response.getOutput().trim().isEmpty());
     }
 
     @Test
     void shouldHandleRetryMechanismsRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("retry-mechanisms")
-                .context("Implement exponential backoff retry")
+                .type("retry-mechanisms")
+                .description("Implement exponential backoff retry")
+                .context("exponential-backoff")
                 .build();
 
         AgentResponse response = resilienceAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("retry"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("retry"));
     }
 
     @Test
     void shouldHandleChaosEngineeringRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("chaos-engineering")
-                .context("Setup chaos monkey for testing")
+                .type("chaos-engineering")
+                .description("Setup chaos monkey for testing")
+                .context("chaos-monkey")
                 .build();
 
         AgentResponse response = resilienceAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().toLowerCase().contains("chaos"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().toLowerCase().contains("chaos"));
     }
 
     @Test
     void shouldHandleFailureInjectionRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("failure-injection")
-                .context("Inject network latency for testing")
+                .type("failure-injection")
+                .description("Inject network latency for testing")
+                .context("network-latency")
                 .build();
 
         AgentResponse response = resilienceAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("failure"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("failure"));
     }
 
     @Test
     void shouldReturnErrorForUnsupportedRequestType() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("unsupported-operation")
-                .context("This should fail")
+                .type("invalid-operation")
+                .description("This should fail")
+                .context("invalid")
                 .build();
 
         AgentResponse response = resilienceAgent.processRequest(request);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
@@ -125,15 +110,16 @@ class ResilienceEngineeringAgentContractTest {
         AgentResponse response = resilienceAgent.processRequest(null);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
     void shouldReturnConsistentResponseFormat() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("circuit-breaker")
-                .context("Test consistency")
+                .type("circuit-breaker")
+                .description("Test consistency")
+                .context("cb-test")
                 .build();
 
         AgentResponse response1 = resilienceAgent.processRequest(request);
@@ -141,8 +127,8 @@ class ResilienceEngineeringAgentContractTest {
 
         assertNotNull(response1);
         assertNotNull(response2);
-        assertEquals(response1.isSuccess(), response2.isSuccess());
-        assertNotNull(response1.getContent());
-        assertNotNull(response2.getContent());
+        assertEquals(response1.getStatus(), response2.getStatus());
+        assertNotNull(response1.getOutput());
+        assertNotNull(response2.getOutput());
     }
 }
