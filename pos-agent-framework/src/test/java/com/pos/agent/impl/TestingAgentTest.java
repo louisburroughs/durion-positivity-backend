@@ -128,7 +128,7 @@ class TestingAgentTest {
 
         AgentResponse response = agent.processRequest(request);
 
-        assertEquals(AgentStatus.SUCCESS, response.getStatus());
+        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
         assertTrue(response.isSuccess());
         assertNotNull(response.getOutput());
         assertTrue(response.getOutput().contains("Testing pattern recommendation"));
@@ -141,7 +141,7 @@ class TestingAgentTest {
         
         AgentResponse response = agent.processRequest(null);
         
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: request is null", response.getOutput());
     }
