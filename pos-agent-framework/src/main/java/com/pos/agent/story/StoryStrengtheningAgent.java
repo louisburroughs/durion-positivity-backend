@@ -2,7 +2,9 @@ package com.pos.agent.story;
 
 import com.pos.agent.story.analysis.RequirementsAnalyzer;
 import com.pos.agent.story.config.StoryConfiguration;
+import com.pos.agent.story.loop.LoopDetectionResult;
 import com.pos.agent.story.loop.LoopDetector;
+import com.pos.agent.story.loop.ProcessingContext;
 import com.pos.agent.story.models.*;
 import com.pos.agent.story.output.OutputGenerator;
 import com.pos.agent.story.parsing.IssueParser;
@@ -78,12 +80,42 @@ public class StoryStrengtheningAgent {
 
             // Step 2: Parsing
             ParsedIssue parsedIssue = parser.parseIssue(issue);
+            
+            // Loop Detection Checkpoint 1: After parsing
+            ProcessingContext contextAfterParsing = buildProcessingContext(parsedIssue, null, null);
+            LoopDetectionResult loopCheckAfterParsing = loopDetector.checkForLoops(contextAfterParsing);
+            if (loopCheckAfterParsing.isLoopDetected()) {
+                return ProcessingResult.stopped(
+                    loopCheckAfterParsing.getStopPhrase().orElse("STOP: Loop detected after parsing"),
+                    loopCheckAfterParsing.getDetails().orElse("Loop condition detected")
+                );
+            }
 
             // Step 3: Analysis
             AnalysisResult analysisResult = analyzer.analyzeRequirements(parsedIssue);
+            
+            // Loop Detection Checkpoint 2: After analysis
+            ProcessingContext contextAfterAnalysis = buildProcessingContext(parsedIssue, analysisResult, null);
+            LoopDetectionResult loopCheckAfterAnalysis = loopDetector.checkForLoops(contextAfterAnalysis);
+            if (loopCheckAfterAnalysis.isLoopDetected()) {
+                return ProcessingResult.stopped(
+                    loopCheckAfterAnalysis.getStopPhrase().orElse("STOP: Loop detected after analysis"),
+                    loopCheckAfterAnalysis.getDetails().orElse("Loop condition detected")
+                );
+            }
 
             // Step 4: Transformation
             TransformedRequirements transformedRequirements = transformer.transformRequirements(analysisResult);
+            
+            // Loop Detection Checkpoint 3: After transformation
+            ProcessingContext contextAfterTransformation = buildProcessingContext(parsedIssue, analysisResult, transformedRequirements);
+            LoopDetectionResult loopCheckAfterTransformation = loopDetector.checkForLoops(contextAfterTransformation);
+            if (loopCheckAfterTransformation.isLoopDetected()) {
+                return ProcessingResult.stopped(
+                    loopCheckAfterTransformation.getStopPhrase().orElse("STOP: Loop detected after transformation"),
+                    loopCheckAfterTransformation.getDetails().orElse("Loop condition detected")
+                );
+            }
 
             // Step 5: Output Generation
             String output = outputGenerator.generateOutput(transformedRequirements, issue.getBody());
@@ -95,6 +127,88 @@ public class StoryStrengtheningAgent {
                 "STOP: Issue parsing failed",
                 e.getMessage()
             );
+        }
+    }
+    
+    /**
+     * Builds a ProcessingContext from pipeline data for loop detection.
+     * Aggregates acceptance criteria count and open questions count from available data.
+     * 
+     * @param parsedIssue The parsed issue (always available)
+     * @param analysisResult The analysis result (may be null if not yet analyzed)
+     * @param transformedRequirements The transformed requirements (may be null if not yet transformed)
+     * @return ProcessingContext populated with available data
+     */
+    private ProcessingContext buildProcessingContext(
+            ParsedIssue parsedIssue,
+            AnalysisResult analysisResult,
+            TransformedRequirements transformedRequirements) {
+        ProcessingContext context = new ProcessingContext();
+        
+        // Set acceptance criteria count from transformed requirements if available
+        if (transformedRequirements != null) {
+            int acceptanceCriteriaCount = transformedRequirements.getAcceptanceCriteria().size() 
+                + transformedRequirements.getFunctionalRequirements().size();
+            context.setAcceptanceCriteriaCount(acceptanceCriteriaCount);
+            
+            // Set open questions count
+            context.setOpenQuestionsCount(transformedRequirements.getOpenQuestions().size());
+        } else if (analysisResult != null) {
+            // Use analysis result data if transformation not yet done
+            context.setOpenQuestionsCount(analysisResult.getAmbiguities().size());
+        }
+        
+        // Check for unsafe inference flags in analysis result
+        if (analysisResult != null) {
+            // Check requirements for sensitive topics that require human expertise
+            checkForUnsafeInference(context, analysisResult);
+        }
+        
+        return context;
+    }
+    
+    /**
+     * Checks analysis results for topics requiring human expertise and unsafe inference.
+     * Sets appropriate flags in the ProcessingContext.
+     * 
+     * @param context The processing context to update
+     * @param analysisResult The analysis result to check
+     */
+    private void checkForUnsafeInference(ProcessingContext context, AnalysisResult analysisResult) {
+        // Check all requirements for sensitive keywords
+        String allRequirementsText = String.join(" ",
+            analysisResult.getIntent(),
+            String.join(" ", analysisResult.getActors()),
+            analysisResult.getFunctionalRequirements().stream()
+                .map(r -> r.getText())
+                .reduce("", String::concat),
+            analysisResult.getBusinessRules().stream()
+                .map(r -> r.getText())
+                .reduce("", String::concat)
+        ).toLowerCase();
+        
+        // Detect legal inference requirements
+        if (allRequirementsText.contains("legal") || allRequirementsText.contains("compliance") 
+            || allRequirementsText.contains("regulation") || allRequirementsText.contains("law")) {
+            context.setRequiresLegalInference(true);
+        }
+        
+        // Detect financial inference requirements
+        if (allRequirementsText.contains("financial") || allRequirementsText.contains("payment") 
+            || allRequirementsText.contains("transaction") || allRequirementsText.contains("accounting")) {
+            context.setRequiresFinancialInference(true);
+        }
+        
+        // Detect security inference requirements
+        if (allRequirementsText.contains("security") || allRequirementsText.contains("authentication") 
+            || allRequirementsText.contains("authorization") || allRequirementsText.contains("encrypt")) {
+            context.setRequiresSecurityInference(true);
+        }
+        
+        // Detect regulatory inference requirements
+        if (allRequirementsText.contains("regulatory") || allRequirementsText.contains("gdpr") 
+            || allRequirementsText.contains("hipaa") || allRequirementsText.contains("sox")) {
+            context.setRequiresRegulatoryInference(true);
         }
     }
 
