@@ -4,7 +4,8 @@ import java.util.Collections;
 
 /**
  * Abstract base class for all agents.
- * Provides common validation logic and failure response creation.
+ * Centralizes validation and failure response creation,
+ * allowing concrete agents to focus on domain logic.
  * Part of frozen contract specification (REQ-016)
  */
 public abstract class AbstractAgent implements Agent {
@@ -12,6 +13,8 @@ public abstract class AbstractAgent implements Agent {
     /**
      * Process an agent request and return response.
      * Performs validation before delegating to the implementation.
+     * Template method for processing agent requests.
+     * Validates the request and delegates to the concrete agent's handle method.
      * 
      * @param request The request to process
      * @return The agent response

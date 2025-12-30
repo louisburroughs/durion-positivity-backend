@@ -49,7 +49,7 @@ Positivity is a multi-service, Java 21-based platform organized as a monorepo wi
 
 ## Adjacent Projects
 - `moqui` — Durion frontend platform built on Moqui; integrates with Positivity services via REST.
-- `durion/workspace-agents` — Java 17 Gradle project for agents/testing.
+- `durion/workspace-agents` — Java 11 Gradle project for agents/testing.
 
 ## Security & Compliance
 - Secrets must come from environment variables or secret stores; never hardcoded.
