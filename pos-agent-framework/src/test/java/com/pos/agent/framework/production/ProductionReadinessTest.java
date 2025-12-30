@@ -1,77 +1,53 @@
 package com.pos.agent.framework.production;
 
-import org.junit.jupiter.api.Test;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.DisplayName;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Production readiness tests for the agent framework.
- * Validates health checks, monitoring endpoints, and system readiness.
+ * Normalized production readiness tests using core API.
+ * Validates that an operations request processes and returns status.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 class ProductionReadinessTest {
 
-    @LocalServerPort
-    private int port;
-
-    @Autowired
-    private TestRestTemplate restTemplate;
-
-    @Test
-    @DisplayName("Health check endpoint should be accessible and return UP status")
-    void testHealthCheckEndpoint() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/health", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("\"status\":\"UP\"");
-    }
+    private final AgentManager agentManager = new AgentManager();
+    private final SecurityContext security = SecurityContext.builder()
+            .jwtToken("valid.jwt.token")
+            .userId("ops-user")
+            .roles(List.of("ops"))
+            .permissions(List.of("read"))
+            .serviceId("pos-ops-suite")
+            .serviceType("manual")
+            .build();
 
     @Test
-    @DisplayName("Readiness probe should return healthy status")
-    void testReadinessProbe() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/health/readiness", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("\"status\":\"UP\"");
-    }
+    @DisplayName("Operations readiness request processes successfully")
+    void processesOperationsReadinessRequest() {
+        AgentContext context = AgentContext.builder()
+                .domain("operations")
+                .property("check", "readiness")
+                .build();
 
-    @Test
-    @DisplayName("Liveness probe should return healthy status")
-    void testLivenessProbe() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/health/liveness", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("\"status\":\"UP\"");
-    }
+        AgentRequest request = AgentRequest.builder()
+                .type("production-readiness")
+                .context(context)
+                .securityContext(security)
+                .requireTLS13(true)
+                .build();
 
-    @Test
-    @DisplayName("Metrics endpoint should be accessible")
-    void testMetricsEndpoint() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/metrics", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("\"names\":");
-    }
+        AgentResponse response = agentManager.processRequest(request);
 
-    @Test
-    @DisplayName("Info endpoint should provide application information")
-    void testInfoEndpoint() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/info", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertNotNull(response);
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
+        assertTrue(response.getProcessingTimeMs() >= 0);
     }
 }

@@ -1,15 +1,12 @@
 package com.pos.agent.performance;
 
-import com.positivity.agent.controller.AgentConsultationController;
-import com.positivity.agent.AgentConsultationRequest;
-import com.positivity.agent.AgentGuidanceResponse;
-import java.util.HashMap;
-import java.util.Map;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -20,21 +17,27 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
 public class LoadTest {
 
-    @Autowired
-    private AgentConsultationController agentController;
+    private AgentManager agentManager;
+    private SecurityContext securityContext;
 
     private ExecutorService executorService;
 
     @BeforeEach
     void setUp() {
+        agentManager = new AgentManager();
+        securityContext = SecurityContext.builder()
+                .jwtToken("test-token-12345")
+                .userId("test-user")
+                .roles(List.of("developer", "architect"))
+                .permissions(List.of("load:test", "domain:access"))
+                .serviceId("test-service")
+                .serviceType("test")
+                .build();
         executorService = Executors.newFixedThreadPool(100);
     }
 
@@ -56,8 +59,8 @@ public class LoadTest {
 
                 // Each user makes multiple requests
                 for (int requestId = 0; requestId < requestsPerUser; requestId++) {
-                    AgentType agentType = getAgentTypeForUser(currentUserId, requestId);
-                    AgentRequest request = createUserRequest(currentUserId, requestId, agentType);
+                    String domain = getDomainForUser(currentUserId, requestId);
+                    AgentRequest request = createUserRequest(currentUserId, requestId, domain);
 
                     AgentResponse response = agentManager.processRequest(request);
                     userResponses.add(response);
@@ -122,9 +125,15 @@ public class LoadTest {
         Instant startTime = Instant.now();
 
         // Submit all requests rapidly
+        String[] domains = {
+                "architecture", "implementation", "deployment", "testing", "security",
+                "observability", "documentation", "business-domain", "integration-gateway",
+                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                "configuration-management", "resilience-engineering"
+        };
         for (int i = 0; i < totalRequests; i++) {
-            AgentType agentType = AgentType.values()[i % AgentType.values().length];
-            AgentRequest request = createThroughputRequest(i, agentType);
+            String domain = domains[i % domains.length];
+            AgentRequest request = createThroughputRequest(i, domain);
 
             CompletableFuture<AgentResponse> future = CompletableFuture.supplyAsync(() -> {
                 AgentResponse response = agentManager.processRequest(request);
@@ -175,9 +184,15 @@ public class LoadTest {
         Instant burstStart = Instant.now();
 
         // Submit burst of requests simultaneously
+        String[] domains = {
+                "architecture", "implementation", "deployment", "testing", "security",
+                "observability", "documentation", "business-domain", "integration-gateway",
+                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                "configuration-management", "resilience-engineering"
+        };
         for (int i = 0; i < burstSize; i++) {
-            AgentType agentType = AgentType.values()[i % AgentType.values().length];
-            AgentRequest request = createBurstRequest(i, agentType);
+            String domain = domains[i % domains.length];
+            AgentRequest request = createBurstRequest(i, domain);
 
             CompletableFuture<AgentResponse> future = CompletableFuture.supplyAsync(() -> {
                 return agentManager.processRequest(request);
@@ -229,10 +244,16 @@ public class LoadTest {
             List<CompletableFuture<AgentResponse>> batchFutures = new ArrayList<>();
 
             // Submit batch of requests
+            String[] domains = {
+                    "architecture", "implementation", "deployment", "testing", "security",
+                    "observability", "documentation", "business-domain", "integration-gateway",
+                    "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                    "configuration-management", "resilience-engineering"
+            };
             for (int i = 0; i < requestsPerSecond; i++) {
                 int requestId = totalRequests.incrementAndGet();
-                AgentType agentType = AgentType.values()[requestId % AgentType.values().length];
-                AgentRequest request = createSustainedRequest(requestId, agentType);
+                String domain = domains[requestId % domains.length];
+                AgentRequest request = createSustainedRequest(requestId, domain);
 
                 CompletableFuture<AgentResponse> future = CompletableFuture.supplyAsync(() -> {
                     AgentResponse response = agentManager.processRequest(request);
@@ -278,36 +299,48 @@ public class LoadTest {
         return domains[index];
     }
 
-    private AgentConsultationRequest createUserRequest(int userId, int requestId, String domain) {
-        Map<String, Object> context = new HashMap<>();
-        context.put("userId", userId);
-        context.put("requestId", requestId);
-
-        String query = "User " + userId + " request " + requestId + " for " + domain;
-        return AgentConsultationRequest.create(domain, query, context);
+    private AgentRequest createUserRequest(int userId, int requestId, String domain) {
+        return AgentRequest.builder()
+                .type("load-test-user")
+                .context(AgentContext.builder()
+                        .domain(domain)
+                        .property("userId", userId)
+                        .property("requestId", requestId)
+                        .build())
+                .securityContext(securityContext)
+                .build();
     }
 
-    private AgentRequest createThroughputRequest(int requestId, AgentType agentType) {
-        AgentRequest request = new AgentRequest();
-        request.setAgentType(agentType);
-        request.setRequestId("throughput-" + requestId);
-        request.setQuery("Throughput test request " + requestId + " for " + agentType);
-        return request;
+    private AgentRequest createThroughputRequest(int requestId, String domain) {
+        return AgentRequest.builder()
+                .type("throughput-test")
+                .context(AgentContext.builder()
+                        .domain(domain)
+                        .property("requestId", "throughput-" + requestId)
+                        .build())
+                .securityContext(securityContext)
+                .build();
     }
 
-    private AgentRequest createBurstRequest(int requestId, AgentType agentType) {
-        AgentRequest request = new AgentRequest();
-        request.setAgentType(agentType);
-        request.setRequestId("burst-" + requestId);
-        request.setQuery("Burst test request " + requestId + " for " + agentType);
-        return request;
+    private AgentRequest createBurstRequest(int requestId, String domain) {
+        return AgentRequest.builder()
+                .type("burst-test")
+                .context(AgentContext.builder()
+                        .domain(domain)
+                        .property("requestId", "burst-" + requestId)
+                        .build())
+                .securityContext(securityContext)
+                .build();
     }
 
-    private AgentRequest createSustainedRequest(int requestId, AgentType agentType) {
-        AgentRequest request = new AgentRequest();
-        request.setAgentType(agentType);
-        request.setRequestId("sustained-" + requestId);
-        request.setQuery("Sustained test request " + requestId + " for " + agentType);
-        return request;
+    private AgentRequest createSustainedRequest(int requestId, String domain) {
+        return AgentRequest.builder()
+                .type("sustained-test")
+                .context(AgentContext.builder()
+                        .domain(domain)
+                        .property("requestId", "sustained-" + requestId)
+                        .build())
+                .securityContext(securityContext)
+                .build();
     }
 }

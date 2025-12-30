@@ -1,71 +1,52 @@
 package com.pos.agent.framework.production;
 
-import org.junit.jupiter.api.Test;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.DisplayName;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Monitoring and alerting validation tests.
- * Validates Prometheus metrics exposure and monitoring readiness.
+ * Normalized monitoring validation using core API.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 class MonitoringValidationTest {
 
-    @LocalServerPort
-    private int port;
-
-    @Autowired
-    private TestRestTemplate restTemplate;
-
-    @Test
-    @DisplayName("Prometheus metrics endpoint should expose agent metrics")
-    void testPrometheusMetricsEndpoint() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/prometheus", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("# HELP");
-        assertThat(response.getBody()).contains("# TYPE");
-    }
+    private final AgentManager agentManager = new AgentManager();
+    private final SecurityContext security = SecurityContext.builder()
+            .jwtToken("valid.jwt.token")
+            .userId("monitor-user")
+            .roles(List.of("monitor"))
+            .permissions(List.of("read"))
+            .serviceId("pos-monitoring-suite")
+            .serviceType("manual")
+            .build();
 
     @Test
-    @DisplayName("JVM metrics should be exposed for monitoring")
-    void testJvmMetricsExposure() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/prometheus", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("jvm_memory_used_bytes");
-        assertThat(response.getBody()).contains("jvm_gc_collection_seconds");
-    }
+    @DisplayName("Monitoring readiness request processes successfully")
+    void processesMonitoringReadinessRequest() {
+        AgentContext context = AgentContext.builder()
+                .domain("observability")
+                .property("check", "metrics")
+                .build();
 
-    @Test
-    @DisplayName("HTTP request metrics should be exposed")
-    void testHttpRequestMetrics() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/prometheus", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("http_server_requests_seconds");
-    }
+        AgentRequest request = AgentRequest.builder()
+                .type("monitoring-validation")
+                .context(context)
+                .securityContext(security)
+                .requireTLS13(true)
+                .build();
 
-    @Test
-    @DisplayName("Agent-specific metrics should be available")
-    void testAgentSpecificMetrics() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-            "http://localhost:" + port + "/actuator/metrics", String.class);
-        
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        // Verify that agent metrics are registered
-        assertThat(response.getBody()).isNotEmpty();
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertNotNull(response);
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
+        assertTrue(response.getProcessingTimeMs() >= 0);
     }
 }

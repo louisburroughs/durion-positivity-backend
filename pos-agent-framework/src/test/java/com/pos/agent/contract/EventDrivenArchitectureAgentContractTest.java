@@ -1,18 +1,14 @@
 package com.pos.agent.contract;
 
-import com.positivity.agent.Agent;
-import com.positivity.agent.AgentConsultationRequest;
-import com.positivity.agent.AgentGuidanceResponse;
-import com.positivity.agent.impl.EventDrivenArchitectureAgent;
+import com.pos.agent.core.Agent;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.impl.EventDrivenArchitectureAgent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
 class EventDrivenArchitectureAgentContractTest {
 
     private Agent eventDrivenAgent;
@@ -27,96 +23,86 @@ class EventDrivenArchitectureAgentContractTest {
         assertInstanceOf(Agent.class, eventDrivenAgent);
     }
 
-    @Test
-    void shouldReturnValidAgentId() {
-        String agentId = eventDrivenAgent.getAgentId();
-        assertNotNull(agentId);
-        assertFalse(agentId.trim().isEmpty());
-        assertEquals("event-driven-architecture", agentId);
-    }
-
-    @Test
-    void shouldReturnValidCapabilities() {
-        var capabilities = eventDrivenAgent.getCapabilities();
-        assertNotNull(capabilities);
-        assertFalse(capabilities.isEmpty());
-        assertTrue(capabilities.contains("event-schema-design"));
-        assertTrue(capabilities.contains("event-versioning"));
-        assertTrue(capabilities.contains("idempotent-handlers"));
-    }
+    // Identity/capabilities not part of core Agent contract; focus on processing
+    // behavior.
 
     @Test
     void shouldHandleEventSchemaDesignRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("event-schema-design")
-                .context("Design event schema for order processing")
+                .type("event-schema-design")
+                .description("Design event schema for order processing")
+                .context("schema-order")
                 .build();
 
         AgentResponse response = eventDrivenAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertFalse(response.getContent().trim().isEmpty());
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertFalse(response.getOutput().trim().isEmpty());
     }
 
     @Test
     void shouldHandleEventVersioningRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("event-versioning")
-                .context("Version customer events for backward compatibility")
+                .type("event-versioning")
+                .description("Version customer events for backward compatibility")
+                .context("versioning-customer")
                 .build();
 
         AgentResponse response = eventDrivenAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("versioning"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("versioning"));
     }
 
     @Test
     void shouldHandleIdempotentHandlerRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("idempotent-handlers")
-                .context("Implement idempotent payment processing")
+                .type("idempotent-handlers")
+                .description("Implement idempotent payment processing")
+                .context("idempotency-payment")
                 .build();
 
         AgentResponse response = eventDrivenAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("idempotent"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("idempotent"));
     }
 
     @Test
     void shouldHandleKafkaConfigurationRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("kafka-configuration")
-                .context("Configure Kafka for high-throughput events")
+                .type("kafka-configuration")
+                .description("Configure Kafka for high-throughput events")
+                .context("kafka-high-throughput")
                 .build();
 
         AgentResponse response = eventDrivenAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().toLowerCase().contains("kafka"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().toLowerCase().contains("kafka"));
     }
 
     @Test
     void shouldReturnErrorForUnsupportedRequestType() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("unsupported-operation")
-                .context("This should fail")
+                .type("invalid-operation")
+                .description("This should fail")
+                .context("invalid")
                 .build();
 
         AgentResponse response = eventDrivenAgent.processRequest(request);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
@@ -124,15 +110,16 @@ class EventDrivenArchitectureAgentContractTest {
         AgentResponse response = eventDrivenAgent.processRequest(null);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
     void shouldReturnConsistentResponseFormat() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("event-schema-design")
-                .context("Test consistency")
+                .type("event-schema-design")
+                .description("Test consistency")
+                .context("schema-test")
                 .build();
 
         AgentResponse response1 = eventDrivenAgent.processRequest(request);
@@ -140,8 +127,8 @@ class EventDrivenArchitectureAgentContractTest {
 
         assertNotNull(response1);
         assertNotNull(response2);
-        assertEquals(response1.isSuccess(), response2.isSuccess());
-        assertNotNull(response1.getContent());
-        assertNotNull(response2.getContent());
+        assertEquals(response1.getStatus(), response2.getStatus());
+        assertNotNull(response1.getOutput());
+        assertNotNull(response2.getOutput());
     }
 }

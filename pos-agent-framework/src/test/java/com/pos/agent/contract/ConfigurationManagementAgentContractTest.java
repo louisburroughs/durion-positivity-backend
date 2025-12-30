@@ -1,18 +1,14 @@
 package com.pos.agent.contract;
 
-import com.positivity.agent.Agent;
-import com.positivity.agent.AgentConsultationRequest;
-import com.positivity.agent.AgentGuidanceResponse;
-import com.positivity.agent.impl.ConfigurationManagementAgent;
+import com.pos.agent.core.Agent;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.impl.ConfigurationManagementAgent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
 class ConfigurationManagementAgentContractTest {
 
     private Agent configAgent;
@@ -27,97 +23,87 @@ class ConfigurationManagementAgentContractTest {
         assertInstanceOf(Agent.class, configAgent);
     }
 
-    @Test
-    void shouldReturnValidAgentId() {
-        String agentId = configAgent.getAgentId();
-        assertNotNull(agentId);
-        assertFalse(agentId.trim().isEmpty());
-        assertEquals("configuration-management", agentId);
-    }
-
-    @Test
-    void shouldReturnValidCapabilities() {
-        var capabilities = configAgent.getCapabilities();
-        assertNotNull(capabilities);
-        assertFalse(capabilities.isEmpty());
-        assertTrue(capabilities.contains("centralized-config"));
-        assertTrue(capabilities.contains("feature-flags"));
-        assertTrue(capabilities.contains("secrets-management"));
-        assertTrue(capabilities.contains("environment-config"));
-    }
+    // Agent identity/capabilities are not part of the frozen core contract
+    // (REQ-016)
+    // Focus on processRequest behavior consistent with core API.
 
     @Test
     void shouldHandleCentralizedConfigRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("centralized-config")
-                .context("Setup Spring Cloud Config server")
+                .type("centralized-config")
+                .description("Setup Spring Cloud Config server")
+                .context("spring-cloud-config")
                 .build();
 
         AgentResponse response = configAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertFalse(response.getContent().trim().isEmpty());
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertFalse(response.getOutput().trim().isEmpty());
     }
 
     @Test
     void shouldHandleFeatureFlagsRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("feature-flags")
-                .context("Implement gradual feature rollout")
+                .type("feature-flags")
+                .description("Implement gradual feature rollout")
+                .context("gradual-rollout")
                 .build();
 
         AgentResponse response = configAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("feature"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("feature"));
     }
 
     @Test
     void shouldHandleSecretsManagementRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("secrets-management")
-                .context("Configure AWS Secrets Manager integration")
+                .type("secrets-management")
+                .description("Configure AWS Secrets Manager integration")
+                .context("aws-secrets-manager")
                 .build();
 
         AgentResponse response = configAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().toLowerCase().contains("secrets"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().toLowerCase().contains("secrets"));
     }
 
     @Test
     void shouldHandleEnvironmentConfigRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("environment-config")
-                .context("Setup dev, staging, prod configurations")
+                .type("environment-config")
+                .description("Setup dev, staging, prod configurations")
+                .context("environments")
                 .build();
 
         AgentResponse response = configAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("environment"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("environment"));
     }
 
     @Test
     void shouldReturnErrorForUnsupportedRequestType() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("unsupported-operation")
-                .context("This should fail")
+                .type("invalid-operation")
+                .description("This should fail")
+                .context("invalid")
                 .build();
 
         AgentResponse response = configAgent.processRequest(request);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
@@ -125,15 +111,16 @@ class ConfigurationManagementAgentContractTest {
         AgentResponse response = configAgent.processRequest(null);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
     void shouldReturnConsistentResponseFormat() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("centralized-config")
-                .context("Test consistency")
+                .type("centralized-config")
+                .description("Test consistency")
+                .context("spring-cloud-config")
                 .build();
 
         AgentResponse response1 = configAgent.processRequest(request);
@@ -141,8 +128,8 @@ class ConfigurationManagementAgentContractTest {
 
         assertNotNull(response1);
         assertNotNull(response2);
-        assertEquals(response1.isSuccess(), response2.isSuccess());
-        assertNotNull(response1.getContent());
-        assertNotNull(response2.getContent());
+        assertEquals(response1.getStatus(), response2.getStatus());
+        assertNotNull(response1.getOutput());
+        assertNotNull(response2.getOutput());
     }
 }

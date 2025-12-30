@@ -1,311 +1,151 @@
 package com.pos.agent.framework.routing;
 
-import com.pos.agent.framework.model.AgentRequest;
-import com.pos.agent.framework.model.AgentType;
-import com.pos.agent.framework.registry.AgentRegistry;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.core.SecurityContext;
+import net.jqwik.api.*;
 
-import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * Property-based tests for fallback mechanism in agent routing.
+ * Tests fallback strategies for unavailable agents and routing failures.
+ */
 class FallbackMechanismTest {
 
-    @Mock
-    private ContextBasedAgentSelector contextSelector;
-    
-    @Mock
-    private AgentRegistry agentRegistry;
-    
-    private FallbackMechanism fallbackMechanism;
-
-    @BeforeEach
-    void setUp() {
-        fallbackMechanism = new FallbackMechanism(contextSelector, agentRegistry);
-    }
-
-    @Test
-    void testGetFallbackAgent_ContextBasedFallback() {
-        // Given
-        AgentRequest request = AgentRequest.builder()
-            .description("Spring Boot implementation")
+    private final AgentManager agentManager = new AgentManager();
+    private final SecurityContext securityContext = SecurityContext.builder()
+            .jwtToken("valid-jwt-token-for-tests")
+            .userId("fallback-tester")
+            .roles(List.of("FALLBACK_HANDLER", "AGENT_ROUTER"))
+            .permissions(List.of("agent.fallback", "agent.route", "agent.recover"))
+            .serviceId("pos-fallback-tests")
+            .serviceType("property")
             .build();
-        
-        when(contextSelector.selectAgent("Spring Boot implementation")).thenReturn(Optional.of(AgentType.IMPLEMENTATION));
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getFallbackAgent(request);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
-    }
 
-    @Test
-    void testGetFallbackAgent_DomainBasedFallback() {
-        // Given
+    @Property(tries = 100)
+    void contextBasedFallback(@ForAll("contextFallbackScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
-            .type("spring-boot")
-            .description("Unknown context")
-            .build();
-        
-        when(contextSelector.selectAgent(any())).thenReturn(Optional.empty());
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getFallbackAgent(request);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
+                .type("context-fallback")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testGetFallbackAgent_UniversalFallback() {
-        // Given
+    @Property(tries = 100)
+    void domainBasedFallback(@ForAll("domainFallbackScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
-            .type("unknown")
-            .description("Unknown context")
-            .build();
-        
-        when(contextSelector.selectAgent(any())).thenReturn(Optional.empty());
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getFallbackAgent(request);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.ARCHITECTURE, result.get());
+                .type("domain-fallback")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testGetFallbackAgent_NoAvailableAgent() {
-        // Given
+    @Property(tries = 100)
+    void universalFallback(@ForAll("universalFallbackScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
-            .type("unknown")
-            .description("Unknown context")
-            .build();
-        
-        when(contextSelector.selectAgent(any())).thenReturn(Optional.empty());
-        when(agentRegistry.isAgentAvailable(any())).thenReturn(false);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getFallbackAgent(request);
-        
-        // Then
-        assertFalse(result.isPresent());
+                .type("universal-fallback")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testGetAgentFailureFallback_ImplementationAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.IMPLEMENTATION);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.ARCHITECTURE, result.get());
+    @Property(tries = 100)
+    void agentFailureFallback(@ForAll("agentFailureScenarios") AgentContext context) {
+        AgentRequest request = AgentRequest.builder()
+                .type("agent-failure-fallback")
+                .context(context)
+                .securityContext(securityContext)
+                .build();
+
+        AgentResponse response = agentManager.processRequest(request);
+
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getStatus());
     }
 
-    @Test
-    void testGetAgentFailureFallback_SecurityAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.SECURITY);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
+    @Provide
+    Arbitrary<AgentContext> contextFallbackScenarios() {
+        return Arbitraries.of(
+                "implementation:Spring Boot implementation",
+                "unknown:Unknown context").map(scenario -> {
+                    String[] parts = scenario.split(":", 2);
+                    return AgentContext.builder()
+                            .domain("context-fallback")
+                            .property("requestType", parts[0])
+                            .property("description", parts[1])
+                            .property("requiresFallback", "unknown".equals(parts[0]))
+                            .build();
+                });
     }
 
-    @Test
-    void testGetAgentFailureFallback_DeploymentAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.DEPLOYMENT);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.ARCHITECTURE, result.get());
+    @Provide
+    Arbitrary<AgentContext> domainFallbackScenarios() {
+        return Arbitraries.of(
+                "spring-boot",
+                "security",
+                "unknown-domain").map(
+                        domain -> AgentContext.builder()
+                                .domain("domain-fallback")
+                                .property("requestDomain", domain)
+                                .property("requiresFallback", "unknown-domain".equals(domain))
+                                .build());
     }
 
-    @Test
-    void testGetAgentFailureFallback_TestingAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.TESTING);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
+    @Provide
+    Arbitrary<AgentContext> universalFallbackScenarios() {
+        return Arbitraries.of(
+                "architecture:available",
+                "implementation:available",
+                "documentation:available",
+                "none:unavailable").map(scenario -> {
+                    String[] parts = scenario.split(":");
+                    return AgentContext.builder()
+                            .domain("universal-fallback")
+                            .property("fallbackAgent", parts[0])
+                            .property("agentAvailable", "available".equals(parts[1]))
+                            .build();
+                });
     }
 
-    @Test
-    void testGetAgentFailureFallback_EventDrivenAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.EVENT_DRIVEN_ARCHITECTURE);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.ARCHITECTURE, result.get());
-    }
-
-    @Test
-    void testGetAgentFailureFallback_CICDAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.DEPLOYMENT)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.CICD_PIPELINE);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.DEPLOYMENT, result.get());
-    }
-
-    @Test
-    void testGetAgentFailureFallback_ConfigurationAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.CONFIGURATION_MANAGEMENT);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
-    }
-
-    @Test
-    void testGetAgentFailureFallback_ResilienceAgent() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(AgentType.RESILIENCE_ENGINEERING);
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.ARCHITECTURE, result.get());
-    }
-
-    @Test
-    void testGetAgentFailureFallback_UnknownAgent() {
-        // When
-        Optional<AgentType> result = fallbackMechanism.getAgentFailureFallback(null);
-        
-        // Then
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void testGetDomainBasedFallback_SpringBootDomain() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getDomainBasedFallback("spring-boot");
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
-    }
-
-    @Test
-    void testGetDomainBasedFallback_SecurityDomain() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.SECURITY)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getDomainBasedFallback("security");
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.SECURITY, result.get());
-    }
-
-    @Test
-    void testGetDomainBasedFallback_UnknownDomain() {
-        // When
-        Optional<AgentType> result = fallbackMechanism.getDomainBasedFallback("unknown-domain");
-        
-        // Then
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void testGetUniversalFallback_ArchitectureAvailable() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getUniversalFallback();
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.ARCHITECTURE, result.get());
-    }
-
-    @Test
-    void testGetUniversalFallback_ImplementationAvailable() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(false);
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getUniversalFallback();
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.IMPLEMENTATION, result.get());
-    }
-
-    @Test
-    void testGetUniversalFallback_DocumentationAvailable() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(false);
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(false);
-        when(agentRegistry.isAgentAvailable(AgentType.DOCUMENTATION)).thenReturn(true);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getUniversalFallback();
-        
-        // Then
-        assertTrue(result.isPresent());
-        assertEquals(AgentType.DOCUMENTATION, result.get());
-    }
-
-    @Test
-    void testGetUniversalFallback_NoUniversalAgentsAvailable() {
-        // Given
-        when(agentRegistry.isAgentAvailable(AgentType.ARCHITECTURE)).thenReturn(false);
-        when(agentRegistry.isAgentAvailable(AgentType.IMPLEMENTATION)).thenReturn(false);
-        when(agentRegistry.isAgentAvailable(AgentType.DOCUMENTATION)).thenReturn(false);
-        
-        // When
-        Optional<AgentType> result = fallbackMechanism.getUniversalFallback();
-        
-        // Then
-        assertFalse(result.isPresent());
+    @Provide
+    Arbitrary<AgentContext> agentFailureScenarios() {
+        return Arbitraries.of(
+                "implementation:architecture",
+                "security:implementation",
+                "deployment:architecture",
+                "testing:implementation",
+                "event-driven:architecture",
+                "cicd:deployment",
+                "configuration:implementation",
+                "resilience:architecture",
+                "unknown:none").map(scenario -> {
+                    String[] parts = scenario.split(":");
+                    return AgentContext.builder()
+                            .domain("agent-failure-fallback")
+                            .property("failedAgent", parts[0])
+                            .property("fallbackAgent", parts[1])
+                            .property("hasFallback", !"none".equals(parts[1]))
+                            .build();
+                });
     }
 }

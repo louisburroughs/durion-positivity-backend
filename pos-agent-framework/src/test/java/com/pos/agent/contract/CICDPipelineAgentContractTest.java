@@ -1,18 +1,14 @@
 package com.pos.agent.contract;
 
-import com.positivity.agent.Agent;
-import com.positivity.agent.AgentConsultationRequest;
-import com.positivity.agent.AgentGuidanceResponse;
-import com.positivity.agent.impl.CICDPipelineAgent;
+import com.pos.agent.core.Agent;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+import com.pos.agent.impl.CICDPipelineAgent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@ActiveProfiles("test")
 class CICDPipelineAgentContractTest {
 
     private Agent cicdAgent;
@@ -27,97 +23,86 @@ class CICDPipelineAgentContractTest {
         assertInstanceOf(Agent.class, cicdAgent);
     }
 
-    @Test
-    void shouldReturnValidAgentId() {
-        String agentId = cicdAgent.getAgentId();
-        assertNotNull(agentId);
-        assertFalse(agentId.trim().isEmpty());
-        assertEquals("cicd-pipeline", agentId);
-    }
-
-    @Test
-    void shouldReturnValidCapabilities() {
-        var capabilities = cicdAgent.getCapabilities();
-        assertNotNull(capabilities);
-        assertFalse(capabilities.isEmpty());
-        assertTrue(capabilities.contains("build-automation"));
-        assertTrue(capabilities.contains("testing-pipeline"));
-        assertTrue(capabilities.contains("deployment-strategy"));
-        assertTrue(capabilities.contains("security-scanning"));
-    }
+    // Identity/capabilities are outside core Agent contract; validate processing
+    // behavior.
 
     @Test
     void shouldHandleBuildAutomationRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("build-automation")
-                .context("Configure Maven build pipeline")
+                .type("build-automation")
+                .description("Configure Maven build pipeline")
+                .context("maven-build")
                 .build();
 
         AgentResponse response = cicdAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertFalse(response.getContent().trim().isEmpty());
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertFalse(response.getOutput().trim().isEmpty());
     }
 
     @Test
     void shouldHandleTestingPipelineRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("testing-pipeline")
-                .context("Setup unit and integration testing")
+                .type("testing-pipeline")
+                .description("Setup unit and integration testing")
+                .context("unit-integration")
                 .build();
 
         AgentResponse response = cicdAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("testing"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("testing"));
     }
 
     @Test
     void shouldHandleDeploymentStrategyRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("deployment-strategy")
-                .context("Implement blue-green deployment")
+                .type("deployment-strategy")
+                .description("Implement blue-green deployment")
+                .context("blue-green")
                 .build();
 
         AgentResponse response = cicdAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().contains("deployment"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("deployment"));
     }
 
     @Test
     void shouldHandleSecurityScanningRequest() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("security-scanning")
-                .context("Configure SAST and DAST scanning")
+                .type("security-scanning")
+                .description("Configure SAST and DAST scanning")
+                .context("sast-dast")
                 .build();
 
         AgentResponse response = cicdAgent.processRequest(request);
 
         assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getContent());
-        assertTrue(response.getContent().toLowerCase().contains("security"));
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().toLowerCase().contains("security"));
     }
 
     @Test
     void shouldReturnErrorForUnsupportedRequestType() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("unsupported-operation")
-                .context("This should fail")
+                .type("invalid-operation")
+                .description("This should fail")
+                .context("invalid")
                 .build();
 
         AgentResponse response = cicdAgent.processRequest(request);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
@@ -125,15 +110,16 @@ class CICDPipelineAgentContractTest {
         AgentResponse response = cicdAgent.processRequest(null);
 
         assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertNotNull(response.getErrorMessage());
+        assertEquals("FAILURE", response.getStatus());
+        assertNotNull(response.getOutput());
     }
 
     @Test
     void shouldReturnConsistentResponseFormat() {
         AgentRequest request = AgentRequest.builder()
-                .requestType("build-automation")
-                .context("Test consistency")
+                .type("build-automation")
+                .description("Test consistency")
+                .context("build-test")
                 .build();
 
         AgentResponse response1 = cicdAgent.processRequest(request);
@@ -141,8 +127,8 @@ class CICDPipelineAgentContractTest {
 
         assertNotNull(response1);
         assertNotNull(response2);
-        assertEquals(response1.isSuccess(), response2.isSuccess());
-        assertNotNull(response1.getContent());
-        assertNotNull(response2.getContent());
+        assertEquals(response1.getStatus(), response2.getStatus());
+        assertNotNull(response1.getOutput());
+        assertNotNull(response2.getOutput());
     }
 }
