@@ -35,7 +35,7 @@ class AbstractAgentTest {
         
         AgentResponse response = agent.processRequest(null);
         
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: request is null", response.getOutput());
         assertEquals(0.0, response.getConfidence());
@@ -57,7 +57,7 @@ class AbstractAgentTest {
         
         AgentResponse response = agent.processRequest(request);
         
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: description is required", response.getOutput());
         assertEquals(0.0, response.getConfidence());
@@ -77,7 +77,7 @@ class AbstractAgentTest {
         
         AgentResponse response = agent.processRequest(request);
         
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: description is required", response.getOutput());
     }
@@ -93,7 +93,7 @@ class AbstractAgentTest {
         
         AgentResponse response = agent.processRequest(request);
         
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: context is required", response.getOutput());
     }
@@ -112,7 +112,7 @@ class AbstractAgentTest {
         
         AgentResponse response = agent.processRequest(request);
         
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: invalid type", response.getOutput());
     }
@@ -132,7 +132,7 @@ class AbstractAgentTest {
         
         AgentResponse response = agent.processRequest(request);
         
-        assertEquals(AgentStatus.SUCCESS, response.getStatus());
+        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
         assertTrue(response.isSuccess());
         assertEquals("Test output: test description", response.getOutput());
         assertEquals(0.9, response.getConfidence());
@@ -148,7 +148,7 @@ class AbstractAgentTest {
         
         AgentResponse response = agent.createFailureResponse(errorMessage);
         
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals(errorMessage, response.getOutput());
         assertEquals(errorMessage, response.getErrorMessage());

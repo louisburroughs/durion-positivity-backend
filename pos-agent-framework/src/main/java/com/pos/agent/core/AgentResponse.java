@@ -46,7 +46,11 @@ public class AgentResponse {
     }
 
     // Getters with backward compatibility
-    public AgentStatus getStatus() {
+    /**
+     * Get status as enum
+     * @return status as AgentStatus enum
+     */
+    public AgentStatus getStatusEnum() {
         return status;
     }
     
@@ -54,7 +58,7 @@ public class AgentResponse {
      * Get status as string for backward compatibility
      * @return status as string
      */
-    public String getStatusString() {
+    public String getStatus() {
         return status != null ? status.name() : null;
     }
 
