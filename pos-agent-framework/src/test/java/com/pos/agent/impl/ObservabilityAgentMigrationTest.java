@@ -34,7 +34,7 @@ class ObservabilityAgentMigrationTest {
 
         assertNotNull(response);
         assertTrue(response.isSuccess());
-        assertEquals(AgentStatus.SUCCESS, response.statusEnum());
+        assertEquals(AgentStatus.SUCCESS, response.getStatus());
         assertEquals("Observability guidance: How to implement monitoring?", response.getOutput());
         assertEquals(0.8, response.getConfidence());
         assertNotNull(response.getRecommendations());
@@ -48,7 +48,7 @@ class ObservabilityAgentMigrationTest {
 
         assertNotNull(response);
         assertFalse(response.isSuccess());
-        assertEquals(AgentStatus.FAILURE, response.statusEnum());
+        assertEquals(AgentStatus.FAILURE, response.getStatus());
         assertEquals("Invalid request: request is null", response.getOutput());
         assertEquals(0.0, response.getConfidence());
     }

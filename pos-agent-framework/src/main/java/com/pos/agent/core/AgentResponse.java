@@ -1,6 +1,7 @@
 package com.pos.agent.core;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,14 +49,16 @@ public class AgentResponse {
     // Getters with backward compatibility
     /**
      * Get status as enum
+     * 
      * @return status as AgentStatus enum
      */
     public AgentStatus getStatusEnum() {
         return status;
     }
-    
+
     /**
      * Get status as string for backward compatibility
+     * 
      * @return status as string
      */
     public String getStatus() {
@@ -66,8 +69,23 @@ public class AgentResponse {
      * Creates a failure response with error message
      */
     public static AgentResponse failure(String errorMessage) {
-        return new AgentResponse(AgentStatus.FAILURE, errorMessage, 0.0, 
-                               Collections.emptyList(), Collections.emptyMap());
+        return AgentResponse.builder()
+                .status(AgentStatus.FAILURE)
+                .errorMessage(errorMessage)
+                .success(false)
+                .build();
+    }
+
+    /**
+     * Creates a failure response with error message
+     */
+    public static AgentResponse success(String successMessage, double confidence) {
+        return AgentResponse.builder()
+                .status(AgentStatus.SUCCESS)
+                .confidence(confidence)
+                .output(successMessage)
+                .success(true)
+                .build();
     }
 
     public double getConfidence() {
@@ -80,6 +98,10 @@ public class AgentResponse {
 
     public String getEscalationReason() {
         return escalationReason;
+    }
+
+    public String getOutput() {
+        return output;
     }
 
     public Map<String, Object> getContext() {
@@ -113,7 +135,7 @@ public class AgentResponse {
             }
         }
     }
-    
+
     public void setStatus(AgentStatus status) {
         this.status = status;
     }
@@ -164,11 +186,11 @@ public class AgentResponse {
      */
     public static class Builder {
         private AgentStatus status;
-        private String output;
+        private String output = "";
         private double confidence;
-        private List<String> recommendations;
+        private List<String> recommendations = new ArrayList<>();
         private String escalationReason;
-        private Map<String, Object> context;
+        private Map<String, Object> context = new HashMap<>();
         private boolean success;
         private String errorMessage;
         private AgentManager.SecurityValidation securityValidation;
@@ -178,32 +200,20 @@ public class AgentResponse {
             this.status = status;
             return this;
         }
-        
+
         /**
          * Set status from string for backward compatibility
+         * 
          * @param status status as string
          * @return builder
          */
         public Builder status(String status) {
             if (status != null) {
                 try {
-                    this.status = AgentStatus.valueOf(status);
-                } catch (IllegalArgumentException e) {
-                    // If string doesn't match enum, default to FAILURE
-                    this.status = AgentStatus.FAILURE;
-                }
-            }
-            return this;
-        }
-
-        public Builder status(String status) {
-            // Backward compatibility: convert string to enum
-            if (status != null) {
-                try {
                     this.status = AgentStatus.valueOf(status.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    // Default to SUCCESS if unknown status
-                    this.status = AgentStatus.SUCCESS;
+                    // Default to FAILURE if unknown status
+                    this.status = AgentStatus.FAILURE;
                 }
             }
             return this;
@@ -224,55 +234,44 @@ public class AgentResponse {
             return this;
         }
 
-        public Builder metadata(Map<String, Object> metadata) {
-            this.metadata = metadata != null ? new HashMap<>(metadata) : new HashMap<>();
+        public Builder context(Map<String, Object> context) {
+            this.context = context != null ? new HashMap<>(context) : new HashMap<>();
             return this;
         }
 
         // Backward compatibility methods
         public Builder success(boolean success) {
+            this.success = success;
             this.status = success ? AgentStatus.SUCCESS : AgentStatus.FAILURE;
             return this;
         }
 
         public Builder errorMessage(String errorMessage) {
+            this.errorMessage = errorMessage;
             if (errorMessage != null && !errorMessage.isEmpty()) {
                 this.output = errorMessage;
                 this.status = AgentStatus.FAILURE;
-                this.metadata.put("errorMessage", errorMessage);
             }
             return this;
         }
 
         public Builder securityValidation(AgentManager.SecurityValidation securityValidation) {
-            if (securityValidation != null) {
-                this.metadata.put("securityValidation", securityValidation);
-            }
+            this.securityValidation = securityValidation;
             return this;
         }
 
         public Builder processingTimeMs(long processingTimeMs) {
-            this.metadata.put("processingTimeMs", processingTimeMs);
+            this.processingTimeMs = processingTimeMs;
             return this;
         }
 
         public Builder escalationReason(String escalationReason) {
-            if (escalationReason != null) {
-                this.metadata.put("escalationReason", escalationReason);
-            }
-            return this;
-        }
-
-        public Builder context(Map<String, Object> context) {
-            if (context != null) {
-                this.metadata.put("context", context);
-            }
+            this.escalationReason = escalationReason;
             return this;
         }
 
         public AgentResponse build() {
-            return new AgentResponse(status, output, confidence, recommendations, metadata);
+            return new AgentResponse(this);
         }
     }
 }
-
