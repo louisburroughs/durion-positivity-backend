@@ -1,8 +1,7 @@
 package com.pos.agent.core;
 
 /**
- * Status enumeration for agent responses.
- * Represents the outcome of agent request processing.
+ * Enum representing the status of an agent response.
  * Part of frozen contract specification (REQ-016)
  */
 public enum AgentStatus {
@@ -17,12 +16,12 @@ public enum AgentStatus {
     FAILURE,
     
     /**
-     * Agent processing was stopped/cancelled
+     * Agent processing was stopped
      */
     STOPPED,
     
     /**
-     * Agent request is pending/in progress
+     * Agent processing is pending
      */
     PENDING
 }

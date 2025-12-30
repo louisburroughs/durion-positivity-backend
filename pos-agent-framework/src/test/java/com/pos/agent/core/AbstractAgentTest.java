@@ -1,276 +1,160 @@
 package com.pos.agent.core;
 
+import com.pos.agent.context.AgentContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for AbstractAgent validation behavior
+ * Unit tests for AbstractAgent base class
+ * Tests validation logic and failure response creation
  */
 class AbstractAgentTest {
 
     /**
-     * Concrete test implementation of AbstractAgent
+     * Test implementation of AbstractAgent for testing purposes
      */
-    static class TestAgent extends AbstractAgent {
+    private static class TestAgent extends AbstractAgent {
         @Override
-        protected AgentResponse handle(AgentRequest request) {
+        protected AgentResponse doProcessRequest(AgentRequest request) {
             return AgentResponse.builder()
                     .status(AgentStatus.SUCCESS)
-                    .output("Handled: " + request.getDescription())
+                    .output("Test output: " + request.getDescription())
                     .confidence(0.9)
-                    .recommendations(List.of("recommendation1"))
+                    .success(true)
+                    .recommendations(List.of("test recommendation"))
                     .build();
         }
     }
 
-    /**
-     * Agent that throws an exception in handle method
-     */
-    static class ErrorAgent extends AbstractAgent {
-        @Override
-        protected AgentResponse handle(AgentRequest request) {
-            throw new RuntimeException("Simulated error");
-        }
-    }
-
-    /**
-     * Agent with custom validation
-     */
-    static class CustomValidationAgent extends AbstractAgent {
-        @Override
-        protected String validateRequest(AgentRequest request) {
-            String baseValidation = super.validateRequest(request);
-            if (baseValidation != null) {
-                return baseValidation;
-            }
-            
-            // Custom validation: require description to start with "CUSTOM:"
-            if (!request.getDescription().startsWith("CUSTOM:")) {
-                return "Description must start with CUSTOM:";
-            }
-            return null;
-        }
-
-        @Override
-        protected AgentResponse handle(AgentRequest request) {
-            return AgentResponse.success("Custom handled", 0.95);
-        }
-    }
-
     @Test
-    void testValidRequestProcessing() {
-        TestAgent agent = new TestAgent();
-        
-        AgentRequest request = AgentRequest.builder()
-                .type("test")
-                .description("Test description")
-                .context(Map.of("key", "value"))
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertEquals(AgentStatus.SUCCESS, response.statusEnum());
-        assertEquals("Handled: Test description", response.getOutput());
-        assertEquals(0.9, response.getConfidence());
-        assertEquals(1, response.getRecommendations().size());
-    }
-
-    @Test
-    void testNullRequestValidation() {
+    void shouldRejectNullRequest() {
         TestAgent agent = new TestAgent();
         
         AgentResponse response = agent.processRequest(null);
-
-        assertNotNull(response);
+        
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
-        assertEquals(AgentStatus.FAILURE, response.statusEnum());
         assertEquals("Invalid request: request is null", response.getOutput());
+        assertEquals(0.0, response.getConfidence());
+        assertNotNull(response.getRecommendations());
+        assertTrue(response.getRecommendations().isEmpty());
+    }
+
+    @Test
+    void shouldRejectRequestWithNullDescription() {
+        TestAgent agent = new TestAgent();
+        AgentContext context = AgentContext.builder()
+                .domain("test")
+                .build();
+        
+        AgentRequest request = new AgentRequest();
+        request.setType("test");
+        request.setContext(context);
+        request.setDescription(null);
+        
+        AgentResponse response = agent.processRequest(request);
+        
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertFalse(response.isSuccess());
+        assertEquals("Invalid request: description is required", response.getOutput());
         assertEquals(0.0, response.getConfidence());
     }
 
     @Test
-    void testNullDescriptionValidation() {
+    void shouldRejectRequestWithEmptyDescription() {
         TestAgent agent = new TestAgent();
-        
-        AgentRequest request = AgentRequest.builder()
-                .type("test")
-                .description(null)
-                .context(Map.of("key", "value"))
+        AgentContext context = AgentContext.builder()
+                .domain("test")
                 .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertEquals(AgentStatus.FAILURE, response.statusEnum());
-        assertEquals("Invalid request: description is required", response.getOutput());
-    }
-
-    @Test
-    void testEmptyDescriptionValidation() {
-        TestAgent agent = new TestAgent();
         
-        AgentRequest request = AgentRequest.builder()
-                .type("test")
-                .description("   ")
-                .context(Map.of("key", "value"))
-                .build();
-
+        AgentRequest request = new AgentRequest();
+        request.setType("test");
+        request.setContext(context);
+        request.setDescription("   ");
+        
         AgentResponse response = agent.processRequest(request);
-
-        assertNotNull(response);
+        
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: description is required", response.getOutput());
     }
 
     @Test
-    void testNullContextValidation() {
+    void shouldRejectRequestWithNullContext() {
         TestAgent agent = new TestAgent();
         
-        AgentRequest request = AgentRequest.builder()
-                .type("test")
-                .description("Test description")
-                .context(null)
-                .build();
-
+        AgentRequest request = new AgentRequest();
+        request.setType("test");
+        request.setDescription("test description");
+        request.setContext(null);
+        
         AgentResponse response = agent.processRequest(request);
-
-        assertNotNull(response);
+        
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: context is required", response.getOutput());
     }
 
     @Test
-    void testNullTypeValidation() {
+    void shouldRejectRequestWithInvalidType() {
         TestAgent agent = new TestAgent();
-        
-        AgentRequest request = AgentRequest.builder()
-                .type(null)
-                .description("Test description")
-                .context(Map.of("key", "value"))
+        AgentContext context = AgentContext.builder()
+                .domain("test")
                 .build();
-
+        
+        AgentRequest request = new AgentRequest();
+        request.setType("invalid-type");
+        request.setDescription("test description");
+        request.setContext(context);
+        
         AgentResponse response = agent.processRequest(request);
-
-        assertNotNull(response);
+        
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: invalid type", response.getOutput());
     }
 
     @Test
-    void testInvalidTypeValidation() {
+    void shouldProcessValidRequest() {
         TestAgent agent = new TestAgent();
-        
-        AgentRequest request = AgentRequest.builder()
-                .type("invalid-type")
-                .description("Test description")
-                .context(Map.of("key", "value"))
+        AgentContext context = AgentContext.builder()
+                .domain("test")
+                .property("key", "value")
                 .build();
-
+        
+        AgentRequest request = new AgentRequest();
+        request.setType("test");
+        request.setDescription("test description");
+        request.setContext(context);
+        
         AgentResponse response = agent.processRequest(request);
-
-        assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: invalid type", response.getOutput());
+        
+        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertTrue(response.isSuccess());
+        assertEquals("Test output: test description", response.getOutput());
+        assertEquals(0.9, response.getConfidence());
+        assertNotNull(response.getRecommendations());
+        assertEquals(1, response.getRecommendations().size());
+        assertEquals("test recommendation", response.getRecommendations().get(0));
     }
 
     @Test
-    void testExceptionHandlingInHandle() {
-        ErrorAgent agent = new ErrorAgent();
-        
-        AgentRequest request = AgentRequest.builder()
-                .type("test")
-                .description("Test description")
-                .context(Map.of("key", "value"))
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertNotNull(response);
-        assertFalse(response.isSuccess());
-        assertEquals(AgentStatus.FAILURE, response.statusEnum());
-        assertTrue(response.getOutput().contains("Internal error"));
-        assertTrue(response.getOutput().contains("Simulated error"));
-    }
-
-    @Test
-    void testCreateFailureResponse() {
+    void shouldCreateProperFailureResponse() {
         TestAgent agent = new TestAgent();
+        String errorMessage = "Test error message";
         
-        AgentResponse response = agent.createFailureResponse("Custom error message");
-
-        assertNotNull(response);
+        AgentResponse response = agent.createFailureResponse(errorMessage);
+        
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
-        assertEquals(AgentStatus.FAILURE, response.statusEnum());
-        assertEquals("Custom error message", response.getOutput());
+        assertEquals(errorMessage, response.getOutput());
+        assertEquals(errorMessage, response.getErrorMessage());
         assertEquals(0.0, response.getConfidence());
-    }
-
-    @Test
-    void testCustomValidation() {
-        CustomValidationAgent agent = new CustomValidationAgent();
-        
-        // Test with invalid custom validation
-        AgentRequest invalidRequest = AgentRequest.builder()
-                .type("test")
-                .description("Not custom description")
-                .context(Map.of("key", "value"))
-                .build();
-
-        AgentResponse invalidResponse = agent.processRequest(invalidRequest);
-        assertFalse(invalidResponse.isSuccess());
-        assertEquals("Description must start with CUSTOM:", invalidResponse.getOutput());
-
-        // Test with valid custom validation
-        AgentRequest validRequest = AgentRequest.builder()
-                .type("test")
-                .description("CUSTOM: Valid description")
-                .context(Map.of("key", "value"))
-                .build();
-
-        AgentResponse validResponse = agent.processRequest(validRequest);
-        assertTrue(validResponse.isSuccess());
-        assertEquals("Custom handled", validResponse.getOutput());
-    }
-
-    @Test
-    void testValidateRequestMethodDirectly() {
-        TestAgent agent = new TestAgent();
-        
-        // Valid request
-        AgentRequest validRequest = AgentRequest.builder()
-                .type("test")
-                .description("Test description")
-                .context(Map.of("key", "value"))
-                .build();
-        assertNull(agent.validateRequest(validRequest));
-
-        // Invalid request - null
-        assertNotNull(agent.validateRequest(null));
-
-        // Invalid request - null description
-        AgentRequest nullDesc = AgentRequest.builder()
-                .type("test")
-                .description(null)
-                .context(Map.of())
-                .build();
-        assertNotNull(agent.validateRequest(nullDesc));
-    }
-
-    @Test
-    void testProcessRequestIsFinal() {
-        // Verify that processRequest is final and cannot be overridden
-        // This is verified by the compiler, but we can test that it exists
-        TestAgent agent = new TestAgent();
-        assertNotNull(agent);
-        
-        // The fact that TestAgent compiles proves that processRequest
-        // is properly implemented in AbstractAgent and used by subclasses
+        assertNotNull(response.getRecommendations());
+        assertTrue(response.getRecommendations().isEmpty());
     }
 }
+

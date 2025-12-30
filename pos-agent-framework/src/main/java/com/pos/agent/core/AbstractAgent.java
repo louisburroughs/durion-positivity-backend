@@ -1,5 +1,7 @@
 package com.pos.agent.core;
 
+import java.util.Collections;
+
 /**
  * Abstract base class for all agents.
  * Centralizes validation and failure response creation,
@@ -9,6 +11,8 @@ package com.pos.agent.core;
 public abstract class AbstractAgent implements Agent {
 
     /**
+     * Process an agent request and return response.
+     * Performs validation before delegating to the implementation.
      * Template method for processing agent requests.
      * Validates the request and delegates to the concrete agent's handle method.
      * 
@@ -22,18 +26,13 @@ public abstract class AbstractAgent implements Agent {
         if (validationError != null) {
             return createFailureResponse(validationError);
         }
-
-        // Delegate to concrete implementation
-        try {
-            return handle(request);
-        } catch (Exception e) {
-            return createFailureResponse("Internal error: " + e.getMessage());
-        }
+        
+        // Delegate to implementation
+        return doProcessRequest(request);
     }
-
+    
     /**
-     * Validates the agent request.
-     * Subclasses can override to add additional validation.
+     * Validate the request. Returns null if valid, error message otherwise.
      * 
      * @param request The request to validate
      * @return null if valid, error message otherwise
@@ -53,27 +52,30 @@ public abstract class AbstractAgent implements Agent {
         }
         return null;
     }
-
+    
     /**
-     * Creates a failure response with the given error message.
+     * Create a failure response with the given message.
      * 
      * @param message The error message
-     * @return A failure response
+     * @return The failure response
      */
     protected AgentResponse createFailureResponse(String message) {
         return AgentResponse.builder()
                 .status(AgentStatus.FAILURE)
                 .output(message)
                 .confidence(0.0)
+                .success(false)
+                .errorMessage(message)
+                .recommendations(Collections.emptyList())
                 .build();
     }
-
+    
     /**
-     * Handles the validated agent request.
-     * Concrete agents must implement this method to provide their domain logic.
+     * Process the request after validation.
+     * Subclasses must implement this method to provide their specific logic.
      * 
      * @param request The validated request
      * @return The agent response
      */
-    protected abstract AgentResponse handle(AgentRequest request);
+    protected abstract AgentResponse doProcessRequest(AgentRequest request);
 }
