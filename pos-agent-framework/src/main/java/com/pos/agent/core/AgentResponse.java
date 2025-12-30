@@ -1,5 +1,6 @@
 package com.pos.agent.core;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -10,8 +11,8 @@ import java.util.Map;
  * backward compatibility
  */
 public class AgentResponse {
-    // Original fields for backward compatibility
-    private String status;
+    // Core fields
+    private AgentStatus status;
     private String output;
     private double confidence;
     private List<String> recommendations;
@@ -26,11 +27,11 @@ public class AgentResponse {
     // Performance tracking fields
     private long processingTimeMs;
 
-    // Constructors
+    // Default constructor for backward compatibility
     public AgentResponse() {
-        // Default constructor for backward compatibility
     }
 
+    // Private constructor for builder
     private AgentResponse(Builder builder) {
         this.status = builder.status;
         this.output = builder.output;
@@ -44,95 +45,114 @@ public class AgentResponse {
         this.processingTimeMs = builder.processingTimeMs;
     }
 
-    // Original getters/setters for backward compatibility
-    public String getStatus() {
+    // Getters with backward compatibility
+    public AgentStatus getStatus() {
         return status;
     }
-
-    public void setStatus(String status) {
-        this.status = status;
+    
+    /**
+     * Get status as string for backward compatibility
+     * @return status as string
+     */
+    public String getStatusString() {
+        return status != null ? status.name() : null;
     }
 
     public String getOutput() {
         return output;
     }
 
-    public void setOutput(String output) {
-        this.output = output;
-    }
-
     public double getConfidence() {
         return confidence;
-    }
-
-    public void setConfidence(double confidence) {
-        this.confidence = confidence;
     }
 
     public List<String> getRecommendations() {
         return recommendations;
     }
 
-    public void setRecommendations(List<String> recommendations) {
-        this.recommendations = recommendations;
-    }
-
     public String getEscalationReason() {
         return escalationReason;
-    }
-
-    public void setEscalationReason(String escalationReason) {
-        this.escalationReason = escalationReason;
     }
 
     public Map<String, Object> getContext() {
         return context;
     }
 
-    public void setContext(Map<String, Object> context) {
-        this.context = context;
-    }
-
-    // Enhanced getters/setters for security features
     public boolean isSuccess() {
         return success;
-    }
-
-    public void setSuccess(boolean success) {
-        this.success = success;
     }
 
     public String getErrorMessage() {
         return errorMessage;
     }
 
-    public void setErrorMessage(String errorMessage) {
-        this.errorMessage = errorMessage;
-    }
-
     public AgentManager.SecurityValidation getSecurityValidation() {
         return securityValidation;
-    }
-
-    public void setSecurityValidation(AgentManager.SecurityValidation securityValidation) {
-        this.securityValidation = securityValidation;
     }
 
     public long getProcessingTimeMs() {
         return processingTimeMs;
     }
 
+    // Setters for backward compatibility
+    public void setStatus(String status) {
+        if (status != null) {
+            try {
+                this.status = AgentStatus.valueOf(status);
+            } catch (IllegalArgumentException e) {
+                // If string doesn't match enum, default to FAILURE
+                this.status = AgentStatus.FAILURE;
+            }
+        }
+    }
+    
+    public void setStatus(AgentStatus status) {
+        this.status = status;
+    }
+
+    public void setOutput(String output) {
+        this.output = output;
+    }
+
+    public void setConfidence(double confidence) {
+        this.confidence = confidence;
+    }
+
+    public void setRecommendations(List<String> recommendations) {
+        this.recommendations = recommendations;
+    }
+
+    public void setEscalationReason(String escalationReason) {
+        this.escalationReason = escalationReason;
+    }
+
+    public void setContext(Map<String, Object> context) {
+        this.context = context;
+    }
+
+    public void setSuccess(boolean success) {
+        this.success = success;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    public void setSecurityValidation(AgentManager.SecurityValidation securityValidation) {
+        this.securityValidation = securityValidation;
+    }
+
     public void setProcessingTimeMs(long processingTimeMs) {
         this.processingTimeMs = processingTimeMs;
     }
 
-    // Builder pattern for advanced usage
+    // Builder pattern for new usage
     public static Builder builder() {
         return new Builder();
     }
 
     public static class Builder {
-        private String status;
+        private AgentStatus status;
         private String output;
         private double confidence;
         private List<String> recommendations;
@@ -143,8 +163,25 @@ public class AgentResponse {
         private AgentManager.SecurityValidation securityValidation;
         private long processingTimeMs;
 
-        public Builder status(String status) {
+        public Builder status(AgentStatus status) {
             this.status = status;
+            return this;
+        }
+        
+        /**
+         * Set status from string for backward compatibility
+         * @param status status as string
+         * @return builder
+         */
+        public Builder status(String status) {
+            if (status != null) {
+                try {
+                    this.status = AgentStatus.valueOf(status);
+                } catch (IllegalArgumentException e) {
+                    // If string doesn't match enum, default to FAILURE
+                    this.status = AgentStatus.FAILURE;
+                }
+            }
             return this;
         }
 
