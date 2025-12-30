@@ -8,17 +8,18 @@ import com.pos.agent.core.AgentStatus;
 import java.util.List;
 
 /**
- * ObservabilityAgent - Provides observability guidance and recommendations.
- * Extends AbstractAgent to leverage centralized validation.
+ * ObservabilityAgent - provides observability guidance and recommendations
+ * Extends AbstractAgent for common validation and failure handling
  */
 public class ObservabilityAgent extends AbstractAgent {
     
     @Override
-    protected AgentResponse handle(AgentRequest request) {
+    protected AgentResponse doProcessRequest(AgentRequest request) {
         return AgentResponse.builder()
                 .status(AgentStatus.SUCCESS)
                 .output("Observability guidance: " + request.getDescription())
                 .confidence(0.8)
+                .success(true)
                 .recommendations(List.of("implement pattern", "configure system", "add monitoring"))
                 .build();
     }

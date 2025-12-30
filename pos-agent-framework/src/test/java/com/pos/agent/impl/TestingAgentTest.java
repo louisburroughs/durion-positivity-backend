@@ -3,6 +3,7 @@ package com.pos.agent.impl;
 import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
+import com.pos.agent.core.AgentStatus;
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.Test;
@@ -110,5 +111,38 @@ class TestingAgentTest {
 
         assertTrue(response.isSuccess());
         assertNotNull(response.getStatus());
+    }
+    
+    @Test
+    void shouldExtendAbstractAgentAndValidateRequests() {
+        TestingAgent agent = new TestingAgent();
+        AgentContext context = AgentContext.builder()
+                .domain("testing")
+                .property("service", "pos-catalog")
+                .build();
+
+        AgentRequest request = new AgentRequest();
+        request.setType("testing");
+        request.setDescription("How to implement unit tests?");
+        request.setContext(context);
+
+        AgentResponse response = agent.processRequest(request);
+
+        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getOutput());
+        assertTrue(response.getOutput().contains("Testing pattern recommendation"));
+        assertEquals(0.8, response.getConfidence());
+    }
+    
+    @Test
+    void shouldRejectInvalidRequestViaAbstractAgent() {
+        TestingAgent agent = new TestingAgent();
+        
+        AgentResponse response = agent.processRequest(null);
+        
+        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertFalse(response.isSuccess());
+        assertEquals("Invalid request: request is null", response.getOutput());
     }
 }

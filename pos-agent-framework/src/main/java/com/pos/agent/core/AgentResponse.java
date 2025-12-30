@@ -1,8 +1,6 @@
 package com.pos.agent.core;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,75 +10,56 @@ import java.util.Map;
  * This class maintains backward compatibility with setter-based construction
  * while providing an immutable builder pattern and record-like semantics.
  */
-public final class AgentResponse {
+public class AgentResponse {
     // Core fields
-    private final AgentStatus status;
-    private final String output;
-    private final double confidence;
-    private final List<String> recommendations;
-    private final Map<String, Object> metadata;
+    private AgentStatus status;
+    private String output;
+    private double confidence;
+    private List<String> recommendations;
+    private String escalationReason;
+    private Map<String, Object> context;
 
-    // Mutable state for backward compatibility (deprecated)
-    private String legacyStatus;
-    private String mutableOutput;
-    private double mutableConfidence;
-    private List<String> mutableRecommendations;
-    private Map<String, Object> mutableMetadata;
-    private boolean useImmutableState = false;
+    // Enhanced security fields
+    private boolean success;
+    private String errorMessage;
+    private AgentManager.SecurityValidation securityValidation;
 
-    /**
-     * Default constructor for backward compatibility with setter pattern
-     */
+    // Performance tracking fields
+    private long processingTimeMs;
+
+    // Default constructor for backward compatibility
     public AgentResponse() {
-        this.status = AgentStatus.SUCCESS;
-        this.output = "";
-        this.confidence = 0.0;
-        this.recommendations = Collections.emptyList();
-        this.metadata = Collections.emptyMap();
-        this.useImmutableState = false;
-        
-        // Initialize mutable fields
-        this.mutableOutput = "";
-        this.mutableConfidence = 0.0;
-        this.mutableRecommendations = new ArrayList<>();
-        this.mutableMetadata = new HashMap<>();
     }
 
-    /**
-     * Private constructor for builder pattern (immutable)
-     */
-    private AgentResponse(AgentStatus status, String output, double confidence, 
-                         List<String> recommendations, Map<String, Object> metadata) {
-        this.status = status;
-        this.output = output;
-        this.confidence = confidence;
-        this.recommendations = recommendations != null 
-            ? Collections.unmodifiableList(new ArrayList<>(recommendations)) 
-            : Collections.emptyList();
-        this.metadata = metadata != null 
-            ? Collections.unmodifiableMap(new HashMap<>(metadata)) 
-            : Collections.emptyMap();
-        this.useImmutableState = true;
-        
-        // Initialize mutable fields as null for immutable instances
-        this.mutableOutput = null;
-        this.mutableRecommendations = null;
-        this.mutableMetadata = null;
+    // Private constructor for builder
+    private AgentResponse(Builder builder) {
+        this.status = builder.status;
+        this.output = builder.output;
+        this.confidence = builder.confidence;
+        this.recommendations = builder.recommendations;
+        this.escalationReason = builder.escalationReason;
+        this.context = builder.context;
+        this.success = builder.success;
+        this.errorMessage = builder.errorMessage;
+        this.securityValidation = builder.securityValidation;
+        this.processingTimeMs = builder.processingTimeMs;
     }
 
+    // Getters with backward compatibility
     /**
-     * Builder for creating immutable AgentResponse instances
+     * Get status as enum
+     * @return status as AgentStatus enum
      */
-    public static Builder builder() {
-        return new Builder();
+    public AgentStatus getStatusEnum() {
+        return status;
     }
-
+    
     /**
-     * Creates a success response with minimal fields
+     * Get status as string for backward compatibility
+     * @return status as string
      */
-    public static AgentResponse success(String output, double confidence) {
-        return new AgentResponse(AgentStatus.SUCCESS, output, confidence, 
-                               Collections.emptyList(), Collections.emptyMap());
+    public String getStatus() {
+        return status != null ? status.name() : null;
     }
 
     /**
@@ -91,134 +70,129 @@ public final class AgentResponse {
                                Collections.emptyList(), Collections.emptyMap());
     }
 
-    // Getters
-    public AgentStatus statusEnum() {
-        return status;
-    }
-
-    public String getStatus() {
-        if (useImmutableState) {
-            return status.name();
-        }
-        return legacyStatus;
-    }
-
-    public String getOutput() {
-        if (useImmutableState) {
-            return output;
-        }
-        return mutableOutput;
-    }
-
     public double getConfidence() {
-        if (useImmutableState) {
-            return confidence;
-        }
-        return mutableConfidence;
+        return confidence;
     }
 
     public List<String> getRecommendations() {
-        if (useImmutableState) {
-            return recommendations;
-        }
-        return mutableRecommendations;
-    }
-
-    public Map<String, Object> getMetadata() {
-        if (useImmutableState) {
-            return metadata;
-        }
-        return mutableMetadata;
-    }
-
-    // Backward compatibility getters
-    public Map<String, Object> getContext() {
-        if (useImmutableState) {
-            return (Map<String, Object>) metadata.get("context");
-        }
-        return (Map<String, Object>) mutableMetadata.get("context");
-    }
-
-    public boolean isSuccess() {
-        if (useImmutableState) {
-            return status == AgentStatus.SUCCESS;
-        }
-        return "SUCCESS".equals(legacyStatus);
-    }
-
-    public String getErrorMessage() {
-        if (useImmutableState) {
-            return status == AgentStatus.FAILURE ? output : null;
-        }
-        return (String) mutableMetadata.get("errorMessage");
-    }
-
-    public AgentManager.SecurityValidation getSecurityValidation() {
-        if (useImmutableState) {
-            return (AgentManager.SecurityValidation) metadata.get("securityValidation");
-        }
-        return (AgentManager.SecurityValidation) mutableMetadata.get("securityValidation");
-    }
-
-    public long getProcessingTimeMs() {
-        if (useImmutableState) {
-            Object value = metadata.get("processingTimeMs");
-            return value instanceof Long ? (Long) value : 0L;
-        }
-        Object value = mutableMetadata.get("processingTimeMs");
-        return value instanceof Long ? (Long) value : 0L;
+        return recommendations;
     }
 
     public String getEscalationReason() {
-        if (useImmutableState) {
-            return (String) metadata.get("escalationReason");
-        }
-        return (String) mutableMetadata.get("escalationReason");
+        return escalationReason;
     }
 
-    // Setters for backward compatibility (deprecated)
+    public Map<String, Object> getContext() {
+        return context;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public AgentManager.SecurityValidation getSecurityValidation() {
+        return securityValidation;
+    }
+
+    public long getProcessingTimeMs() {
+        return processingTimeMs;
+    }
+
+    // Setters for backward compatibility
     public void setStatus(String status) {
-        this.legacyStatus = status;
+        if (status != null) {
+            try {
+                this.status = AgentStatus.valueOf(status);
+            } catch (IllegalArgumentException e) {
+                // If string doesn't match enum, default to FAILURE
+                this.status = AgentStatus.FAILURE;
+            }
+        }
+    }
+    
+    public void setStatus(AgentStatus status) {
+        this.status = status;
     }
 
     public void setOutput(String output) {
-        this.mutableOutput = output;
+        this.output = output;
     }
 
     public void setConfidence(double confidence) {
-        this.mutableConfidence = confidence;
+        this.confidence = confidence;
     }
 
     public void setRecommendations(List<String> recommendations) {
-        this.mutableRecommendations = recommendations;
-    }
-
-    public void setContext(Map<String, Object> context) {
-        if (this.mutableMetadata == null) {
-            this.mutableMetadata = new HashMap<>();
-        }
-        this.mutableMetadata.put("context", context);
+        this.recommendations = recommendations;
     }
 
     public void setEscalationReason(String escalationReason) {
-        if (this.mutableMetadata == null) {
-            this.mutableMetadata = new HashMap<>();
-        }
-        this.mutableMetadata.put("escalationReason", escalationReason);
+        this.escalationReason = escalationReason;
+    }
+
+    public void setContext(Map<String, Object> context) {
+        this.context = context;
+    }
+
+    public void setSuccess(boolean success) {
+        this.success = success;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    public void setSecurityValidation(AgentManager.SecurityValidation securityValidation) {
+        this.securityValidation = securityValidation;
+    }
+
+    public void setProcessingTimeMs(long processingTimeMs) {
+        this.processingTimeMs = processingTimeMs;
+    }
+
+    // Builder pattern for new usage
+    public static Builder builder() {
+        return new Builder();
     }
 
     /**
      * Builder class for AgentResponse
      */
     public static class Builder {
-        private AgentStatus status = AgentStatus.SUCCESS;
-        private String output = "";
-        private double confidence = 0.0;
-        private List<String> recommendations = new ArrayList<>();
-        private Map<String, Object> metadata = new HashMap<>();
+        private AgentStatus status;
+        private String output;
+        private double confidence;
+        private List<String> recommendations;
+        private String escalationReason;
+        private Map<String, Object> context;
+        private boolean success;
+        private String errorMessage;
+        private AgentManager.SecurityValidation securityValidation;
+        private long processingTimeMs;
 
         public Builder status(AgentStatus status) {
             this.status = status;
+            return this;
+        }
+        
+        /**
+         * Set status from string for backward compatibility
+         * @param status status as string
+         * @return builder
+         */
+        public Builder status(String status) {
+            if (status != null) {
+                try {
+                    this.status = AgentStatus.valueOf(status);
+                } catch (IllegalArgumentException e) {
+                    // If string doesn't match enum, default to FAILURE
+                    this.status = AgentStatus.FAILURE;
+                }
+            }
             return this;
         }
 
