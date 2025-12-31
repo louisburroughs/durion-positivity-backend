@@ -132,6 +132,17 @@ public class AgentRequest {
         }
 
         public AgentRequest build() {
+            // Validate required fields
+            if (description == null || description.trim().isEmpty()) {
+                throw new IllegalStateException("description is required and cannot be null or empty");
+            }
+            if (type == null || type.trim().isEmpty()) {
+                throw new IllegalStateException("type is required and cannot be null or empty");
+            }
+            if (context == null && agentContext == null) {
+                throw new IllegalStateException("context or agentContext is required and cannot be null");
+            }
+
             return new AgentRequest(this);
         }
     }

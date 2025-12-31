@@ -28,6 +28,7 @@ class StoryProcessingE2ETest {
 
                 AgentRequest request = new AgentRequest();
                 request.setType("story-processing");
+                request.setDescription("Process customer service story");
                 request.setContext(context);
 
                 // When: Story is processed
@@ -56,6 +57,7 @@ class StoryProcessingE2ETest {
 
                 AgentRequest request = new AgentRequest();
                 request.setType("story-processing");
+                request.setDescription("Process order processing story with dependencies");
                 request.setContext(context);
 
                 // When: Dependencies are resolved
@@ -83,6 +85,7 @@ class StoryProcessingE2ETest {
 
                 AgentRequest request = new AgentRequest();
                 request.setType("story-processing");
+                request.setDescription("Execute Maven build for inventory service");
                 request.setContext(context);
 
                 // When: Build is executed
@@ -110,6 +113,7 @@ class StoryProcessingE2ETest {
 
                 AgentRequest request = new AgentRequest();
                 request.setType("story-processing");
+                request.setDescription("Process invalid module story");
                 request.setContext(context);
 
                 // When: Processing fails
@@ -138,6 +142,7 @@ class StoryProcessingE2ETest {
 
                 AgentRequest request = new AgentRequest();
                 request.setType("story-processing");
+                request.setDescription("Detect circular dependencies in story");
                 request.setContext(context);
 
                 // When: Circular dependency is detected
@@ -165,6 +170,7 @@ class StoryProcessingE2ETest {
 
                 AgentRequest request = new AgentRequest();
                 request.setType("story-processing");
+                request.setDescription("Process simple success story");
                 request.setContext(context);
 
                 // When: Story is processed successfully

@@ -23,6 +23,7 @@ class EnhancedAgentRegistryIntegrationTest {
 
         private final AgentManager agentManager = new AgentManager();
         private final SecurityContext securityContext = SecurityContext.builder()
+                        .jwtToken("valid-jwt-token-for-tests")
                         .userId("registry-tester")
                         .roles(List.of("developer"))
                         .permissions(List.of("registry:query"))
@@ -240,17 +241,17 @@ class EnhancedAgentRegistryIntegrationTest {
                                                 .build());
         }
 
-    @Provide
-    Arbitrary<AgentContext> multiDomainContexts() {
-        return Arbitraries.of(
-                "cross-domain-architecture",
-                "integrated-implementation",
-                "comprehensive-testing",
-                "holistic-deployment")
-                .map(scenario -> AgentContext.builder()
-                        .domain("multi-domain")
-                        .property("scenario", scenario)
-                        .property("requiresMultipleAgents", true)
-                        .build());
-    }
+        @Provide
+        Arbitrary<AgentContext> multiDomainContexts() {
+                return Arbitraries.of(
+                                "cross-domain-architecture",
+                                "integrated-implementation",
+                                "comprehensive-testing",
+                                "holistic-deployment")
+                                .map(scenario -> AgentContext.builder()
+                                                .domain("multi-domain")
+                                                .property("scenario", scenario)
+                                                .property("requiresMultipleAgents", true)
+                                                .build());
+        }
 }

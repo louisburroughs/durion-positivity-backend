@@ -1,7 +1,9 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
+import com.pos.agent.core.AgentStatus;
 import com.pos.agent.context.StoryContext;
 
 import java.util.ArrayList;
@@ -12,7 +14,7 @@ import java.util.regex.Pattern;
 /**
  * Agent for processing GitHub story issues and orchestrating builds
  */
-public class StoryProcessingAgent {
+public class StoryProcessingAgent extends AbstractAgent {
 
     private static final Pattern MODULE_PATTERN = Pattern.compile("Module[s]?:\\s*([^\\n]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern AC_PATTERN = Pattern.compile("AC:\\s*([^\\n]+)", Pattern.CASE_INSENSITIVE);
@@ -22,44 +24,45 @@ public class StoryProcessingAgent {
             "pos-price", "pos-vehicle-inventory", "pos-work-order",
             "pos-shop-manager", "pos-accounting");
 
-    public AgentResponse processRequest(AgentRequest request) {
-        AgentResponse response = new AgentResponse();
-
-        if (request == null || request.getContext() == null) {
-            response.setStatus("FAILURE");
-            response.setOutput("Invalid request: context is required");
-            response.setRecommendations(List.of("Provide a valid StoryContext"));
-            return response;
-        }
-
+    @Override
+    protected AgentResponse doProcessRequest(AgentRequest request) {
         // Extract StoryContext from context
         StoryContext context = extractStoryContext(request.getContext());
         if (context == null) {
-            response.setStatus("FAILURE");
-            response.setOutput("Invalid context type: expected StoryContext");
-            response.setRecommendations(List.of("Use StoryContext for story processing"));
-            return response;
+            return AgentResponse.builder()
+                    .status(AgentStatus.FAILURE)
+                    .output("Invalid context type: expected StoryContext")
+                    .confidence(0.0)
+                    .success(false)
+                    .recommendations(List.of("Use StoryContext for story processing"))
+                    .build();
         }
 
         // Validate module exists
         if (!isValidModule(context.getModuleName())) {
-            response.setStatus("FAILURE");
-            response.setOutput("Module not found: " + context.getModuleName());
-            response.setRecommendations(List.of(
-                    "Verify module name is correct",
-                    "Check available modules: " + String.join(", ", VALID_MODULES)));
-            return response;
+            return AgentResponse.builder()
+                    .status(AgentStatus.FAILURE)
+                    .output("Module not found: " + context.getModuleName())
+                    .confidence(0.0)
+                    .success(false)
+                    .recommendations(List.of(
+                            "Verify module name is correct",
+                            "Check available modules: " + String.join(", ", VALID_MODULES)))
+                    .build();
         }
 
         // Check for circular dependencies
         if (hasCircularDependency(context)) {
-            response.setStatus("ESCALATION");
-            response.setOutput("Detected circular dependency in story: " + context.getIssueId());
-            response.setRecommendations(List.of(
-                    "Review dependency chain",
-                    "Break circular dependency",
-                    "Consider refactoring story structure"));
-            return response;
+            return AgentResponse.builder()
+                    .status(AgentStatus.FAILURE)
+                    .output("Detected circular dependency in story: " + context.getIssueId())
+                    .confidence(0.0)
+                    .success(false)
+                    .recommendations(List.of(
+                            "Review dependency chain",
+                            "Break circular dependency",
+                            "Consider refactoring story structure"))
+                    .build();
         }
 
         // Extract acceptance criteria
@@ -95,15 +98,16 @@ public class StoryProcessingAgent {
         output.append("Tests run: 12, Failures: 0, Errors: 0, Skipped: 0\n");
         output.append("BUILD SUCCESS\n");
 
-        response.setStatus("SUCCESS");
-        response.setOutput(output.toString());
-        response.setConfidence(0.90);
-        response.setRecommendations(List.of(
-                "Review build artifacts",
-                "Update issue with test results",
-                "Proceed with code review"));
-
-        return response;
+        return AgentResponse.builder()
+                .status(AgentStatus.SUCCESS)
+                .output(output.toString())
+                .confidence(0.90)
+                .success(true)
+                .recommendations(List.of(
+                        "Review build artifacts",
+                        "Update issue with test results",
+                        "Proceed with code review"))
+                .build();
     }
 
     private StoryContext extractStoryContext(Object contextObj) {

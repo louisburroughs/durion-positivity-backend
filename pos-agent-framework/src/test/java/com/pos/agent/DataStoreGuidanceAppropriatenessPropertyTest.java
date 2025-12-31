@@ -189,7 +189,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
         }
 
         @Provide
-        Arbitrary<AgentRequest> dynamoDbRequests() {
+        Arbitrary<AgentContext> dynamoDbRequests() {
                 return Combinators.combine(
                                 Arbitraries.of("implementation", "deployment"),
                                 Arbitraries.of(
@@ -211,17 +211,12 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                         .domain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> ctxBuilder.property(k, v));
-                                        AgentContext agentContext = ctxBuilder.build();
-
-                                        return AgentRequest.builder()
-                                                        .type("dynamodb-guidance")
-                                                        .context(agentContext)
-                                                        .build();
+                                        return ctxBuilder.build();
                                 });
         }
 
         @Provide
-        Arbitrary<AgentRequest> elastiCacheRequests() {
+        Arbitrary<AgentContext> elastiCacheRequests() {
                 return Combinators.combine(
                                 Arbitraries.of("implementation", "deployment"),
                                 Arbitraries.of(
@@ -242,17 +237,12 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                         .domain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> ctxBuilder.property(k, v));
-                                        AgentContext agentContext = ctxBuilder.build();
-
-                                        return AgentRequest.builder()
-                                                        .type("cache-guidance")
-                                                        .context(agentContext)
-                                                        .build();
+                                        return ctxBuilder.build();
                                 });
         }
 
         @Provide
-        Arbitrary<AgentRequest> serviceTypeRequests() {
+        Arbitrary<AgentContext> serviceTypeRequests() {
                 return Combinators.combine(
                                 Arbitraries.of("implementation", "architecture"),
                                 Arbitraries.of(
@@ -273,12 +263,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                         .domain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> ctxBuilder.property(k, v));
-                                        AgentContext agentContext = ctxBuilder.build();
-
-                                        return AgentRequest.builder()
-                                                        .type("service-datastore-selection")
-                                                        .context(agentContext)
-                                                        .build();
+                                        return ctxBuilder.build();
                                 });
         }
 
