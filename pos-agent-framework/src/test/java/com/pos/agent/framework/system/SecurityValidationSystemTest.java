@@ -34,9 +34,9 @@ class SecurityValidationSystemTest {
 
         @BeforeEach
         void setUp() {
-                agentManager = new AgentManager();
-                tokenValidator = new JWTTokenValidator();
                 auditTrailManager = new AuditTrailManager();
+                agentManager = new AgentManager(auditTrailManager);
+                tokenValidator = new JWTTokenValidator();
 
                 // Initialize security test environment
                 initializeSecurityTestEnvironment();
@@ -50,11 +50,13 @@ class SecurityValidationSystemTest {
 
                 AgentRequest authenticatedRequest = AgentRequest.builder()
                                 .type("implementation")
+                                .description("JWT authenticated implementation request")
                                 .context(createSecureContext())
                                 .securityContext(SecurityContext.builder()
                                                 .jwtToken(validToken)
                                                 .userId("dev-001")
                                                 .roles(List.of("DEVELOPER"))
+                                                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
                                                 .build())
                                 .build();
 
@@ -67,6 +69,7 @@ class SecurityValidationSystemTest {
 
                 AgentRequest unauthenticatedRequest = AgentRequest.builder()
                                 .type("implementation")
+                                .description("Unauthenticated implementation request")
                                 .context(createSecureContext())
                                 .securityContext(SecurityContext.builder()
                                                 .jwtToken(invalidToken)
@@ -76,7 +79,7 @@ class SecurityValidationSystemTest {
 
                 AgentResponse unauthorizedResponse = agentManager.processRequest(unauthenticatedRequest);
                 assertFalse(unauthorizedResponse.isSuccess(), "Invalid JWT should reject request");
-                assertTrue(unauthorizedResponse.getErrorMessage().contains("authentication"),
+                assertTrue(unauthorizedResponse.getErrorMessage().contains("Authentication"),
                                 "Error should indicate authentication failure");
         }
 
@@ -100,6 +103,7 @@ class SecurityValidationSystemTest {
 
                                 AgentRequest request = AgentRequest.builder()
                                                 .type(getAgentTypeForPermission(permission))
+                                                .description("RBAC test for " + role + " with " + permission)
                                                 .context(createContextForPermission(permission))
                                                 .securityContext(SecurityContext.builder()
                                                                 .jwtToken(token)
@@ -120,6 +124,7 @@ class SecurityValidationSystemTest {
 
                                 AgentRequest adminRequest = AgentRequest.builder()
                                                 .type("admin-operation")
+                                                .description("Admin operation test for " + role)
                                                 .context(createAdminContext())
                                                 .securityContext(SecurityContext.builder()
                                                                 .jwtToken(token)
@@ -142,6 +147,7 @@ class SecurityValidationSystemTest {
                 // Test that all agent communications use TLS 1.3
                 AgentRequest secureRequest = AgentRequest.builder()
                                 .type("security-validation")
+                                .description("TLS 1.3 encryption compliance validation")
                                 .context(createTLSValidationContext())
                                 .requireTLS13(true)
                                 .build();
@@ -166,6 +172,7 @@ class SecurityValidationSystemTest {
 
                 AgentRequest serviceRequest = AgentRequest.builder()
                                 .type("service-integration")
+                                .description("Service-to-service authentication for pos-inventory-service")
                                 .context(createServiceContext())
                                 .securityContext(SecurityContext.builder()
                                                 .jwtToken(serviceToken)
@@ -199,11 +206,13 @@ class SecurityValidationSystemTest {
 
                                 AgentRequest request = AgentRequest.builder()
                                                 .type(agentType)
+                                                .description("Audit trail test for " + agentType + " by " + userId)
                                                 .context(createAuditContext(agentType))
                                                 .securityContext(SecurityContext.builder()
                                                                 .jwtToken(token)
                                                                 .userId(userId)
                                                                 .roles(List.of("DEVELOPER"))
+                                                                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
                                                                 .build())
                                                 .build();
 
@@ -246,6 +255,8 @@ class SecurityValidationSystemTest {
 
                                         AgentRequest request = AgentRequest.builder()
                                                         .type("concurrent-security-test")
+                                                        .description("Concurrent security test #" + i + " for role "
+                                                                        + role)
                                                         .context(createConcurrentSecurityContext(i))
                                                         .securityContext(SecurityContext.builder()
                                                                         .jwtToken(token)
@@ -290,6 +301,7 @@ class SecurityValidationSystemTest {
                 // Test AWS Secrets Manager integration
                 AgentRequest awsSecretsRequest = AgentRequest.builder()
                                 .type("configuration-management")
+                                .description("AWS Secrets Manager integration test")
                                 .context(createSecretsContext("aws-secrets-manager"))
                                 .securityContext(createAdminSecurityContext())
                                 .build();
@@ -300,6 +312,7 @@ class SecurityValidationSystemTest {
                 // Test HashiCorp Vault integration
                 AgentRequest vaultRequest = AgentRequest.builder()
                                 .type("configuration-management")
+                                .description("HashiCorp Vault integration test")
                                 .context(createSecretsContext("hashicorp-vault"))
                                 .securityContext(createAdminSecurityContext())
                                 .build();
@@ -458,6 +471,7 @@ class SecurityValidationSystemTest {
                 for (String eventType : eventTypes) {
                         AgentRequest request = AgentRequest.builder()
                                         .type("security-event")
+                                        .description("Security event generation for " + eventType)
                                         .context(AgentContext.builder()
                                                         .type(eventType)
                                                         .domain("compliance")

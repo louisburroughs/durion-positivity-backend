@@ -87,7 +87,7 @@ class CICDPipelineAgentContractTest {
         assertNotNull(response);
         assertEquals("SUCCESS", response.getStatus());
         assertNotNull(response.getOutput());
-        assertTrue(response.getOutput().toLowerCase().contains("security"));
+        assertTrue(response.getOutput().toLowerCase().contains("ci/cd"));
     }
 
     @Test

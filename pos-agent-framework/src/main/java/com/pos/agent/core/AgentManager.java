@@ -1,5 +1,7 @@
 package com.pos.agent.core;
 
+import com.pos.agent.framework.audit.AuditTrailManager;
+
 import java.util.Map;
 
 /**
@@ -7,9 +9,14 @@ import java.util.Map;
  * Handles security validation, routing, and response generation.
  */
 public class AgentManager {
+    private final AuditTrailManager auditTrailManager;
 
     public AgentManager() {
-        // Initialize agent manager
+        this(new AuditTrailManager());
+    }
+
+    public AgentManager(AuditTrailManager auditTrailManager) {
+        this.auditTrailManager = auditTrailManager;
     }
 
     /**
@@ -20,38 +27,86 @@ public class AgentManager {
      */
     public AgentResponse processRequest(AgentRequest request) {
         long startTime = System.currentTimeMillis();
+        String userId = extractUserId(request);
+        String agentType = request.getType();
+        boolean success = false;
 
-        // Validate security context
-        if (request.getSecurityContext() != null) {
-            if (!validateSecurityContext(request.getSecurityContext())) {
-                return AgentResponse.builder()
-                        .success(false)
-                        .errorMessage("Authentication failed: Invalid security credentials")
-                        .processingTimeMs(System.currentTimeMillis() - startTime)
-                        .build();
-            }
-        }
-
-        // Process the request (simulated processing time)
         try {
-            Thread.sleep(10); // Simulate minimal processing time
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            // Validate security context
+            if (request.getSecurityContext() != null) {
+                if (!validateSecurityContext(request.getSecurityContext())) {
+                    // Record failed authentication attempt
+                    recordAuditEntry(agentType, userId, "AUTHENTICATION_FAILED", false);
+
+                    return AgentResponse.builder()
+                            .success(false)
+                            .errorMessage("Authentication failed: Invalid security credentials")
+                            .processingTimeMs(System.currentTimeMillis() - startTime)
+                            .build();
+                }
+
+                // Check role-based authorization
+                if (!validateAuthorization(request)) {
+                    // Record failed authorization attempt
+                    recordAuditEntry(agentType, userId, "AUTHORIZATION_FAILED", false);
+
+                    return AgentResponse.builder()
+                            .success(false)
+                            .errorMessage("Authorization failed: Insufficient permissions for " + agentType)
+                            .processingTimeMs(System.currentTimeMillis() - startTime)
+                            .build();
+                }
+            }
+
+            // Process the request (simulated processing time)
+            try {
+                Thread.sleep(10); // Simulate minimal processing time
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            long processingTime = System.currentTimeMillis() - startTime;
+
+            // Generate output based on request type
+            String output = generateOutput(request);
+            success = true;
+
+            // Record successful request processing
+            recordAuditEntry(agentType, userId, "REQUEST_PROCESSED", true);
+
+            return AgentResponse.builder()
+                    .success(true)
+                    .status("SUCCESS")
+                    .output(output)
+                    .confidence(0.95)
+                    .securityValidation(new SecurityValidation(request.getSecurityContext()))
+                    .processingTimeMs(processingTime)
+                    .build();
+        } catch (Exception e) {
+            // Record failed request processing
+            recordAuditEntry(agentType, userId, "REQUEST_FAILED", false);
+            throw e;
         }
+    }
 
-        long processingTime = System.currentTimeMillis() - startTime;
+    private String extractUserId(AgentRequest request) {
+        if (request.getSecurityContext() != null && request.getSecurityContext().getUserId() != null) {
+            return request.getSecurityContext().getUserId();
+        }
+        return "unknown";
+    }
 
-        // Generate output based on request type
-        String output = generateOutput(request);
+    private void recordAuditEntry(String agentType, String userId, String action, boolean success) {
+        AuditTrailManager.AuditEntry entry = new AuditTrailManager.AuditEntry(
+                agentType,
+                userId,
+                action,
+                success);
+        auditTrailManager.recordAuditEntry(entry);
+    }
 
-        return AgentResponse.builder()
-                .success(true)
-                .status("SUCCESS")
-                .output(output)
-                .confidence(0.95)
-                .securityValidation(new SecurityValidation(request.getSecurityContext()))
-                .processingTimeMs(processingTime)
-                .build();
+    public AuditTrailManager getAuditTrailManager() {
+        return auditTrailManager;
     }
 
     private String generateOutput(AgentRequest request) {
@@ -152,6 +207,60 @@ public class AgentManager {
         }
         // Simulate JWT validation
         return !securityContext.getJwtToken().equals("invalid.jwt.token");
+    }
+
+    private boolean validateAuthorization(AgentRequest request) {
+        SecurityContext securityContext = request.getSecurityContext();
+        if (securityContext == null) {
+            return true; // No security context means no authorization required
+        }
+
+        String agentType = request.getType();
+        if (agentType == null) {
+            return true;
+        }
+
+        // Check admin operations
+        if (agentType.equals("admin-operation")) {
+            return hasRole(securityContext, "ADMIN") || hasPermission(securityContext, "AGENT_ADMIN");
+        }
+
+        // Check configuration management operations
+        if (agentType.equals("configuration-management")) {
+            return hasRole(securityContext, "ADMIN") ||
+                    hasRole(securityContext, "CONFIG_MANAGER") ||
+                    hasPermission(securityContext, "CONFIG_MANAGE") ||
+                    hasPermission(securityContext, "SECRETS_MANAGE");
+        }
+
+        // Check security-sensitive operations
+        if (agentType.equals("security-validation") || agentType.equals("security-event")) {
+            return hasPermission(securityContext, "AGENT_READ") ||
+                    hasPermission(securityContext, "AGENT_WRITE") ||
+                    hasRole(securityContext, "ADMIN");
+        }
+
+        // Check service-to-service operations
+        if (agentType.equals("service-integration") || agentType.contains("service")) {
+            return hasPermission(securityContext, "SERVICE_READ") ||
+                    hasPermission(securityContext, "SERVICE_WRITE") ||
+                    hasPermission(securityContext, "AGENT_READ") ||
+                    hasPermission(securityContext, "AGENT_WRITE");
+        }
+
+        // Default: allow if user has basic read or write permissions
+        return hasPermission(securityContext, "AGENT_READ") ||
+                hasPermission(securityContext, "AGENT_WRITE");
+    }
+
+    private boolean hasRole(SecurityContext securityContext, String role) {
+        return securityContext.getRoles() != null &&
+                securityContext.getRoles().contains(role);
+    }
+
+    private boolean hasPermission(SecurityContext securityContext, String permission) {
+        return securityContext.getPermissions() != null &&
+                securityContext.getPermissions().contains(permission);
     }
 
     /**

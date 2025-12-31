@@ -3,8 +3,8 @@ package com.positivity.mcp.api;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.mcp.server.McpSyncServer;
-import io.mcp.server.tool.ToolResponse;
+import io.modelcontextprotocol.spec.McpSchema;
+import io.modelcontextprotocol.client.McpSyncClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -19,8 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>
  * Chatbots can POST a JSON payload to {@code /api/mcp/chat} specifying
  * which MCP tool to call and the arguments to pass. The controller will
- * synchronously call the tool via {@link McpSyncServer} and return the
- * {@link ToolResponse} as JSON.
+ * synchronously call the tool via {@link McpSyncClient} and return the
+ * {@link McpSchema.CallToolResult} as JSON.
  */
 @RestController
 @RequestMapping("/api/mcp")
@@ -28,11 +28,11 @@ public class McpChatController {
 
     private static final Logger logger = LoggerFactory.getLogger(McpChatController.class);
 
-    private final McpSyncServer mcpSyncServer;
+    private final McpSyncClient mcpSyncClient;
     private final ObjectMapper objectMapper;
 
-    public McpChatController(McpSyncServer mcpSyncServer, ObjectMapper objectMapper) {
-        this.mcpSyncServer = mcpSyncServer;
+    public McpChatController(McpSyncClient mcpSyncClient, ObjectMapper objectMapper) {
+        this.mcpSyncClient = mcpSyncClient;
         this.objectMapper = objectMapper;
     }
 
@@ -49,7 +49,15 @@ public class McpChatController {
         }
 
         try {
-            ToolResponse response = mcpSyncServer.callTool(request.toolName(), arguments);
+            // Convert JsonNode arguments to Map for CallToolRequest
+            @SuppressWarnings("unchecked")
+            var argsMap = objectMapper.convertValue(arguments, java.util.Map.class);
+
+            McpSchema.CallToolRequest callToolRequest = new McpSchema.CallToolRequest(
+                    request.toolName(),
+                    argsMap);
+
+            McpSchema.CallToolResult response = mcpSyncClient.callTool(callToolRequest);
             return ResponseEntity.ok(response);
         } catch (Exception ex) {
             logger.error("Failed to execute MCP tool '{}'", request.toolName(), ex);
