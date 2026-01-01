@@ -32,20 +32,22 @@ class PerformanceAndScalabilityTest {
                 .jwtToken("valid-jwt-token-for-performance-tests")
                 .userId("perf-test-user")
                 .roles(List.of("TESTER"))
-                .permissions(List.of("read", "execute"))
+                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "read", "execute"))
                 .build();
     }
 
     @Test
     @DisplayName("Basic request processing performance")
     void testBasicPerformance() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Basic performance test request");
-        request.setType("architecture");
-        request.setSecurityContext(securityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("test", "basic");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Basic performance test request")
+                .type("architecture")
+                .context(context)
+                .build();
+        request.setSecurityContext(securityContext);
 
         long startTime = System.currentTimeMillis();
         AgentResponse response = agentManager.processRequest(request);
@@ -63,13 +65,15 @@ class PerformanceAndScalabilityTest {
         long startTime = System.currentTimeMillis();
 
         for (int i = 0; i < requestCount; i++) {
-            AgentRequest request = new AgentRequest();
-            request.setDescription("Sequential request " + (i + 1));
-            request.setType("implementation");
-            request.setSecurityContext(securityContext);
             Map<String, Object> context = new HashMap<>();
             context.put("index", i);
-            request.setContext(context);
+
+            AgentRequest request = AgentRequest.builder()
+                    .description("Sequential request " + (i + 1))
+                    .type("implementation")
+                    .context(context)
+                    .build();
+            request.setSecurityContext(securityContext);
 
             AgentResponse response = agentManager.processRequest(request);
             assertNotNull(response);
@@ -83,13 +87,15 @@ class PerformanceAndScalabilityTest {
     @Test
     @DisplayName("Response time measurement")
     void testResponseTime() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Response time measurement test");
-        request.setType("security");
-        request.setSecurityContext(securityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("measurement", "response-time");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Response time measurement test")
+                .type("security")
+                .context(context)
+                .build();
+        request.setSecurityContext(securityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -102,13 +108,15 @@ class PerformanceAndScalabilityTest {
         Runtime runtime = Runtime.getRuntime();
         long beforeMemory = runtime.totalMemory() - runtime.freeMemory();
 
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Memory efficiency test");
-        request.setType("testing");
-        request.setSecurityContext(securityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("memory", "test");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Memory efficiency test")
+                .type("testing")
+                .context(context)
+                .build();
+        request.setSecurityContext(securityContext);
 
         for (int i = 0; i < 20; i++) {
             AgentResponse response = agentManager.processRequest(request);
@@ -126,13 +134,15 @@ class PerformanceAndScalabilityTest {
         String[] agentTypes = { "architecture", "implementation", "security", "testing" };
 
         for (String agentType : agentTypes) {
-            AgentRequest request = new AgentRequest();
-            request.setDescription("Request for " + agentType + " agent");
-            request.setType(agentType);
-            request.setSecurityContext(securityContext);
             Map<String, Object> context = new HashMap<>();
             context.put("agent-type", agentType);
-            request.setContext(context);
+
+            AgentRequest request = AgentRequest.builder()
+                    .description("Request for " + agentType + " agent")
+                    .type(agentType)
+                    .context(context)
+                    .build();
+            request.setSecurityContext(securityContext);
 
             AgentResponse response = agentManager.processRequest(request);
             assertNotNull(response, "Response should not be null for agent type: " + agentType);
@@ -143,13 +153,15 @@ class PerformanceAndScalabilityTest {
     @Test
     @DisplayName("Processing time tracking")
     void testProcessingTimeTracking() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Processing time tracking test");
-        request.setType("documentation");
-        request.setSecurityContext(securityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("timing", "tracked");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Processing time tracking test")
+                .type("documentation")
+                .context(context)
+                .build();
+        request.setSecurityContext(securityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);

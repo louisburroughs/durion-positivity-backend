@@ -23,8 +23,14 @@ class SecurityComplianceValidationPropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("security-compliance-jwt-token")
                         .userId("property-tester")
-                        .roles(List.of("tester"))
-                        .permissions(List.of("read"))
+                        .roles(List.of("admin", "security", "developer", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "security:validate"))
                         .serviceId("pos-security-tests")
                         .serviceType("property")
                         .build();
@@ -38,6 +44,7 @@ class SecurityComplianceValidationPropertyTest {
         @Property(tries = 100)
         void securityComplianceValidation(@ForAll("securityImplementationContexts") AgentContext context) {
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Security compliance validation property test")
                                 .type("security")
                                 .context(context)
                                 .securityContext(security)
@@ -60,6 +67,7 @@ class SecurityComplianceValidationPropertyTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("OWASP compliance guidance property test")
                                 .type("security")
                                 .context(ctx)
                                 .securityContext(security)
@@ -81,6 +89,7 @@ class SecurityComplianceValidationPropertyTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Authentication and authorization patterns property test")
                                 .type("security")
                                 .context(ctx)
                                 .securityContext(security)
@@ -103,6 +112,7 @@ class SecurityComplianceValidationPropertyTest {
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
                                 .type("security")
+                                .description("Encryption implementation guidance property test")
                                 .context(ctx)
                                 .securityContext(security)
                                 .build());
@@ -120,6 +130,7 @@ class SecurityComplianceValidationPropertyTest {
                 long start = System.currentTimeMillis();
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
                                 .type("security")
+                                .description("Security guidance performance property test")
                                 .context(context)
                                 .securityContext(security)
                                 .build());

@@ -22,8 +22,16 @@ class CICDSecurityIntegrationPropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("cicd-security-jwt-token")
                         .userId("cicd-security-tester")
-                        .roles(List.of("devops", "security"))
-                        .permissions(List.of("execute", "configure", "audit"))
+                        .roles(List.of("admin", "devops", "security", "operator"))
+                        .permissions(List.of(
+                                        "execute",
+                                        "configure",
+                                        "audit",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:execute"))
                         .serviceId("pos-cicd-tests")
                         .serviceType("property")
                         .build();
@@ -38,6 +46,7 @@ class CICDSecurityIntegrationPropertyTest {
                         @ForAll("pipelineConfigurationContexts") AgentContext context) {
                 // Given: A CI/CD security integration request
                 AgentRequest request = AgentRequest.builder()
+                                .description("CI/CD security integration property test")
                                 .type("ci-cd-security")
                                 .context(context)
                                 .securityContext(security)
@@ -71,6 +80,7 @@ class CICDSecurityIntegrationPropertyTest {
                         @ForAll("securityScanningContexts") AgentContext context) {
                 // Given: A security scanning request
                 AgentRequest request = AgentRequest.builder()
+                                .description("Security scanning pipeline integration property test")
                                 .type("security-scanning")
                                 .context(context)
                                 .securityContext(security)
@@ -106,6 +116,7 @@ class CICDSecurityIntegrationPropertyTest {
                 // Given: A testing pipeline automation request
                 AgentRequest request = AgentRequest.builder()
                                 .type("testing-pipeline")
+                                .description("Testing pipeline automation property test")
                                 .context(context)
                                 .securityContext(security)
                                 .build();

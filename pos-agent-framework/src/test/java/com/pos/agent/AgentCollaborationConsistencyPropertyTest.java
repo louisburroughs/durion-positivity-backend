@@ -28,8 +28,15 @@ class AgentCollaborationConsistencyPropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("collaboration-jwt-token")
                         .userId("test-user")
-                        .roles(List.of("developer", "architect"))
-                        .permissions(List.of("collaboration:process", "domain:access"))
+                        .roles(List.of("admin", "developer", "architect", "operator"))
+                        .permissions(List.of(
+                                        "collaboration:process",
+                                        "domain:access",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:execute"))
                         .serviceId("test-service")
                         .serviceType("test")
                         .build();
@@ -43,6 +50,7 @@ class AgentCollaborationConsistencyPropertyTest {
                 // When: Processing requests across multiple agent types for the same context
                 for (String type : agentTypes) {
                         AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                        .description("Collaboration consistency across multiple agent types property test")
                                         .type(type)
                                         .context(context)
                                         .securityContext(securityContext)
@@ -64,6 +72,7 @@ class AgentCollaborationConsistencyPropertyTest {
                 // When: Processing collaboration request
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Consistency validation performance property test")
                                 .type("collaboration")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -89,6 +98,7 @@ class AgentCollaborationConsistencyPropertyTest {
 
                 // When: Processing potentially conflicting collaboration scenario
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Conflict resolution maintains quality property test")
                                 .type("collaboration-conflict-resolution")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -119,12 +129,14 @@ class AgentCollaborationConsistencyPropertyTest {
 
                 // When: Processing same domain context twice
                 AgentResponse response1 = agentManager.processRequest(AgentRequest.builder()
+                                .description("Collaboration workflows consistency property test - request 1")
                                 .type("workflow-consistency")
                                 .context(context)
                                 .securityContext(securityContext)
                                 .build());
 
                 AgentResponse response2 = agentManager.processRequest(AgentRequest.builder()
+                                .description("Collaboration workflows consistency property test - request 2")
                                 .type("workflow-consistency")
                                 .context(context)
                                 .securityContext(securityContext)

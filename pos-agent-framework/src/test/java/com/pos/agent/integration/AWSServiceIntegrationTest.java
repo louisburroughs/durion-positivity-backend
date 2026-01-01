@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.List;
+
 /**
  * AWS integration scenarios validated via core AgentManager + AgentContext.
  * Uses existing structures without relying on specific agent implementations.
@@ -26,9 +28,29 @@ class AWSServiceIntegrationTest {
                 securityContext = SecurityContext.builder()
                                 .jwtToken("aws-service-integration-jwt-token")
                                 .userId("test-user")
+                                .roles(List.of("admin", "developer", "devops", "operator"))
+                                .permissions(List.of(
+                                                "AGENT_READ",
+                                                "AGENT_WRITE",
+                                                "agent:execute",
+                                                "CONFIG_MANAGE",
+                                                "SECRETS_MANAGE",
+                                                "aws:sns",
+                                                "aws:sqs",
+                                                "aws:codepipeline",
+                                                "aws:secrets-manager",
+                                                "aws:ecs",
+                                                "aws:fargate",
+                                                "aws:eventbridge",
+                                                "aws:lambda",
+                                                "aws:parameter-store",
+                                                "aws:rds",
+                                                "event-driven:*",
+                                                "cicd:*",
+                                                "configuration:*",
+                                                "resilience:*"))
                                 .serviceId("test-service")
                                 .serviceType("test")
-                               // .securityContext(securityContext)
                                 .build();
         }
 
@@ -37,6 +59,7 @@ class AWSServiceIntegrationTest {
         void testEventAgentSNSSQSIntegration() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("event-driven")
+                                .description("AWS SNS/SQS integration test request")
                                 .context(AgentContext.builder()
                                                 .domain("customer")
                                                 .property("eventType", "CustomerRegistered")
@@ -56,6 +79,7 @@ class AWSServiceIntegrationTest {
         void testCICDAgentCodePipelineIntegration() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("cicd-pipeline")
+                                .description("AWS CodePipeline integration test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", "pos-inventory")
                                                 .property("deploymentTarget", "AWS")
@@ -73,6 +97,7 @@ class AWSServiceIntegrationTest {
         void testConfigAgentSecretsManagerIntegration() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("configuration-management")
+                                .description("AWS Secrets Manager integration test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", "pos-security-service")
                                                 .property("configurationType", "secrets")
@@ -90,6 +115,7 @@ class AWSServiceIntegrationTest {
         void testResilienceAgentECSFargateIntegration() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("resilience-engineering")
+                                .description("AWS ECS/Fargate resilience patterns test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", "pos-order")
                                                 .property("platform", "AWS")
@@ -108,6 +134,7 @@ class AWSServiceIntegrationTest {
         void testEventAgentEventBridgeIntegration() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("event-driven")
+                                .description("AWS EventBridge integration test request")
                                 .context(AgentContext.builder()
                                                 .property("eventType", "OrderStatusChanged")
                                                 .property("serviceName", "pos-order")
@@ -125,6 +152,7 @@ class AWSServiceIntegrationTest {
         void testCICDAgentLambdaDeployment() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("cicd-pipeline")
+                                .description("AWS Lambda deployment strategy test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", "pos-events")
                                                 .property("deploymentTarget", "Lambda")
@@ -142,6 +170,7 @@ class AWSServiceIntegrationTest {
         void testConfigAgentParameterStoreIntegration() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("configuration-management")
+                                .description("AWS Parameter Store integration test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", "pos-catalog")
                                                 .property("configurationType", "application-config")
@@ -160,6 +189,7 @@ class AWSServiceIntegrationTest {
         void testResilienceAgentRDSFailover() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("resilience-engineering")
+                                .description("AWS RDS failover resilience patterns test request")
                                 .context(AgentContext.builder()
                                                 .domain("resilience")
                                                 .property("serviceName", "pos-customer")
@@ -181,6 +211,7 @@ class AWSServiceIntegrationTest {
 
                 AgentResponse eventResponse = agentManager.processRequest(AgentRequest.builder()
                                 .type("event-driven")
+                                .description("AWS EventBridge integration test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", serviceName)
                                                 .property("eventType", "FitmentCalculated")
@@ -190,6 +221,7 @@ class AWSServiceIntegrationTest {
 
                 AgentResponse cicdResponse = agentManager.processRequest(AgentRequest.builder()
                                 .type("cicd-pipeline")
+                                .description("AWS CodePipeline integration test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", serviceName)
                                                 .property("deploymentTarget", "ECS")
@@ -199,6 +231,7 @@ class AWSServiceIntegrationTest {
 
                 AgentResponse configResponse = agentManager.processRequest(AgentRequest.builder()
                                 .type("configuration-management")
+                                .description("AWS Secrets Manager integration test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", serviceName)
                                                 .property("configurationType", "secrets")
@@ -208,6 +241,7 @@ class AWSServiceIntegrationTest {
 
                 AgentResponse resilienceResponse = agentManager.processRequest(AgentRequest.builder()
                                 .type("resilience-engineering")
+                                .description("AWS ECS/Fargate resilience patterns test request")
                                 .context(AgentContext.builder()
                                                 .property("serviceName", serviceName)
                                                 .property("platform", "AWS")

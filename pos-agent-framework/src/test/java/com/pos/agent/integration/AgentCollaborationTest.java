@@ -42,16 +42,19 @@ class AgentCollaborationTest {
 
                 AgentResponse arch = agentManager.processRequest(AgentRequest.builder()
                                 .type("architecture")
+                                .description("Architecture review for inventory REST API")
                                 .context(storyContext)
                                 .build());
 
                 AgentResponse impl = agentManager.processRequest(AgentRequest.builder()
                                 .type("implementation")
+                                .description("Implementation guidance for inventory service")
                                 .context(storyContext)
                                 .build());
 
                 AgentResponse test = agentManager.processRequest(AgentRequest.builder()
                                 .type("testing")
+                                .description("Testing strategy for inventory service")
                                 .context(storyContext)
                                 .build());
 
@@ -71,16 +74,19 @@ class AgentCollaborationTest {
 
                 AgentResponse arch = agentManager.processRequest(AgentRequest.builder()
                                 .type("architecture")
+                                .description("Architecture review for payment microservice")
                                 .context(archContext)
                                 .build());
 
                 AgentResponse sec = agentManager.processRequest(AgentRequest.builder()
                                 .type("security")
+                                .description("Security analysis for payment architecture")
                                 .context(archContext)
                                 .build());
 
                 AgentResponse resil = agentManager.processRequest(AgentRequest.builder()
                                 .type("resilience-engineering")
+                                .description("Resilience engineering for payment service")
                                 .context(archContext)
                                 .build());
 
@@ -102,16 +108,19 @@ class AgentCollaborationTest {
 
                 AgentResponse deploy = agentManager.processRequest(AgentRequest.builder()
                                 .type("deployment")
+                                .description("Deployment planning for pos-inventory to Kubernetes")
                                 .context(deployContext)
                                 .build());
 
                 AgentResponse cicd = agentManager.processRequest(AgentRequest.builder()
                                 .type("cicd-pipeline")
+                                .description("CI/CD pipeline setup for inventory service")
                                 .context(deployContext)
                                 .build());
 
                 AgentResponse observ = agentManager.processRequest(AgentRequest.builder()
                                 .type("observability")
+                                .description("Observability setup for inventory service monitoring")
                                 .context(deployContext)
                                 .build());
 
@@ -133,16 +142,19 @@ class AgentCollaborationTest {
 
                 AgentResponse impl = agentManager.processRequest(AgentRequest.builder()
                                 .type("implementation")
+                                .description("Implementation of customer loyalty points calculation")
                                 .context(implContext)
                                 .build());
 
                 AgentResponse testing = agentManager.processRequest(AgentRequest.builder()
                                 .type("testing")
+                                .description("Testing strategy for loyalty points feature")
                                 .context(implContext)
                                 .build());
 
                 AgentResponse domain = agentManager.processRequest(AgentRequest.builder()
                                 .type("business-domain")
+                                .description("Business domain analysis for customer loyalty program")
                                 .context(implContext)
                                 .build());
 
@@ -162,14 +174,17 @@ class AgentCollaborationTest {
 
                 AgentResponse sec = agentManager.processRequest(AgentRequest.builder()
                                 .type("security")
+                                .description("Security analysis for payment processing")
                                 .context(secContext)
                                 .build());
                 AgentResponse impl = agentManager.processRequest(AgentRequest.builder()
                                 .type("implementation")
+                                .description("Implementation approach for secure payment processing")
                                 .context(secContext)
                                 .build());
                 AgentResponse perf = agentManager.processRequest(AgentRequest.builder()
                                 .type("performance")
+                                .description("Performance optimization for payment processing")
                                 .context(secContext)
                                 .build());
 
@@ -192,14 +207,17 @@ class AgentCollaborationTest {
 
                 AgentResponse arch = agentManager.processRequest(AgentRequest.builder()
                                 .type("architecture")
+                                .description("Architecture decision: microservices vs monolith")
                                 .context(decisionContext)
                                 .build());
                 AgentResponse impl = agentManager.processRequest(AgentRequest.builder()
                                 .type("implementation")
+                                .description("Implementation perspective on architecture decision")
                                 .context(decisionContext)
                                 .build());
                 AgentResponse deploy = agentManager.processRequest(AgentRequest.builder()
                                 .type("deployment")
+                                .description("Deployment considerations for architecture decision")
                                 .context(decisionContext)
                                 .build());
 
@@ -222,18 +240,22 @@ class AgentCollaborationTest {
 
                 AgentResponse arch = agentManager.processRequest(AgentRequest.builder()
                                 .type("architecture")
+                                .description("Architecture perspective on database technology selection")
                                 .context(techSelection)
                                 .build());
                 AgentResponse impl = agentManager.processRequest(AgentRequest.builder()
                                 .type("implementation")
+                                .description("Implementation perspective on database technology selection")
                                 .context(techSelection)
                                 .build());
                 AgentResponse deploy = agentManager.processRequest(AgentRequest.builder()
                                 .type("deployment")
+                                .description("Deployment perspective on database technology selection")
                                 .context(techSelection)
                                 .build());
                 AgentResponse observ = agentManager.processRequest(AgentRequest.builder()
                                 .type("observability")
+                                .description("Observability perspective on database technology selection")
                                 .context(techSelection)
                                 .build());
 
@@ -253,18 +275,21 @@ class AgentCollaborationTest {
                 CompletableFuture<AgentResponse> impl = CompletableFuture
                                 .supplyAsync(() -> agentManager.processRequest(AgentRequest.builder()
                                                 .type("implementation")
+                                                .description("Implementation best practices for Spring Boot REST API")
                                                 .context(perfContext)
                                                 .build()));
 
                 CompletableFuture<AgentResponse> sec = CompletableFuture
                                 .supplyAsync(() -> agentManager.processRequest(AgentRequest.builder()
                                                 .type("security")
+                                                .description("Security best practices for Spring Boot REST API")
                                                 .context(perfContext)
                                                 .build()));
 
                 CompletableFuture<AgentResponse> test = CompletableFuture
                                 .supplyAsync(() -> agentManager.processRequest(AgentRequest.builder()
                                                 .type("testing")
+                                                .description("Testing best practices for Spring Boot REST API")
                                                 .context(perfContext)
                                                 .build()));
 

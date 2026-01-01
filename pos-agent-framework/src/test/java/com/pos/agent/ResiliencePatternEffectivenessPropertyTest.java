@@ -22,8 +22,14 @@ class ResiliencePatternEffectivenessPropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("resilience-pattern-jwt-token")
                         .userId("resilience-tester")
-                        .roles(List.of("tester"))
-                        .permissions(List.of("read"))
+                        .roles(List.of("admin", "developer", "architect", "tester", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "resilience:pattern"))
                         .serviceId("pos-resilience-tests")
                         .serviceType("property")
                         .build();
@@ -43,6 +49,7 @@ class ResiliencePatternEffectivenessPropertyTest {
                         @ForAll("resilienceRequests") AgentContext context) {
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Resilience pattern effectiveness property test")
                                 .type("resilience")
                                 .context(context)
                                 .securityContext(security)

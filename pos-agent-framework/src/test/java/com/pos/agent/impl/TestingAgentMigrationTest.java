@@ -2,7 +2,6 @@ package com.pos.agent.impl;
 
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +33,7 @@ class TestingAgentMigrationTest {
 
         assertNotNull(response);
         assertTrue(response.isSuccess());
-        assertEquals(AgentStatus.SUCCESS, response.getStatus());
+        assertEquals("SUCCESS", response.getStatus());
         assertEquals("Testing pattern recommendation: How to implement unit tests?", response.getOutput());
         assertEquals(0.8, response.getConfidence());
         assertNotNull(response.getRecommendations());
@@ -48,51 +47,42 @@ class TestingAgentMigrationTest {
 
         assertNotNull(response);
         assertFalse(response.isSuccess());
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals("FAILURE", response.getStatus());
         assertEquals("Invalid request: request is null", response.getOutput());
         assertEquals(0.0, response.getConfidence());
     }
 
     @Test
     void testNullDescriptionValidation() {
-        AgentRequest request = AgentRequest.builder()
-                .type("testing")
-                .description(null)
-                .context(Map.of("domain", "testing"))
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: description is required", response.getOutput());
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .type("testing")
+                    .description(null)
+                    .context(Map.of("domain", "testing"))
+                    .build();
+        });
     }
 
     @Test
     void testEmptyDescriptionValidation() {
-        AgentRequest request = AgentRequest.builder()
-                .type("testing")
-                .description("   ")
-                .context(Map.of("domain", "testing"))
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: description is required", response.getOutput());
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .type("testing")
+                    .description("   ")
+                    .context(Map.of("domain", "testing"))
+                    .build();
+        });
     }
 
     @Test
     void testNullContextValidation() {
-        AgentRequest request = AgentRequest.builder()
-                .type("testing")
-                .description("How to test?")
-                .context(null)
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: context is required", response.getOutput());
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .type("testing")
+                    .description("How to test?")
+                    .context(null)
+                    .build();
+        });
     }
 
     @Test

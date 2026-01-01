@@ -3,6 +3,7 @@ package com.pos.agent;
 import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
+import com.pos.agent.core.SecurityContext;
 import com.pos.agent.context.AgentContext;
 import net.jqwik.api.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Property-based test for domain boundary enforcement
@@ -19,10 +21,25 @@ import java.time.Duration;
 class DomainBoundaryEnforcementPropertyTest {
 
         private AgentManager agentManager;
+        private SecurityContext securityContext;
 
         @BeforeEach
         void setUp() {
                 agentManager = new AgentManager();
+                securityContext = SecurityContext.builder()
+                                .jwtToken("domain-boundary-jwt-token")
+                                .userId("domain-boundary-tester")
+                                .roles(List.of("admin", "architect", "developer", "operator"))
+                                .permissions(List.of(
+                                                "AGENT_READ",
+                                                "AGENT_WRITE",
+                                                "agent:read",
+                                                "agent:write",
+                                                "architecture:design",
+                                                "domain:enforce"))
+                                .serviceId("pos-boundary-tests")
+                                .serviceType("property")
+                                .build();
         }
 
         private void ensureSetup() {
@@ -47,11 +64,13 @@ class DomainBoundaryEnforcementPropertyTest {
 
                 // When: Making an architectural decision request
                 AgentRequest request = AgentRequest.builder()
+                                .description("Domain boundary enforcement property test")
                                 .type("architecture")
                                 .context(AgentContext.builder()
                                                 .property("query", query)
                                                 .property("focus", "domain-boundaries")
                                                 .build())
+                                .securityContext(securityContext)
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(request);
@@ -88,11 +107,13 @@ class DomainBoundaryEnforcementPropertyTest {
 
                 // Given: A request about circular dependencies
                 AgentRequest request = AgentRequest.builder()
+                                .description("Circular dependency prevention property test")
                                 .type("architecture")
                                 .context(AgentContext.builder()
                                                 .property("query", "circular dependency scenario: " + scenario)
                                                 .property("scenario", scenario)
                                                 .build())
+                                .securityContext(securityContext)
                                 .build();
 
                 // When: Requesting guidance about circular dependencies
@@ -123,6 +144,7 @@ class DomainBoundaryEnforcementPropertyTest {
                 // Given: A request about domain ownership
                 AgentRequest request = AgentRequest.builder()
                                 .type("architecture")
+                                .description("Domain ownership validation property test")
                                 .context(AgentContext.builder()
                                                 .domain(domain)
                                                 .property("query", String.format(
@@ -160,6 +182,7 @@ class DomainBoundaryEnforcementPropertyTest {
                 // Given: A governance query
                 AgentRequest request = AgentRequest.builder()
                                 .type("architecture")
+                                .description("Domain boundary enforcement performance property test")
                                 .context(AgentContext.builder()
                                                 .property("query", query)
                                                 .build())

@@ -46,6 +46,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("kubernetes-deployment")
+                .description("CI/CD agent provides Kubernetes deployment strategies")
                 .context(context)
                 .securityContext(security)
                 .build();
@@ -69,6 +70,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("kubernetes-config")
+                .description("Configuration agent provides ConfigMap and Secret management")
                 .context(context)
                 .securityContext(security)
                 .build();
@@ -92,6 +94,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("kubernetes-health-check")
+                .description("Resilience agent provides Kubernetes health checks and probes")
                 .context(context)
                 .securityContext(security)
                 .build();
@@ -115,6 +118,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("helm-deployment")
+                .description("CI/CD agent provides Helm chart deployment guidance")
                 .context(context)
                 .securityContext(security)
                 .build();
@@ -138,6 +142,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("pod-disruption-budget")
+                .description("Resilience agent provides pod disruption budget guidance")
                 .context(context)
                 .securityContext(security)
                 .build();
@@ -162,6 +167,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("service-mesh-config")
+                .description("Configuration agent provides service mesh configuration")
                 .context(context)
                 .securityContext(security)
                 .requireTLS13(true)
@@ -186,6 +192,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("canary-deployment")
+                .description("CI/CD agent provides canary deployment with Kubernetes")
                 .context(context)
                 .securityContext(security)
                 .requireTLS13(true)
@@ -210,6 +217,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("horizontal-pod-autoscaler")
+                .description("Resilience agent provides horizontal pod autoscaling")
                 .context(context)
                 .securityContext(security)
                 .requireTLS13(true)
@@ -237,6 +245,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest cicdRequest = AgentRequest.builder()
                 .type("kubernetes-deployment")
+                .description("CI/CD agent provides Kubernetes deployment strategies")
                 .context(cicdContext)
                 .securityContext(security)
                 .requireTLS13(true)
@@ -254,6 +263,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest configRequest = AgentRequest.builder()
                 .type("kubernetes-config")
+                .description("Configuration agent provides ConfigMap and Secret management")
                 .context(configContext)
                 .securityContext(security)
                 .requireTLS13(true)
@@ -271,6 +281,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest resilienceRequest = AgentRequest.builder()
                 .type("kubernetes-health-check")
+                .description("Resilience agent provides Kubernetes health checks and probes")
                 .context(resilienceContext)
                 .securityContext(security)
                 .requireTLS13(true)
@@ -307,6 +318,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest devRequest = AgentRequest.builder()
                 .type("kubernetes-deployment")
+                .description("CI/CD agent provides Kubernetes deployment guidance for development environment")
                 .context(devContext)
                 .securityContext(security)
                 .requireTLS13(true)
@@ -324,6 +336,7 @@ class KubernetesDeploymentIntegrationTest {
 
         AgentRequest prodRequest = AgentRequest.builder()
                 .type("kubernetes-deployment")
+                .description("CI/CD agent provides Kubernetes deployment guidance for production environment")
                 .context(prodContext)
                 .securityContext(security)
                 .requireTLS13(true)

@@ -8,7 +8,6 @@ import net.jqwik.api.*;
 
 import java.util.List;
 
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -19,48 +18,64 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class CrossAgentCollaborationPropertyTest {
 
-    private final AgentManager agentManager = new AgentManager();
+        private final AgentManager agentManager = new AgentManager();
+        private final com.pos.agent.core.SecurityContext securityContext = com.pos.agent.core.SecurityContext.builder()
+                        .jwtToken("cross-agent-jwt-token")
+                        .userId("cross-agent-tester")
+                        .roles(List.of("admin", "developer", "operator"))
+                        .permissions(List.of(
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:execute",
+                                        "collaboration:process"))
+                        .serviceId("cross-agent-tests")
+                        .serviceType("collaboration")
+                        .build();
 
-    @Property(tries = 100)
-    @Label("Feature: agent-structure, Property 18: Cross-agent collaboration effectiveness")
-    void crossAgentCollaborationEffectivenessProperty(@ForAll("collaborationContexts") AgentContext context,
-            @ForAll("agentTypeSets") List<String> agentTypes) {
-        // Ensure we exercise at least 4 collaborating agent types
-        Assume.that(agentTypes.size() >= 4);
+        @Property(tries = 100)
+        @Label("Feature: agent-structure, Property 18: Cross-agent collaboration effectiveness")
+        void crossAgentCollaborationEffectivenessProperty(@ForAll("collaborationContexts") AgentContext context,
+                        @ForAll("agentTypeSets") List<String> agentTypes) {
+                // Ensure we exercise at least 4 collaborating agent types
+                Assume.that(agentTypes.size() >= 4);
 
-        // Process for each agent type and assert success
-        for (String type : agentTypes) {
-            AgentResponse response = agentManager.processRequest(AgentRequest.builder()
-                    .type(type)
-                    .context(context)
-                    .build());
-            assertTrue(response.isSuccess());
-            assertNotNull(response.getStatus());
-            // Optional minimal performance expectation
-            assertTrue(response.getProcessingTimeMs() >= 0);
+                // Process for each agent type and assert success
+                for (String type : agentTypes) {
+                        AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                        .description("Cross-agent collaboration effectiveness property test - " + type)
+                                        .type(type)
+                                        .context(context)
+                                        .securityContext(securityContext)
+                                        .build());
+                        assertTrue(response.isSuccess());
+                        assertNotNull(response.getStatus());
+                        // Optional minimal performance expectation
+                        assertTrue(response.getProcessingTimeMs() >= 0);
+                }
         }
-    }
 
-    @Provide
-    Arbitrary<AgentContext> collaborationContexts() {
-        return Arbitraries
-                .of("microservice-implementation", "event-driven-system", "cicd-pipeline-setup",
-                        "resilient-architecture")
-                .map(scenario -> AgentContext.builder()
-                        .domain("collaboration")
-                        .property("scenario", scenario)
-                        .property("complexity", "high")
-                        .property("requiredAgents", 5)
-                        .property("moduleName", "pos-inventory")
-                        .build());
-    }
+        @Provide
+        Arbitrary<AgentContext> collaborationContexts() {
+                return Arbitraries
+                                .of("microservice-implementation", "event-driven-system", "cicd-pipeline-setup",
+                                                "resilient-architecture")
+                                .map(scenario -> AgentContext.builder()
+                                                .domain("collaboration")
+                                                .property("scenario", scenario)
+                                                .property("complexity", "high")
+                                                .property("requiredAgents", 5)
+                                                .property("moduleName", "pos-inventory")
+                                                .build());
+        }
 
-    @Provide
-    Arbitrary<List<String>> agentTypeSets() {
-        List<String> all = List.of("event-driven", "cicd-pipeline", "configuration-management",
-                "resilience-engineering",
-                "implementation", "security", "observability");
-        return Arbitraries.integers().between(4, 6)
-                .flatMap(count -> Arbitraries.shuffle(all).map(shuffled -> shuffled.subList(0, count)));
-    }
+        @Provide
+        Arbitrary<List<String>> agentTypeSets() {
+                List<String> all = List.of("event-driven", "cicd-pipeline", "configuration-management",
+                                "resilience-engineering",
+                                "implementation", "security", "observability");
+                return Arbitraries.integers().between(4, 6)
+                                .flatMap(count -> Arbitraries.shuffle(all).map(shuffled -> shuffled.subList(0, count)));
+        }
 }

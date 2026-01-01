@@ -23,8 +23,16 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("api-gateway-jwt-token")
                         .userId("api-gateway-tester")
-                        .roles(List.of("architect", "integration"))
-                        .permissions(List.of("design", "integrate", "test"))
+                        .roles(List.of("admin", "architect", "developer", "operator"))
+                        .permissions(List.of(
+                                        "design",
+                                        "integrate",
+                                        "test",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:discover"))
                         .serviceId("pos-api-gateway-tests")
                         .serviceType("property")
                         .build();
@@ -34,6 +42,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
                         @ForAll("apiEndpointDesignContexts") AgentContext context) {
                 // Given: An API Gateway integration request
                 AgentRequest request = AgentRequest.builder()
+                                .description("API Gateway integration consistency property test")
                                 .type("api-gateway")
                                 .context(context)
                                 .securityContext(security)
@@ -66,6 +75,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
                         @ForAll("apiVersioningContexts") AgentContext context) {
                 // Given: An API versioning request
                 AgentRequest request = AgentRequest.builder()
+                                .description("API versioning consistency property test")
                                 .type("api-versioning")
                                 .context(context)
                                 .securityContext(security)
@@ -93,6 +103,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
                         @ForAll("restApiDesignContexts") AgentContext context) {
                 // Given: A REST API design request
                 AgentRequest request = AgentRequest.builder()
+                                .description("REST API design consistency property test")
                                 .type("rest-api-design")
                                 .context(context)
                                 .securityContext(security)
@@ -121,6 +132,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
                 // Given: An API Gateway routing request
                 AgentRequest request = AgentRequest.builder()
                                 .type("gateway-routing")
+                                .description("API Gateway routing consistency property test")
                                 .context(context)
                                 .securityContext(security)
                                 .build();
@@ -148,6 +160,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
                 // Given: An API Gateway integration request
                 AgentRequest request = AgentRequest.builder()
                                 .type("api-gateway")
+                                .description("API Gateway integration performance property test")
                                 .context(context)
                                 .securityContext(security)
                                 .build();

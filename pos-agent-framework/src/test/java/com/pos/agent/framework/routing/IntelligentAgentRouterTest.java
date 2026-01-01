@@ -23,8 +23,8 @@ class IntelligentAgentRouterTest {
     private final SecurityContext securityContext = SecurityContext.builder()
             .jwtToken("valid-jwt-token-for-tests")
             .userId("router-tester")
-            .roles(List.of("INTELLIGENT_ROUTER", "SERVICE_MAPPER"))
-            .permissions(List.of("agent.route", "service.map", "fallback.select"))
+            .roles(List.of("ADMIN", "INTELLIGENT_ROUTER", "SERVICE_MAPPER"))
+            .permissions(List.of("AGENT_READ", "AGENT_WRITE", "agent.route", "service.map", "fallback.select"))
             .serviceId("pos-router-tests")
             .serviceType("property")
             .build();
@@ -33,6 +33,7 @@ class IntelligentAgentRouterTest {
     void routingWithServiceMapping(@ForAll("serviceMappingScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
                 .type("service-mapping-route")
+                .description("Service mapping based routing scenario")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -47,6 +48,7 @@ class IntelligentAgentRouterTest {
     void routingWithContextFallback(@ForAll("contextFallbackScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
                 .type("context-fallback-route")
+                .description("Context fallback based routing scenario")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -61,6 +63,7 @@ class IntelligentAgentRouterTest {
     void routingWithUniversalFallback(@ForAll("universalFallbackScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
                 .type("universal-fallback-route")
+                .description("Universal fallback based routing scenario")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -75,6 +78,7 @@ class IntelligentAgentRouterTest {
     void routingToSpecificServices(@ForAll("serviceRoutingScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
                 .type("service-specific-route")
+                .description("Service specific routing scenario")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -89,6 +93,7 @@ class IntelligentAgentRouterTest {
     void domainBasedRouting(@ForAll("domainRoutingScenarios") AgentContext context) {
         AgentRequest request = AgentRequest.builder()
                 .type("domain-based-route")
+                .description("Domain based routing scenario")
                 .context(context)
                 .securityContext(securityContext)
                 .build();

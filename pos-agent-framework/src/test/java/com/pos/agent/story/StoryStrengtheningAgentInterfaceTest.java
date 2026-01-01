@@ -88,19 +88,20 @@ class StoryStrengtheningAgentInterfaceTest {
     }
 
     /**
-     * Test that validation errors return FAILURE status
+     * Test that validation errors throw IllegalStateException for empty description
      */
     @Test
     void testProcessRequest_ValidationError_EmptyDescription() {
-        AgentRequest invalidRequest = AgentRequest.builder()
-                .description("") // Empty description
-                .type("test-type").context(new HashMap<>()).build();
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .description("") // Empty description
+                    .type("test-type")
+                    .context(new HashMap<>())
+                    .build();
+        });
 
-        AgentResponse response = agent.processRequest(invalidRequest);
-
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum(), "Status should be FAILURE");
-        assertFalse(response.isSuccess(), "Response should indicate failure");
-        assertNotNull(response.getErrorMessage(), "Error message should be present");
+        assertTrue(exception.getMessage().contains("description"),
+                "Exception message should mention description field");
     }
 
     /**

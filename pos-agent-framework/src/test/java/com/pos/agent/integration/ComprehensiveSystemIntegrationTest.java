@@ -46,15 +46,33 @@ class ComprehensiveSystemIntegrationTest {
                 SecurityContext security = SecurityContext.builder()
                                 .jwtToken("comprehensive-system-jwt-token")
                                 .userId("test-user")
+                                .roles(List.of("USER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
+                                .serviceId("test-service")
+                                .serviceType("test")
+                                .build();
+
+                // Special security context for configuration-management (requires elevated
+                // permissions)
+                SecurityContext configSecurity = SecurityContext.builder()
+                                .jwtToken("comprehensive-system-jwt-token")
+                                .userId("test-user")
+                                .roles(List.of("USER", "CONFIG_MANAGER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "CONFIG_MANAGE", "SECRETS_MANAGE"))
                                 .serviceId("test-service")
                                 .serviceType("test")
                                 .build();
 
                 for (String agentType : expectedAgentTypes) {
+                        // Use special security context for configuration-management
+                        SecurityContext contextToUse = agentType.equals("configuration-management") ? configSecurity
+                                        : security;
+
                         AgentRequest request = AgentRequest.builder()
                                         .type(agentType)
+                                        .description("Comprehensive test for agent type: " + agentType)
                                         .context(createContextForAgent(agentType))
-                                        .securityContext(security)
+                                        .securityContext(contextToUse)
                                         .build();
 
                         AgentResponse response = agentManager.processRequest(request);
@@ -70,6 +88,7 @@ class ComprehensiveSystemIntegrationTest {
                 // Architecture scenario
                 AgentRequest architectureRequest = AgentRequest.builder()
                                 .type("architecture")
+                                .description("Architecture guidance for scalable microservice design")
                                 .context(AgentContext.builder()
                                                 .serviceType("microservice")
                                                 .domain("inventory")
@@ -85,12 +104,15 @@ class ComprehensiveSystemIntegrationTest {
                 SecurityContext security = SecurityContext.builder()
                                 .jwtToken("valid.jwt.token")
                                 .userId("user-123")
+                                .roles(List.of("USER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
                                 .serviceId("pos-api-gateway")
                                 .serviceType("spring-boot")
                                 .build();
 
                 AgentRequest securityRequest = AgentRequest.builder()
                                 .type("security")
+                                .description("Security validation for encryption and audit requirements")
                                 .context(AgentContext.builder()
                                                 .domain("all")
                                                 .property("securityRequirements", List.of("encryption", "audit"))
@@ -109,6 +131,7 @@ class ComprehensiveSystemIntegrationTest {
                 // Event-driven scenario
                 AgentRequest eventRequest = AgentRequest.builder()
                                 .type("event-driven")
+                                .description("Event-driven architecture for domain events handling")
                                 .context(AgentContext.builder()
                                                 .property("eventType", "domain-event")
                                                 .property("messagingPlatform", "kafka")
@@ -128,6 +151,19 @@ class ComprehensiveSystemIntegrationTest {
                 SecurityContext security = SecurityContext.builder()
                                 .jwtToken("concurrent-requests-jwt-token")
                                 .userId("test-user")
+                                .roles(List.of("USER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
+                                .serviceId("test-service")
+                                .serviceType("test")
+                                .build();
+
+                // Special security context for configuration-management (requires elevated
+                // permissions)
+                SecurityContext configSecurity = SecurityContext.builder()
+                                .jwtToken("concurrent-requests-jwt-token")
+                                .userId("test-user")
+                                .roles(List.of("USER", "CONFIG_MANAGER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "CONFIG_MANAGE", "SECRETS_MANAGE"))
                                 .serviceId("test-service")
                                 .serviceType("test")
                                 .build();
@@ -135,10 +171,17 @@ class ComprehensiveSystemIntegrationTest {
                 List<CompletableFuture<AgentResponse>> futures = IntStream.range(0, 50)
                                 .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
                                         String agentType = getAgentTypeForIndex(i);
+                                        // Use special security context for configuration-management
+                                        SecurityContext contextToUse = agentType.equals("configuration-management")
+                                                        ? configSecurity
+                                                        : security;
+
                                         AgentRequest request = AgentRequest.builder()
                                                         .type(agentType)
+                                                        .description("Concurrent request test for agent type: "
+                                                                        + agentType)
                                                         .context(createContextForAgent(agentType))
-                                                        .securityContext(security)
+                                                        .securityContext(contextToUse)
                                                         .build();
                                         return agentManager.processRequest(request);
                                 }, executorService))
@@ -164,6 +207,8 @@ class ComprehensiveSystemIntegrationTest {
                 SecurityContext security = SecurityContext.builder()
                                 .jwtToken("performance-under-load-jwt-token")
                                 .userId("test-user")
+                                .roles(List.of("USER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
                                 .serviceId("test-service")
                                 .serviceType("test")
                                 .build();
@@ -172,13 +217,31 @@ class ComprehensiveSystemIntegrationTest {
 
                 List<CompletableFuture<AgentResponse>> futures = IntStream.range(0, 100)
                                 .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
+                                        String agentType = getAgentTypeForIndex(i);
+                                        // Use special security context for configuration-management
+                                        SecurityContext contextToUse = agentType.equals("configuration-management")
+                                                        ? SecurityContext.builder()
+                                                                        .jwtToken("performance-under-load-jwt-token")
+                                                                        .userId("test-user")
+                                                                        .roles(List.of("USER", "CONFIG_MANAGER"))
+                                                                        .permissions(List.of("AGENT_READ",
+                                                                                        "AGENT_WRITE", "CONFIG_MANAGE",
+                                                                                        "SECRETS_MANAGE"))
+                                                                        .serviceId("test-service")
+                                                                        .serviceType("test")
+                                                                        .build()
+                                                        : security;
+
                                         AgentRequest request = AgentRequest.builder()
-                                                        .type("implementation")
+                                                        .type(agentType)
+                                                        .description("Load test request " + (i + 1)
+                                                                        + " for agent type: " + agentType)
                                                         .context(AgentContext.builder()
+                                                                        .type(agentType)
                                                                         .serviceType("microservice")
                                                                         .property("framework", "spring-boot")
                                                                         .build())
-                                                        .securityContext(security)
+                                                        .securityContext(contextToUse)
                                                         .build();
                                         return agentManager.processRequest(request);
                                 }, executorService))
@@ -206,6 +269,7 @@ class ComprehensiveSystemIntegrationTest {
         void testAgentFailoverScenarios() {
                 AgentRequest request = AgentRequest.builder()
                                 .type("implementation")
+                                .description("Failover test with invalid security credentials")
                                 .context(AgentContext.builder().build())
                                 .securityContext(SecurityContext.builder().jwtToken("invalid.jwt.token").build())
                                 .build();
@@ -221,6 +285,7 @@ class ComprehensiveSystemIntegrationTest {
         void testCrossDomainCollaboration() {
                 AgentRequest businessRequest = AgentRequest.builder()
                                 .type("business-domain")
+                                .description("Business domain collaboration for vehicle fitment process")
                                 .context(AgentContext.builder()
                                                 .domain("automotive")
                                                 .property("businessProcess", "vehicle-fitment")
@@ -233,6 +298,7 @@ class ComprehensiveSystemIntegrationTest {
 
                 AgentRequest cicdRequest = AgentRequest.builder()
                                 .type("cicd-pipeline")
+                                .description("CI/CD pipeline integration for automotive deployment")
                                 .context(AgentContext.builder()
                                                 .property("pipelineType", "deployment")
                                                 .property("targetEnvironment", "production")
@@ -250,6 +316,7 @@ class ComprehensiveSystemIntegrationTest {
         void testConfigurationManagementIntegration() {
                 AgentRequest configRequest = AgentRequest.builder()
                                 .type("configuration-management")
+                                .description("Configuration management for production application settings")
                                 .context(AgentContext.builder()
                                                 .property("configurationType", "application")
                                                 .property("environment", "production")
@@ -267,6 +334,7 @@ class ComprehensiveSystemIntegrationTest {
         void testResiliencePatternIntegration() {
                 AgentRequest resilienceRequest = AgentRequest.builder()
                                 .type("resilience-engineering")
+                                .description("Resilience pattern implementation for inventory service")
                                 .context(AgentContext.builder()
                                                 .property("resiliencePattern", "circuit-breaker")
                                                 .property("targetService", "pos-inventory")

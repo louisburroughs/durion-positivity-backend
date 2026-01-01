@@ -25,8 +25,16 @@ class EnhancedAgentRegistryIntegrationTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("valid-jwt-token-for-tests")
                         .userId("registry-tester")
-                        .roles(List.of("developer"))
-                        .permissions(List.of("registry:query"))
+                        .roles(List.of("admin", "developer", "operator"))
+                        .permissions(List.of("AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "registry:query",
+                                        "registry:read",
+                                        "registry:write",
+                                        "agent:route",
+                                        "agent:discover",
+                                        "domain:query",
+                                        "agent:execute"))
                         .serviceId("pos-registry-tests")
                         .serviceType("property")
                         .build();
@@ -38,6 +46,7 @@ class EnhancedAgentRegistryIntegrationTest {
         void agentDiscoveryAcrossDomains(@ForAll("registryDomains") AgentContext context) {
                 // When: Querying for agents in a domain
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Agent discovery across domains property test")
                                 .type("registry-query")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -55,6 +64,7 @@ class EnhancedAgentRegistryIntegrationTest {
         void requestRoutingToSpecializedAgents(@ForAll("routingContexts") AgentContext context) {
                 // When: Routing request to specialized agent
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Request routing to specialized agents property test")
                                 .type("agent-routing")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -72,6 +82,7 @@ class EnhancedAgentRegistryIntegrationTest {
         void eventDrivenAgentDiscovery(@ForAll("eventDrivenContexts") AgentContext context) {
                 // When: Querying for event-driven agent
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Event-driven agent discovery property test")
                                 .type("domain-query")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -89,6 +100,7 @@ class EnhancedAgentRegistryIntegrationTest {
         void cicdAgentDiscovery(@ForAll("cicdContexts") AgentContext context) {
                 // When: Querying for CI/CD agent
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("CI/CD agent discovery property test")
                                 .type("domain-query")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -106,6 +118,7 @@ class EnhancedAgentRegistryIntegrationTest {
         void configurationAgentDiscovery(@ForAll("configContexts") AgentContext context) {
                 // When: Querying for configuration agent
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Configuration agent discovery property test")
                                 .type("domain-query")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -123,6 +136,7 @@ class EnhancedAgentRegistryIntegrationTest {
         void resilienceAgentDiscovery(@ForAll("resilienceContexts") AgentContext context) {
                 // When: Querying for resilience agent
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Resilience agent discovery property test")
                                 .type("domain-query")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -140,12 +154,14 @@ class EnhancedAgentRegistryIntegrationTest {
         void concurrentMultiDomainRouting(@ForAll("multiDomainContexts") AgentContext context) {
                 // When: Processing concurrent requests
                 AgentResponse response1 = agentManager.processRequest(AgentRequest.builder()
+                                .description("Concurrent multi-domain routing test - request 1")
                                 .type("concurrent-routing-1")
                                 .context(context)
                                 .securityContext(securityContext)
                                 .build());
 
                 AgentResponse response2 = agentManager.processRequest(AgentRequest.builder()
+                                .description("Concurrent multi-domain routing test - request 2")
                                 .type("concurrent-routing-2")
                                 .context(context)
                                 .securityContext(securityContext)

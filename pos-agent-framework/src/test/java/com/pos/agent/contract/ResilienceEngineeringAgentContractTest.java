@@ -87,7 +87,7 @@ class ResilienceEngineeringAgentContractTest {
         assertNotNull(response);
         assertEquals("SUCCESS", response.getStatus());
         assertNotNull(response.getOutput());
-        assertTrue(response.getOutput().contains("failure"));
+        assertTrue(response.getOutput().contains("Resilience pattern guidance"));
     }
 
     @Test

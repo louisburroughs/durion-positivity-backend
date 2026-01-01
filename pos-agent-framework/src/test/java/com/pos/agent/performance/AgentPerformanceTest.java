@@ -3,6 +3,8 @@ package com.pos.agent.performance;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentManager;
+import com.pos.agent.core.SecurityContext;
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.framework.model.AgentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,12 +23,20 @@ import static org.junit.jupiter.api.Assertions.*;
 public class AgentPerformanceTest {
 
     private AgentManager agentManager;
-
+    private SecurityContext securityContext;
     private ExecutorService executorService;
 
     @BeforeEach
     void setUp() {
         agentManager = new AgentManager();
+        securityContext = SecurityContext.builder()
+                .jwtToken("test-token-12345")
+                .userId("test-user")
+                .roles(List.of("developer", "architect"))
+                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "performance:test", "domain:access"))
+                .serviceId("test-service")
+                .serviceType("test")
+                .build();
         executorService = Executors.newFixedThreadPool(50);
     }
 
@@ -204,51 +214,83 @@ public class AgentPerformanceTest {
     }
 
     private AgentRequest createTestRequest(AgentType agentType) {
-        AgentRequest request = new AgentRequest();
-        request.setType(agentType.name());
-        request.setDescription("perf-test-" + System.nanoTime());
+        String description;
+        String domain;
 
         switch (agentType) {
             case ARCHITECTURE:
-                request.setDescription("Design microservice architecture for inventory service");
+                description = "Design microservice architecture for inventory service";
+                domain = "architecture";
                 break;
             case IMPLEMENTATION:
-                request.setDescription("Implement REST controller for product management");
+                description = "Implement REST controller for product management";
+                domain = "implementation";
                 break;
             case TESTING:
-                request.setDescription("Create unit tests for customer service");
+                description = "Create unit tests for customer service";
+                domain = "testing";
                 break;
             case SECURITY:
-                request.setDescription("Implement JWT authentication for API gateway");
+                description = "Implement JWT authentication for API gateway";
+                domain = "security";
                 break;
             case DOCUMENTATION:
-                request.setDescription("Generate API documentation for catalog service");
+                description = "Generate API documentation for catalog service";
+                domain = "documentation";
                 break;
             case BUSINESS_DOMAIN:
-                request.setDescription("Validate business rules for pricing service");
+                description = "Validate business rules for pricing service";
+                domain = "business-domain";
                 break;
             case INTEGRATION_GATEWAY:
-                request.setDescription("Configure API gateway routing for inventory");
+                description = "Configure API gateway routing for inventory";
+                domain = "integration-gateway";
                 break;
             case EVENT_DRIVEN_ARCHITECTURE:
-                request.setDescription("Design event schema for order events");
+                description = "Design event schema for order events";
+                domain = "event-driven-architecture";
                 break;
             case CICD_PIPELINE:
-                request.setDescription("Configure CI/CD pipeline for customer service");
+                description = "Configure CI/CD pipeline for customer service";
+                domain = "cicd-pipeline";
                 break;
             case CONFIGURATION_MANAGEMENT:
-                request.setDescription("Manage configuration for payment service");
+                description = "Manage configuration for payment service";
+                domain = "configuration-management";
                 break;
             case RESILIENCE_ENGINEERING:
-                request.setDescription("Implement circuit breaker for external API");
+                description = "Implement circuit breaker for external API";
+                domain = "resilience-engineering";
                 break;
             case PERFORMANCE:
-                request.setDescription("Optimize performance for payment service");
+                description = "Optimize performance for payment service";
+                domain = "performance";
                 break;
             default:
-                request.setDescription("Generic performance test query");
+                description = "Generic performance test query";
+                domain = agentType.name().toLowerCase();
         }
 
-        return request;
+        // Use elevated security context for configuration-management
+        SecurityContext contextToUse = agentType == AgentType.CONFIGURATION_MANAGEMENT ? SecurityContext.builder()
+                .jwtToken("test-token-12345")
+                .userId("test-user")
+                .roles(List.of("developer", "architect", "CONFIG_MANAGER"))
+                .permissions(List.of("AGENT_READ", "AGENT_WRITE","performance:test", "domain:access", "CONFIG_MANAGE", "SECRETS_MANAGE"))
+                .serviceId("test-service")
+                .serviceType("test")
+                .build()
+                : securityContext;
+
+        return AgentRequest.builder()
+                .type(agentType.name())
+                .description(description)
+                .context(AgentContext.builder()
+                        .domain(domain)
+                        .property("testType", "performance")
+                        .property("timestamp", System.nanoTime())
+                        .build())
+                .securityContext(contextToUse)
+                .build();
     }
 }

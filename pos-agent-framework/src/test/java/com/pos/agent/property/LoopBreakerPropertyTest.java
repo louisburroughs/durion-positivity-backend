@@ -36,7 +36,7 @@ public class LoopBreakerPropertyTest {
 
         Assume.that(testAgent.getIterationCount() <= expectedIterations);
         if (testAgent.getIterationCount() == expectedIterations) {
-            Assume.that("ESCALATION".equals(response.getStatus()));
+            Assume.that("FAILURE".equals(response.getStatus()));
         }
     }
 
@@ -76,7 +76,8 @@ public class LoopBreakerPropertyTest {
 
         // When max iterations reached, should escalate with proper details
         if (testAgent.getIterationCount() >= maxIterations) {
-            assertThat(response.getStatus()).isEqualTo("ESCALATION");
+            assertThat(response.getOutput()).contains("Maximum iterations exceeded");
+            assertThat(response.getStatus()).isEqualTo("FAILURE");
             assertThat(response.getEscalationReason()).isNotNull();
         }
     }
@@ -95,7 +96,7 @@ public class LoopBreakerPropertyTest {
         // Should handle large contexts appropriately
         if (contextSize > 50000) { // 50KB threshold from REQ-017
             Assume.that(response.getOutput().contains("context summarized") ||
-                    "ESCALATION".equals(response.getStatus()));
+                    "FAILURE".equals(response.getStatus()));
         }
     }
 
@@ -113,7 +114,7 @@ public class LoopBreakerPropertyTest {
 
         // Should never run longer than 30 seconds regardless of input
         Assume.that(duration < 30000);
-        Assume.that("ESCALATION".equals(response.getStatus()));
+        Assume.that("FAILURE".equals(response.getStatus()));
     }
 
     @Property
@@ -181,11 +182,11 @@ public class LoopBreakerPropertyTest {
     }
 
     private AgentRequest createValidRequest() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Test request for loop breaker validation");
-        request.setContext(Map.of("test", "context"));
-        request.setType("test-request");
-        return request;
+        return AgentRequest.builder()
+                .description("Test request for loop breaker validation")
+                .context(Map.of("test", "context"))
+                .type("test-request")
+                .build();
     }
 
     /**

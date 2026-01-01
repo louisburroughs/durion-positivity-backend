@@ -24,8 +24,15 @@ class ProcessingContinuationPropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("processing-continuation-jwt-token")
                         .userId("story-validator")
-                        .roles(List.of("developer"))
-                        .permissions(List.of("story:validate"))
+                        .roles(List.of("admin", "developer", "operator"))
+                        .permissions(List.of(
+                                        "story:validate",
+                                        "story:read",
+                                        "story:write",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:execute",
+                                        "processing:continue"))
                         .serviceId("pos-story-tests")
                         .serviceType("property")
                         .build();
@@ -40,6 +47,7 @@ class ProcessingContinuationPropertyTest {
         void processingContinuationOnValidStories(@ForAll("validStories") AgentContext context) {
                 // When: Processing a valid story request
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Processing continuation on valid stories property test")
                                 .type("story-continuation")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -57,6 +65,7 @@ class ProcessingContinuationPropertyTest {
         void allActivationConditionsMustBeMet(@ForAll("storiesWithVariedValidity") AgentContext context) {
                 // When: Processing the story request
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("All activation conditions must be met property test")
                                 .type("story-activation-check")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -82,6 +91,7 @@ class ProcessingContinuationPropertyTest {
         void validStoriesWithVariationsPass(@ForAll("validStoriesWithVariations") AgentContext context) {
                 // When: Processing a valid story with content variations
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Valid stories with different content variations property test")
                                 .type("story-variations")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -99,18 +109,21 @@ class ProcessingContinuationPropertyTest {
         void processingContinuationIsDeterministic(@ForAll("validStories") AgentContext context) {
                 // When: Processing the same story multiple times
                 AgentResponse result1 = agentManager.processRequest(AgentRequest.builder()
+                                .description("Processing continuation is deterministic property test - request 1")
                                 .type("story-determinism")
                                 .context(context)
                                 .securityContext(securityContext)
                                 .build());
 
                 AgentResponse result2 = agentManager.processRequest(AgentRequest.builder()
+                                .description("Processing continuation is deterministic property test - request 2")
                                 .type("story-determinism")
                                 .context(context)
                                 .securityContext(securityContext)
                                 .build());
 
                 AgentResponse result3 = agentManager.processRequest(AgentRequest.builder()
+                                .description("Processing continuation is deterministic property test - request 3")
                                 .type("story-determinism")
                                 .context(context)
                                 .securityContext(securityContext)

@@ -3,6 +3,11 @@ package com.pos.agent.framework.model;
 /**
  * Represents the different types of agents available in the framework.
  * Each agent type specializes in specific aspects of software development.
+ * 
+ * Source of Truth: This enum must be synchronized with agent configurations in
+ * application.yml
+ * All agents defined in application.yml must have a corresponding enum value
+ * here.
  */
 public enum AgentType {
     /**
@@ -31,6 +36,17 @@ public enum AgentType {
     TESTING,
 
     /**
+     * Observability agent - focuses on monitoring, logging, and observability
+     * patterns
+     */
+    OBSERVABILITY,
+
+    /**
+     * Deployment agent - focuses on deployment strategies and release management
+     */
+    DEPLOYMENT,
+
+    /**
      * Integration Gateway agent - focuses on API gateways and integration patterns
      */
     INTEGRATION_GATEWAY,
@@ -39,6 +55,12 @@ public enum AgentType {
      * Event Driven Architecture agent - focuses on event-driven design patterns
      */
     EVENT_DRIVEN_ARCHITECTURE,
+
+    /**
+     * Pair Programming agent - focuses on collaborative code review and pair
+     * programming practices
+     */
+    PAIR_PROGRAMMING,
 
     /**
      * Resilience Engineering agent - focuses on fault tolerance and reliability

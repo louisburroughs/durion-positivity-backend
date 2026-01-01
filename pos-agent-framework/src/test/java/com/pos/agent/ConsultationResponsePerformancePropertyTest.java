@@ -27,8 +27,15 @@ class ConsultationResponsePerformancePropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("performance-jwt-token")
                         .userId("performance-tester")
-                        .roles(List.of("developer", "architect"))
-                        .permissions(List.of("read", "execute"))
+                        .roles(List.of("admin", "developer", "architect", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "execute",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "consultation:request"))
                         .serviceId("pos-performance-tests")
                         .serviceType("property")
                         .build();
@@ -47,6 +54,7 @@ class ConsultationResponsePerformancePropertyTest {
                 // When: Consulting the best agent for any valid request
                 long startTime = System.nanoTime();
                 AgentRequest request = AgentRequest.builder()
+                                .description("Consultation response performance property test")
                                 .type("consultation")
                                 .context(context)
                                 .securityContext(security)
@@ -77,6 +85,7 @@ class ConsultationResponsePerformancePropertyTest {
 
                 // When: Requesting Spring Boot guidance
                 AgentRequest request = AgentRequest.builder()
+                                .description("Spring Boot pattern accuracy property test")
                                 .type("implementation")
                                 .context(context)
                                 .securityContext(security)
@@ -101,6 +110,7 @@ class ConsultationResponsePerformancePropertyTest {
                 // When: Requesting AWS guidance
                 AgentRequest request = AgentRequest.builder()
                                 .type("deployment")
+                                .description("AWS patterns accuracy property test")
                                 .context(context)
                                 .securityContext(security)
                                 .build();
@@ -128,6 +138,7 @@ class ConsultationResponsePerformancePropertyTest {
                 List<AgentResponse> responses = contexts.stream()
                                 .map(context -> AgentRequest.builder()
                                                 .type("consultation")
+                                                .description("Concurrent consultation performance property test")
                                                 .context(context)
                                                 .securityContext(security)
                                                 .build())

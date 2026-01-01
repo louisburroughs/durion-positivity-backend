@@ -204,12 +204,12 @@ class EventSchemaConsistencyPropertyTest {
                                                                 .ofMaxLength(10),
                                                 Arbitraries.of("value1", "value2", "value3")).ofMinSize(1).ofMaxSize(3))
                                 .as((description, type, context) -> {
-                                        AgentRequest request = new AgentRequest();
-                                        request.setDescription(description);
-                                        request.setType(type);
                                         Map<String, Object> objectContext = new HashMap<>(context);
-                                        request.setContext(objectContext);
-                                        return request;
+                                        return AgentRequest.builder()
+                                                        .description(description)
+                                                        .type(type)
+                                                        .context(objectContext)
+                                                        .build();
                                 });
         }
 
@@ -233,12 +233,12 @@ class EventSchemaConsistencyPropertyTest {
                                                                 .ofMaxLength(10),
                                                 Arbitraries.of("value1", "value2", "value3")).ofMinSize(1).ofMaxSize(3))
                                 .as((description, type, context) -> {
-                                        AgentRequest request = new AgentRequest();
-                                        request.setDescription(description);
-                                        request.setType(type);
                                         Map<String, Object> objectContext = new HashMap<>(context);
-                                        request.setContext(objectContext);
-                                        return request;
+                                        return AgentRequest.builder()
+                                                        .description(description)
+                                                        .type(type)
+                                                        .context(objectContext)
+                                                        .build();
                                 });
         }
 
@@ -262,12 +262,12 @@ class EventSchemaConsistencyPropertyTest {
                                                                 .ofMaxLength(10),
                                                 Arbitraries.of("value1", "value2", "value3")).ofMinSize(1).ofMaxSize(3))
                                 .as((description, type, context) -> {
-                                        AgentRequest request = new AgentRequest();
-                                        request.setDescription(description);
-                                        request.setType(type);
                                         Map<String, Object> objectContext = new HashMap<>(context);
-                                        request.setContext(objectContext);
-                                        return request;
+                                        return AgentRequest.builder()
+                                                        .description(description)
+                                                        .type(type)
+                                                        .context(objectContext)
+                                                        .build();
                                 });
         }
 }

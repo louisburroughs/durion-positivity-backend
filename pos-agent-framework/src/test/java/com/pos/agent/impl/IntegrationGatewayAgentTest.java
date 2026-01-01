@@ -72,56 +72,42 @@ public class IntegrationGatewayAgentTest {
     public void testProcessRequest_ValidationError_NullDescription() {
         // Arrange
         Map<String, Object> context = new HashMap<>();
-        AgentRequest request = AgentRequest.builder()
-                .description(null)
-                .type("integration")
-                .context(context)
-                .build();
 
-        // Act
-        AgentResponse response = agent.processRequest(request);
-
-        // Assert
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
-        assertFalse(response.isSuccess());
-        assertTrue(response.getOutput().contains("description is required"));
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .description(null)
+                    .type("integration")
+                    .context(context)
+                    .build();
+        });
     }
 
     @Test
     public void testProcessRequest_ValidationError_EmptyDescription() {
         // Arrange
         Map<String, Object> context = new HashMap<>();
-        AgentRequest request = AgentRequest.builder()
-                .description("   ")
-                .type("integration")
-                .context(context)
-                .build();
 
-        // Act
-        AgentResponse response = agent.processRequest(request);
-
-        // Assert
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
-        assertFalse(response.isSuccess());
-        assertTrue(response.getOutput().contains("description is required"));
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .description("   ")
+                    .type("integration")
+                    .context(context)
+                    .build();
+        });
     }
 
     @Test
     public void testProcessRequest_ValidationError_NullContext() {
-        // Arrange
-        AgentRequest request = AgentRequest.builder()
-                .description("Improve integration capabilities")
-                .type("integration")
-                .context(null)
-                .build();
-
-        // Act
-        AgentResponse response = agent.processRequest(request);
-
-        // Assert
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
-        assertFalse(response.isSuccess());
-        assertTrue(response.getOutput().contains("context is required"));
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .description("Improve integration capabilities")
+                    .type("integration")
+                    .context(null)
+                    .build();
+        });
     }
 
     @Test

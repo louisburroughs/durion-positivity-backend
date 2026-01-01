@@ -6,25 +6,25 @@ The POS Agent Framework provides intelligent development assistance across all a
 
 ## Available Agents
 
-The framework includes 15 specialized agents:
+The framework includes 14 specialized agents:
 
 ### Core Development Agents
-- **Architecture Agent** - System Architecture & Design
-- **Implementation Agent** - Spring Boot Development
-- **Deployment Agent** - DevOps & Infrastructure
-- **Testing Agent** - Quality Assurance & Testing
-- **Security Agent** - Security & Compliance
-- **Observability Agent** - Monitoring & Reliability
-- **Documentation Agent** - Technical Documentation
-- **Business Domain Agent** - POS Business Logic
-- **Integration Gateway Agent** - API Gateway & Integration
-- **Pair Programming Navigator Agent** - Code Quality & Collaboration
+- **Architecture Agent** (`architecture`) - System Architecture & Design
+- **Implementation Agent** (`implementation`) - Spring Boot Development
+- **Deployment Agent** (`deployment`) - DevOps & Infrastructure
+- **Testing Agent** (`testing`) - Quality Assurance & Testing
+- **Security Agent** (`security`) - Security & Compliance
+- **Observability Agent** (`observability`) - Monitoring & Reliability
+- **Documentation Agent** (`documentation`) - Technical Documentation
+- **Business Domain Agent** (`business-domain`) - POS Business Logic
+- **Integration Gateway Agent** (`integration-gateway`) - API Gateway & Integration
+- **Pair Programming Navigator Agent** (`pair-programming-navigator`) - Code Quality & Collaboration
 
 ### Specialized Agents
-- **Event-Driven Architecture Agent** - Event-Driven Systems
-- **CI/CD Pipeline Agent** - Continuous Integration/Deployment
-- **Configuration Management Agent** - Configuration & Secrets
-- **Resilience Engineering Agent** - System Reliability & Resilience
+- **Event-Driven Architecture Agent** (`event-driven-architecture`) - Event-Driven Systems
+- **CI/CD Pipeline Agent** (`cicd-pipeline`) - Continuous Integration/Deployment
+- **Configuration Management Agent** (`configuration-management`) - Configuration & Secrets
+- **Resilience Engineering Agent** (`resilience-engineering`) - System Reliability & Resilience
 
 ## Configuration
 

@@ -22,9 +22,18 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
 
         private final AgentManager agentManager = new AgentManager();
         private final SecurityContext securityContext = SecurityContext.builder()
-                        .jwtToken("availability-coverage-jwt-token").userId("test-user")
-                        .roles(List.of("developer"))
-                        .permissions(List.of("domain:access"))
+                        .jwtToken("availability-coverage-jwt-token")
+                        .userId("test-user")
+                        .roles(List.of("admin", "developer", "operator"))
+                        .permissions(List.of(
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "domain:access",
+                                        "domain:query",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:execute",
+                                        "agent:discover"))
                         .serviceId("test-service")
                         .serviceType("domain-test")
                         .build();
@@ -43,6 +52,7 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
 
                 // When: Processing request for any major domain
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Agent availability and domain coverage property test")
                                 .type("domain-test")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -57,6 +67,7 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
         void allMajorDomainsHaveCoverage(@ForAll("majorDomains") AgentContext context) {
                 // When: Processing request for major domain
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("All major domains have coverage property test")
                                 .type("domain-coverage")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -72,6 +83,7 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
                 // When: Processing request for any major domain
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Agent availability performance property test")
                                 .type("availability-check")
                                 .context(context)
                                 .securityContext(securityContext)

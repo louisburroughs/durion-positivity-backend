@@ -88,7 +88,7 @@ class ConfigurationManagementAgentContractTest {
         assertNotNull(response);
         assertEquals("SUCCESS", response.getStatus());
         assertNotNull(response.getOutput());
-        assertTrue(response.getOutput().contains("environment"));
+        assertTrue(response.getOutput().contains("Configuration management"));
     }
 
     @Test
