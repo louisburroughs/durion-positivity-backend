@@ -23,7 +23,7 @@ class EventDrivenArchitectureAgentTest {
             .jwtToken("valid-jwt-token-for-tests")
             .userId("event-driven-agent-tester")
             .roles(List.of("INTEGRATION_ARCHITECT", "EVENT_SPECIALIST"))
-            .permissions(List.of("event.design", "messaging.configure"))
+            .permissions(List.of("AGENT_READ", "AGENT_WRITE","event.design", "messaging.configure"))
             .serviceId("pos-event-driven-agent-tests")
             .serviceType("test")
             .build();
@@ -40,6 +40,7 @@ class EventDrivenArchitectureAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("event-driven")
+                .description("Event schema design guidance for pos-events service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -62,6 +63,7 @@ class EventDrivenArchitectureAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("event-driven")
+                .description("Idempotent event handler guidance for pos-order service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -84,6 +86,7 @@ class EventDrivenArchitectureAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("event-driven")
+                .description("Kafka configuration guidance for pos-catalog service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -106,6 +109,7 @@ class EventDrivenArchitectureAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("event-driven")
+                .description("SNS and SQS configuration guidance for pos-inventory service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -128,6 +132,7 @@ class EventDrivenArchitectureAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("event-driven")
+                .description("RabbitMQ configuration guidance for pos-customer service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -150,6 +155,7 @@ class EventDrivenArchitectureAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("event-driven")
+                .description("Event sourcing guidance for pos-order service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -172,6 +178,7 @@ class EventDrivenArchitectureAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("event-driven")
+                .description("Event failure handling guidance for pos-price service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();

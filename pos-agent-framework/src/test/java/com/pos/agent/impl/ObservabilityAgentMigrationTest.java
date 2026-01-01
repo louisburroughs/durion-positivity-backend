@@ -3,6 +3,8 @@ package com.pos.agent.impl;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentStatus;
+import com.pos.agent.framework.model.AgentType;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +36,7 @@ class ObservabilityAgentMigrationTest {
 
         assertNotNull(response);
         assertTrue(response.isSuccess());
-        assertEquals(AgentStatus.SUCCESS, response.getStatus());
+        assertEquals("SUCCESS", response.getStatus());
         assertEquals("Observability guidance: How to implement monitoring?", response.getOutput());
         assertEquals(0.8, response.getConfidence());
         assertNotNull(response.getRecommendations());
@@ -48,51 +50,42 @@ class ObservabilityAgentMigrationTest {
 
         assertNotNull(response);
         assertFalse(response.isSuccess());
-        assertEquals(AgentStatus.FAILURE, response.getStatus());
+        assertEquals("FAILURE", response.getStatus());
         assertEquals("Invalid request: request is null", response.getOutput());
         assertEquals(0.0, response.getConfidence());
     }
 
     @Test
     void testNullDescriptionValidation() {
-        AgentRequest request = AgentRequest.builder()
-                .type("observability")
-                .description(null)
-                .context(Map.of("domain", "observability"))
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: description is required", response.getOutput());
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .type("observability")
+                    .description(null)
+                    .context(Map.of("domain", "observability"))
+                    .build();
+        });
     }
 
     @Test
     void testEmptyDescriptionValidation() {
-        AgentRequest request = AgentRequest.builder()
-                .type("observability")
-                .description("   ")
-                .context(Map.of("domain", "observability"))
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: description is required", response.getOutput());
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .type("observability")
+                    .description("   ")
+                    .context(Map.of("domain", "observability"))
+                    .build();
+        });
     }
 
     @Test
     void testNullContextValidation() {
-        AgentRequest request = AgentRequest.builder()
-                .type("observability")
-                .description("How to monitor?")
-                .context(null)
-                .build();
-
-        AgentResponse response = agent.processRequest(request);
-
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: context is required", response.getOutput());
+        assertThrows(IllegalStateException.class, () -> {
+            AgentRequest.builder()
+                    .type("observability")
+                    .description("How to monitor?")
+                    .context(null)
+                    .build();
+        });
     }
 
     @Test
@@ -183,7 +176,12 @@ class ObservabilityAgentMigrationTest {
 
         AgentResponse obsResponse = agent.processRequest(request);
         TestingAgent testingAgent = new TestingAgent();
-        AgentResponse testResponse = testingAgent.processRequest(request);
+        AgentResponse testResponse = testingAgent.processRequest(
+                AgentRequest.builder()
+                        .type("testing")
+                        .description("Common request")
+                        .context(Map.of("domain", "test"))
+                        .build());
 
         // Both should succeed but have different output
         assertTrue(obsResponse.isSuccess());

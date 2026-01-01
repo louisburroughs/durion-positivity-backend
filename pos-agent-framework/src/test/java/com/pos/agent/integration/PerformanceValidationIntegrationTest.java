@@ -43,6 +43,8 @@ class PerformanceValidationIntegrationTest {
         securityContext = SecurityContext.builder()
                 .jwtToken("performance-validation-jwt-token")
                 .userId("test-user")
+                .roles(List.of("USER"))
+                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
                 .serviceId("test-service")
                 .serviceType("test")
                 .build();
@@ -67,10 +69,25 @@ class PerformanceValidationIntegrationTest {
                 try {
                     long startTime = System.currentTimeMillis();
 
+                    String agentType = getAgentTypeForIndex(requestIndex);
+                    // Use elevated security context for configuration-management
+                    SecurityContext contextToUse = agentType.equals("configuration-management")
+                            ? SecurityContext.builder()
+                                    .jwtToken("performance-validation-jwt-token")
+                                    .userId("test-user")
+                                    .roles(List.of("USER", "CONFIG_MANAGER"))
+                                    .permissions(
+                                            List.of("AGENT_READ", "AGENT_WRITE", "CONFIG_MANAGE", "SECRETS_MANAGE"))
+                                    .serviceId("test-service")
+                                    .serviceType("test")
+                                    .build()
+                            : securityContext;
+
                     AgentRequest request = AgentRequest.builder()
-                            .type(getAgentTypeForIndex(requestIndex))
+                            .type(agentType)
+                            .description("Performance validation test request")
                             .context(createLightweightContext(requestIndex))
-                            .securityContext(securityContext)
+                            .securityContext(contextToUse)
                             .build();
 
                     AgentResponse response = agentManager.processRequest(request);
@@ -136,9 +153,25 @@ class PerformanceValidationIntegrationTest {
                     long userStartTime = System.currentTimeMillis();
 
                     for (int request = 0; request < requestsPerUser; request++) {
+                        String agentType = getAgentTypeForIndex(userId + request);
+                        // Use elevated security context for configuration-management
+                        SecurityContext contextToUse = agentType.equals("configuration-management")
+                                ? SecurityContext.builder()
+                                        .jwtToken("performance-validation-jwt-token")
+                                        .userId("test-user")
+                                        .roles(List.of("USER", "CONFIG_MANAGER"))
+                                        .permissions(
+                                                List.of("AGENT_READ", "AGENT_WRITE", "CONFIG_MANAGE", "SECRETS_MANAGE"))
+                                        .serviceId("test-service")
+                                        .serviceType("test")
+                                        .build()
+                                : securityContext;
+
                         AgentRequest agentRequest = AgentRequest.builder()
-                                .type(getAgentTypeForIndex(userId + request))
+                                .type(agentType)
+                                .description("Concurrent user performance test request")
                                 .context(createUserContext(userId, request))
+                                .securityContext(contextToUse)
                                 .build();
 
                         AgentResponse response = agentManager.processRequest(agentRequest);
@@ -193,9 +226,25 @@ class PerformanceValidationIntegrationTest {
             final int requestIndex = i;
             executorService.submit(() -> {
                 try {
+                    String agentType = getAgentTypeForIndex(requestIndex);
+                    // Use elevated security context for configuration-management
+                    SecurityContext contextToUse = agentType.equals("configuration-management")
+                            ? SecurityContext.builder()
+                                    .jwtToken("performance-validation-jwt-token")
+                                    .userId("test-user")
+                                    .roles(List.of("USER", "CONFIG_MANAGER"))
+                                    .permissions(
+                                            List.of("AGENT_READ", "AGENT_WRITE", "CONFIG_MANAGE", "SECRETS_MANAGE"))
+                                    .serviceId("test-service")
+                                    .serviceType("test")
+                                    .build()
+                            : securityContext;
+
                     AgentRequest request = AgentRequest.builder()
-                            .type(getAgentTypeForIndex(requestIndex))
+                            .type(agentType)
+                            .description("Memory usage performance test request")
                             .context(createComplexContext(requestIndex))
+                            .securityContext(contextToUse)
                             .build();
 
                     AgentResponse response = agentManager.processRequest(request);
@@ -250,10 +299,12 @@ class PerformanceValidationIntegrationTest {
 
                         AgentRequest request = AgentRequest.builder()
                                 .type("implementation")
+                                .description("Agent test for system stability")
                                 .context(AgentContext.builder()
                                         .property("serviceType", "microservice")
                                         .property("framework", "spring-boot")
                                         .build())
+                                .securityContext(securityContext)
                                 .build();
 
                         AgentResponse response = agentManager.processRequest(request);

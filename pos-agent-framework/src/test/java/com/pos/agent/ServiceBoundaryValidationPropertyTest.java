@@ -22,8 +22,14 @@ class ServiceBoundaryValidationPropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("service-boundary-jwt-token")
                         .userId("property-tester")
-                        .roles(List.of("tester"))
-                        .permissions(List.of("read"))
+                        .roles(List.of("admin", "developer", "architect", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "implementation:enforce"))
                         .serviceId("pos-impl-tests")
                         .serviceType("property")
                         .build();
@@ -36,6 +42,7 @@ class ServiceBoundaryValidationPropertyTest {
         @Property(tries = 100)
         void serviceBoundaryValidation(@ForAll("businessLogicImplementationContexts") AgentContext context) {
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Service boundary validation property test")
                                 .type("implementation")
                                 .context(context)
                                 .securityContext(security)
@@ -58,6 +65,7 @@ class ServiceBoundaryValidationPropertyTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Cross-domain boundary enforcement property test")
                                 .type("implementation")
                                 .context(ctx)
                                 .securityContext(security)
@@ -79,6 +87,7 @@ class ServiceBoundaryValidationPropertyTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Service layer design validation property test")
                                 .type("implementation")
                                 .context(ctx)
                                 .securityContext(security)
@@ -100,6 +109,7 @@ class ServiceBoundaryValidationPropertyTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Domain-driven design enforcement property test")
                                 .type("implementation")
                                 .context(ctx)
                                 .securityContext(security)

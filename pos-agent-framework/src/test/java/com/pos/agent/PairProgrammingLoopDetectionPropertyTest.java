@@ -28,8 +28,14 @@ public class PairProgrammingLoopDetectionPropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("pair-programming-jwt-token")
                         .userId("test-user")
-                        .roles(List.of("developer"))
-                        .permissions(List.of("collaboration:use"))
+                        .roles(List.of("admin", "developer", "operator"))
+                        .permissions(List.of(
+                                        "collaboration:use",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:execute"))
                         .serviceId("test-service")
                         .serviceType("collaboration")
                         .build();
@@ -48,6 +54,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
 
                 // When: Processing request with stalled implementation context
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Loop detection and stop-phrase interruption property test")
                                 .type("collaboration")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -68,6 +75,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
 
                 // When: Processing request with architectural drift indicators
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Architectural drift detection and constraint enforcement property test")
                                 .type("collaboration")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -88,6 +96,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
 
                 // When: Processing request with scope creep indicators
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Scope creep detection and simplification guidance property test")
                                 .type("collaboration")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -108,6 +117,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
 
                 // When: Processing valid collaboration request
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Collaboration guidance for valid requests property test")
                                 .type("collaboration")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -132,6 +142,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
 
                 // When: Processing the request
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Loop detection processing unit test")
                                 .type("collaboration")
                                 .context(context)
                                 .securityContext(securityContext)

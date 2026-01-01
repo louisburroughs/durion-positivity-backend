@@ -17,35 +17,36 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class DisasterRecoveryTest {
 
-    private final AgentManager agentManager = new AgentManager();
-    private final SecurityContext security = SecurityContext.builder()
-            .jwtToken("valid.jwt.token")
-            .userId("dr-user")
-            .roles(List.of("ops"))
-            .permissions(List.of("read"))
-            .serviceId("pos-dr-suite")
-            .serviceType("manual")
-            .build();
+        private final AgentManager agentManager = new AgentManager();
+        private final SecurityContext security = SecurityContext.builder()
+                        .jwtToken("valid.jwt.token")
+                        .userId("dr-user")
+                        .roles(List.of("ops"))
+                        .permissions(List.of("read"))
+                        .serviceId("pos-dr-suite")
+                        .serviceType("manual")
+                        .build();
 
-    @Test
-    @DisplayName("Processes request even under simulated degraded conditions")
-    void processesUnderDegradation() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
-                .property("mode", "degraded")
-                .build();
+        @Test
+        @DisplayName("Processes request even under simulated degraded conditions")
+        void processesUnderDegradation() {
+                AgentContext context = AgentContext.builder()
+                                .domain("resilience")
+                                .property("mode", "degraded")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("disaster-recovery")
-                .context(context)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("disaster-recovery")
+                                .description("Disaster recovery test under degraded conditions")
+                                .context(context)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertNotNull(response);
-        assertNotNull(response.getStatus());
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertNotNull(response.getStatus());
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 }

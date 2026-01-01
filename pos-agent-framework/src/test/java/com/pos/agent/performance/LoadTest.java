@@ -34,7 +34,7 @@ public class LoadTest {
                 .jwtToken("test-token-12345")
                 .userId("test-user")
                 .roles(List.of("developer", "architect"))
-                .permissions(List.of("load:test", "domain:access"))
+                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "load:test", "domain:access"))
                 .serviceId("test-service")
                 .serviceType("test")
                 .build();
@@ -302,6 +302,7 @@ public class LoadTest {
     private AgentRequest createUserRequest(int userId, int requestId, String domain) {
         return AgentRequest.builder()
                 .type("load-test-user")
+                .description("Load test request for user " + userId + " in domain " + domain)
                 .context(AgentContext.builder()
                         .domain(domain)
                         .property("userId", userId)
@@ -314,6 +315,7 @@ public class LoadTest {
     private AgentRequest createThroughputRequest(int requestId, String domain) {
         return AgentRequest.builder()
                 .type("throughput-test")
+                .description("High throughput load test request #" + requestId + " for domain " + domain)
                 .context(AgentContext.builder()
                         .domain(domain)
                         .property("requestId", "throughput-" + requestId)
@@ -325,6 +327,7 @@ public class LoadTest {
     private AgentRequest createBurstRequest(int requestId, String domain) {
         return AgentRequest.builder()
                 .type("burst-test")
+                .description("Burst load test request #" + requestId + " for domain " + domain)
                 .context(AgentContext.builder()
                         .domain(domain)
                         .property("requestId", "burst-" + requestId)
@@ -336,6 +339,7 @@ public class LoadTest {
     private AgentRequest createSustainedRequest(int requestId, String domain) {
         return AgentRequest.builder()
                 .type("sustained-test")
+                .description("Sustained load test request #" + requestId + " for domain " + domain)
                 .context(AgentContext.builder()
                         .domain(domain)
                         .property("requestId", "sustained-" + requestId)

@@ -37,13 +37,15 @@ class ConfigurationComplianceValidationTest {
 
     @Test
     void testConfigurationCompliance() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Configuration management for production environment");
-        request.setType("configuration-management");
-        request.setSecurityContext(configManagerContext);
         Map<String, Object> context = new HashMap<>();
         context.put("environment", "production");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Configuration management for production environment")
+                .type("configuration-management")
+                .context(context)
+                .build();
+        request.setSecurityContext(configManagerContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -53,13 +55,15 @@ class ConfigurationComplianceValidationTest {
 
     @Test
     void testSecretsManagement() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("AWS Secrets Manager integration and management");
-        request.setType("configuration-management");
-        request.setSecurityContext(configManagerContext);
         Map<String, Object> context = new HashMap<>();
         context.put("secrets", "aws-secrets-manager");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("AWS Secrets Manager integration and management")
+                .type("configuration-management")
+                .context(context)
+                .build();
+        request.setSecurityContext(configManagerContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -68,14 +72,16 @@ class ConfigurationComplianceValidationTest {
 
     @Test
     void testEnvironmentIsolation() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Environment isolation verification");
-        request.setType("configuration-management");
-        request.setSecurityContext(configManagerContext);
         Map<String, Object> context = new HashMap<>();
         context.put("isolation", "enabled");
         context.put("environment", "production");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Environment isolation verification")
+                .type("configuration-management")
+                .context(context)
+                .build();
+        request.setSecurityContext(configManagerContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -85,13 +91,15 @@ class ConfigurationComplianceValidationTest {
 
     @Test
     void testEncryptionCompliance() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Encryption compliance verification");
-        request.setType("configuration-management");
-        request.setSecurityContext(configManagerContext);
         Map<String, Object> context = new HashMap<>();
         context.put("encryption", "aes-256");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Encryption compliance verification")
+                .type("configuration-management")
+                .context(context)
+                .build();
+        request.setSecurityContext(configManagerContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);

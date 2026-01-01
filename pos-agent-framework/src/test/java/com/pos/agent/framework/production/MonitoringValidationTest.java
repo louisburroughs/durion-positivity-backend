@@ -17,36 +17,37 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class MonitoringValidationTest {
 
-    private final AgentManager agentManager = new AgentManager();
-    private final SecurityContext security = SecurityContext.builder()
-            .jwtToken("valid.jwt.token")
-            .userId("monitor-user")
-            .roles(List.of("monitor"))
-            .permissions(List.of("read"))
-            .serviceId("pos-monitoring-suite")
-            .serviceType("manual")
-            .build();
+        private final AgentManager agentManager = new AgentManager();
+        private final SecurityContext security = SecurityContext.builder()
+                        .jwtToken("valid.jwt.token")
+                        .userId("monitor-user")
+                        .roles(List.of("monitor"))
+                        .permissions(List.of("AGENT_READ", "read"))
+                        .serviceId("pos-monitoring-suite")
+                        .serviceType("manual")
+                        .build();
 
-    @Test
-    @DisplayName("Monitoring readiness request processes successfully")
-    void processesMonitoringReadinessRequest() {
-        AgentContext context = AgentContext.builder()
-                .domain("observability")
-                .property("check", "metrics")
-                .build();
+        @Test
+        @DisplayName("Monitoring readiness request processes successfully")
+        void processesMonitoringReadinessRequest() {
+                AgentContext context = AgentContext.builder()
+                                .domain("observability")
+                                .property("check", "metrics")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("monitoring-validation")
-                .context(context)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("monitoring-validation")
+                                .description("Monitoring validation test for metrics check")
+                                .context(context)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 }

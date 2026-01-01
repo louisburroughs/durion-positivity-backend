@@ -28,8 +28,14 @@ class DomainSpecificGuidanceQualityPropertyTest {
                 securityContext = SecurityContext.builder()
                                 .jwtToken("domain-guidance-jwt-token")
                                 .userId("property-test-user")
-                                .roles(List.of("tester"))
-                                .permissions(List.of("read"))
+                                .roles(List.of("admin", "developer", "architect", "tester", "operator"))
+                                .permissions(List.of(
+                                                "read",
+                                                "AGENT_READ",
+                                                "AGENT_WRITE",
+                                                "agent:read",
+                                                "agent:write",
+                                                "agent:discover"))
                                 .serviceId("property-test-service")
                                 .serviceType("property-based")
                                 .build();
@@ -183,6 +189,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                 Arbitraries.strings().alpha().ofMinLength(10).ofMaxLength(100))
                                 .as((domain, query) -> AgentRequest.builder()
                                                 .type("domain-test")
+                                                .description("Domain consultation property test")
                                                 .context(AgentContext.builder()
                                                                 .domain(domain)
                                                                 .property("query", query)
@@ -202,6 +209,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                 "Microservice architecture with Spring Boot")
                                 .map(query -> AgentRequest.builder()
                                                 .type("spring-boot-test")
+                                                .description("Spring Boot guidance property test")
                                                 .context(AgentContext.builder()
                                                                 .domain("implementation")
                                                                 .property("query", query)
@@ -222,6 +230,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                 "AWS monitoring and observability setup")
                                 .map(query -> AgentRequest.builder()
                                                 .type("aws-deployment-test")
+                                                .description("AWS deployment guidance property test")
                                                 .context(AgentContext.builder()
                                                                 .domain("deployment")
                                                                 .property("query", query)
@@ -244,6 +253,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                                 "Cache strategy for high performance"))
                                 .as((domain, query) -> AgentRequest.builder()
                                                 .type("datastore-test")
+                                                .description("Data store guidance property test")
                                                 .context(AgentContext.builder()
                                                                 .domain(domain)
                                                                 .property("query", query)

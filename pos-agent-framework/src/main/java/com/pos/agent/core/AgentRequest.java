@@ -20,7 +20,7 @@ public class AgentRequest {
     private boolean requireTLS13;
 
     // Constructors
-    public AgentRequest() {
+    private AgentRequest() {
         // Default constructor for backward compatibility
     }
 

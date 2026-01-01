@@ -34,7 +34,7 @@ public class MemoryUsageTest {
                 .jwtToken("test-token-12345")
                 .userId("test-user")
                 .roles(List.of("developer", "architect"))
-                .permissions(List.of("memory:test", "domain:access"))
+                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "memory:test", "domain:access"))
                 .serviceId("test-service")
                 .serviceType("test")
                 .build();
@@ -264,6 +264,7 @@ public class MemoryUsageTest {
     private AgentRequest createTestRequest(String domain, int index) {
         return AgentRequest.builder()
                 .type("memory-test")
+                .description("Memory usage test for " + domain + " domain, iteration " + index)
                 .context(AgentContext.builder()
                         .domain(domain)
                         .property("testIndex", index)

@@ -23,7 +23,7 @@ class ConfigurationManagementAgentTest {
             .jwtToken("valid-jwt-token-for-tests")
             .userId("config-agent-tester")
             .roles(List.of("CONFIG_MANAGER", "SECURITY_SPECIALIST"))
-            .permissions(List.of("config.manage", "secrets.access"))
+            .permissions(List.of("AGENT_READ", "AGENT_WRITE","config.manage", "secrets.access"))
             .serviceId("pos-config-agent-tests")
             .serviceType("test")
             .build();
@@ -40,6 +40,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("Spring Cloud Config guidance for pos-api-gateway service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -62,6 +63,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("Consul configuration guidance for pos-service-discovery service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -84,6 +86,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("Etcd configuration guidance for pos-catalog service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -106,6 +109,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("Feature flags guidance for pos-order service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -128,6 +132,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("AWS Secrets Manager guidance for pos-security-service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -150,6 +155,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("HashiCorp Vault guidance for pos-customer service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -172,6 +178,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("Kubernetes Secrets guidance for pos-inventory service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -194,6 +201,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("Environment specific configuration guidance for pos-price service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -216,6 +224,7 @@ class ConfigurationManagementAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("configuration")
+                .description("Configuration validation guidance for pos-accounting service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();

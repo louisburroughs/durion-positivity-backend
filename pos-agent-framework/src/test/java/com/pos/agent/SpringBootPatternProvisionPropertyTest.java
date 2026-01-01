@@ -22,8 +22,14 @@ class SpringBootPatternProvisionPropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("springboot-pattern-jwt-token")
                         .userId("property-tester")
-                        .roles(List.of("tester"))
-                        .permissions(List.of("read"))
+                        .roles(List.of("admin", "developer", "architect", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "implementation:pattern"))
                         .serviceId("pos-impl-tests")
                         .serviceType("property")
                         .build();
@@ -36,6 +42,7 @@ class SpringBootPatternProvisionPropertyTest {
         @Property(tries = 100)
         void springBootPatternProvision(@ForAll("microserviceImplementationContexts") AgentContext context) {
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Spring Boot pattern provision property test")
                                 .type("implementation")
                                 .context(context)
                                 .securityContext(security)
@@ -58,6 +65,7 @@ class SpringBootPatternProvisionPropertyTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Spring Boot microservice patterns property test")
                                 .type("implementation")
                                 .context(ctx)
                                 .securityContext(security)
@@ -79,6 +87,7 @@ class SpringBootPatternProvisionPropertyTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Data access pattern provision property test")
                                 .type("implementation")
                                 .context(ctx)
                                 .securityContext(security)

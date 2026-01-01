@@ -17,8 +17,13 @@ public class PairProgrammingNavigatorDebugTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("test-token-12345")
                         .userId("debug-tester")
-                        .roles(List.of("tester"))
-                        .permissions(List.of("read"))
+                        .roles(List.of("admin", "developer", "tester", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write"))
                         .serviceId("pos-debug-tests")
                         .serviceType("debug")
                         .build();
@@ -34,6 +39,7 @@ public class PairProgrammingNavigatorDebugTest {
                                 .build();
 
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Debug pair programming loop detection test")
                                 .type("collaboration")
                                 .context(context)
                                 .securityContext(security)

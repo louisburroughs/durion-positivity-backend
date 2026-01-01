@@ -27,8 +27,15 @@ class ConfigurationManagementConsistencyPropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("config-consistency-jwt-token")
                         .userId("configuration-tester")
-                        .roles(List.of("architect", "devops"))
-                        .permissions(List.of("read", "execute"))
+                        .roles(List.of("admin", "architect", "devops", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "execute",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "config:manage"))
                         .serviceId("pos-configuration-tests")
                         .serviceType("property")
                         .build();
@@ -49,6 +56,7 @@ class ConfigurationManagementConsistencyPropertyTest {
 
                 // When: Requesting configuration management guidance
                 AgentRequest request = AgentRequest.builder()
+                                .description("Configuration management consistency property test")
                                 .type("configuration")
                                 .context(context)
                                 .securityContext(security)

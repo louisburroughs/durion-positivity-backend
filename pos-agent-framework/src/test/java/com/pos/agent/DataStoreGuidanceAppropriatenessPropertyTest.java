@@ -28,8 +28,14 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("datastore-guidance-jwt-token")
                         .userId("test-user")
-                        .roles(List.of("developer", "architect"))
-                        .permissions(List.of("datastore:access", "domain:access"))
+                        .roles(List.of("admin", "developer", "architect", "operator"))
+                        .permissions(List.of(
+                                        "datastore:access",
+                                        "domain:access",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write"))
                         .serviceId("test-service")
                         .serviceType("test")
                         .build();
@@ -43,6 +49,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
         void dataStoreGuidanceAppropriateness(@ForAll("microserviceGuidanceRequests") AgentContext context) {
                 // When: Requesting microservice guidance
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Data store guidance appropriateness property test")
                                 .type("datastore-guidance")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -68,6 +75,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
         void dynamoDbGuidanceScenarios(@ForAll("dynamoDbRequests") AgentContext context) {
                 // When: Requesting DynamoDB-specific guidance
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("DynamoDB guidance scenarios property test")
                                 .type("dynamodb-guidance")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -93,6 +101,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
         void elastiCacheGuidanceScenarios(@ForAll("elastiCacheRequests") AgentContext context) {
                 // When: Requesting ElastiCache-specific guidance
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("ElastiCache guidance scenarios property test")
                                 .type("cache-guidance")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -116,6 +125,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                 // When: Requesting guidance for specific service types
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
                                 .type("service-datastore-selection")
+                                .description("Service-specific data store selection property test")
                                 .context(context)
                                 .securityContext(securityContext)
                                 .build());

@@ -49,7 +49,7 @@ class AuditTrailValidationTest {
                 .jwtToken("guest.jwt.token")
                 .userId("guest-user")
                 .roles(List.of("GUEST"))
-                .permissions(List.of("AGENT_READ"))
+                .permissions(List.of())
                 .build();
     }
 
@@ -63,6 +63,7 @@ class AuditTrailValidationTest {
         for (String agentType : agentTypes) {
             AgentRequest request = AgentRequest.builder()
                     .type(agentType)
+                    .description("Basic audit trail generation for " + agentType + " agent")
                     .securityContext(developerContext)
                     .context(AgentContext.builder()
                             .property("service", "pos-test-" + agentType)
@@ -81,6 +82,7 @@ class AuditTrailValidationTest {
     void testDetailedAuditTrailContent() {
         AgentRequest detailedRequest = AgentRequest.builder()
                 .type("security")
+                .description("Detailed audit trail content verification")
                 .securityContext(adminContext)
                 .context(AgentContext.builder()
                         .property("service", "pos-payment")
@@ -101,15 +103,20 @@ class AuditTrailValidationTest {
         // Create request that will fail due to insufficient permissions
         AgentRequest failedRequest = AgentRequest.builder()
                 .type("security")
+                .description("Failed request audit trail verification")
                 .securityContext(guestContext) // Guest doesn't have security agent access
                 .context(AgentContext.builder()
                         .property("service", "pos-security")
                         .build())
                 .build();
 
-        assertThrows(SecurityException.class, () -> {
-            agentManager.processRequest(failedRequest);
-        });
+        AgentResponse response = agentManager.processRequest(failedRequest);
+
+        // Verify that the request failed due to authorization
+        assertNotNull(response);
+        assertFalse(response.isSuccess());
+        assertNotNull(response.getErrorMessage());
+        assertTrue(response.getErrorMessage().contains("Authorization failed"));
     }
 
     @Test
@@ -123,6 +130,7 @@ class AuditTrailValidationTest {
             futures[i] = CompletableFuture.runAsync(() -> {
                 AgentRequest request = AgentRequest.builder()
                         .type("architecture")
+                        .description("Concurrent audit trail generation request " + requestId)
                         .securityContext(developerContext)
                         .context(AgentContext.builder()
                                 .property("service", "pos-concurrent-" + requestId)
@@ -149,6 +157,7 @@ class AuditTrailValidationTest {
         // Verify basic functionality with retention context
         AgentRequest request = AgentRequest.builder()
                 .type("security")
+                .description("Audit trail retention verification")
                 .securityContext(adminContext)
                 .context(AgentContext.builder()
                         .property("auditContext", "retention-test")
@@ -169,6 +178,7 @@ class AuditTrailValidationTest {
         for (String agentType : agentTypes) {
             AgentRequest request = AgentRequest.builder()
                     .type(agentType)
+                    .description("Audit trail search test for " + agentType + " agent")
                     .securityContext(developerContext)
                     .context(AgentContext.builder()
                             .property("service", "pos-search-test")
@@ -184,6 +194,7 @@ class AuditTrailValidationTest {
         for (String agentType : agentTypes) {
             AgentRequest verifyRequest = AgentRequest.builder()
                     .type(agentType)
+                    .description("Verify audit trail entry for " + agentType + " agent")
                     .securityContext(developerContext)
                     .context(AgentContext.builder()
                             .property("verify", "true")
@@ -202,6 +213,7 @@ class AuditTrailValidationTest {
         // Test that export operations work with security context
         AgentRequest request = AgentRequest.builder()
                 .type("documentation")
+                .description("Audit trail export functionality test")
                 .securityContext(adminContext)
                 .context(AgentContext.builder()
                         .property("service", "pos-export-test")
@@ -220,6 +232,7 @@ class AuditTrailValidationTest {
         // Test that audit operations maintain integrity with proper security context
         AgentRequest request = AgentRequest.builder()
                 .type("observability")
+                .description("Audit trail integrity verification")
                 .securityContext(adminContext)
                 .context(AgentContext.builder()
                         .property("service", "pos-integrity-test")
@@ -245,6 +258,7 @@ class AuditTrailValidationTest {
         for (Map<String, Object> testRequest : testRequests) {
             AgentRequest request = AgentRequest.builder()
                     .type((String) testRequest.get("type"))
+                    .description("Compliance reporting test for " + testRequest.get("type") + " agent")
                     .securityContext((SecurityContext) testRequest.get("context"))
                     .context(AgentContext.builder()
                             .property("service", "pos-compliance-test")

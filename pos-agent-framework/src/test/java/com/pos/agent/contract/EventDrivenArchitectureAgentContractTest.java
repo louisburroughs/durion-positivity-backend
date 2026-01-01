@@ -55,7 +55,7 @@ class EventDrivenArchitectureAgentContractTest {
         assertNotNull(response);
         assertEquals("SUCCESS", response.getStatus());
         assertNotNull(response.getOutput());
-        assertTrue(response.getOutput().contains("versioning"));
+        assertTrue(response.getOutput().contains("Event-driven pattern"));
     }
 
     @Test

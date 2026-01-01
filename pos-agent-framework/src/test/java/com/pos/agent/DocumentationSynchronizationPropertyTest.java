@@ -29,8 +29,14 @@ class DocumentationSynchronizationPropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("documentation-test-token")
                         .userId("doc-tester")
-                        .roles(List.of("developer", "architect"))
-                        .permissions(List.of("documentation:read", "documentation:write"))
+                        .roles(List.of("admin", "developer", "architect", "operator"))
+                        .permissions(List.of(
+                                        "documentation:read",
+                                        "documentation:write",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write"))
                         .serviceId("pos-doc-tests")
                         .serviceType("property")
                         .build();
@@ -63,6 +69,7 @@ class DocumentationSynchronizationPropertyTest {
 
                 // Given: A documentation request
                 AgentRequest request = AgentRequest.builder()
+                                .description("Documentation synchronization property test")
                                 .type("documentation")
                                 .context(AgentContext.builder()
                                                 .property("query", query)
@@ -107,6 +114,7 @@ class DocumentationSynchronizationPropertyTest {
                 // Given: An API documentation request
                 AgentRequest request = AgentRequest.builder()
                                 .type("documentation")
+                                .description("API documentation synchronization property test")
                                 .context(AgentContext.builder()
                                                 .property("query", query)
                                                 .property("focus", "api")
@@ -151,6 +159,7 @@ class DocumentationSynchronizationPropertyTest {
                 // Given: A documentation validation request
                 AgentRequest request = AgentRequest.builder()
                                 .type("documentation")
+                                .description("Documentation completeness validation property test")
                                 .context(AgentContext.builder()
                                                 .property("query", query)
                                                 .property("focus", "validation")
@@ -196,6 +205,7 @@ class DocumentationSynchronizationPropertyTest {
                 // Given: A documentation request
                 AgentRequest request = AgentRequest.builder()
                                 .type("documentation")
+                                .description("Documentation guidance performance property test")
                                 .context(AgentContext.builder()
                                                 .property("query", query)
                                                 .build())
@@ -284,6 +294,7 @@ class DocumentationSynchronizationPropertyTest {
                 // Given: An API documentation request
                 AgentRequest request = AgentRequest.builder()
                                 .type("documentation")
+                                .description("API documentation synchronization property test")
                                 .context(AgentContext.builder()
                                                 .property("query", "api documentation synchronization")
                                                 .build())
@@ -306,6 +317,7 @@ class DocumentationSynchronizationPropertyTest {
                 // Given: A documentation validation request
                 AgentRequest request = AgentRequest.builder()
                                 .type("documentation")
+                                .description("Documentation completeness validation property test")
                                 .context(AgentContext.builder()
                                                 .property("query", "documentation completeness validation")
                                                 .build())
@@ -329,6 +341,7 @@ class DocumentationSynchronizationPropertyTest {
                 // Given: A technical documentation request
                 AgentRequest request = AgentRequest.builder()
                                 .type("documentation")
+                                .description("Documentation guidance performance property test")
                                 .context(AgentContext.builder()
                                                 .property("query", "technical documentation standards")
                                                 .build())

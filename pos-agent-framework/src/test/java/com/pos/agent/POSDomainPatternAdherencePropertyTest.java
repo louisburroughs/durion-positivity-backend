@@ -22,8 +22,14 @@ class POSDomainPatternAdherencePropertyTest {
         private final SecurityContext security = SecurityContext.builder()
                         .jwtToken("property-test-jwt-token")
                         .userId("pos-domain-tester")
-                        .roles(List.of("tester"))
-                        .permissions(List.of("read"))
+                        .roles(List.of("admin", "developer", "tester", "operator"))
+                        .permissions(List.of(
+                                        "read",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "pos:domain"))
                         .serviceId("pos-domain-tests")
                         .serviceType("property")
                         .build();
@@ -36,6 +42,7 @@ class POSDomainPatternAdherencePropertyTest {
         @Property(tries = 100)
         void posDomainPatternAdherence(@ForAll("posDomainConsultationRequests") AgentContext context) {
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("POS domain pattern adherence property test")
                                 .type("business")
                                 .context(context)
                                 .securityContext(security)

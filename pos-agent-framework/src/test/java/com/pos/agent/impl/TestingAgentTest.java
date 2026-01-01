@@ -19,130 +19,135 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class TestingAgentTest {
 
-    private final AgentManager agentManager = new AgentManager();
-    private final SecurityContext securityContext = SecurityContext.builder()
-            .jwtToken("valid-jwt-token-for-tests")
-            .userId("testing-agent-tester")
-            .roles(List.of("TESTING_EXPERT", "QUALITY_ASSURANCE"))
-            .permissions(List.of("testing.guide", "quality.assess"))
-            .serviceId("pos-testing-agent-tests")
-            .serviceType("test")
-            .build();
+        private final AgentManager agentManager = new AgentManager();
+        private final SecurityContext securityContext = SecurityContext.builder()
+                        .jwtToken("valid-jwt-token-for-tests")
+                        .userId("testing-agent-tester")
+                        .roles(List.of("TESTING_EXPERT", "QUALITY_ASSURANCE"))
+                        .permissions(List.of("AGENT_READ", "AGENT_WRITE", "testing.guide", "quality.assess"))
+                        .serviceId("pos-testing-agent-tests")
+                        .serviceType("test")
+                        .build();
 
-    @Test
-    void shouldProvideUnitTestingGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("testing")
-                .property("service", "pos-catalog")
-                .property("topic", "unit-testing")
-                .property("query", "How to implement unit tests with JUnit 5?")
-                .build();
+        @Test
+        void shouldProvideUnitTestingGuidance() {
+                AgentContext context = AgentContext.builder()
+                                .domain("testing")
+                                .property("service", "pos-catalog")
+                                .property("topic", "unit-testing")
+                                .property("query", "How to implement unit tests with JUnit 5?")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("testing")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("testing")
+                                .description("Unit testing guidance for pos-catalog service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-    @Test
-    void shouldProvideTDDGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("testing")
-                .property("service", "pos-inventory")
-                .property("topic", "tdd")
-                .property("query", "How to implement Test-Driven Development?")
-                .build();
+        @Test
+        void shouldProvideTDDGuidance() {
+                AgentContext context = AgentContext.builder()
+                                .domain("testing")
+                                .property("service", "pos-inventory")
+                                .property("topic", "tdd")
+                                .property("query", "How to implement Test-Driven Development?")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("testing")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("testing")
+                                .description("TDD guidance for pos-inventory service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-    @Test
-    void shouldProvidePropertyBasedTestingGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("testing")
-                .property("service", "pos-price")
-                .property("topic", "property-based-testing")
-                .property("query", "How to implement property-based testing with jqwik?")
-                .build();
+        @Test
+        void shouldProvidePropertyBasedTestingGuidance() {
+                AgentContext context = AgentContext.builder()
+                                .domain("testing")
+                                .property("service", "pos-price")
+                                .property("topic", "property-based-testing")
+                                .property("query", "How to implement property-based testing with jqwik?")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("testing")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("testing")
+                                .description("Property-based testing guidance for pos-price service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-    @Test
-    void shouldProvideIntegrationTestingGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("testing")
-                .property("service", "pos-order")
-                .property("topic", "integration-testing")
-                .property("query", "How to implement integration tests with TestContainers?")
-                .build();
+        @Test
+        void shouldProvideIntegrationTestingGuidance() {
+                AgentContext context = AgentContext.builder()
+                                .domain("testing")
+                                .property("service", "pos-order")
+                                .property("topic", "integration-testing")
+                                .property("query", "How to implement integration tests with TestContainers?")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("testing")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("testing")
+                                .description("Integration testing guidance for pos-order service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
-    
-    @Test
-    void shouldExtendAbstractAgentAndValidateRequests() {
-        TestingAgent agent = new TestingAgent();
-        AgentContext context = AgentContext.builder()
-                .domain("testing")
-                .property("service", "pos-catalog")
-                .build();
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-        AgentRequest request = new AgentRequest();
-        request.setType("testing");
-        request.setDescription("How to implement unit tests?");
-        request.setContext(context);
+        @Test
+        void shouldExtendAbstractAgentAndValidateRequests() {
+                TestingAgent agent = new TestingAgent();
+                AgentContext context = AgentContext.builder()
+                                .domain("testing")
+                                .property("service", "pos-catalog")
+                                .build();
 
-        AgentResponse response = agent.processRequest(request);
+                AgentRequest request = AgentRequest.builder()
+                                .type("testing")
+                                .description("How to implement unit tests?")
+                                .context(context)
+                                .build();
 
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getOutput());
-        assertTrue(response.getOutput().contains("Testing pattern recommendation"));
-        assertEquals(0.8, response.getConfidence());
-    }
-    
-    @Test
-    void shouldRejectInvalidRequestViaAbstractAgent() {
-        TestingAgent agent = new TestingAgent();
-        
-        AgentResponse response = agent.processRequest(null);
-        
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
-        assertFalse(response.isSuccess());
-        assertEquals("Invalid request: request is null", response.getOutput());
-    }
+                AgentResponse response = agent.processRequest(request);
+
+                assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getOutput());
+                assertTrue(response.getOutput().contains("Testing pattern recommendation"));
+                assertEquals(0.8, response.getConfidence());
+        }
+
+        @Test
+        void shouldRejectInvalidRequestViaAbstractAgent() {
+                TestingAgent agent = new TestingAgent();
+
+                AgentResponse response = agent.processRequest(null);
+
+                assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+                assertFalse(response.isSuccess());
+                assertEquals("Invalid request: request is null", response.getOutput());
+        }
 }

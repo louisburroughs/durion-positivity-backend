@@ -24,8 +24,16 @@ class MetadataExtractionCompletenessPropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("metadata-extraction-jwt-token")
                         .userId("metadata-extractor")
-                        .roles(List.of("developer"))
-                        .permissions(List.of("metadata:extract"))
+                        .roles(List.of("admin", "developer", "operator"))
+                        .permissions(List.of(
+                                        "metadata:extract",
+                                        "metadata:read",
+                                        "metadata:write",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:execute"))
                         .serviceId("pos-metadata-tests")
                         .serviceType("property")
                         .build();
@@ -40,6 +48,7 @@ class MetadataExtractionCompletenessPropertyTest {
                         @ForAll("validStoryIssues") AgentContext context) {
                 // When: Processing metadata extraction request
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Metadata extraction completeness property test")
                                 .type("metadata-extraction")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -58,6 +67,7 @@ class MetadataExtractionCompletenessPropertyTest {
                         @ForAll("validStoryIssues") AgentContext context) {
                 // When: Processing metadata extraction with labels
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Metadata extraction preserves all label information property test")
                                 .type("label-preservation")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -76,6 +86,7 @@ class MetadataExtractionCompletenessPropertyTest {
                         @ForAll("issuesWithEmptyBodies") AgentContext context) {
                 // When: Processing metadata extraction with empty body
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Metadata extraction handles empty bodies property test")
                                 .type("empty-body-handling")
                                 .context(context)
                                 .securityContext(securityContext)

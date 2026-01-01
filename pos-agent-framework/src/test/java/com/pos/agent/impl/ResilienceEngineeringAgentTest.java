@@ -24,7 +24,7 @@ class ResilienceEngineeringAgentTest {
             .jwtToken("valid-jwt-token-for-tests")
             .userId("resilience-agent-tester")
             .roles(List.of("RELIABILITY_ENGINEER", "SRE"))
-            .permissions(List.of("resilience.configure", "chaos.engineer"))
+            .permissions(List.of("AGENT_READ", "AGENT_WRITE","resilience.configure", "chaos.engineer"))
             .serviceId("pos-resilience-agent-tests")
             .serviceType("test")
             .build();
@@ -41,6 +41,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to configure Resilience4j circuit breakers?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -63,6 +64,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to configure Hystrix circuit breakers?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -85,6 +87,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to configure Spring Cloud Circuit Breaker?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -107,6 +110,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to implement retry mechanisms with exponential backoff?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -129,6 +133,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to implement bulkhead patterns for resource isolation?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -151,6 +156,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to implement rate limiting for API protection?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -173,6 +179,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to configure timeouts for microservices communication?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -195,6 +202,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to implement chaos engineering for resilience testing?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -217,6 +225,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to implement health monitoring and failure rate tracking?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -239,6 +248,7 @@ class ResilienceEngineeringAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("resilience")
+                .description("How to implement fallback patterns for graceful degradation?")
                 .context(context)
                 .securityContext(securityContext)
                 .build();

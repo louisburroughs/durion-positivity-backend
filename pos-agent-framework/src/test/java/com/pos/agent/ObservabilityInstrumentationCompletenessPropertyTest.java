@@ -24,8 +24,15 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("observability-jwt-token")
                         .userId("test-user")
-                        .roles(List.of("developer", "architect"))
-                        .permissions(List.of("observability:access", "domain:access"))
+                        .roles(List.of("admin", "developer", "architect", "operator"))
+                        .permissions(List.of(
+                                        "observability:access",
+                                        "domain:access",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "observability:instrument"))
                         .serviceId("test-service")
                         .serviceType("test")
                         .build();
@@ -40,6 +47,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
                         @ForAll("microserviceImplementationRequests") AgentContext context) {
                 // When: Making a microservice implementation request
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Observability instrumentation completeness property test")
                                 .type("observability-guidance")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -75,6 +83,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
 
                 // When: Requesting guidance about OpenTelemetry integration
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("OpenTelemetry integration guidance property test")
                                 .type("otel-guidance")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -105,6 +114,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
 
                 // When: Requesting guidance about RED metrics
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("RED metrics implementation guidance property test")
                                 .type("red-metrics-guidance")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -135,6 +145,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
 
                 // When: Requesting guidance about monitoring stack
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
+                                .description("Monitoring stack integration guidance property test")
                                 .type("monitoring-stack-guidance")
                                 .context(context)
                                 .securityContext(securityContext)

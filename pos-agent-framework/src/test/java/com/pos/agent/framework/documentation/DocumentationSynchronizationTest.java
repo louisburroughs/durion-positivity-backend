@@ -33,7 +33,7 @@ class DocumentationSynchronizationTest {
         expectedAgentTypes = Arrays.asList(
                 "architecture", "implementation", "deployment", "testing", "security",
                 "observability", "documentation", "business-domain", "integration-gateway",
-                "pair-programming-navigator", "event-driven-architecture", "cicd-pipeline",
+                "pair-programming", "event-driven", "cicd-pipeline",
                 "configuration-management", "resilience-engineering");
 
         agentDescriptions = Map.ofEntries(
@@ -46,8 +46,8 @@ class DocumentationSynchronizationTest {
                 Map.entry("documentation", "Technical Documentation"),
                 Map.entry("business-domain", "POS Business Logic"),
                 Map.entry("integration-gateway", "API Gateway & Integration"),
-                Map.entry("pair-programming-navigator", "Code Quality & Collaboration"),
-                Map.entry("event-driven-architecture", "Event-Driven Systems"),
+                Map.entry("pair-programming", "Code Quality & Collaboration"),
+                Map.entry("event-driven", "Event-Driven Systems"),
                 Map.entry("cicd-pipeline", "Continuous Integration/Deployment"),
                 Map.entry("configuration-management", "Configuration & Secrets"),
                 Map.entry("resilience-engineering", "System Reliability & Resilience"));

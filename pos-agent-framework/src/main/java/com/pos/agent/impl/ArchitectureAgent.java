@@ -77,8 +77,8 @@ public class ArchitectureAgent extends AbstractAgent {
 
         // Generate recommendations based on requirements
         List<String> recommendations = new ArrayList<>();
-        recommendations.add(String.format("Consider %s architecture for %s: %s",
-                systemType, description, getSystemTypeRationale(systemType)));
+        recommendations.add(String.format("Implement %s architecture for %s to %s",
+            systemType, description, getSystemTypeRationale(systemType)));
 
         // Add pattern-specific recommendations
         for (String pattern : recommendedPatterns) {
@@ -142,7 +142,7 @@ public class ArchitectureAgent extends AbstractAgent {
 
         // Add monitoring and observability recommendations
         recommendations.add("Implement health checks and circuit breakers for resilience");
-        recommendations.add("Set up automated testing pipeline (unit, integration, performance)");
+        recommendations.add("Implement automated testing pipeline (unit, integration, performance)");
 
         analysis.setRecommendations(recommendations);
         analysis.setSummary(generateSummary(description, systemType, recommendedPatterns, requirements));

@@ -24,7 +24,7 @@ class CICDPipelineAgentTest {
             .jwtToken("valid-jwt-token-for-tests")
             .userId("cicd-agent-tester")
             .roles(List.of("DEVOPS_ENGINEER", "PIPELINE_ARCHITECT"))
-            .permissions(List.of("cicd.configure", "deployment.execute"))
+            .permissions(List.of("AGENT_READ", "AGENT_WRITE","cicd.configure", "deployment.execute"))
             .serviceId("pos-cicd-agent-tests")
             .serviceType("test")
             .build();
@@ -41,6 +41,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("Build automation guidance for pos-catalog service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -63,6 +64,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("Testing pipeline guidance for pos-order service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -85,6 +87,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("Security scanning guidance for pos-security-service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -107,6 +110,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("Jenkins configuration guidance for pos-inventory service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -129,6 +133,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("GitHub Actions configuration guidance for pos-customer service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -151,6 +156,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("GitLab CI configuration guidance for pos-price service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -173,6 +179,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("Blue-Green deployment guidance for pos-api-gateway service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -195,6 +202,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("Canary deployment guidance for pos-order service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();
@@ -217,6 +225,7 @@ class CICDPipelineAgentTest {
 
         AgentRequest request = AgentRequest.builder()
                 .type("cicd")
+                .description("Docker build guidance for pos-inventory service")
                 .context(context)
                 .securityContext(securityContext)
                 .build();

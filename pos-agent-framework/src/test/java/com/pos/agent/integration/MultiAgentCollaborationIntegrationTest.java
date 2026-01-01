@@ -30,9 +30,10 @@ class MultiAgentCollaborationIntegrationTest {
                 securityContext = SecurityContext.builder()
                                 .jwtToken("multi-agent-collaboration-jwt-token")
                                 .userId("test-user")
+                                .roles(List.of("USER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
                                 .serviceId("test-service")
                                 .serviceType("test")
-                               // .securityContext(securityContext)
                                 .build();
         }
 
@@ -42,6 +43,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 1. Architecture design
                 AgentRequest architectureRequest = AgentRequest.builder()
                                 .type("architecture")
+                                .description("Microservice architecture design for inventory domain")
                                 .context(AgentContext.builder()
                                                 .serviceType("microservice")
                                                 .domain("inventory")
@@ -57,6 +59,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 2. Implementation guidance
                 AgentRequest implementationRequest = AgentRequest.builder()
                                 .type("implementation")
+                                .description("Spring Boot microservice implementation guidance")
                                 .context(AgentContext.builder()
                                                 .serviceType("microservice")
                                                 .property("framework", "spring-boot")
@@ -72,6 +75,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 3. Security configuration
                 AgentRequest securityRequest = AgentRequest.builder()
                                 .type("security")
+                                .description("JWT and RBAC security configuration")
                                 .context(AgentContext.builder()
                                                 .property("authenticationType", "jwt")
                                                 .property("authorizationModel", "rbac")
@@ -87,6 +91,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 4. Testing strategy
                 AgentRequest testingRequest = AgentRequest.builder()
                                 .type("testing")
+                                .description("JUnit5 testing strategy with unit, integration, and contract tests")
                                 .context(AgentContext.builder()
                                                 .property("testingFramework", "junit5")
                                                 .property("testTypes", List.of("unit", "integration", "contract"))
@@ -101,6 +106,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 5. Deployment configuration
                 AgentRequest deploymentRequest = AgentRequest.builder()
                                 .type("deployment")
+                                .description("Kubernetes production deployment with horizontal scaling")
                                 .context(AgentContext.builder()
                                                 .property("platform", "kubernetes")
                                                 .property("environment", "production")
@@ -119,6 +125,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 1. Event-driven architecture design
                 AgentRequest eventRequest = AgentRequest.builder()
                                 .type("event-driven")
+                                .description("Event-driven architecture with Kafka messaging")
                                 .context(AgentContext.builder()
                                                 .property("eventType", "domain-event")
                                                 .property("messagingPlatform", "kafka")
@@ -134,6 +141,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 2. Resilience patterns
                 AgentRequest resilienceRequest = AgentRequest.builder()
                                 .type("resilience-engineering")
+                                .description("Circuit breaker resilience pattern for inventory service")
                                 .context(AgentContext.builder()
                                                 .property("resiliencePattern", "circuit-breaker")
                                                 .property("targetService", "pos-inventory")
@@ -147,15 +155,25 @@ class MultiAgentCollaborationIntegrationTest {
                 assertTrue(resilienceResponse.isSuccess());
 
                 // 3. Configuration management
+                SecurityContext configSecurityContext = SecurityContext.builder()
+                                .jwtToken("multi-agent-collaboration-jwt-token")
+                                .userId("test-user")
+                                .roles(List.of("USER", "CONFIG_MANAGER"))
+                                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "CONFIG_MANAGE", "SECRETS_MANAGE"))
+                                .serviceId("test-service")
+                                .serviceType("test")
+                                .build();
+
                 AgentRequest configRequest = AgentRequest.builder()
                                 .type("configuration-management")
+                                .description("Production configuration with secrets and feature flags")
                                 .context(AgentContext.builder()
                                                 .property("configurationType", "application")
                                                 .property("environment", "production")
                                                 .property("secretsManagement", true)
                                                 .property("featureFlags", true)
                                                 .build())
-                                .securityContext(securityContext)
+                                .securityContext(configSecurityContext)
                                 .build();
 
                 AgentResponse configResponse = agentManager.processRequest(configRequest);
@@ -168,6 +186,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 1. CI/CD pipeline design
                 AgentRequest cicdRequest = AgentRequest.builder()
                                 .type("cicd-pipeline")
+                                .description("Full CI/CD pipeline with blue-green deployment")
                                 .context(AgentContext.builder()
                                                 .property("pipelineType", "full")
                                                 .property("targetEnvironment", "production")
@@ -183,6 +202,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 2. Security integration
                 AgentRequest securityRequest = AgentRequest.builder()
                                 .type("security")
+                                .description("Security scanning with SAST, DAST, and dependency checks")
                                 .context(AgentContext.builder()
                                                 .property("authenticationType", "jwt")
                                                 .property("authorizationModel", "rbac")
@@ -198,6 +218,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 3. Testing integration
                 AgentRequest testingRequest = AgentRequest.builder()
                                 .type("testing")
+                                .description("Comprehensive testing with unit, integration, security, and performance tests")
                                 .context(AgentContext.builder()
                                                 .property("testingFramework", "junit5")
                                                 .property("testTypes",
@@ -218,6 +239,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 1. Business domain analysis
                 AgentRequest businessRequest = AgentRequest.builder()
                                 .type("business-domain")
+                                .description("Automotive domain analysis for B2B vehicle fitment")
                                 .context(AgentContext.builder()
                                                 .domain("automotive")
                                                 .property("businessProcess", "vehicle-fitment")
@@ -232,6 +254,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 2. API Gateway configuration
                 AgentRequest gatewayRequest = AgentRequest.builder()
                                 .type("integration-gateway")
+                                .description("Spring Cloud Gateway with path-based routing and authentication")
                                 .context(AgentContext.builder()
                                                 .property("gatewayType", "spring-cloud-gateway")
                                                 .property("routingStrategy", "path-based")
@@ -246,6 +269,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // 3. Observability setup
                 AgentRequest observabilityRequest = AgentRequest.builder()
                                 .type("observability")
+                                .description("Observability with Prometheus metrics and distributed tracing")
                                 .context(AgentContext.builder()
                                                 .property("monitoringPlatform", "prometheus")
                                                 .property("tracingEnabled", true)
@@ -305,6 +329,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // Test pair programming navigator with implementation agent
                 AgentRequest pairRequest = AgentRequest.builder()
                                 .type("pair-programming")
+                                .description("Pair programming navigation for high-complexity code refactoring")
                                 .context(AgentContext.builder()
                                                 .property("codeComplexity", "high")
                                                 .property("refactoringNeeded", true)
@@ -319,6 +344,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // Follow up with implementation guidance
                 AgentRequest implementationRequest = AgentRequest.builder()
                                 .type("implementation")
+                                .description("Spring Boot implementation guidance for refactored microservice")
                                 .context(AgentContext.builder()
                                                 .serviceType("microservice")
                                                 .property("framework", "spring-boot")
@@ -337,6 +363,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // Test documentation generation across multiple agents
                 AgentRequest docRequest = AgentRequest.builder()
                                 .type("documentation")
+                                .description("OpenAPI documentation generation with examples")
                                 .context(AgentContext.builder()
                                                 .property("documentationType", "api")
                                                 .property("format", "openapi")
@@ -351,6 +378,7 @@ class MultiAgentCollaborationIntegrationTest {
                 // Test architecture documentation
                 AgentRequest archDocRequest = AgentRequest.builder()
                                 .type("architecture")
+                                .description("Architecture documentation for inventory microservice")
                                 .context(AgentContext.builder()
                                                 .serviceType("microservice")
                                                 .domain("inventory")

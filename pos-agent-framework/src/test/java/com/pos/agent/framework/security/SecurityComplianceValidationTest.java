@@ -44,13 +44,15 @@ class SecurityComplianceValidationTest {
 
     @Test
     void testValidSecurityContext() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Agent request with valid security context");
-        request.setType("security");
-        request.setSecurityContext(validSecurityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("action", "read");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Agent request with valid security context")
+                .type("security")
+                .context(context)
+                .build();
+        request.setSecurityContext(validSecurityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -59,13 +61,15 @@ class SecurityComplianceValidationTest {
 
     @Test
     void testSecurityContextValidation() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Security context validation test");
-        request.setType("security");
-        request.setSecurityContext(validSecurityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("operation", "validate");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Security context validation test")
+                .type("security")
+                .context(context)
+                .build();
+        request.setSecurityContext(validSecurityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -74,13 +78,15 @@ class SecurityComplianceValidationTest {
 
     @Test
     void testRoleBasedAccess() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Role-based access control verification");
-        request.setType("security");
-        request.setSecurityContext(validSecurityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("role", "DEVELOPER");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Role-based access control verification")
+                .type("security")
+                .context(context)
+                .build();
+        request.setSecurityContext(validSecurityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -89,13 +95,15 @@ class SecurityComplianceValidationTest {
 
     @Test
     void testPermissionValidation() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Permission validation test");
-        request.setType("security");
-        request.setSecurityContext(validSecurityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("permission", "AGENT_WRITE");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Permission validation test")
+                .type("security")
+                .context(context)
+                .build();
+        request.setSecurityContext(validSecurityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -104,13 +112,15 @@ class SecurityComplianceValidationTest {
 
     @Test
     void testConcurrentSecurityValidation() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Concurrent security validation");
-        request.setType("security");
-        request.setSecurityContext(validSecurityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("threads", "5");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Concurrent security validation")
+                .type("security")
+                .context(context)
+                .build();
+        request.setSecurityContext(validSecurityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);
@@ -119,13 +129,15 @@ class SecurityComplianceValidationTest {
 
     @Test
     void testComplianceReporting() {
-        AgentRequest request = new AgentRequest();
-        request.setDescription("Security compliance report generation");
-        request.setType("security");
-        request.setSecurityContext(validSecurityContext);
         Map<String, Object> context = new HashMap<>();
         context.put("report", "compliance");
-        request.setContext(context);
+
+        AgentRequest request = AgentRequest.builder()
+                .description("Security compliance report generation")
+                .type("security")
+                .context(context)
+                .build();
+        request.setSecurityContext(validSecurityContext);
 
         AgentResponse response = agentManager.processRequest(request);
         assertNotNull(response);

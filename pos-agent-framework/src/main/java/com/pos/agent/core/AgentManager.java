@@ -1,7 +1,10 @@
 package com.pos.agent.core;
 
 import com.pos.agent.framework.audit.AuditTrailManager;
+import com.pos.agent.impl.StoryValidationAgent;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -10,6 +13,7 @@ import java.util.Map;
  */
 public class AgentManager {
     private final AuditTrailManager auditTrailManager;
+    private final List<Agent> registeredAgents;
 
     public AgentManager() {
         this(new AuditTrailManager());
@@ -17,6 +21,19 @@ public class AgentManager {
 
     public AgentManager(AuditTrailManager auditTrailManager) {
         this.auditTrailManager = auditTrailManager;
+        this.registeredAgents = new ArrayList<>();
+
+        // Register default agents
+        registerAgent(new StoryValidationAgent());
+    }
+
+    /**
+     * Register an agent with the manager.
+     *
+     * @param agent The agent to register
+     */
+    public void registerAgent(Agent agent) {
+        registeredAgents.add(agent);
     }
 
     /**
@@ -58,9 +75,25 @@ public class AgentManager {
                 }
             }
 
-            // Process the request (simulated processing time)
+            // Try to find a registered agent that can handle the request
+            //TODO implement real agent activity and routing logic
+            Agent handlingAgent = findAgentForRequest(request);
+
+            if (handlingAgent != null) {
+                // Delegate to the registered agent
+                AgentResponse response = handlingAgent.processRequest(request);
+                success = response.isSuccess();
+
+                // Record request processing
+                recordAuditEntry(agentType, userId,
+                        success ? "REQUEST_PROCESSED" : "REQUEST_FAILED", success);
+
+                return response;
+            }
+
+            // Fallback to default processing if no agent handles it
             try {
-                Thread.sleep(10); // Simulate minimal processing time
+                Thread.sleep(1); // Simulate minimal processing time
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -96,6 +129,38 @@ public class AgentManager {
         return "unknown";
     }
 
+    /**
+     * Find an agent that can handle the given request.
+     * For StoryValidationAgent, checks if it can handle the request
+     * based on activation conditions.
+     *
+     * @param request The request to find an agent for
+     * @return The agent that can handle the request, or null if none found
+     */
+    private Agent findAgentForRequest(AgentRequest request) {
+        for (Agent agent : registeredAgents) {
+            // Special handling for StoryValidationAgent
+            if (agent instanceof StoryValidationAgent) {
+                // Always delegate story domain requests to StoryValidationAgent
+                // The agent will determine if it can handle based on activation conditions
+                if (request.getContext() instanceof com.pos.agent.context.AgentContext) {
+                    com.pos.agent.context.AgentContext ctx = (com.pos.agent.context.AgentContext) request.getContext();
+                    if ("story".equals(ctx.getDomain())) {
+                        return agent;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // TODO: Performance Optimization Step 2 - Optimize audit trail recording
+    // Make audit recording asynchronous using a queue (e.g., BlockingQueue or
+    // Disruptor)
+    // to avoid blocking request processing. Consider batching multiple audit
+    // entries
+    // and writing them in bulk. Make audit recording configurable/optional for
+    // performance tests.
     private void recordAuditEntry(String agentType, String userId, String action, boolean success) {
         AuditTrailManager.AuditEntry entry = new AuditTrailManager.AuditEntry(
                 agentType,
@@ -109,6 +174,10 @@ public class AgentManager {
         return auditTrailManager;
     }
 
+    // TODO: Performance Optimization Step 4 - Optimize switch statements
+    // Cache the toLowerCase() result to avoid repeated string operations.
+    // Consider using a HashMap for type lookup instead of switch/case for better
+    // performance with many agent types.
     private String generateOutput(AgentRequest request) {
         String type = request.getType() != null ? request.getType().toLowerCase() : "generic";
 
@@ -146,6 +215,11 @@ public class AgentManager {
         }
     }
 
+    // TODO: Performance Optimization Step 3 - Reduce string operations
+    // Pre-generate common responses and cache them as static final String
+    // constants.
+    // Only build dynamic responses when necessary. Consider lazy evaluation - only
+    // generate output if it will be used by the caller.
     private String generateDocumentationGuidance(String query) {
         StringBuilder guidance = new StringBuilder();
         guidance.append("Documentation Synchronization Guidance:\n\n");
@@ -201,6 +275,12 @@ public class AgentManager {
                 "- Implement saga patterns for distributed transactions\n";
     }
 
+    // TODO: Performance Optimization Step 1 - Cache authorization checks
+    // Consider caching authorization results based on security context hash to
+    // avoid
+    // repeated validation for the same context. Use a LRU cache with TTL (e.g., 5
+    // minutes)
+    // to balance security freshness with performance.
     private boolean validateSecurityContext(SecurityContext securityContext) {
         if (securityContext.getJwtToken() == null || securityContext.getJwtToken().isEmpty()) {
             return false;

@@ -14,36 +14,37 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigurationConsistencyTest {
 
-    private final AgentManager agentManager = new AgentManager();
-    private final SecurityContext security = SecurityContext.builder()
-            .jwtToken("valid.jwt.token")
-            .userId("test-user")
-            .roles(List.of("tester"))
-            .permissions(List.of("read", "execute"))
-            .serviceId("pos-testing-suite")
-            .serviceType("manual")
-            .build();
+        private final AgentManager agentManager = new AgentManager();
+        private final SecurityContext security = SecurityContext.builder()
+                        .jwtToken("valid.jwt.token")
+                        .userId("test-user")
+                        .roles(List.of("CONFIG_MANAGER"))
+                        .permissions(List.of("AGENT_READ", "AGENT_WRITE"))
+                        .serviceId("pos-testing-suite")
+                        .serviceType("manual")
+                        .build();
 
-    @Test
-    @DisplayName("Processes configuration guidance request successfully")
-    void processesConfigurationRequest() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
-                .property("service", "pos-config")
-                .property("scenario", "consistency-check")
-                .build();
+        @Test
+        @DisplayName("Processes configuration guidance request successfully")
+        void processesConfigurationRequest() {
+                AgentContext context = AgentContext.builder()
+                                .domain("configuration")
+                                .property("service", "pos-config")
+                                .property("scenario", "consistency-check")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("configuration")
-                .context(context)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("configuration")
+                                .description("Configuration guidance for pos-config consistency check")
+                                .context(context)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 }

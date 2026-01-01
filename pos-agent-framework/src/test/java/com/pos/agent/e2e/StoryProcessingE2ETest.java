@@ -26,10 +26,11 @@ class StoryProcessingE2ETest {
                                 .moduleName("pos-customer")
                                 .build();
 
-                AgentRequest request = new AgentRequest();
-                request.setType("story-processing");
-                request.setDescription("Process customer service story");
-                request.setContext(context);
+                AgentRequest request = AgentRequest.builder()
+                                .type("story-processing")
+                                .description("Process customer service story")
+                                .context(context)
+                                .build();
 
                 // When: Story is processed
                 AgentResponse response = agent.processRequest(request);
@@ -55,10 +56,11 @@ class StoryProcessingE2ETest {
                                 .moduleName("pos-order")
                                 .build();
 
-                AgentRequest request = new AgentRequest();
-                request.setType("story-processing");
-                request.setDescription("Process order processing story with dependencies");
-                request.setContext(context);
+                AgentRequest request = AgentRequest.builder()
+                                .type("story-processing")
+                                .description("Process order processing story with dependencies")
+                                .context(context)
+                                .build();
 
                 // When: Dependencies are resolved
                 AgentResponse response = agent.processRequest(request);
@@ -83,10 +85,11 @@ class StoryProcessingE2ETest {
                                 .moduleName("pos-inventory")
                                 .build();
 
-                AgentRequest request = new AgentRequest();
-                request.setType("story-processing");
-                request.setDescription("Execute Maven build for inventory service");
-                request.setContext(context);
+                AgentRequest request = AgentRequest.builder()
+                                .type("story-processing")
+                                .description("Execute Maven build for inventory service")
+                                .context(context)
+                                .build();
 
                 // When: Build is executed
                 AgentResponse response = agent.processRequest(request);
@@ -111,10 +114,11 @@ class StoryProcessingE2ETest {
                                 .moduleName("non-existent-module")
                                 .build();
 
-                AgentRequest request = new AgentRequest();
-                request.setType("story-processing");
-                request.setDescription("Process invalid module story");
-                request.setContext(context);
+                AgentRequest request = AgentRequest.builder()
+                                .type("story-processing")
+                                .description("Process invalid module story")
+                                .context(context)
+                                .build();
 
                 // When: Processing fails
                 AgentResponse response = agent.processRequest(request);
@@ -140,10 +144,11 @@ class StoryProcessingE2ETest {
                                 .dependencies(java.util.List.of("128"))
                                 .build();
 
-                AgentRequest request = new AgentRequest();
-                request.setType("story-processing");
-                request.setDescription("Detect circular dependencies in story");
-                request.setContext(context);
+                AgentRequest request = AgentRequest.builder()
+                                .type("story-processing")
+                                .description("Detect circular dependencies in story")
+                                .context(context)
+                                .build();
 
                 // When: Circular dependency is detected
                 AgentResponse response = agent.processRequest(request);
@@ -168,10 +173,11 @@ class StoryProcessingE2ETest {
                                 .moduleName("pos-catalog")
                                 .build();
 
-                AgentRequest request = new AgentRequest();
-                request.setType("story-processing");
-                request.setDescription("Process simple success story");
-                request.setContext(context);
+                AgentRequest request = AgentRequest.builder()
+                                .type("story-processing")
+                                .description("Process simple success story")
+                                .context(context)
+                                .build();
 
                 // When: Story is processed successfully
                 AgentResponse response = agent.processRequest(request);

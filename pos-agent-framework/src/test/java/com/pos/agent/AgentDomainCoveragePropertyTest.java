@@ -24,8 +24,14 @@ class AgentDomainCoveragePropertyTest {
         private final SecurityContext securityContext = SecurityContext.builder()
                         .jwtToken("domain-coverage-jwt-token")
                         .userId("test-user")
-                        .roles(List.of("developer"))
-                        .permissions(List.of("domain:access"))
+                        .roles(List.of("admin", "developer", "operator", "architect"))
+                        .permissions(List.of(
+                                        "domain:access",
+                                        "AGENT_READ",
+                                        "AGENT_WRITE",
+                                        "agent:read",
+                                        "agent:write",
+                                        "agent:discover"))
                         .serviceId("test-service")
                         .serviceType("domain-test")
                         .build();
@@ -40,6 +46,7 @@ class AgentDomainCoveragePropertyTest {
                 // Given: An agent manager ready to process domain requests
                 // When: Requesting guidance for a domain
                 AgentRequest request = AgentRequest.builder()
+                                .description("Agent domain coverage property test")
                                 .type("domain-coverage")
                                 .context(context)
                                 .securityContext(securityContext)
@@ -65,6 +72,8 @@ class AgentDomainCoveragePropertyTest {
                 // When: Processing requests across all domains
                 for (AgentContext context : contexts) {
                         AgentRequest request = AgentRequest.builder()
+                                        .description("All major domains have coverage property test - "
+                                                        + context.getDomain())
                                         .type("domain-validation")
                                         .context(context)
                                         .securityContext(securityContext)
@@ -88,6 +97,7 @@ class AgentDomainCoveragePropertyTest {
         void guidanceProvisionPerformance(@ForAll("domainContexts") AgentContext context) {
                 // Given: A request for domain guidance
                 AgentRequest request = AgentRequest.builder()
+                                .description("Agent domain coverage performance property test")
                                 .type("domain-coverage")
                                 .context(context)
                                 .securityContext(securityContext)
