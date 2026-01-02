@@ -107,7 +107,7 @@ public class AgentManager implements AgentRegistry {
             long processingTime = System.currentTimeMillis() - startTime;
 
             // Generate output based on request type
-            String output = generateOutput(request);
+            String output = generateOutput(request,handlingAgent);
             success = true;
 
             // Record successful request processing
