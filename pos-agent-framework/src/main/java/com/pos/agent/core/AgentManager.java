@@ -5,8 +5,13 @@ import com.pos.agent.context.CICDContext;
 import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.ResilienceContext;
+import com.pos.agent.discovery.CapabilityBasedDiscoveryStrategy;
+import com.pos.agent.discovery.CompositeAgentDiscovery;
+import com.pos.agent.discovery.DomainBasedDiscoveryStrategy;
+import com.pos.agent.discovery.ObjectiveBasedDiscoveryStrategy;
 import com.pos.agent.framework.audit.AuditTrailManager;
 import com.pos.agent.framework.model.AgentType;
+import com.pos.agent.framework.service.ServiceAgentMapping;
 import com.pos.agent.impl.ArchitectureAgent;
 import com.pos.agent.impl.StoryValidationAgent;
 
@@ -35,6 +40,9 @@ import java.util.stream.Collectors;
 public class AgentManager implements AgentRegistry, ContextCoordinator {
     private final AuditTrailManager auditTrailManager;
     private final List<Agent> registeredAgents;
+    private final CompositeAgentDiscovery agentDiscovery;
+    private final ServiceAgentMapping serviceMapping;
+
     static final Duration SESSION_TIMEOUT = Duration.ofMinutes(30);
     private static final Set<String> REQUIRED_CONTEXT_KEYS = Set.of(
             "session-id", "project-context", "architectural-decisions",
@@ -45,12 +53,23 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
     private final Map<String, SessionContext> sessionContexts = new ConcurrentHashMap<>();
 
     public AgentManager() {
-        this(new AuditTrailManager());
+        this(new AuditTrailManager(), new ServiceAgentMapping());
     }
 
     public AgentManager(AuditTrailManager auditTrailManager) {
+        this(auditTrailManager, new ServiceAgentMapping());
+    }
+
+    public AgentManager(AuditTrailManager auditTrailManager, ServiceAgentMapping serviceMapping) {
         this.auditTrailManager = auditTrailManager;
+        this.serviceMapping = serviceMapping;
         this.registeredAgents = new ArrayList<>();
+        this.agentDiscovery = new CompositeAgentDiscovery();
+
+        // Register discovery strategies in order of priority
+        agentDiscovery.registerStrategy(new DomainBasedDiscoveryStrategy(serviceMapping));
+        agentDiscovery.registerStrategy(new ObjectiveBasedDiscoveryStrategy());
+        agentDiscovery.registerStrategy(new CapabilityBasedDiscoveryStrategy());
 
         // Register default agents
         registerAgent(new StoryValidationAgent());
@@ -94,8 +113,10 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
             }
 
             // Try to find a registered agent that can handle the request
-            // TODO implement real agent activity and routing logic
-            Agent handlingAgent = findAgentForRequest(request);
+
+            Agent handlingAgent = consultBestAgent(request)
+                    .completeOnTimeout(new ArchitectureAgent(), 5000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .join();
 
             // Check role-based authorization using agent's declared requirements
             if (handlingAgent != null
@@ -143,32 +164,6 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
             recordAuditEntry(agentType, userId, "REQUEST_FAILED", false);
             throw e;
         }
-    }
-
-    /**
-     * Find an agent that can handle the given request.
-     * For StoryValidationAgent, checks if it can handle the request
-     * based on activation conditions.
-     *
-     * @param request The request to find an agent for
-     * @return The agent that can handle the request, or null if none found
-     */
-    private Agent findAgentForRequest(AgentRequest request) {
-        for (Agent agent : registeredAgents) {
-            // Special handling for StoryValidationAgent
-            if (agent instanceof StoryValidationAgent) {
-                // Always delegate story domain requests to StoryValidationAgent
-                // The agent will determine if it can handle based on activation conditions
-                if (request.getAgentContext() instanceof com.pos.agent.context.AgentContext) {
-                    com.pos.agent.context.AgentContext ctx = (com.pos.agent.context.AgentContext) request
-                            .getAgentContext();
-                    if ("story".equals(ctx.getAgentDomain())) {
-                        return agent;
-                    }
-                }
-            }
-        }
-        return null;
     }
 
     // TODO: Performance Optimization Step 2 - Optimize audit trail recording
@@ -226,10 +221,20 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
         return Collections.unmodifiableList(registeredAgents);
     }
 
+    /**
+     * Discovers the best agent for a given request using composite strategy
+     * pattern.
+     * Applies discovery strategies in priority order (domain-based >
+     * objective-based > capability-based).
+     * Filters results to only healthy agents.
+     * 
+     * @param request the agent request with domain and context information
+     * @return CompletableFuture with the best agent, or empty if no match found
+     */
     @Override
-    public CompletableFuture<AgentResponse> consultBestAgent(AgentRequest request) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'consultBestAgent'");
+    public CompletableFuture<Agent> consultBestAgent(AgentRequest request) {
+        return agentDiscovery.discoverBestAgent(request, registeredAgents)
+                .thenApply(optionalAgent -> optionalAgent.orElse(null));
     }
 
     @Override
