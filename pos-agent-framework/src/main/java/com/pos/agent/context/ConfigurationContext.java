@@ -7,15 +7,11 @@ import java.util.*;
  * Context model for configuration management scenarios.
  * Tracks service configuration, platform details, and service mesh integration.
  */
-public class ConfigurationContext {
-    private String contextId;
-    private String sessionId;
+public class ConfigurationContext extends AgentContext {
     private String serviceName;
     private String configurationType;
     private String platform;
     private String serviceMesh;
-    private final Instant createdAt;
-    private Instant lastUpdated;
 
     // Specialized collections for configuration sources
     private final Set<String> configSources;
@@ -47,54 +43,51 @@ public class ConfigurationContext {
     private final Map<String, String> driftDetection;
     private final Set<String> configAuditing;
 
-    public ConfigurationContext(String contextId, String sessionId) {
-        this.contextId = Objects.requireNonNull(contextId, "Context ID cannot be null");
-        this.sessionId = Objects.requireNonNull(sessionId, "Session ID cannot be null");
-        this.createdAt = Instant.now();
-        this.lastUpdated = Instant.now();
+    private ConfigurationContext(Builder builder) {
+        super(builder);
+        this.serviceName = builder.serviceName;
+        this.configurationType = builder.configurationType;
+        this.platform = builder.platform;
+        this.serviceMesh = builder.serviceMesh;
 
         // Initialize configuration sources
-        this.configSources = new LinkedHashSet<>();
-        this.configSourceSettings = new HashMap<>();
-        this.configFormats = new LinkedHashSet<>();
-        this.configValidation = new HashMap<>();
+        this.configSources = builder.configSources;
+        this.configSourceSettings = builder.configSourceSettings;
+        this.configFormats = builder.configFormats;
+        this.configValidation = builder.configValidation;
 
         // Initialize feature flags
-        this.featureFlags = new LinkedHashSet<>();
-        this.flagConfigurations = new HashMap<>();
-        this.rolloutStrategies = new LinkedHashSet<>();
-        this.flagTargeting = new HashMap<>();
+        this.featureFlags = builder.featureFlags;
+        this.flagConfigurations = builder.flagConfigurations;
+        this.rolloutStrategies = builder.rolloutStrategies;
+        this.flagTargeting = builder.flagTargeting;
 
         // Initialize secrets management
-        this.secretsManagers = new LinkedHashSet<>();
-        this.secretsConfigurations = new HashMap<>();
-        this.rotationPolicies = new LinkedHashSet<>();
-        this.accessPolicies = new HashMap<>();
+        this.secretsManagers = builder.secretsManagers;
+        this.secretsConfigurations = builder.secretsConfigurations;
+        this.rotationPolicies = builder.rotationPolicies;
+        this.accessPolicies = builder.accessPolicies;
 
         // Initialize environment management
-        this.environments = new LinkedHashSet<>();
-        this.environmentConfigs = new HashMap<>();
-        this.configProfiles = new LinkedHashSet<>();
-        this.profileMappings = new HashMap<>();
+        this.environments = builder.environments;
+        this.environmentConfigs = builder.environmentConfigs;
+        this.configProfiles = builder.configProfiles;
+        this.profileMappings = builder.profileMappings;
 
         // Initialize validation and monitoring
-        this.validationRules = new LinkedHashSet<>();
-        this.configMonitoring = new LinkedHashSet<>();
-        this.driftDetection = new HashMap<>();
-        this.configAuditing = new LinkedHashSet<>();
+        this.validationRules = builder.validationRules;
+        this.configMonitoring = builder.configMonitoring;
+        this.driftDetection = builder.driftDetection;
+        this.configAuditing = builder.configAuditing;
     }
 
-    public String getContextId() {
-        return contextId;
-    }
-
-    public String getSessionId() {
-        return sessionId;
+    
+    public static Builder builder() {
+        return new Builder();
     }
 
     public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
-        updateTimestamp();
+        super.setSessionId(sessionId);
     }
 
     public String getServiceName() {
@@ -134,11 +127,11 @@ public class ConfigurationContext {
     }
 
     public Instant getCreatedAt() {
-        return createdAt;
+        return super.getCreatedAt();
     }
 
     public Instant getLastUpdated() {
-        return lastUpdated;
+        return super.getLastUpdated();
     }
 
     public Set<String> getConfigSources() {
@@ -338,15 +331,15 @@ public class ConfigurationContext {
         return !validationRules.isEmpty();
     }
 
-    private void updateTimestamp() {
-        this.lastUpdated = Instant.now();
+    protected void updateTimestamp() {
+        super.updateTimestamp();
     }
 
     @Override
     public String toString() {
         return "ConfigurationContext{" +
-                "contextId='" + contextId + '\'' +
-                ", sessionId='" + sessionId + '\'' +
+                "contextId='" + getContextId() + '\'' +
+                ", sessionId='" + getSessionId() + '\'' +
                 ", serviceName='" + serviceName + '\'' +
                 ", configurationType='" + configurationType + '\'' +
                 ", platform='" + platform + '\'' +
@@ -354,8 +347,338 @@ public class ConfigurationContext {
                 ", sources=" + configSources.size() +
                 ", flags=" + featureFlags.size() +
                 ", secrets=" + secretsManagers.size() +
-                ", createdAt=" + createdAt +
-                ", lastUpdated=" + lastUpdated +
+                ", createdAt=" + getCreatedAt() +
+                ", lastUpdated=" + getLastUpdated() +
                 '}';
+    }
+
+    public static class Builder extends AgentContext.Builder<Builder> {
+        private String serviceName;
+        private String configurationType;
+        private String platform;
+        private String serviceMesh;
+
+        private Set<String> configSources = new LinkedHashSet<>();
+        private Map<String, Object> configSourceSettings = new HashMap<>();
+        private Set<String> configFormats = new LinkedHashSet<>();
+        private Map<String, String> configValidation = new HashMap<>();
+
+        private Set<String> featureFlags = new LinkedHashSet<>();
+        private Map<String, Object> flagConfigurations = new HashMap<>();
+        private Set<String> rolloutStrategies = new LinkedHashSet<>();
+        private Map<String, String> flagTargeting = new HashMap<>();
+
+        private Set<String> secretsManagers = new LinkedHashSet<>();
+        private Map<String, Object> secretsConfigurations = new HashMap<>();
+        private Set<String> rotationPolicies = new LinkedHashSet<>();
+        private Map<String, String> accessPolicies = new HashMap<>();
+
+        private Set<String> environments = new LinkedHashSet<>();
+        private Map<String, Object> environmentConfigs = new HashMap<>();
+        private Set<String> configProfiles = new LinkedHashSet<>();
+        private Map<String, String> profileMappings = new HashMap<>();
+
+        private Set<String> validationRules = new LinkedHashSet<>();
+        private Set<String> configMonitoring = new LinkedHashSet<>();
+        private Map<String, String> driftDetection = new HashMap<>();
+        private Set<String> configAuditing = new LinkedHashSet<>();
+
+        public Builder() {
+            domain("configuration");
+            contextType("configuration-context");
+        }
+
+        public Builder serviceName(String serviceName) {
+            this.serviceName = serviceName;
+            return this;
+        }
+
+        public Builder configurationType(String configurationType) {
+            this.configurationType = configurationType;
+            return this;
+        }
+
+        public Builder platform(String platform) {
+            this.platform = platform;
+            return this;
+        }
+
+        public Builder serviceMesh(String serviceMesh) {
+            this.serviceMesh = serviceMesh;
+            return this;
+        }
+
+        public Builder addConfigSource(String source, Map<String, Object> config) {
+            if (source != null) {
+                this.configSources.add(source);
+                if (config != null) {
+                    this.configSourceSettings.put(source, config);
+                }
+            }
+            return this;
+        }
+
+        public Builder configSources(Set<String> sources) {
+            if (sources != null) {
+                this.configSources.addAll(sources);
+            }
+            return this;
+        }
+
+        public Builder configSourceSettings(Map<String, Object> settings) {
+            if (settings != null) {
+                this.configSourceSettings.putAll(settings);
+            }
+            return this;
+        }
+
+        public Builder addConfigFormat(String format) {
+            if (format != null) {
+                this.configFormats.add(format);
+            }
+            return this;
+        }
+
+        public Builder configFormats(Set<String> formats) {
+            if (formats != null) {
+                this.configFormats.addAll(formats);
+            }
+            return this;
+        }
+
+        public Builder addConfigValidation(String key, String validation) {
+            if (key != null && validation != null) {
+                this.configValidation.put(key, validation);
+            }
+            return this;
+        }
+
+        public Builder configValidation(Map<String, String> validation) {
+            if (validation != null) {
+                this.configValidation.putAll(validation);
+            }
+            return this;
+        }
+
+        public Builder addFeatureFlag(String flag, Map<String, Object> config) {
+            if (flag != null) {
+                this.featureFlags.add(flag);
+                if (config != null) {
+                    this.flagConfigurations.put(flag, config);
+                }
+            }
+            return this;
+        }
+
+        public Builder featureFlags(Set<String> flags) {
+            if (flags != null) {
+                this.featureFlags.addAll(flags);
+            }
+            return this;
+        }
+
+        public Builder flagConfigurations(Map<String, Object> configs) {
+            if (configs != null) {
+                this.flagConfigurations.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder addRolloutStrategy(String strategy) {
+            if (strategy != null) {
+                this.rolloutStrategies.add(strategy);
+            }
+            return this;
+        }
+
+        public Builder rolloutStrategies(Set<String> strategies) {
+            if (strategies != null) {
+                this.rolloutStrategies.addAll(strategies);
+            }
+            return this;
+        }
+
+        public Builder addFlagTargeting(String flag, String targeting) {
+            if (flag != null && targeting != null) {
+                this.flagTargeting.put(flag, targeting);
+            }
+            return this;
+        }
+
+        public Builder flagTargeting(Map<String, String> targeting) {
+            if (targeting != null) {
+                this.flagTargeting.putAll(targeting);
+            }
+            return this;
+        }
+
+        public Builder addSecretsManager(String manager, Map<String, Object> config) {
+            if (manager != null) {
+                this.secretsManagers.add(manager);
+                if (config != null) {
+                    this.secretsConfigurations.put(manager, config);
+                }
+            }
+            return this;
+        }
+
+        public Builder secretsManagers(Set<String> managers) {
+            if (managers != null) {
+                this.secretsManagers.addAll(managers);
+            }
+            return this;
+        }
+
+        public Builder secretsConfigurations(Map<String, Object> configs) {
+            if (configs != null) {
+                this.secretsConfigurations.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder addRotationPolicy(String policy) {
+            if (policy != null) {
+                this.rotationPolicies.add(policy);
+            }
+            return this;
+        }
+
+        public Builder rotationPolicies(Set<String> policies) {
+            if (policies != null) {
+                this.rotationPolicies.addAll(policies);
+            }
+            return this;
+        }
+
+        public Builder addAccessPolicy(String secret, String policy) {
+            if (secret != null && policy != null) {
+                this.accessPolicies.put(secret, policy);
+            }
+            return this;
+        }
+
+        public Builder accessPolicies(Map<String, String> policies) {
+            if (policies != null) {
+                this.accessPolicies.putAll(policies);
+            }
+            return this;
+        }
+
+        public Builder addEnvironment(String environment, Map<String, Object> config) {
+            if (environment != null) {
+                this.environments.add(environment);
+                if (config != null) {
+                    this.environmentConfigs.put(environment, config);
+                }
+            }
+            return this;
+        }
+
+        public Builder environments(Set<String> environments) {
+            if (environments != null) {
+                this.environments.addAll(environments);
+            }
+            return this;
+        }
+
+        public Builder environmentConfigs(Map<String, Object> configs) {
+            if (configs != null) {
+                this.environmentConfigs.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder addConfigProfile(String profile) {
+            if (profile != null) {
+                this.configProfiles.add(profile);
+            }
+            return this;
+        }
+
+        public Builder configProfiles(Set<String> profiles) {
+            if (profiles != null) {
+                this.configProfiles.addAll(profiles);
+            }
+            return this;
+        }
+
+        public Builder addProfileMapping(String profile, String environment) {
+            if (profile != null && environment != null) {
+                this.profileMappings.put(profile, environment);
+            }
+            return this;
+        }
+
+        public Builder profileMappings(Map<String, String> mappings) {
+            if (mappings != null) {
+                this.profileMappings.putAll(mappings);
+            }
+            return this;
+        }
+
+        public Builder addValidationRule(String rule) {
+            if (rule != null) {
+                this.validationRules.add(rule);
+            }
+            return this;
+        }
+
+        public Builder validationRules(Set<String> rules) {
+            if (rules != null) {
+                this.validationRules.addAll(rules);
+            }
+            return this;
+        }
+
+        public Builder addConfigMonitoring(String monitoring) {
+            if (monitoring != null) {
+                this.configMonitoring.add(monitoring);
+            }
+            return this;
+        }
+
+        public Builder configMonitoring(Set<String> monitoring) {
+            if (monitoring != null) {
+                this.configMonitoring.addAll(monitoring);
+            }
+            return this;
+        }
+
+        public Builder addDriftDetection(String config, String detection) {
+            if (config != null && detection != null) {
+                this.driftDetection.put(config, detection);
+            }
+            return this;
+        }
+
+        public Builder driftDetection(Map<String, String> detection) {
+            if (detection != null) {
+                this.driftDetection.putAll(detection);
+            }
+            return this;
+        }
+
+        public Builder addConfigAuditing(String auditing) {
+            if (auditing != null) {
+                this.configAuditing.add(auditing);
+            }
+            return this;
+        }
+
+        public Builder configAuditing(Set<String> auditing) {
+            if (auditing != null) {
+                this.configAuditing.addAll(auditing);
+            }
+            return this;
+        }
+
+        @Override
+        protected Builder self() {
+            return this;
+        }
+
+        public ConfigurationContext build() {
+            return new ConfigurationContext(this);
+        }
     }
 }

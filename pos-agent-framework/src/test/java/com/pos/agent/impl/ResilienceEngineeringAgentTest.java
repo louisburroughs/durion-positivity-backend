@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ResilienceContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.Test;
 
@@ -31,8 +32,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testResilience4jCircuitBreakerGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-api-gateway")
                 .property("topic", "resilience4j")
                 .property("query", "How to configure Resilience4j circuit breakers?")
@@ -54,8 +55,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testHystrixCircuitBreakerGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-order")
                 .property("topic", "hystrix")
                 .property("query", "How to configure Hystrix circuit breakers?")
@@ -77,8 +78,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testSpringCloudCircuitBreakerGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-customer")
                 .property("topic", "spring-cloud")
                 .property("query", "How to configure Spring Cloud Circuit Breaker?")
@@ -100,8 +101,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testRetryMechanismGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-inventory")
                 .property("topic", "retry-mechanisms")
                 .property("query", "How to implement retry mechanisms with exponential backoff?")
@@ -123,8 +124,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testBulkheadPatternGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-catalog")
                 .property("topic", "bulkhead-pattern")
                 .property("query", "How to implement bulkhead patterns for resource isolation?")
@@ -146,8 +147,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testRateLimitingGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-api-gateway")
                 .property("topic", "rate-limiting")
                 .property("query", "How to implement rate limiting for API protection?")
@@ -169,8 +170,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testTimeoutConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-price")
                 .property("topic", "timeout-configuration")
                 .property("query", "How to configure timeouts for microservices communication?")
@@ -192,8 +193,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testChaosEngineeringGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-order")
                 .property("topic", "chaos-engineering")
                 .property("query", "How to implement chaos engineering for resilience testing?")
@@ -215,8 +216,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testHealthMonitoringGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-accounting")
                 .property("topic", "health-monitoring")
                 .property("query", "How to implement health monitoring and failure rate tracking?")
@@ -238,8 +239,8 @@ class ResilienceEngineeringAgentTest {
 
     @Test
     void testFallbackPatternGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
+        AgentContext context = ResilienceContext.builder()
+                
                 .property("service", "pos-customer")
                 .property("topic", "fallback-pattern")
                 .property("query", "How to implement fallback patterns for graceful degradation?")

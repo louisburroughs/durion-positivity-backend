@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,7 @@ class ConfigurationConsistencyTest {
         @Test
         @DisplayName("Processes configuration guidance request successfully")
         void processesConfigurationRequest() {
-                AgentContext context = AgentContext.builder()
+                AgentContext context = DefaultContext.builder()
                                 .domain("configuration")
                                 .property("service", "pos-config")
                                 .property("scenario", "consistency-check")

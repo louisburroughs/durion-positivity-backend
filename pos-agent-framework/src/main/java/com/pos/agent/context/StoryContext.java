@@ -6,7 +6,8 @@ import java.util.List;
 /**
  * Context for story processing scenarios
  */
-public class StoryContext {
+public class StoryContext extends AgentContext {
+
     private String repositoryUrl;
     private Long issueId;
     private String issueTitle;
@@ -15,6 +16,7 @@ public class StoryContext {
     private List<String> dependencies;
 
     private StoryContext(Builder builder) {
+        super(builder);
         this.repositoryUrl = builder.repositoryUrl;
         this.issueId = builder.issueId;
         this.issueTitle = builder.issueTitle;
@@ -51,13 +53,18 @@ public class StoryContext {
         return new Builder();
     }
 
-    public static class Builder {
+    public static class Builder extends AgentContext.Builder<Builder> {
         private String repositoryUrl;
         private Long issueId;
         private String issueTitle;
         private String issueBody;
         private String moduleName;
         private List<String> dependencies = new ArrayList<>();
+
+        public Builder() {
+            // Set default domain for story context
+            domain("story");
+        }
 
         public Builder repositoryUrl(String repositoryUrl) {
             this.repositoryUrl = repositoryUrl;
@@ -86,6 +93,11 @@ public class StoryContext {
 
         public Builder dependencies(List<String> dependencies) {
             this.dependencies = dependencies != null ? dependencies : new ArrayList<>();
+            return this;
+        }
+
+        @Override
+        protected Builder self() {
             return this;
         }
 

@@ -11,7 +11,7 @@ import com.pos.agent.context.AgentContext;
 public class AgentRequest {
     // Original fields for backward compatibility
     private String description;
-    private Object context;
+    // private Object context;
     private String type;
 
     // Enhanced security fields
@@ -27,7 +27,7 @@ public class AgentRequest {
     private AgentRequest(Builder builder) {
         this.type = builder.type;
         this.description = builder.description;
-        this.context = builder.context;
+        // this.context = builder.context;
         this.agentContext = builder.agentContext;
         this.securityContext = builder.securityContext;
         this.requireTLS13 = builder.requireTLS13;
@@ -42,13 +42,13 @@ public class AgentRequest {
         this.description = description;
     }
 
-    public Object getContext() {
-        return context;
-    }
+    // public Object getContext() {
+    //     return context;
+    // }
 
-    public void setContext(Object context) {
-        this.context = context;
-    }
+    // public void setContext(Object context) {
+    //     this.context = context;
+    // }
 
     public String getType() {
         return type;

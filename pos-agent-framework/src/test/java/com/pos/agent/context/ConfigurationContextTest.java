@@ -23,7 +23,7 @@ class ConfigurationContextTest {
 
     @BeforeEach
     void setUp() {
-        context = new ConfigurationContext(contextId, sessionId);
+        context = ConfigurationContext.builder().contextId(contextId).sessionId(sessionId).build();
     }
 
     @Test
@@ -283,12 +283,12 @@ class ConfigurationContextTest {
         assertTrue(context.isValid());
         
         // Valid with feature flag
-        ConfigurationContext flagContext = new ConfigurationContext("flag-ctx", "session");
+        ConfigurationContext flagContext =  ConfigurationContext.builder().build();
         flagContext.addFeatureFlag("test-flag", Map.of());
         assertTrue(flagContext.isValid());
         
         // Valid with secrets manager
-        ConfigurationContext secretsContext = new ConfigurationContext("secrets-ctx", "session");
+        ConfigurationContext secretsContext =  ConfigurationContext.builder().build();
         secretsContext.addSecretsManager("vault", Map.of());
         assertTrue(secretsContext.isValid());
         

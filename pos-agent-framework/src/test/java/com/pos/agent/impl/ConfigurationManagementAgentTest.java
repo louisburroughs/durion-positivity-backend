@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.Test;
 
@@ -30,8 +31,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testSpringCloudConfigGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-api-gateway")
                 .property("topic", "spring-cloud-config")
                 .property("query", "How to configure Spring Cloud Config Server?")
@@ -53,8 +54,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testConsulConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-service-discovery")
                 .property("topic", "consul")
                 .property("query", "How to integrate Consul for configuration management?")
@@ -76,8 +77,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testEtcdConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-catalog")
                 .property("topic", "etcd")
                 .property("query", "How to use etcd for distributed configuration?")
@@ -99,8 +100,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testFeatureFlagsGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-order")
                 .property("topic", "feature-flags")
                 .property("query", "How to implement feature flags for gradual rollouts?")
@@ -122,8 +123,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testAWSSecretsManagerGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-security-service")
                 .property("topic", "aws-secrets-manager")
                 .property("query", "How to integrate AWS Secrets Manager for secrets management?")
@@ -145,8 +146,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testHashiCorpVaultGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-customer")
                 .property("topic", "hashicorp-vault")
                 .property("query", "How to integrate HashiCorp Vault for secrets management?")
@@ -168,8 +169,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testKubernetesSecretsGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-inventory")
                 .property("topic", "kubernetes-secrets")
                 .property("query", "How to use Kubernetes Secrets and ConfigMaps?")
@@ -191,8 +192,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testEnvironmentSpecificConfigGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-price")
                 .property("topic", "environment-config")
                 .property("query", "How to manage environment-specific configurations?")
@@ -214,8 +215,8 @@ class ConfigurationManagementAgentTest {
 
     @Test
     void testConfigurationValidationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
+        AgentContext context = ConfigurationContext.builder()
+                
                 .property("service", "pos-accounting")
                 .property("topic", "validation")
                 .property("query", "How to validate configuration and implement health checks?")

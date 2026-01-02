@@ -3,6 +3,7 @@ package com.pos.agent.framework.system;
 import com.pos.agent.framework.security.JWTTokenValidator;
 import com.pos.agent.framework.audit.AuditTrailManager;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
 import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -367,7 +368,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createSecureContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("secure-operation")
                                 .domain("security")
                                 .requiresAuthentication(true)
@@ -375,7 +376,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createTLSValidationContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("tls-validation")
                                 .domain("security")
                                 .requiresTLS13(true)
@@ -383,7 +384,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createServiceContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("service-integration")
                                 .domain("microservice")
                                 .serviceType("spring-boot")
@@ -391,7 +392,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createAuditContext(String agentType) {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type(agentType)
                                 .domain("audit-test")
                                 .requiresAuditTrail(true)
@@ -399,7 +400,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createConcurrentSecurityContext(int index) {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("concurrent-security")
                                 .domain("performance")
                                 .requestId("req-" + index)
@@ -407,7 +408,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createSecretsContext(String secretsProvider) {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("secrets-management")
                                 .domain("configuration")
                                 .secretsProvider(secretsProvider)
@@ -434,7 +435,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createContextForPermission(String permission) {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("permission-test")
                                 .domain("security")
                                 .requiredPermission(permission)
@@ -442,7 +443,7 @@ class SecurityValidationSystemTest {
         }
 
         private AgentContext createAdminContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("admin-operation")
                                 .domain("administration")
                                 .requiresAdminRole(true)
@@ -472,7 +473,7 @@ class SecurityValidationSystemTest {
                         AgentRequest request = AgentRequest.builder()
                                         .type("security-event")
                                         .description("Security event generation for " + eventType)
-                                        .context(AgentContext.builder()
+                                        .context(DefaultContext.builder()
                                                         .type(eventType)
                                                         .domain("compliance")
                                                         .build())

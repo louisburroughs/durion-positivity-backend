@@ -5,6 +5,8 @@ import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.SecurityContext;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -279,7 +281,7 @@ class ComprehensiveSystemIntegrationTest {
         // directly
 
         private AgentContext createMicroserviceContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("microservice-implementation")
                                 .serviceType("spring-boot")
                                 .domain("inventory")
@@ -289,14 +291,14 @@ class ComprehensiveSystemIntegrationTest {
         }
 
         private AgentContext createContextForAgentType(String agentType) {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type(agentType)
                                 .domain("general")
                                 .build();
         }
 
         private AgentContext createArchitectureContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("architecture")
                                 .serviceType("microservice")
                                 .domain("catalog")
@@ -304,7 +306,7 @@ class ComprehensiveSystemIntegrationTest {
         }
 
         private AgentContext createImplementationContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("implementation")
                                 .serviceType("spring-boot")
                                 .domain("inventory")
@@ -312,7 +314,7 @@ class ComprehensiveSystemIntegrationTest {
         }
 
         private AgentContext createSecurityContext() {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("security")
                                 .property("securityType", "jwt-authentication")
                                 .domain("all")
@@ -320,7 +322,7 @@ class ComprehensiveSystemIntegrationTest {
         }
 
         private AgentContext createServiceContext(String service) {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("service-specific")
                                 .serviceType("spring-boot")
                                 .property("serviceName", service)
@@ -329,7 +331,7 @@ class ComprehensiveSystemIntegrationTest {
 
         private AgentContext createRandomContext() {
                 String[] domains = { "catalog", "inventory", "customer", "order", "security" };
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type("general")
                                 .domain(domains[(int) (Math.random() * domains.length)])
                                 .build();

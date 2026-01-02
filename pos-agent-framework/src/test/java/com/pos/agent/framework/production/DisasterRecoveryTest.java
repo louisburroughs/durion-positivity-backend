@@ -4,6 +4,8 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
+import com.pos.agent.context.ResilienceContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,8 +32,7 @@ class DisasterRecoveryTest {
         @Test
         @DisplayName("Processes request even under simulated degraded conditions")
         void processesUnderDegradation() {
-                AgentContext context = AgentContext.builder()
-                                .domain("resilience")
+                AgentContext context = ResilienceContext.builder()
                                 .property("mode", "degraded")
                                 .build();
 

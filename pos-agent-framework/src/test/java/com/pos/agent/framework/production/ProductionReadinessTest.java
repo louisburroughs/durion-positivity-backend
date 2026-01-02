@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.OperationsContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,8 +32,7 @@ class ProductionReadinessTest {
         @Test
         @DisplayName("Operations readiness request processes successfully")
         void processesOperationsReadinessRequest() {
-                AgentContext context = AgentContext.builder()
-                                .domain("operations")
+                AgentContext context = OperationsContext.builder()
                                 .property("check", "readiness")
                                 .build();
 

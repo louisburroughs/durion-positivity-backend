@@ -1,5 +1,6 @@
 package com.pos.agent.core;
 
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.framework.audit.AuditTrailManager;
 import com.pos.agent.impl.StoryValidationAgent;
 
@@ -76,7 +77,7 @@ public class AgentManager {
             }
 
             // Try to find a registered agent that can handle the request
-            //TODO implement real agent activity and routing logic
+            // TODO implement real agent activity and routing logic
             Agent handlingAgent = findAgentForRequest(request);
 
             if (handlingAgent != null) {
@@ -143,8 +144,9 @@ public class AgentManager {
             if (agent instanceof StoryValidationAgent) {
                 // Always delegate story domain requests to StoryValidationAgent
                 // The agent will determine if it can handle based on activation conditions
-                if (request.getContext() instanceof com.pos.agent.context.AgentContext) {
-                    com.pos.agent.context.AgentContext ctx = (com.pos.agent.context.AgentContext) request.getContext();
+                if (request.getAgentContext() instanceof com.pos.agent.context.AgentContext) {
+                    com.pos.agent.context.AgentContext ctx = (com.pos.agent.context.AgentContext) request
+                            .getAgentContext();
                     if ("story".equals(ctx.getDomain())) {
                         return agent;
                     }
@@ -184,22 +186,13 @@ public class AgentManager {
         String query = "general request";
 
         // Try to extract query from context
-        Object contextObj = request.getContext();
+        AgentContext contextObj = request.getAgentContext();
         if (contextObj != null) {
-            if (contextObj instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> context = (Map<String, Object>) contextObj;
-                Object queryValue = context.get("query");
-                if (queryValue != null) {
-                    query = queryValue.toString();
-                }
-            } else if (contextObj instanceof com.pos.agent.context.AgentContext) {
-                // Handle AgentContext objects
-                com.pos.agent.context.AgentContext agentContext = (com.pos.agent.context.AgentContext) contextObj;
-                // For documentation requests, try to extract meaningful info from AgentContext
-                // The context contains "focus" property which hints at the request type
-                query = "documentation synchronization request";
-            }
+
+            // For documentation requests, try to extract meaningful info from AgentContext
+            // The context contains "focus" property which hints at the request type
+            query = "documentation synchronization request";
+
         }
 
         switch (type) {

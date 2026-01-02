@@ -44,8 +44,8 @@ public abstract class AbstractAgent implements Agent {
         if (request.getDescription() == null || request.getDescription().trim().isEmpty()) {
             return "Invalid request: description is required";
         }
-        if (request.getContext() == null) {
-            return "Invalid request: context is required";
+        if (request.getAgentContext() == null) {
+            return "Invalid request: agent context is required";
         }
         if (request.getType() == null || request.getType().contains("invalid")) {
             return "Invalid request: invalid type";

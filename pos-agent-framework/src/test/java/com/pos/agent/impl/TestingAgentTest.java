@@ -5,6 +5,7 @@ import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentStatus;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.TestingContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.Test;
 
@@ -31,8 +32,8 @@ class TestingAgentTest {
 
         @Test
         void shouldProvideUnitTestingGuidance() {
-                AgentContext context = AgentContext.builder()
-                                .domain("testing")
+                AgentContext context = TestingContext.builder()
+                                
                                 .property("service", "pos-catalog")
                                 .property("topic", "unit-testing")
                                 .property("query", "How to implement unit tests with JUnit 5?")
@@ -53,8 +54,8 @@ class TestingAgentTest {
 
         @Test
         void shouldProvideTDDGuidance() {
-                AgentContext context = AgentContext.builder()
-                                .domain("testing")
+                AgentContext context = TestingContext.builder()
+                                
                                 .property("service", "pos-inventory")
                                 .property("topic", "tdd")
                                 .property("query", "How to implement Test-Driven Development?")
@@ -75,8 +76,8 @@ class TestingAgentTest {
 
         @Test
         void shouldProvidePropertyBasedTestingGuidance() {
-                AgentContext context = AgentContext.builder()
-                                .domain("testing")
+                AgentContext context = TestingContext.builder()
+                                
                                 .property("service", "pos-price")
                                 .property("topic", "property-based-testing")
                                 .property("query", "How to implement property-based testing with jqwik?")
@@ -97,8 +98,8 @@ class TestingAgentTest {
 
         @Test
         void shouldProvideIntegrationTestingGuidance() {
-                AgentContext context = AgentContext.builder()
-                                .domain("testing")
+                AgentContext context = TestingContext.builder()
+                                
                                 .property("service", "pos-order")
                                 .property("topic", "integration-testing")
                                 .property("query", "How to implement integration tests with TestContainers?")
@@ -120,8 +121,8 @@ class TestingAgentTest {
         @Test
         void shouldExtendAbstractAgentAndValidateRequests() {
                 TestingAgent agent = new TestingAgent();
-                AgentContext context = AgentContext.builder()
-                                .domain("testing")
+                AgentContext context = TestingContext.builder()
+                                
                                 .property("service", "pos-catalog")
                                 .build();
 

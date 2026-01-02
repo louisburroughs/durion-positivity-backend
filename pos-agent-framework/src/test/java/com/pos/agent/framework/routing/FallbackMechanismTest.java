@@ -4,6 +4,8 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
+import com.pos.agent.context.ImplementationContext;
 import com.pos.agent.core.SecurityContext;
 import net.jqwik.api.*;
 
@@ -91,16 +93,15 @@ class FallbackMechanismTest {
         @Provide
         Arbitrary<AgentContext> contextFallbackScenarios() {
                 return Arbitraries.of(
-                                "implementation:Spring Boot implementation",
-                                "unknown:Unknown context").map(scenario -> {
-                                        String[] parts = scenario.split(":", 2);
-                                        return AgentContext.builder()
+                                 ImplementationContext.builder()
+                                                .property("technicalContext", "Spring Boot microservice")
+                                                .build(),
+                                DefaultContext.builder()
                                                         .domain("context-fallback")
-                                                        .property("requestType", parts[0])
-                                                        .property("description", parts[1])
-                                                        .property("requiresFallback", "unknown".equals(parts[0]))
-                                                        .build();
-                                });
+                                                        .property("requestType", "unknown")
+                                                        .property("description", "Unknown context")
+                                                        .property("requiresFallback", true)
+                                                        .build());
         }
 
         @Provide
@@ -109,7 +110,7 @@ class FallbackMechanismTest {
                                 "spring-boot",
                                 "security",
                                 "unknown-domain").map(
-                                                domain -> AgentContext.builder()
+                                                domain -> DefaultContext.builder()
                                                                 .domain("domain-fallback")
                                                                 .property("requestDomain", domain)
                                                                 .property("requiresFallback",
@@ -125,7 +126,7 @@ class FallbackMechanismTest {
                                 "documentation:available",
                                 "none:unavailable").map(scenario -> {
                                         String[] parts = scenario.split(":");
-                                        return AgentContext.builder()
+                                        return DefaultContext.builder()
                                                         .domain("universal-fallback")
                                                         .property("fallbackAgent", parts[0])
                                                         .property("agentAvailable", "available".equals(parts[1]))
@@ -146,7 +147,7 @@ class FallbackMechanismTest {
                                 "resilience:architecture",
                                 "unknown:none").map(scenario -> {
                                         String[] parts = scenario.split(":");
-                                        return AgentContext.builder()
+                                        return DefaultContext.builder()
                                                         .domain("agent-failure-fallback")
                                                         .property("failedAgent", parts[0])
                                                         .property("fallbackAgent", parts[1])

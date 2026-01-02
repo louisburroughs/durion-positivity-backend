@@ -4,6 +4,11 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ArchitectureContext;
+import com.pos.agent.context.DeploymentContext;
+import com.pos.agent.context.ImplementationContext;
+import com.pos.agent.context.StoryContext;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,8 +33,7 @@ class AgentCollaborationTest {
 
         @Test
         void testStoryProcessingWithArchitectureAndImplementationAgents() {
-                AgentContext storyContext = AgentContext.builder()
-                                .domain("inventory")
+                AgentContext storyContext = StoryContext.builder()
                                 .property("issueId", "123")
                                 .property("title", "Implement inventory service")
                                 .property("description", "Create REST API for inventory management")
@@ -65,9 +69,9 @@ class AgentCollaborationTest {
 
         @Test
         void testArchitectureReviewWithSecurityAndResilienceAgents() {
-                AgentContext archContext = AgentContext.builder()
+                AgentContext archContext = ArchitectureContext.builder()
                                 .serviceType("microservice")
-                                .domain("payment")
+                                .property("domain","payment")
                                 .property("patterns", List.of("api-gateway", "circuit-breaker"))
                                 .property("constraints", List.of("PCI-DSS compliance", "high availability"))
                                 .build();
@@ -97,8 +101,8 @@ class AgentCollaborationTest {
 
         @Test
         void testDeploymentWithCICDAndObservabilityAgents() {
-                AgentContext deployContext = AgentContext.builder()
-                                .domain("inventory")
+                AgentContext deployContext = DeploymentContext.builder()
+                                .property("domain", "inventory")
                                 .property("description", "Deploy pos-inventory service to Kubernetes")
                                 .property("requirements", List.of(
                                                 "Automated deployment pipeline",
@@ -131,8 +135,8 @@ class AgentCollaborationTest {
 
         @Test
         void testImplementationWithTestingAndBusinessDomainAgents() {
-                AgentContext implContext = AgentContext.builder()
-                                .domain("customer")
+                AgentContext implContext = ImplementationContext.builder()
+                                .property("domain", "customer")
                                 .property("description", "Implement customer loyalty points calculation")
                                 .property("requirements", List.of(
                                                 "Business rules for point calculation",
@@ -165,8 +169,8 @@ class AgentCollaborationTest {
 
         @Test
         void testConflictResolutionBetweenAgents() {
-                AgentContext secContext = AgentContext.builder()
-                                .domain("payment")
+                AgentContext secContext = com.pos.agent.context.SecurityContext.builder()
+                                .property("domain", "payment")
                                 .property("threatModel", "payment processing")
                                 .property("complianceRequirements", List.of("PCI-DSS", "SOX"))
                                 .property("securityConstraints", List.of("encryption at rest", "audit logging"))
@@ -195,8 +199,7 @@ class AgentCollaborationTest {
 
         @Test
         void testEscalationToHumanOnUnresolvableConflicts() {
-                AgentContext decisionContext = AgentContext.builder()
-                                .domain("architecture")
+                AgentContext decisionContext = ArchitectureContext.builder()
                                 .property("decision", "Choose between microservices vs monolith for small team")
                                 .property("criteria", List.of(
                                                 "Rapid development",
@@ -228,8 +231,8 @@ class AgentCollaborationTest {
 
         @Test
         void testAgentConsensusBuilding() {
-                AgentContext techSelection = AgentContext.builder()
-                                .domain("inventory")
+                AgentContext techSelection = ArchitectureContext.builder()
+                                .property("domain", "inventory")
                                 .property("topic", "Select database technology for pos-inventory service")
                                 .property("requirements", List.of(
                                                 "ACID compliance",
@@ -267,8 +270,7 @@ class AgentCollaborationTest {
 
         @Test
         void testCollaborationPerformanceWithinSLA() {
-                AgentContext perfContext = AgentContext.builder()
-                                .domain("implementation")
+                AgentContext perfContext = ImplementationContext.builder()
                                 .property("topic", "Best practices for Spring Boot REST API")
                                 .build();
 

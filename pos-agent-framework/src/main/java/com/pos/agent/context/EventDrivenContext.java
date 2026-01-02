@@ -1,17 +1,16 @@
 package com.pos.agent.context;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Context model for event-driven architecture scenarios.
  * Tracks message brokers, event handlers, schemas, and event sourcing patterns.
  */
-public class EventDrivenContext {
-    private final String contextId;
-    private final String sessionId;
-    private final Instant createdAt;
-    private Instant lastUpdated;
+public class EventDrivenContext extends AgentContext {
 
     // Message brokers and queues
     private final Set<String> messageBrokers;
@@ -35,61 +34,46 @@ public class EventDrivenContext {
     private final Set<String> choreography;
     private final Set<String> orchestration;
 
-    public EventDrivenContext(String contextId, String sessionId) {
-        this.contextId = Objects.requireNonNull(contextId, "Context ID cannot be null");
-        this.sessionId = Objects.requireNonNull(sessionId, "Session ID cannot be null");
-        this.createdAt = Instant.now();
-        this.lastUpdated = Instant.now();
+    private EventDrivenContext(Builder builder) {
+        super(builder);
+        this.messageBrokers = builder.messageBrokers;
+        this.brokerConfigurations = builder.brokerConfigurations;
+        this.deadLetterQueues = builder.deadLetterQueues;
+        this.dlqConfigurations = builder.dlqConfigurations;
 
-        this.messageBrokers = new LinkedHashSet<>();
-        this.brokerConfigurations = new HashMap<>();
-        this.deadLetterQueues = new LinkedHashSet<>();
-        this.dlqConfigurations = new HashMap<>();
+        this.eventHandlers = builder.eventHandlers;
+        this.handlerTypes = builder.handlerTypes;
+        this.eventStores = builder.eventStores;
+        this.eventSchemas = builder.eventSchemas;
+        this.eventSources = builder.eventSources;
+        this.eventConsumers = builder.eventConsumers;
+        this.idempotencyPatterns = builder.idempotencyPatterns;
+        this.errorHandlingStrategies = builder.errorHandlingStrategies;
+        this.projections = builder.projections;
 
-        this.eventHandlers = new LinkedHashSet<>();
-        this.handlerTypes = new HashMap<>();
-        this.eventStores = new LinkedHashSet<>();
-        this.eventSchemas = new HashMap<>();
-        this.eventSources = new LinkedHashSet<>();
-        this.eventConsumers = new LinkedHashSet<>();
-        this.idempotencyPatterns = new LinkedHashSet<>();
-        this.errorHandlingStrategies = new LinkedHashSet<>();
-        this.projections = new LinkedHashSet<>();
+        this.sagas = builder.sagas;
+        this.choreography = builder.choreography;
+        this.orchestration = builder.orchestration;
+    }
 
-        this.sagas = new LinkedHashSet<>();
-        this.choreography = new LinkedHashSet<>();
-        this.orchestration = new LinkedHashSet<>();
+    
+    public static Builder builder() {
+        return new Builder();
     }
 
     // Getters
-    public String getContextId() {
-        return contextId;
-    }
-
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getLastUpdated() {
-        return lastUpdated;
-    }
-
     public Set<String> getMessageBrokers() {
         return new LinkedHashSet<>(messageBrokers);
     }
 
-    public Map<String, Object> getBrokerConfigurations() {
-        Map<String, Object> result = new HashMap<>();
+    public Map<String, Map<String, Object>> getBrokerConfigurations() {
+        Map<String, Map<String, Object>> result = new HashMap<>();
         brokerConfigurations.forEach((key, value) -> result.put(key, new HashMap<>(value)));
         return result;
     }
 
     public Set<String> getDeadLetterQueues() {
-        return new LinkedHashSet<>(dlqConfigurations.keySet());
+        return new LinkedHashSet<>(deadLetterQueues);
     }
 
     public Map<String, String> getDeadLetterQueuesMap() {
@@ -98,6 +82,10 @@ public class EventDrivenContext {
 
     public Set<String> getEventHandlers() {
         return new LinkedHashSet<>(eventHandlers);
+    }
+
+    public Map<String, String> getHandlerTypes() {
+        return new HashMap<>(handlerTypes);
     }
 
     public Set<String> getEventStores() {
@@ -136,71 +124,115 @@ public class EventDrivenContext {
         return new LinkedHashSet<>(sagas);
     }
 
+    public Set<String> getChoreography() {
+        return new LinkedHashSet<>(choreography);
+    }
+
+    public Set<String> getOrchestration() {
+        return new LinkedHashSet<>(orchestration);
+    }
+
     // Mutators
     public void addMessageBroker(String broker, Map<String, Object> config) {
-        if (!this.messageBrokers.contains(broker)) {
-            this.messageBrokers.add(broker);
+        if (broker != null && this.messageBrokers.add(broker)) {
             if (config != null) {
                 this.brokerConfigurations.put(broker, new HashMap<>(config));
             }
-            this.lastUpdated = Instant.now();
+            updateTimestamp();
         }
     }
 
     public void addDeadLetterQueue(String queueName, String config) {
-        this.deadLetterQueues.add(queueName);
-        this.dlqConfigurations.put(queueName, config);
-        this.lastUpdated = Instant.now();
+        if (queueName != null) {
+            this.deadLetterQueues.add(queueName);
+            this.dlqConfigurations.put(queueName, config);
+            updateTimestamp();
+        }
     }
 
     public void addEventHandler(String handler, String idempotencyPattern) {
-        this.eventHandlers.add(handler);
-        if (idempotencyPattern != null) {
-            this.idempotencyPatterns.add(idempotencyPattern);
+        if (handler != null) {
+            this.eventHandlers.add(handler);
+            if (idempotencyPattern != null) {
+                this.idempotencyPatterns.add(idempotencyPattern);
+            }
+            updateTimestamp();
         }
-        this.lastUpdated = Instant.now();
     }
 
     public void addEventStore(String store) {
-        this.eventStores.add(store);
-        this.lastUpdated = Instant.now();
+        if (store != null && this.eventStores.add(store)) {
+            updateTimestamp();
+        }
     }
 
     public void addEventSchema(String schemaName, String version) {
-        this.eventSchemas.put(schemaName, version);
-        this.lastUpdated = Instant.now();
+        if (schemaName != null && version != null) {
+            this.eventSchemas.put(schemaName, version);
+            updateTimestamp();
+        }
     }
 
     public void addSaga(String saga) {
-        this.sagas.add(saga);
-        this.lastUpdated = Instant.now();
+        if (saga != null && this.sagas.add(saga)) {
+            updateTimestamp();
+        }
     }
 
     public void updateSchemaVersion(String schemaName, String newVersion) {
-        if (this.eventSchemas.containsKey(schemaName)) {
+        if (schemaName != null && newVersion != null && this.eventSchemas.containsKey(schemaName)) {
             this.eventSchemas.put(schemaName, newVersion);
-            this.lastUpdated = Instant.now();
+            updateTimestamp();
         }
     }
 
     public void addEventSource(String source) {
-        this.eventSources.add(source);
-        this.lastUpdated = Instant.now();
+        if (source != null && this.eventSources.add(source)) {
+            updateTimestamp();
+        }
     }
 
     public void addEventConsumer(String consumer) {
-        this.eventConsumers.add(consumer);
-        this.lastUpdated = Instant.now();
+        if (consumer != null && this.eventConsumers.add(consumer)) {
+            updateTimestamp();
+        }
     }
 
     public void addErrorHandlingStrategy(String strategy) {
-        this.errorHandlingStrategies.add(strategy);
-        this.lastUpdated = Instant.now();
+        if (strategy != null && this.errorHandlingStrategies.add(strategy)) {
+            updateTimestamp();
+        }
     }
 
     public void addProjection(String projection) {
-        this.projections.add(projection);
-        this.lastUpdated = Instant.now();
+        if (projection != null && this.projections.add(projection)) {
+            updateTimestamp();
+        }
+    }
+
+    public void addIdempotencyPattern(String pattern) {
+        if (pattern != null && this.idempotencyPatterns.add(pattern)) {
+            updateTimestamp();
+        }
+    }
+
+    public void addHandlerType(String handler, String type) {
+        if (handler != null && type != null) {
+            this.handlerTypes.put(handler, type);
+            updateTimestamp();
+        }
+    }
+
+    public void addOrchestration(String pattern) {
+        if (pattern != null && this.orchestration.add(pattern)) {
+            updateTimestamp();
+        }
+    }
+
+    public void addChoreography(String pattern) {
+        if (pattern != null && this.choreography.add(pattern)) {
+            updateTimestamp();
+        }
     }
 
     // Validation methods
@@ -219,10 +251,10 @@ public class EventDrivenContext {
     @Override
     public String toString() {
         return "EventDrivenContext{" +
-                "contextId='" + contextId + '\'' +
-                ", sessionId='" + sessionId + '\'' +
-                ", createdAt=" + createdAt +
-                ", lastUpdated=" + lastUpdated +
+                "contextId='" + getContextId() + '\'' +
+                ", sessionId='" + getSessionId() + '\'' +
+                ", createdAt=" + getCreatedAt() +
+                ", lastUpdated=" + getLastUpdated() +
                 ", brokers=" + messageBrokers.size() +
                 ", schemas=" + eventSchemas.size() +
                 ", handlers=" + eventHandlers.size() +
@@ -230,5 +262,236 @@ public class EventDrivenContext {
                 ", sagas=" + sagas.size() +
                 ", projections=" + projections.size() +
                 '}';
+    }
+
+    public static class Builder extends AgentContext.Builder<Builder> {
+        private Set<String> messageBrokers = new LinkedHashSet<>();
+        private Map<String, Map<String, Object>> brokerConfigurations = new HashMap<>();
+        private Set<String> deadLetterQueues = new LinkedHashSet<>();
+        private Map<String, String> dlqConfigurations = new HashMap<>();
+
+        private Set<String> eventHandlers = new LinkedHashSet<>();
+        private Map<String, String> handlerTypes = new HashMap<>();
+        private Set<String> eventStores = new LinkedHashSet<>();
+        private Map<String, String> eventSchemas = new HashMap<>();
+        private Set<String> eventSources = new LinkedHashSet<>();
+        private Set<String> eventConsumers = new LinkedHashSet<>();
+        private Set<String> idempotencyPatterns = new LinkedHashSet<>();
+        private Set<String> errorHandlingStrategies = new LinkedHashSet<>();
+        private Set<String> projections = new LinkedHashSet<>();
+
+        private Set<String> sagas = new LinkedHashSet<>();
+        private Set<String> choreography = new LinkedHashSet<>();
+        private Set<String> orchestration = new LinkedHashSet<>();
+
+        public Builder() {
+            domain("event-driven");
+            contextType("event-driven-context");
+        }
+
+        public Builder addMessageBroker(String broker, Map<String, Object> config) {
+            if (broker != null) {
+                messageBrokers.add(broker);
+                if (config != null) {
+                    brokerConfigurations.put(broker, new HashMap<>(config));
+                }
+            }
+            return this;
+        }
+
+        public Builder messageBrokers(Set<String> brokers) {
+            if (brokers != null) {
+                messageBrokers.addAll(brokers);
+            }
+            return this;
+        }
+
+        public Builder brokerConfigurations(Map<String, Map<String, Object>> configs) {
+            if (configs != null) {
+                configs.forEach((k, v) -> brokerConfigurations.put(k, v != null ? new HashMap<>(v) : new HashMap<>()));
+            }
+            return this;
+        }
+
+        public Builder addDeadLetterQueue(String queueName, String config) {
+            if (queueName != null) {
+                deadLetterQueues.add(queueName);
+                dlqConfigurations.put(queueName, config);
+            }
+            return this;
+        }
+
+        public Builder deadLetterQueues(Set<String> queues) {
+            if (queues != null) {
+                deadLetterQueues.addAll(queues);
+            }
+            return this;
+        }
+
+        public Builder dlqConfigurations(Map<String, String> configs) {
+            if (configs != null) {
+                dlqConfigurations.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder addEventHandler(String handler, String idempotencyPattern) {
+            if (handler != null) {
+                eventHandlers.add(handler);
+                if (idempotencyPattern != null) {
+                    idempotencyPatterns.add(idempotencyPattern);
+                }
+            }
+            return this;
+        }
+
+        public Builder eventHandlers(Set<String> handlers) {
+            if (handlers != null) {
+                eventHandlers.addAll(handlers);
+            }
+            return this;
+        }
+
+        public Builder handlerTypes(Map<String, String> types) {
+            if (types != null) {
+                handlerTypes.putAll(types);
+            }
+            return this;
+        }
+
+        public Builder addEventStore(String store) {
+            if (store != null) {
+                eventStores.add(store);
+            }
+            return this;
+        }
+
+        public Builder eventStores(Set<String> stores) {
+            if (stores != null) {
+                eventStores.addAll(stores);
+            }
+            return this;
+        }
+
+        public Builder addEventSchema(String name, String version) {
+            if (name != null && version != null) {
+                eventSchemas.put(name, version);
+            }
+            return this;
+        }
+
+        public Builder eventSchemas(Map<String, String> schemas) {
+            if (schemas != null) {
+                eventSchemas.putAll(schemas);
+            }
+            return this;
+        }
+
+        public Builder addEventSource(String source) {
+            if (source != null) {
+                eventSources.add(source);
+            }
+            return this;
+        }
+
+        public Builder eventSources(Set<String> sources) {
+            if (sources != null) {
+                eventSources.addAll(sources);
+            }
+            return this;
+        }
+
+        public Builder addEventConsumer(String consumer) {
+            if (consumer != null) {
+                eventConsumers.add(consumer);
+            }
+            return this;
+        }
+
+        public Builder eventConsumers(Set<String> consumers) {
+            if (consumers != null) {
+                eventConsumers.addAll(consumers);
+            }
+            return this;
+        }
+
+        public Builder addErrorHandlingStrategy(String strategy) {
+            if (strategy != null) {
+                errorHandlingStrategies.add(strategy);
+            }
+            return this;
+        }
+
+        public Builder errorHandlingStrategies(Set<String> strategies) {
+            if (strategies != null) {
+                errorHandlingStrategies.addAll(strategies);
+            }
+            return this;
+        }
+
+        public Builder addProjections(Set<String> projections) {
+            if (projections != null) {
+                this.projections.addAll(projections);
+            }
+            return this;
+        }
+
+        public Builder addProjection(String projection) {
+            if (projection != null) {
+                this.projections.add(projection);
+            }
+            return this;
+        }
+
+        public Builder addSaga(String saga) {
+            if (saga != null) {
+                sagas.add(saga);
+            }
+            return this;
+        }
+
+        public Builder sagas(Set<String> sagas) {
+            if (sagas != null) {
+                this.sagas.addAll(sagas);
+            }
+            return this;
+        }
+
+        public Builder choreography(Set<String> choreography) {
+            if (choreography != null) {
+                this.choreography.addAll(choreography);
+            }
+            return this;
+        }
+
+        public Builder addChoreography(String pattern) {
+            if (pattern != null) {
+                this.choreography.add(pattern);
+            }
+            return this;
+        }
+
+        public Builder orchestration(Set<String> orchestration) {
+            if (orchestration != null) {
+                this.orchestration.addAll(orchestration);
+            }
+            return this;
+        }
+
+        public Builder addOrchestration(String pattern) {
+            if (pattern != null) {
+                this.orchestration.add(pattern);
+            }
+            return this;
+        }
+
+        @Override
+        protected Builder self() {
+            return this;
+        }
+
+        public EventDrivenContext build() {
+            return new EventDrivenContext(this);
+        }
     }
 }

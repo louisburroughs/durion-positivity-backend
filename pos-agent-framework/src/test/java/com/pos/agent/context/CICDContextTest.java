@@ -23,7 +23,7 @@ class CICDContextTest {
 
     @BeforeEach
     void setUp() {
-        context = new CICDContext(contextId, sessionId);
+        context =  CICDContext.builder().contextId(contextId).sessionId(sessionId).build();
     }
 
     @Test
@@ -280,12 +280,12 @@ class CICDContextTest {
         assertTrue(context.isValid());
 
         // Valid with testing framework
-        CICDContext testContext = new CICDContext("test-ctx", "session");
+        CICDContext testContext =  CICDContext.builder().build();
         testContext.addTestingFramework("junit5", "config");
         assertTrue(testContext.isValid());
 
         // Valid with deployment strategy
-        CICDContext deployContext = new CICDContext("deploy-ctx", "session");
+        CICDContext deployContext = CICDContext.builder().build();
         deployContext.addDeploymentStrategy("blue-green", Map.of());
         assertTrue(deployContext.isValid());
 
