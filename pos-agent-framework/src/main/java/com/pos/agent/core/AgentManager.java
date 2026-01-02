@@ -5,6 +5,7 @@ import com.pos.agent.context.CICDContext;
 import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.ResilienceContext;
+import com.pos.agent.discovery.AgentDiscovery;
 import com.pos.agent.discovery.CapabilityBasedDiscoveryStrategy;
 import com.pos.agent.discovery.CompositeAgentDiscovery;
 import com.pos.agent.discovery.DomainBasedDiscoveryStrategy;
@@ -26,6 +27,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -40,7 +42,9 @@ import java.util.stream.Collectors;
 public class AgentManager implements AgentRegistry, ContextCoordinator {
     private final AuditTrailManager auditTrailManager;
     private final List<Agent> registeredAgents;
-    private final CompositeAgentDiscovery agentDiscovery;
+    private final AgentDiscovery agentDiscovery;
+    private final SecurityValidator securityValidator;
+    private final Supplier<Agent> fallbackAgentSupplier;
 
     static final Duration SESSION_TIMEOUT = Duration.ofMinutes(30);
     private static final Set<String> REQUIRED_CONTEXT_KEYS = Set.of(
@@ -51,26 +55,65 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
     // Maps contexts by session id
     private final Map<String, SessionContext> sessionContexts = new ConcurrentHashMap<>();
 
+    /**
+     * Creates an AgentManager with default collaborators.
+     * Uses SecurityValidation singleton, CompositeAgentDiscovery, and ArchitectureAgent fallback.
+     */
     public AgentManager() {
         this(new AuditTrailManager(), new ServiceAgentMapping());
     }
 
+    /**
+     * Creates an AgentManager with custom audit manager.
+     * Uses default service mapping, SecurityValidation singleton, CompositeAgentDiscovery, and ArchitectureAgent fallback.
+     */
     public AgentManager(AuditTrailManager auditTrailManager) {
         this(auditTrailManager, new ServiceAgentMapping());
     }
 
+    /**
+     * Creates an AgentManager with custom audit manager and service mapping.
+     * Uses SecurityValidation singleton, CompositeAgentDiscovery, and ArchitectureAgent fallback.
+     */
     public AgentManager(AuditTrailManager auditTrailManager, ServiceAgentMapping serviceMapping) {
+        this(auditTrailManager, serviceMapping, new DefaultSecurityValidator(), 
+             createDefaultDiscovery(serviceMapping), ArchitectureAgent::new);
+    }
+
+    /**
+     * Full constructor accepting all collaborators for dependency injection.
+     * Allows complete control over security validation, discovery, and fallback behavior.
+     * 
+     * @param auditTrailManager the audit manager for tracking request processing
+     * @param serviceMapping the service-to-agent mapping configuration
+     * @param securityValidator the security validator for authentication/authorization
+     * @param agentDiscovery the discovery strategy for routing requests
+     * @param fallbackAgentSupplier supplier for the fallback agent when discovery times out
+     */
+    public AgentManager(AuditTrailManager auditTrailManager, 
+                       ServiceAgentMapping serviceMapping,
+                       SecurityValidator securityValidator,
+                       AgentDiscovery agentDiscovery,
+                       Supplier<Agent> fallbackAgentSupplier) {
         this.auditTrailManager = auditTrailManager;
         this.registeredAgents = new ArrayList<>();
-        this.agentDiscovery = new CompositeAgentDiscovery();
-
-        // Register discovery strategies in order of priority
-        agentDiscovery.registerStrategy(new DomainBasedDiscoveryStrategy(serviceMapping));
-        agentDiscovery.registerStrategy(new ObjectiveBasedDiscoveryStrategy());
-        agentDiscovery.registerStrategy(new CapabilityBasedDiscoveryStrategy());
+        this.agentDiscovery = agentDiscovery;
+        this.securityValidator = securityValidator;
+        this.fallbackAgentSupplier = fallbackAgentSupplier;
 
         // Register default agents
         registerAgent(new StoryValidationAgent());
+    }
+
+    /**
+     * Creates the default composite discovery with all strategies.
+     */
+    private static AgentDiscovery createDefaultDiscovery(ServiceAgentMapping serviceMapping) {
+        CompositeAgentDiscovery discovery = new CompositeAgentDiscovery();
+        discovery.registerStrategy(new DomainBasedDiscoveryStrategy(serviceMapping));
+        discovery.registerStrategy(new ObjectiveBasedDiscoveryStrategy());
+        discovery.registerStrategy(new CapabilityBasedDiscoveryStrategy());
+        return discovery;
     }
 
     /**
@@ -90,14 +133,14 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
      */
     public AgentResponse processRequest(AgentRequest request) {
         long startTime = System.currentTimeMillis();
-        String userId = SecurityValidation.getInstance().extractUserId(request);
+        String userId = securityValidator.extractUserId(request);
         String agentType = request.getAgentContext().getAgentDomain();
         boolean success = false;
 
         try {
             // Validate security context
             if (request.getSecurityContext() != null) {
-                if (!SecurityValidation.getInstance().validateSecurityContext(request.getSecurityContext())) {
+                if (!securityValidator.validateSecurityContext(request.getSecurityContext())) {
                     // Record failed authentication attempt
                     recordAuditEntry(agentType, userId, "AUTHENTICATION_FAILED", false);
 
@@ -113,12 +156,12 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
             // Try to find a registered agent that can handle the request
 
             Agent handlingAgent = consultBestAgent(request)
-                    .completeOnTimeout(new ArchitectureAgent(), 5000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .completeOnTimeout(fallbackAgentSupplier.get(), 5000, java.util.concurrent.TimeUnit.MILLISECONDS)
                     .join();
 
             // Check role-based authorization using agent's declared requirements
             if (handlingAgent != null
-                    && !SecurityValidation.getInstance().validateAuthorization(request, handlingAgent)) {
+                    && !securityValidator.validateAuthorization(request, handlingAgent)) {
                 // Record failed authorization attempt
                 recordAuditEntry(agentType, userId, "AUTHORIZATION_FAILED", false);
 
