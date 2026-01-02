@@ -41,7 +41,7 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
     private final AuditTrailManager auditTrailManager;
     private final List<Agent> registeredAgents;
     private final CompositeAgentDiscovery agentDiscovery;
-    private final ServiceAgentMapping serviceMapping;
+   
 
     static final Duration SESSION_TIMEOUT = Duration.ofMinutes(30);
     private static final Set<String> REQUIRED_CONTEXT_KEYS = Set.of(
@@ -166,13 +166,6 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
         }
     }
 
-    // TODO: Performance Optimization Step 2 - Optimize audit trail recording
-    // Make audit recording asynchronous using a queue (e.g., BlockingQueue or
-    // Disruptor)
-    // to avoid blocking request processing. Consider batching multiple audit
-    // entries
-    // and writing them in bulk. Make audit recording configurable/optional for
-    // performance tests.
     private void recordAuditEntry(String agentType, String userId, String action, boolean success) {
         AuditTrailManager.AuditEntry entry = new AuditTrailManager.AuditEntry(
                 agentType,
@@ -187,21 +180,21 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
     }
 
     private String generateOutput(AgentRequest request, Agent agent) {
-        // TODO Generate a real query from the request context
-
-        String query = "general request";
-
-        // Try to extract query from context
         AgentContext contextObj = request.getAgentContext();
-        if (contextObj != null) {
-
-            // For documentation requests, try to extract meaningful info from AgentContext
-            // The context contains "focus" property which hints at the request type
-            query = "documentation synchronization request";
-
-        }
-
-        return agent.generateOutput(query);
+    
+    if (contextObj == null) {
+        return agent.generateOutput("general request");
+    }
+    
+    // Extract query from context properties in priority order
+    String query = Optional.ofNullable(contextObj.getProperties().get("objective"))
+        .or(() -> Optional.ofNullable(contextObj.getProperties().get("task")))
+        .or(() -> Optional.ofNullable(contextObj.getProperties().get("focus")))
+        .map(Object::toString)
+        .orElse("general request");
+    
+    // Generate output based on extracted query
+    return agent.generateOutput(query);
 
     }
 
