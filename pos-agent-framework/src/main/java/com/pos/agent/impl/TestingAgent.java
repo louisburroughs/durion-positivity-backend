@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class TestingAgent extends AbstractAgent {
 
-    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+    protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
     public TestingAgent() {
         super(AgentType.TESTING, List.of(
@@ -31,7 +31,7 @@ public class TestingAgent extends AbstractAgent {
 
     @Override
     public AgentContext getOrCreateContext(String sessionId) {
-        return contextMap.computeIfAbsent(sessionId,
+        return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> TestingContext.builder().requestId(sessionId).build());
     }
 
@@ -44,5 +44,10 @@ public class TestingAgent extends AbstractAgent {
                 .success(true)
                 .recommendations(List.of("implement pattern", "configure system", "add monitoring"))
                 .build();
+    }
+
+    @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
     }
 }

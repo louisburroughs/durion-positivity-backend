@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ResilienceEngineeringAgent extends AbstractAgent {
 
-        private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+        protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
         public ResilienceEngineeringAgent() {
                 super(AgentType.RESILIENCE_ENGINEERING, List.of(
@@ -32,7 +32,7 @@ public class ResilienceEngineeringAgent extends AbstractAgent {
 
         @Override
         public AgentContext getOrCreateContext(String sessionId) {
-                return contextMap.computeIfAbsent(sessionId,
+                return CONTEXT_MAP.computeIfAbsent(sessionId,
                                 sid -> ResilienceContext.builder().requestId(sessionId).build());
         }
 
@@ -94,4 +94,33 @@ public class ResilienceEngineeringAgent extends AbstractAgent {
                                                 "Use custom metrics for application-specific scaling"))
                                 .build();
         }
+
+        @Override
+        public void updateContext(String sessionId, String guidance) {
+                ResilienceContext ctx = (ResilienceContext) getOrCreateContext(sessionId);
+
+                if (guidance.contains("resilience4j") || guidance.contains("circuit breaker"))
+                        ctx.addCircuitBreaker("resilience4j", Map.of());
+                if (guidance.contains("exponential backoff") || guidance.contains("retry"))
+                        ctx.addRetryPattern("exponential-backoff", Map.of());
+                if (guidance.contains("exponential"))
+                        ctx.addBackoffStrategy("exponential");
+                if (guidance.contains("jitter"))
+                        ctx.addBackoffStrategy("jitter");
+                if (guidance.contains("bulkhead"))
+                        ctx.addBulkheadPattern("thread-pool-isolation");
+                if (guidance.contains("thread pool"))
+                        ctx.addThreadPool("isolated-thread-pool");
+                if (guidance.contains("chaos monkey") || guidance.contains("chaos"))
+                        ctx.addChaosExperiment("chaos-monkey");
+                if (guidance.contains("health check"))
+                        ctx.addHealthCheck("endpoint-health");
+                if (guidance.contains("sli") || guidance.contains("slo"))
+                        ctx.addSliSloDefinition("service", Map.of());
+        }
+
+        @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
+    }
 }

@@ -21,8 +21,14 @@ public abstract class AbstractAgent implements Agent {
     private AgentStatus status = AgentStatus.HEALTHY;
     private final List<String> capabilities = new ArrayList<>();
     private final AgentType technicalDomain;
-    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+    private static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
+    /**
+     * Creates an agent with the specified domain and capabilities.
+     *
+     * @param technicalDomain technical domain classification for the agent
+     * @param capabilities    capabilities the agent supports; may be null
+     */
     public AbstractAgent(AgentType technicalDomain, List<String> capabilities) {
         this.technicalDomain = technicalDomain;
         if (capabilities != null) {
@@ -30,29 +36,47 @@ public abstract class AbstractAgent implements Agent {
         }
     }
 
-   
-     @Override
+    /**
+     * Returns an existing context for the session or creates a new one.
+     *
+     * @param sessionId unique session identifier
+     * @return cached or newly created agent context
+     */
+    @Override
     public AgentContext getOrCreateContext(String sessionId) {
-        return contextMap.computeIfAbsent(sessionId,
+        return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> DefaultContext.builder().requestId(sessionId).build());
     }
 
+    /** {@inheritDoc} */
+    @Override
     public AgentStatus getStatus() {
         return status;
     }
 
+    /**
+     * Updates the agent status.
+     *
+     * @param status new status value
+     */
     public void setStatus(AgentStatus status) {
         this.status = status;
     }
 
+    /** {@inheritDoc} */
+    @Override
     public boolean isHealthy() {
         return this.status == AgentStatus.HEALTHY;
     }
 
+    /** {@inheritDoc} */
+    @Override
     public List<String> getCapabilities() {
         return Collections.unmodifiableList(capabilities);
     }
 
+    /** {@inheritDoc} */
+    @Override
     public AgentType getTechnicalDomain() {
         return technicalDomain;
     }
@@ -81,28 +105,14 @@ public abstract class AbstractAgent implements Agent {
         return List.of("AGENT_READ", "AGENT_WRITE");
     }
 
-    /**
-     * Default implementation for generating output.
-     * Provides basic fallback behavior that can be overridden by concrete agents.
-     * 
-     * @param query the agent query
-     * @return generated output string
-     */
+    /** {@inheritDoc} */
     @Override
     public String generateOutput(String query) {
         String domain = getTechnicalDomain().name().toLowerCase().replace('_', '-');
         return "Agent guidance for: " + query + " in " + domain + " domain";
     }
 
-    /**
-     * Process an agent request and return response.
-     * Performs validation before delegating to the implementation.
-     * Template method for processing agent requests.
-     * Validates the request and delegates to the concrete agent's handle method.
-     * 
-     * @param request The request to process
-     * @return The agent response
-     */
+    /** {@inheritDoc} */
     @Override
     public final AgentResponse processRequest(AgentRequest request) {
         // Validate request
@@ -117,8 +127,8 @@ public abstract class AbstractAgent implements Agent {
 
     /**
      * Validate the request. Returns null if valid, error message otherwise.
-     * 
-     * @param request The request to validate
+     *
+     * @param request the request to validate
      * @return null if valid, error message otherwise
      */
     protected String validateRequest(AgentRequest request) {
@@ -135,9 +145,9 @@ public abstract class AbstractAgent implements Agent {
 
     /**
      * Create a failure response with the given message.
-     * 
-     * @param message The error message
-     * @return The failure response
+     *
+     * @param message error message to include
+     * @return failure response
      */
     protected AgentResponse createFailureResponse(String message) {
         return AgentResponse.builder()
@@ -153,9 +163,20 @@ public abstract class AbstractAgent implements Agent {
     /**
      * Process the request after validation.
      * Subclasses must implement this method to provide their specific logic.
-     * 
-     * @param request The validated request
-     * @return The agent response
+     *
+     * @param request the validated request
+     * @return the agent response
      */
     protected abstract AgentResponse doProcessRequest(AgentRequest request);
+
+    @Override
+    public void updateContext(String sessionId, String guidance) {
+        DefaultContext ctx = (DefaultContext) getOrCreateContext(sessionId);
+        ctx.getProperties().put("guidance", guidance);
+    }
+
+    @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
+    }
 }

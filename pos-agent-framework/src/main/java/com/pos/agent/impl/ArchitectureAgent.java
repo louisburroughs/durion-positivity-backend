@@ -2,6 +2,10 @@ package com.pos.agent.impl;
 
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.context.ArchitectureContext;
+import com.pos.agent.context.CICDContext;
+import com.pos.agent.context.ConfigurationContext;
+import com.pos.agent.context.EventDrivenContext;
+import com.pos.agent.context.ResilienceContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -28,7 +32,7 @@ import java.util.stream.Collectors;
  */
 public class ArchitectureAgent extends AbstractAgent {
 
-    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+    protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
     public ArchitectureAgent() {
         super(AgentType.ARCHITECTURE, List.of(
@@ -41,8 +45,28 @@ public class ArchitectureAgent extends AbstractAgent {
 
     @Override
     public AgentContext getOrCreateContext(String sessionId) {
-        return contextMap.computeIfAbsent(sessionId,
+        return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> ArchitectureContext.builder().requestId(sessionId).build());
+    }
+
+    public AgentContext getOrCreateEventDrivenContext(String sessionId) {
+        return EventDrivenArchitectureAgent.CONTEXT_MAP.computeIfAbsent(sessionId,
+                sid -> EventDrivenContext.builder().requestId(sessionId).build());
+    }
+
+    public AgentContext getOrCreateCICDContext(String sessionId) {
+        return CICDPipelineAgent.CONTEXT_MAP.computeIfAbsent(sessionId,
+                sid -> CICDContext.builder().requestId(sessionId).build());
+    }
+
+    public AgentContext getOrCreateConfigurationContext(String sessionId) {
+        return ConfigurationManagementAgent.CONTEXT_MAP.computeIfAbsent(sessionId,
+                sid -> ConfigurationContext.builder().requestId(sessionId).build());
+    }
+
+    public AgentContext getOrCreateResilienceContext(String sessionId) {
+        return ResilienceEngineeringAgent.CONTEXT_MAP.computeIfAbsent(sessionId,
+                sid -> ResilienceContext.builder().requestId(sessionId).build());
     }
 
     @Override
@@ -328,5 +352,15 @@ public class ArchitectureAgent extends AbstractAgent {
         public void addTradeOff(String tradeOff) {
             this.tradeOffs.add(tradeOff);
         }
+    }
+
+    @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
+        EventDrivenArchitectureAgent.CONTEXT_MAP.remove(sessionId);
+        CICDPipelineAgent.CONTEXT_MAP.remove(sessionId);
+        ConfigurationManagementAgent.CONTEXT_MAP.remove(sessionId);
+        ResilienceEngineeringAgent.CONTEXT_MAP.remove(sessionId);
+
     }
 }

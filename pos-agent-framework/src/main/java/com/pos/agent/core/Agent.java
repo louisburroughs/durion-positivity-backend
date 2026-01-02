@@ -125,4 +125,9 @@ public interface Agent {
      * @see AgentContext
      */
     AgentContext getOrCreateContext(String sessionId);
+
+
+    void updateContext(String sessionId, String guidance);
+
+    void removeContext(String sessionId);
 }
