@@ -366,7 +366,7 @@ class PerformanceValidationIntegrationTest {
 
     private AgentContext createLightweightContext(int index) {
         return AgentContext.builder()
-                .domain("implementation")
+                .agentDomain("implementation")
                 .property("serviceType", "microservice")
                 .property("framework", "spring-boot")
                 .build();
@@ -375,19 +375,19 @@ class PerformanceValidationIntegrationTest {
     private AgentContext createUserContext(int userId, int requestIndex) {
         if (requestIndex % 3 == 0) {
             return AgentContext.builder()
-                    .domain("implementation")
+                    .agentDomain("implementation")
                     .property("serviceType", "microservice")
                     .property("userContext", "user-" + userId)
                     .build();
         } else if (requestIndex % 3 == 1) {
             return AgentContext.builder()
-                    .domain("security")
+                    .agentDomain("security")
                     .property("authenticationType", "jwt")
                     .property("authorizationModel", "rbac")
                     .build();
         } else {
             return AgentContext.builder()
-                    .domain("testing")
+                    .agentDomain("testing")
                     .property("testingFramework", "junit5")
                     .property("testTypes", "unit,integration")
                     .build();
@@ -396,7 +396,7 @@ class PerformanceValidationIntegrationTest {
 
     private AgentContext createComplexContext(int index) {
         return AgentContext.builder()
-                .domain("architecture")
+                .agentDomain("architecture")
                 .property("serviceType", "microservice")
                 .property("contextIdentifier", "complex-domain-" + index)
                 .property("scalabilityRequirements", "high")

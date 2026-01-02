@@ -13,11 +13,12 @@ import java.util.HashMap;
  */
 public abstract class AgentContext {
     private final String contextId;
-    private String sessionId;
+    private final String sessionId;
     private final Instant createdAt;
     private Instant lastUpdated;
     private final String contextType;
-    private final String domain;
+    private final String agentDomain;
+    private final String description;
     private final Map<String, Object> properties;
 
     protected AgentContext(Builder<?> builder) {
@@ -26,8 +27,9 @@ public abstract class AgentContext {
         this.createdAt = builder.createdAt != null ? builder.createdAt : Instant.now();
         this.lastUpdated = builder.lastUpdated != null ? builder.lastUpdated : this.createdAt;
         this.contextType = builder.contextType;
-        this.domain = builder.domain;
+        this.agentDomain = builder.agentDomain;
         this.properties = builder.properties;
+        this.description = builder.description;
     }
 
     public String getContextId() {
@@ -36,11 +38,6 @@ public abstract class AgentContext {
 
     public String getSessionId() {
         return sessionId;
-    }
-
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
-        updateTimestamp();
     }
 
     public Instant getCreatedAt() {
@@ -55,8 +52,8 @@ public abstract class AgentContext {
         return contextType;
     }
 
-    public String getDomain() {
-        return domain;
+    public String getAgentDomain() {
+        return agentDomain;
     }
 
     public Map<String, Object> getProperties() {
@@ -71,6 +68,10 @@ public abstract class AgentContext {
         this.lastUpdated = Instant.now();
     }
 
+    public String getDescription() {
+        return description;
+    }
+
     /**
      * Generic builder for AgentContext subclasses.
      * Uses the self-bounded generic pattern to enable fluent method chaining
@@ -79,8 +80,9 @@ public abstract class AgentContext {
      * @param <T> The concrete builder type
      */
     public static class Builder<T extends Builder<T>> {
+        public String description;
         private String contextType;
-        private String domain;
+        private String agentDomain;
         private Map<String, Object> properties = new HashMap<>();
         private String contextId;
         private String sessionId;
@@ -92,38 +94,23 @@ public abstract class AgentContext {
             return (T) this;
         }
 
-        public T contextType(String contextType) {
+        protected T contextType(String contextType) {
             this.contextType = contextType;
             return self();
         }
 
-        public T type(String type) {
+        protected T type(String type) {
             this.contextType = type;
             return self();
         }
 
-        public T domain(String domain) {
-            this.domain = domain;
+        protected T agentDomain(String agentDomain) {
+            this.agentDomain = agentDomain;
             return self();
         }
 
-        public T contextId(String contextId) {
-            this.contextId = contextId;
-            return self();
-        }
-
-        public T sessionId(String sessionId) {
-            this.sessionId = sessionId;
-            return self();
-        }
-
-        public T createdAt(Instant createdAt) {
-            this.createdAt = createdAt;
-            return self();
-        }
-
-        public T lastUpdated(Instant lastUpdated) {
-            this.lastUpdated = lastUpdated;
+        public T description(String description) {
+            this.description = description;
             return self();
         }
 

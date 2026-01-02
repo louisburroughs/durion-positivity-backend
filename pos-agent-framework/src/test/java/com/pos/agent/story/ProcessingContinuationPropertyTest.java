@@ -144,7 +144,7 @@ class ProcessingContinuationPropertyTest {
                                 "Payment Integration",
                                 "Inventory Management")
                                 .map(storyName -> AgentContext.builder()
-                                                .domain("story")
+                                                .agentDomain("story")
                                                 .property("storyName", storyName)
                                                 .property("isBackendStory", true)
                                                 .property("isValidContent", true)
@@ -167,7 +167,7 @@ class ProcessingContinuationPropertyTest {
                                 "Story With Numbers 123",
                                 "Story-With-Dashes-And-Details")
                                 .map(storyName -> AgentContext.builder()
-                                                .domain("story")
+                                                .agentDomain("story")
                                                 .property("storyName", storyName)
                                                 .property("contentLength", storyName.length())
                                                 .property("isBackendStory", true)
@@ -179,7 +179,7 @@ class ProcessingContinuationPropertyTest {
         Arbitrary<AgentContext> invalidBackendStories() {
                 return Arbitraries.of("Frontend", "Database", "DevOps")
                                 .map(storyType -> AgentContext.builder()
-                                                .domain("story")
+                                                .agentDomain("story")
                                                 .property("storyName", storyType + " Story")
                                                 .property("isBackendStory", false)
                                                 .property("isValidContent", true)
@@ -193,7 +193,7 @@ class ProcessingContinuationPropertyTest {
                                 "X",
                                 "Task: Fix bug")
                                 .map(content -> AgentContext.builder()
-                                                .domain("story")
+                                                .agentDomain("story")
                                                 .property("storyName", content)
                                                 .property("isBackendStory", true)
                                                 .property("isValidContent", false)

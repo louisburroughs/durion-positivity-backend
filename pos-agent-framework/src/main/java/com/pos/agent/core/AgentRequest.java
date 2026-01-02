@@ -9,15 +9,17 @@ import com.pos.agent.context.AgentContext;
  * backward compatibility
  */
 public class AgentRequest {
-    // Original fields for backward compatibility
-    private String description;
-    // private Object context;
-    private String type;
+
+    private Priority priority;
 
     // Enhanced security fields
     private AgentContext agentContext;
     private SecurityContext securityContext;
     private boolean requireTLS13;
+
+    public enum Priority {
+        LOW, NORMAL, HIGH, URGENT
+    }
 
     // Constructors
     private AgentRequest() {
@@ -25,37 +27,17 @@ public class AgentRequest {
     }
 
     private AgentRequest(Builder builder) {
-        this.type = builder.type;
-        this.description = builder.description;
-        // this.context = builder.context;
         this.agentContext = builder.agentContext;
         this.securityContext = builder.securityContext;
         this.requireTLS13 = builder.requireTLS13;
     }
 
-    // Original getters/setters for backward compatibility
-    public String getDescription() {
-        return description;
+    public Priority getPriority() {
+        return priority;
     }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    // public Object getContext() {
-    //     return context;
-    // }
-
-    // public void setContext(Object context) {
-    //     this.context = context;
-    // }
-
-    public String getType() {
-        return type;
-    }
-
-    public void setType(String type) {
-        this.type = type;
+    public void setPriority(Priority priority) {
+        this.priority = priority;
     }
 
     // Enhanced getters/setters for security features
@@ -89,30 +71,15 @@ public class AgentRequest {
     }
 
     public static class Builder {
-        private String type;
-        private String description;
-        private Object context;
+        // private String type;
+        // private String description;
+        private Priority priority;
         private AgentContext agentContext;
         private SecurityContext securityContext;
         private boolean requireTLS13;
 
-        public Builder type(String type) {
-            this.type = type;
-            return this;
-        }
-
-        public Builder description(String description) {
-            this.description = description;
-            return this;
-        }
-
-        public Builder context(Object context) {
-            this.context = context;
-            return this;
-        }
-
-        public Builder context(AgentContext agentContext) {
-            this.agentContext = agentContext;
+        public Builder priority(Priority priority) {
+            this.priority = priority;
             return this;
         }
 
@@ -132,15 +99,11 @@ public class AgentRequest {
         }
 
         public AgentRequest build() {
-            // Validate required fields
-            if (description == null || description.trim().isEmpty()) {
-                throw new IllegalStateException("description is required and cannot be null or empty");
+            if (agentContext == null) {
+                throw new IllegalStateException("agentContext is required and cannot be null");
             }
-            if (type == null || type.trim().isEmpty()) {
-                throw new IllegalStateException("type is required and cannot be null or empty");
-            }
-            if (context == null && agentContext == null) {
-                throw new IllegalStateException("context or agentContext is required and cannot be null");
+            if (securityContext == null) {
+                throw new IllegalStateException("securityContext is required and cannot be null");
             }
 
             return new AgentRequest(this);

@@ -62,7 +62,7 @@ class SecurityComplianceValidationPropertyTest {
         @Property(tries = 100)
         void owaspComplianceGuidance(@ForAll("owaspVulnerabilityScenarios") String vulnerability) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("security")
+                                .agentDomain("security")
                                 .property("vulnerability", vulnerability)
                                 .build();
 
@@ -84,7 +84,7 @@ class SecurityComplianceValidationPropertyTest {
         @Property(tries = 100)
         void authenticationAuthorizationPatterns(@ForAll("authenticationScenarios") String scenario) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("security")
+                                .agentDomain("security")
                                 .property("scenario", scenario)
                                 .build();
 
@@ -106,7 +106,7 @@ class SecurityComplianceValidationPropertyTest {
         @Property(tries = 100)
         void encryptionImplementationGuidance(@ForAll("encryptionScenarios") String scenario) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("security")
+                                .agentDomain("security")
                                 .property("scenario", scenario)
                                 .build();
 
@@ -147,19 +147,21 @@ class SecurityComplianceValidationPropertyTest {
         @Provide
         Arbitrary<AgentContext> securityImplementationContexts() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("security").property("topic", "jwt").build(),
-                                AgentContext.builder().domain("security").property("topic", "owasp").build(),
-                                AgentContext.builder().domain("security").property("topic", "spring-security").build(),
-                                AgentContext.builder().domain("security").property("topic", "authorization").build(),
-                                AgentContext.builder().domain("security").property("topic", "validation").build(),
-                                AgentContext.builder().domain("security").property("topic", "encryption-at-rest")
+                                AgentContext.builder().agentDomain("security").property("topic", "jwt").build(),
+                                AgentContext.builder().agentDomain("security").property("topic", "owasp").build(),
+                                AgentContext.builder().agentDomain("security").property("topic", "spring-security")
                                                 .build(),
-                                AgentContext.builder().domain("security").property("topic", "tls").build(),
-                                AgentContext.builder().domain("security").property("topic", "api-gateway-security")
+                                AgentContext.builder().agentDomain("security").property("topic", "authorization")
                                                 .build(),
-                                AgentContext.builder().domain("security").property("topic", "secrets-management")
+                                AgentContext.builder().agentDomain("security").property("topic", "validation").build(),
+                                AgentContext.builder().agentDomain("security").property("topic", "encryption-at-rest")
                                                 .build(),
-                                AgentContext.builder().domain("security").property("topic", "rbac").build());
+                                AgentContext.builder().agentDomain("security").property("topic", "tls").build(),
+                                AgentContext.builder().agentDomain("security").property("topic", "api-gateway-security")
+                                                .build(),
+                                AgentContext.builder().agentDomain("security").property("topic", "secrets-management")
+                                                .build(),
+                                AgentContext.builder().agentDomain("security").property("topic", "rbac").build());
         }
 
         @Provide

@@ -70,7 +70,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                 // Then: Response should be successful
                 assertThat(response.isSuccess())
                                 .describedAs("Response should be successful for domain: %s",
-                                                request.getAgentContext().getDomain())
+                                                request.getAgentContext().getAgentDomain())
                                 .isTrue();
 
                 // And: Response should return success status
@@ -79,7 +79,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                 .isNotNull();
 
                 // And: Guidance should be relevant to the requested domain
-                String domain = request.getAgentContext().getDomain().toLowerCase();
+                String domain = request.getAgentContext().getAgentDomain().toLowerCase();
 
                 boolean isDomainSpecific = switch (domain) {
                         case "architecture" -> containsArchitecturalConcepts(domain);
@@ -114,7 +114,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                 assertThat(response.isSuccess()).isTrue();
 
                 // And: Domain should be implementation-related
-                boolean hasImplementationDomain = request.getAgentContext().getDomain().equals("implementation");
+                boolean hasImplementationDomain = request.getAgentContext().getAgentDomain().equals("implementation");
 
                 assertThat(hasImplementationDomain)
                                 .describedAs("Spring Boot request should target implementation domain")
@@ -141,7 +141,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                 assertThat(response.isSuccess()).isTrue();
 
                 // And: Status should be deployment-related
-                String domain = request.getAgentContext().getDomain();
+                String domain = request.getAgentContext().getAgentDomain();
                 boolean hasDeploymentDomain = domain.equals("deployment");
 
                 assertThat(hasDeploymentDomain)
@@ -169,7 +169,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                 assertThat(response.isSuccess()).isTrue();
 
                 // And: Domain should be either implementation or deployment
-                String domain = request.getAgentContext().getDomain();
+                String domain = request.getAgentContext().getAgentDomain();
                 boolean isValidDomain = domain.equals("implementation") || domain.equals("deployment");
 
                 assertThat(isValidDomain)
@@ -191,7 +191,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                                 .type("domain-test")
                                                 .description("Domain consultation property test")
                                                 .context(AgentContext.builder()
-                                                                .domain(domain)
+                                                                .agentDomain(domain)
                                                                 .property("query", query)
                                                                 .build())
                                                 .securityContext(getTestSecurityContext())
@@ -211,7 +211,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                                 .type("spring-boot-test")
                                                 .description("Spring Boot guidance property test")
                                                 .context(AgentContext.builder()
-                                                                .domain("implementation")
+                                                                .agentDomain("implementation")
                                                                 .property("query", query)
                                                                 .property("framework", "spring-boot")
                                                                 .build())
@@ -232,7 +232,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                                 .type("aws-deployment-test")
                                                 .description("AWS deployment guidance property test")
                                                 .context(AgentContext.builder()
-                                                                .domain("deployment")
+                                                                .agentDomain("deployment")
                                                                 .property("query", query)
                                                                 .property("cloud", "aws")
                                                                 .build())
@@ -255,7 +255,7 @@ class DomainSpecificGuidanceQualityPropertyTest {
                                                 .type("datastore-test")
                                                 .description("Data store guidance property test")
                                                 .context(AgentContext.builder()
-                                                                .domain(domain)
+                                                                .agentDomain(domain)
                                                                 .property("query", query)
                                                                 .build())
                                                 .securityContext(getTestSecurityContext())

@@ -77,7 +77,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
         void openTelemetryIntegrationGuidance(@ForAll("openTelemetryScenarios") String scenario) {
                 // Given: A request about OpenTelemetry integration
                 AgentContext context = AgentContext.builder()
-                                .domain("observability")
+                                .agentDomain("observability")
                                 .property("scenario", scenario)
                                 .build();
 
@@ -108,7 +108,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
         void redMetricsImplementationGuidance(@ForAll("redMetricsScenarios") String metricType) {
                 // Given: A request about RED metrics implementation
                 AgentContext context = AgentContext.builder()
-                                .domain("observability")
+                                .agentDomain("observability")
                                 .property("metricType", metricType)
                                 .build();
 
@@ -139,7 +139,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
         void monitoringStackIntegrationGuidance(@ForAll("monitoringStackComponents") String component) {
                 // Given: A request about monitoring stack integration
                 AgentContext context = AgentContext.builder()
-                                .domain("observability")
+                                .agentDomain("observability")
                                 .property("component", component)
                                 .build();
 
@@ -196,25 +196,25 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
         @Provide
         Arbitrary<AgentContext> microserviceImplementationRequests() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "implement OpenTelemetry instrumentation").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "add RED metrics monitoring").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "configure distributed tracing").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "set up Prometheus metrics").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "create Grafana dashboards").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "implement error tracking").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "add performance monitoring").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "configure observability stack").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "instrument microservice endpoints").build(),
-                                AgentContext.builder().domain("observability")
+                                AgentContext.builder().agentDomain("observability")
                                                 .property("query", "monitor business metrics").build());
         }
 

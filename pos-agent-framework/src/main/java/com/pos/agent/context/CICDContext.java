@@ -84,7 +84,6 @@ public class CICDContext extends AgentContext {
         this.environment = builder.environment;
     }
 
-   
     public static Builder builder() {
         return new Builder();
     }
@@ -251,7 +250,7 @@ public class CICDContext extends AgentContext {
         private String environment;
 
         public Builder() {
-            domain("cicd");
+            agentDomain("cicd");
             contextType("cicd-context");
         }
 

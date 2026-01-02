@@ -33,7 +33,7 @@ public class PairProgrammingNavigatorDebugTest {
                 String contextDescription = "The service layer keeps getting refactored without progress";
 
                 AgentContext context = AgentContext.builder()
-                                .domain("collaboration")
+                                .agentDomain("collaboration")
                                 .property("scenario", contextDescription)
                                 .property("requestType", "loop-detection")
                                 .build();

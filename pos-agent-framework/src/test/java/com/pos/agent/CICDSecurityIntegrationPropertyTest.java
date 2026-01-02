@@ -144,7 +144,7 @@ class CICDSecurityIntegrationPropertyTest {
                 return Arbitraries.of(
                                 "microservices", "monolithic", "serverless", "containerized", "hybrid")
                                 .map(architecture -> AgentContext.builder()
-                                                .domain("ci-cd")
+                                                .agentDomain("ci-cd")
                                                 .property("architecture", architecture)
                                                 .property("includeSecurityScanning", "true")
                                                 .build());
@@ -154,7 +154,7 @@ class CICDSecurityIntegrationPropertyTest {
         Arbitrary<AgentContext> securityScanningContexts() {
                 return Arbitraries.of("sast", "dast", "dependency", "container", "combined")
                                 .map(scanType -> AgentContext.builder()
-                                                .domain("security")
+                                                .agentDomain("security")
                                                 .property("scanningType", scanType)
                                                 .property("automationLevel", "high")
                                                 .build());
@@ -165,7 +165,7 @@ class CICDSecurityIntegrationPropertyTest {
                 return Arbitraries.of(
                                 "unit", "integration", "contract", "security", "end-to-end")
                                 .map(testType -> AgentContext.builder()
-                                                .domain("testing")
+                                                .agentDomain("testing")
                                                 .property("testType", testType)
                                                 .property("coverageRequired", "80")
                                                 .build());

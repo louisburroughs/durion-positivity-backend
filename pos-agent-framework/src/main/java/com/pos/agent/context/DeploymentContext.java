@@ -31,8 +31,6 @@ public class DeploymentContext extends AgentContext {
         this.maintenanceWindows = builder.maintenanceWindows;
     }
 
-    
-
     public static Builder builder() {
         return new Builder();
     }
@@ -147,7 +145,7 @@ public class DeploymentContext extends AgentContext {
         private Set<String> maintenanceWindows = new LinkedHashSet<>();
 
         public Builder() {
-            domain("deployment");
+            agentDomain("deployment");
             contextType("deployment-context");
         }
 

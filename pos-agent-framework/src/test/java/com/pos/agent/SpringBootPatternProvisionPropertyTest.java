@@ -59,7 +59,7 @@ class SpringBootPatternProvisionPropertyTest {
         @Property(tries = 100)
         void springBootMicroservicePatterns(@ForAll("springBootQueries") String query) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("implementation")
+                                .agentDomain("implementation")
                                 .property("type", "microservice")
                                 .property("query", query)
                                 .build();
@@ -81,7 +81,7 @@ class SpringBootPatternProvisionPropertyTest {
         @Property(tries = 100)
         void dataAccessPatternProvision(@ForAll("dataStoreTypes") String dataStoreType) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("implementation")
+                                .agentDomain("implementation")
                                 .property("dataStore", dataStoreType)
                                 .property("operation", "data-access")
                                 .build();
@@ -100,25 +100,25 @@ class SpringBootPatternProvisionPropertyTest {
         @Provide
         Arbitrary<AgentContext> microserviceImplementationContexts() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "microservice")
                                                 .property("moduleName", "pos-catalog").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "microservice")
                                                 .property("moduleName", "pos-customer").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "microservice")
                                                 .property("moduleName", "pos-order").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "microservice")
                                                 .property("moduleName", "pos-inventory").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "microservice")
                                                 .property("moduleName", "pos-payment").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "microservice")
                                                 .property("moduleName", "pos-product").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "microservice")
                                                 .property("moduleName", "pos-vehicle").build());
         }

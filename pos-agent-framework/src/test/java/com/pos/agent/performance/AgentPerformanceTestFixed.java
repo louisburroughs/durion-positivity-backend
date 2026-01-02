@@ -174,7 +174,7 @@ public class AgentPerformanceTestFixed {
                 .type("performance-test")
                 .description("Performance test request for domain: " + domain)
                 .context(AgentContext.builder()
-                        .domain(domain)
+                        .agentDomain(domain)
                         .property("service", "test-service")
                         .property("environment", "test")
                         .property("query", getQueryForDomain(domain))

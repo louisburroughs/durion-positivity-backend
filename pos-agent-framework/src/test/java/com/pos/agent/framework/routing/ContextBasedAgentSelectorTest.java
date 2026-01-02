@@ -105,7 +105,7 @@ class ContextBasedAgentSelectorTest {
                                 ImplementationContext.builder()
                                                 .property("technicalContext", "Spring Boot microservice")
                                                 .build(),
-                               com.pos.agent.context.SecurityContext.builder()
+                                com.pos.agent.context.SecurityContext.builder()
                                                 .property("technicalContext", "JWT authentication")
                                                 .build(),
                                 ArchitectureContext.builder()
@@ -141,7 +141,7 @@ class ContextBasedAgentSelectorTest {
                                 "Microservices with Kafka and testing",
                                 "CI/CD with deployment and resilience").map(
                                                 description -> DefaultContext.builder()
-                                                                .domain("multi-domain")
+                                                                .agentDomain("multi-domain")
                                                                 .property("description", description)
                                                                 .property("isComplex", true)
                                                                 .build());
@@ -155,7 +155,7 @@ class ContextBasedAgentSelectorTest {
                                 "minimal:X").map(contextStr -> {
                                         String[] parts = contextStr.split(":", 2);
                                         return DefaultContext.builder()
-                                                        .domain(parts[0])
+                                                        .agentDomain(parts[0])
                                                         .property("context", parts.length > 1 ? parts[1] : "")
                                                         .property("isEdgeCase", true)
                                                         .build();
@@ -170,7 +170,7 @@ class ContextBasedAgentSelectorTest {
                                         String[] parts = contextStr.split(":", 2);
                                         boolean isComplex = "complex".equals(parts[0]);
                                         return DefaultContext.builder()
-                                                        .domain("complexity-analysis")
+                                                        .agentDomain("complexity-analysis")
                                                         .property("description", parts[1])
                                                         .property("isComplex", isComplex)
                                                         .build();

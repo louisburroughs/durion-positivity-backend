@@ -59,7 +59,7 @@ class ServiceBoundaryValidationPropertyTest {
         @Property(tries = 100)
         void crossDomainBoundaryEnforcement(@ForAll("crossDomainScenarios") String scenario) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("implementation")
+                                .agentDomain("implementation")
                                 .property("type", "business-logic")
                                 .property("scenario", scenario)
                                 .build();
@@ -81,7 +81,7 @@ class ServiceBoundaryValidationPropertyTest {
         @Property(tries = 100)
         void serviceLayerDesignValidation(@ForAll("serviceLayerQueries") String query) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("implementation")
+                                .agentDomain("implementation")
                                 .property("layer", "service")
                                 .property("query", query)
                                 .build();
@@ -103,7 +103,7 @@ class ServiceBoundaryValidationPropertyTest {
         @Property(tries = 100)
         void domainDrivenDesignEnforcement(@ForAll("dddScenarios") String scenario) {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("implementation")
+                                .agentDomain("implementation")
                                 .property("approach", "ddd")
                                 .property("scenario", scenario)
                                 .build();
@@ -122,19 +122,19 @@ class ServiceBoundaryValidationPropertyTest {
         @Provide
         Arbitrary<AgentContext> businessLogicImplementationContexts() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "business-logic")
                                                 .property("moduleName", "pos-order").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "business-logic")
                                                 .property("moduleName", "pos-customer").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "business-logic")
                                                 .property("moduleName", "pos-inventory").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "business-logic")
                                                 .property("moduleName", "pos-payment").build(),
-                                AgentContext.builder().domain("implementation")
+                                AgentContext.builder().agentDomain("implementation")
                                                 .property("type", "business-logic")
                                                 .property("moduleName", "pos-pricing").build());
         }

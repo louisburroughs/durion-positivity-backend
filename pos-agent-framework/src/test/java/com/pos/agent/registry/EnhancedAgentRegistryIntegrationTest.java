@@ -182,7 +182,7 @@ class EnhancedAgentRegistryIntegrationTest {
                                 "integration", "pair-programming", "governance",
                                 "event-driven", "cicd", "configuration", "resilience")
                                 .map(domain -> AgentContext.builder()
-                                                .domain("registry")
+                                                .agentDomain("registry")
                                                 .property("queryDomain", domain)
                                                 .build());
         }
@@ -200,7 +200,7 @@ class EnhancedAgentRegistryIntegrationTest {
                                 "config-management",
                                 "resilience-patterns")
                                 .map(requestType -> AgentContext.builder()
-                                                .domain("routing")
+                                                .agentDomain("routing")
                                                 .property("requestType", requestType)
                                                 .build());
         }
@@ -213,7 +213,7 @@ class EnhancedAgentRegistryIntegrationTest {
                                 "message-brokers",
                                 "event-schemas")
                                 .map(topic -> AgentContext.builder()
-                                                .domain("event-driven")
+                                                .agentDomain("event-driven")
                                                 .property("topic", topic)
                                                 .build());
         }
@@ -226,7 +226,7 @@ class EnhancedAgentRegistryIntegrationTest {
                                 "security-scanning",
                                 "test-automation")
                                 .map(feature -> AgentContext.builder()
-                                                .domain("cicd")
+                                                .agentDomain("cicd")
                                                 .property("feature", feature)
                                                 .build());
         }
@@ -239,7 +239,7 @@ class EnhancedAgentRegistryIntegrationTest {
                                 "secrets-management",
                                 "configuration-profiles")
                                 .map(configType -> AgentContext.builder()
-                                                .domain("configuration")
+                                                .agentDomain("configuration")
                                                 .property("configType", configType)
                                                 .build());
         }
@@ -252,7 +252,7 @@ class EnhancedAgentRegistryIntegrationTest {
                                 "timeout-handling",
                                 "chaos-engineering")
                                 .map(pattern -> AgentContext.builder()
-                                                .domain("resilience")
+                                                .agentDomain("resilience")
                                                 .property("pattern", pattern)
                                                 .build());
         }
@@ -265,7 +265,7 @@ class EnhancedAgentRegistryIntegrationTest {
                                 "comprehensive-testing",
                                 "holistic-deployment")
                                 .map(scenario -> AgentContext.builder()
-                                                .domain("multi-domain")
+                                                .agentDomain("multi-domain")
                                                 .property("scenario", scenario)
                                                 .property("requiresMultipleAgents", true)
                                                 .build());
