@@ -12,46 +12,46 @@ class AgentStatusTest {
     @Test
     void testEnumValues() {
         // Verify all expected enum values exist
-        assertEquals(4, AgentStatus.values().length);
-        
-        assertNotNull(AgentStatus.SUCCESS);
-        assertNotNull(AgentStatus.FAILURE);
-        assertNotNull(AgentStatus.STOPPED);
-        assertNotNull(AgentStatus.PENDING);
+        assertEquals(4, AgentProcessingState.values().length);
+
+        assertNotNull(AgentProcessingState.SUCCESS);
+        assertNotNull(AgentProcessingState.FAILURE);
+        assertNotNull(AgentProcessingState.STOPPED);
+        assertNotNull(AgentProcessingState.PENDING);
     }
 
     @Test
     void testEnumValueOf() {
         // Test valueOf with valid status names
-        assertEquals(AgentStatus.SUCCESS, AgentStatus.valueOf("SUCCESS"));
-        assertEquals(AgentStatus.FAILURE, AgentStatus.valueOf("FAILURE"));
-        assertEquals(AgentStatus.STOPPED, AgentStatus.valueOf("STOPPED"));
-        assertEquals(AgentStatus.PENDING, AgentStatus.valueOf("PENDING"));
+        assertEquals(AgentProcessingState.SUCCESS, AgentProcessingState.valueOf("SUCCESS"));
+        assertEquals(AgentProcessingState.FAILURE, AgentProcessingState.valueOf("FAILURE"));
+        assertEquals(AgentProcessingState.STOPPED, AgentProcessingState.valueOf("STOPPED"));
+        assertEquals(AgentProcessingState.PENDING, AgentProcessingState.valueOf("PENDING"));
     }
 
     @Test
     void testEnumValueOfInvalid() {
         // Test valueOf with invalid status name throws exception
         assertThrows(IllegalArgumentException.class, () -> {
-            AgentStatus.valueOf("INVALID");
+            AgentProcessingState.valueOf("INVALID");
         });
     }
 
     @Test
     void testEnumName() {
         // Test that enum names are as expected
-        assertEquals("SUCCESS", AgentStatus.SUCCESS.name());
-        assertEquals("FAILURE", AgentStatus.FAILURE.name());
-        assertEquals("STOPPED", AgentStatus.STOPPED.name());
-        assertEquals("PENDING", AgentStatus.PENDING.name());
+        assertEquals("SUCCESS", AgentProcessingState.SUCCESS.name());
+        assertEquals("FAILURE", AgentProcessingState.FAILURE.name());
+        assertEquals("STOPPED", AgentProcessingState.STOPPED.name());
+        assertEquals("PENDING", AgentProcessingState.PENDING.name());
     }
 
     @Test
     void testEnumEquality() {
         // Test enum equality
-        AgentStatus status1 = AgentStatus.SUCCESS;
-        AgentStatus status2 = AgentStatus.valueOf("SUCCESS");
-        
+        AgentProcessingState status1 = AgentProcessingState.SUCCESS;
+        AgentProcessingState status2 = AgentProcessingState.valueOf("SUCCESS");
+
         assertEquals(status1, status2);
         assertSame(status1, status2); // Enums are singletons
     }
@@ -59,16 +59,16 @@ class AgentStatusTest {
     @Test
     void testEnumInequality() {
         // Test enum inequality
-        assertNotEquals(AgentStatus.SUCCESS, AgentStatus.FAILURE);
-        assertNotEquals(AgentStatus.PENDING, AgentStatus.STOPPED);
+        assertNotEquals(AgentProcessingState.SUCCESS, AgentProcessingState.FAILURE);
+        assertNotEquals(AgentProcessingState.PENDING, AgentProcessingState.STOPPED);
     }
 
     @Test
     void testEnumOrdinal() {
         // Test enum ordinals (order in which they're declared)
-        assertEquals(0, AgentStatus.SUCCESS.ordinal());
-        assertEquals(1, AgentStatus.FAILURE.ordinal());
-        assertEquals(2, AgentStatus.STOPPED.ordinal());
-        assertEquals(3, AgentStatus.PENDING.ordinal());
+        assertEquals(0, AgentProcessingState.SUCCESS.ordinal());
+        assertEquals(1, AgentProcessingState.FAILURE.ordinal());
+        assertEquals(2, AgentProcessingState.STOPPED.ordinal());
+        assertEquals(3, AgentProcessingState.PENDING.ordinal());
     }
 }

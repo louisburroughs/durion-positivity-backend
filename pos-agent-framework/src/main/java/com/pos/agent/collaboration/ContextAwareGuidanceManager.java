@@ -1,8 +1,8 @@
 package com.pos.agent.collaboration;
 
-import com.pos.agent.AgentConsultationRequest;
-import com.pos.agent.AgentGuidanceResponse;
 import com.pos.agent.context.*;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Requirements: REQ-001.3, REQ-012.1, REQ-013.1, REQ-014.1, REQ-015.1
  */
 public class ContextAwareGuidanceManager {
-    private static final Duration SESSION_TIMEOUT = Duration.ofMinutes(30);
+    static final Duration SESSION_TIMEOUT = Duration.ofMinutes(30);
     private static final Set<String> REQUIRED_CONTEXT_KEYS = Set.of(
             "session-id", "project-context", "architectural-decisions",
             "current-task", "domain-constraints", "event-driven-context",
@@ -29,140 +29,25 @@ public class ContextAwareGuidanceManager {
     private final Map<String, ResilienceContext> resilienceContexts = new ConcurrentHashMap<>();
 
     /**
-     * Session context for tracking progress and decisions.
-     */
-    public static class SessionContext {
-        private final String sessionId;
-        private final Instant createdAt;
-        private Instant lastUpdated;
-        private String taskObjective;
-        private Map<String, Object> architecturalDecisions;
-        private List<String> nextSteps;
-
-        public SessionContext(String sessionId) {
-            this.sessionId = sessionId;
-            this.createdAt = Instant.now();
-            this.lastUpdated = Instant.now();
-            this.architecturalDecisions = new HashMap<>();
-            this.nextSteps = new ArrayList<>();
-        }
-
-        public String getSessionId() {
-            return sessionId;
-        }
-
-        public Instant getCreatedAt() {
-            return createdAt;
-        }
-
-        public Instant getLastUpdated() {
-            return lastUpdated;
-        }
-
-        public void setLastUpdated(Instant lastUpdated) {
-            this.lastUpdated = lastUpdated;
-        }
-
-        public String getTaskObjective() {
-            return taskObjective;
-        }
-
-        public void setTaskObjective(String taskObjective) {
-            this.taskObjective = taskObjective;
-            this.lastUpdated = Instant.now();
-        }
-
-        public Map<String, Object> getArchitecturalDecisions() {
-            return new HashMap<>(architecturalDecisions);
-        }
-
-        public void setArchitecturalDecisions(Map<String, Object> decisions) {
-            this.architecturalDecisions = new HashMap<>(decisions);
-            this.lastUpdated = Instant.now();
-        }
-
-        public List<String> getNextSteps() {
-            return new ArrayList<>(nextSteps);
-        }
-
-        public void setNextSteps(List<String> steps) {
-            this.nextSteps = new ArrayList<>(steps);
-            this.lastUpdated = Instant.now();
-        }
-
-        public boolean isStale() {
-            return Duration.between(lastUpdated, Instant.now()).compareTo(SESSION_TIMEOUT) > 0;
-        }
-    }
-
-    /**
-     * Context validation result.
-     */
-    public static class ContextValidationResult {
-        private final boolean sufficient;
-        private final List<String> missingInputs;
-        private final List<String> missingDecisions;
-        private final Duration validationTime;
-
-        public ContextValidationResult(boolean sufficient, List<String> missingInputs,
-                List<String> missingDecisions, Duration validationTime) {
-            this.sufficient = sufficient;
-            this.missingInputs = missingInputs;
-            this.missingDecisions = missingDecisions;
-            this.validationTime = validationTime;
-        }
-
-        public boolean isSufficient() {
-            return sufficient;
-        }
-
-        public List<String> getMissingInputs() {
-            return new ArrayList<>(missingInputs);
-        }
-
-        public List<String> getMissingDecisions() {
-            return new ArrayList<>(missingDecisions);
-        }
-
-        public Duration getValidationTime() {
-            return validationTime;
-        }
-
-        public String getInsufficientContextMessage() {
-            if (sufficient) {
-                return "";
-            }
-            StringBuilder sb = new StringBuilder("Context insufficient – re-anchor needed.\n");
-            if (!missingInputs.isEmpty()) {
-                sb.append("Missing inputs: ").append(String.join(", ", missingInputs)).append("\n");
-            }
-            if (!missingDecisions.isEmpty()) {
-                sb.append("Missing decisions: ").append(String.join(", ", missingDecisions));
-            }
-            return sb.toString();
-        }
-    }
-
-    /**
      * Validates if request context is sufficient.
      */
-    public ContextValidationResult validateContext(AgentConsultationRequest request) {
+    public ContextValidationResult validateContext(AgentRequest request) {
         Instant start = Instant.now();
         List<String> missing = new ArrayList<>();
         List<String> missingDecisions = new ArrayList<>();
 
-        Map<String, Object> context = request.context();
+        AgentContext context = request.getAgentContext();
 
         // Check required keys
         for (String key : REQUIRED_CONTEXT_KEYS) {
-            if (!context.containsKey(key)) {
+            if (!context.getProperties().containsKey(key)) {
                 missing.add(key);
             }
         }
 
         // Check session staleness
-        if (context.containsKey("session-id")) {
-            String sessionId = context.get("session-id").toString();
+        if (context.getProperties().containsKey("session-id")) {
+            String sessionId = context.getProperties().get("session-id").toString();
             Optional<SessionContext> sessionOpt = getSessionContext(sessionId);
             if (sessionOpt.isPresent() && sessionOpt.get().isStale()) {
                 missing.add("stale-session-context");
@@ -180,7 +65,7 @@ public class ContextAwareGuidanceManager {
      */
     public EventDrivenContext getOrCreateEventDrivenContext(String sessionId) {
         return eventDrivenContexts.computeIfAbsent(sessionId,
-                sid -> new EventDrivenContext("event-" + UUID.randomUUID(), sid));
+                sid -> EventDrivenContext.builder().requestId(sid).build());
     }
 
     /**
@@ -188,7 +73,7 @@ public class ContextAwareGuidanceManager {
      */
     public CICDContext getOrCreateCICDContext(String sessionId) {
         return cicdContexts.computeIfAbsent(sessionId,
-                sid -> new CICDContext("cicd-" + UUID.randomUUID(), sid));
+                sid -> CICDContext.builder().requestId(sid).build());
     }
 
     /**
@@ -196,7 +81,7 @@ public class ContextAwareGuidanceManager {
      */
     public ConfigurationContext getOrCreateConfigurationContext(String sessionId) {
         return configurationContexts.computeIfAbsent(sessionId,
-                sid -> new ConfigurationContext("config-" + UUID.randomUUID(), sid));
+                sid -> ConfigurationContext.builder().requestId(sid).build());
     }
 
     /**
@@ -204,7 +89,7 @@ public class ContextAwareGuidanceManager {
      */
     public ResilienceContext getOrCreateResilienceContext(String sessionId) {
         return resilienceContexts.computeIfAbsent(sessionId,
-                sid -> new ResilienceContext("resilience-" + UUID.randomUUID(), sid));
+                sid -> ResilienceContext.builder().requestId(sid).build());
     }
 
     /**
@@ -228,8 +113,8 @@ public class ContextAwareGuidanceManager {
     /**
      * Update specialized context from agent guidance.
      */
-    public void updateSpecializedContext(String sessionId, String agentId, AgentGuidanceResponse response) {
-        String guidance = response.guidance().toLowerCase();
+    public void updateSpecializedContext(String sessionId, String agentId, AgentResponse response) {
+        String guidance = response.getOutput().toLowerCase();
 
         if (agentId.contains("event-driven")) {
             updateEventDrivenContext(sessionId, guidance);
@@ -350,14 +235,14 @@ public class ContextAwareGuidanceManager {
     /**
      * Enhance guidance with context information.
      */
-    public AgentGuidanceResponse enhanceWithContext(AgentGuidanceResponse response,
-            AgentConsultationRequest request) {
-        String sessionId = request.context().get("session-id").toString();
+    public AgentResponse enhanceWithContext(AgentResponse response,
+            AgentRequest request) {
+        String sessionId = request.getAgentContext().getSessionId();
 
         StringBuilder enhancedGuidance = new StringBuilder();
         enhancedGuidance.append("=== Context-Aware Guidance ===\n\n");
         enhancedGuidance.append("Original Guidance:\n");
-        enhancedGuidance.append(response.guidance()).append("\n\n");
+        enhancedGuidance.append(response.getOutput()).append("\n\n");
 
         // Add session context (create if missing to ensure visibility in guidance)
         SessionContext session = sessionContexts.computeIfAbsent(sessionId, SessionContext::new);
@@ -391,7 +276,7 @@ public class ContextAwareGuidanceManager {
         }
 
         // Enhanced recommendations
-        List<String> enhancedRecommendations = new ArrayList<>(response.recommendations());
+        List<String> enhancedRecommendations = new ArrayList<>(response.getRecommendations());
         if (eventCtx != null && !eventCtx.getMessageBrokers().isEmpty()) {
             enhancedRecommendations.add("Consider event schema versioning for " + eventCtx.getMessageBrokers());
             enhancedRecommendations.add("Ensure idempotent event handlers for reliability");
@@ -401,13 +286,9 @@ public class ContextAwareGuidanceManager {
             enhancedRecommendations.add("Consider deployment strategies: " + cicdCtx.getDeploymentStrategies());
         }
 
-        return AgentGuidanceResponse.success(
-                response.requestId(),
-                response.agentId(),
+        return AgentResponse.success(
                 enhancedGuidance.toString(),
-                response.confidence(),
-                enhancedRecommendations,
-                response.processingTime());
+                response.getConfidence());
     }
 
     /**

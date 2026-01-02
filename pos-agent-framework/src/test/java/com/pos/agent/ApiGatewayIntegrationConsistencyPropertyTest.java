@@ -186,7 +186,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
         Arbitrary<AgentContext> apiEndpointDesignContexts() {
                 return Arbitraries.of("customer", "catalog", "order", "vehicle", "invoice")
                                 .map(domain -> AgentContext.builder()
-                                                .domain("integration")
+                                                .agentDomain("integration")
                                                 .property("service", "pos-" + domain)
                                                 .property("designType", "rest-api")
                                                 .build());
@@ -198,7 +198,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
                                 .of("v1-to-v2", "backward-compat", "deprecation", "contract-testing",
                                                 "schema-evolution")
                                 .map(scenario -> AgentContext.builder()
-                                                .domain("integration")
+                                                .agentDomain("integration")
                                                 .property("versioningStrategy", scenario)
                                                 .property("compatibilityRequired", "true")
                                                 .build());
@@ -208,7 +208,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
         Arbitrary<AgentContext> restApiDesignContexts() {
                 return Arbitraries.of("resource", "collection", "nested", "query", "command")
                                 .map(designType -> AgentContext.builder()
-                                                .domain("integration")
+                                                .agentDomain("integration")
                                                 .property("designPattern", designType)
                                                 .property("restLevel", "3")
                                                 .build());
@@ -219,7 +219,7 @@ class ApiGatewayIntegrationConsistencyPropertyTest {
                 return Arbitraries
                                 .of("path-based", "header-based", "load-balancing", "circuit-breaker", "timeout-retry")
                                 .map(routingType -> AgentContext.builder()
-                                                .domain("integration")
+                                                .agentDomain("integration")
                                                 .property("routingStrategy", routingType)
                                                 .property("resilience", "enabled")
                                                 .build());

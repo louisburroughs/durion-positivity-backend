@@ -3,9 +3,10 @@ package com.pos.agent.impl;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
+import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.context.StoryContext;
+import com.pos.agent.framework.model.AgentType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,15 @@ import java.util.regex.Pattern;
  * Agent for processing GitHub story issues and orchestrating builds
  */
 public class StoryProcessingAgent extends AbstractAgent {
+
+    public StoryProcessingAgent() {
+        super(AgentType.BUSINESS_DOMAIN, List.of(
+                "story-analysis",
+                "requirement-extraction",
+                "story-validation",
+                "build-orchestration",
+                "acceptance-criteria"));
+    }
 
     private static final Pattern MODULE_PATTERN = Pattern.compile("Module[s]?:\\s*([^\\n]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern AC_PATTERN = Pattern.compile("AC:\\s*([^\\n]+)", Pattern.CASE_INSENSITIVE);
@@ -31,7 +41,7 @@ public class StoryProcessingAgent extends AbstractAgent {
         StoryContext context = extractStoryContext(request.getAgentContext());
         if (context == null) {
             return AgentResponse.builder()
-                    .status(AgentStatus.FAILURE)
+                    .status(AgentProcessingState.FAILURE)
                     .output("Invalid context type: expected StoryContext")
                     .confidence(0.0)
                     .success(false)
@@ -42,7 +52,7 @@ public class StoryProcessingAgent extends AbstractAgent {
         // Validate module exists
         if (!isValidModule(context.getModuleName())) {
             return AgentResponse.builder()
-                    .status(AgentStatus.FAILURE)
+                    .status(AgentProcessingState.FAILURE)
                     .output("Module not found: " + context.getModuleName())
                     .confidence(0.0)
                     .success(false)
@@ -55,7 +65,7 @@ public class StoryProcessingAgent extends AbstractAgent {
         // Check for circular dependencies
         if (hasCircularDependency(context)) {
             return AgentResponse.builder()
-                    .status(AgentStatus.FAILURE)
+                    .status(AgentProcessingState.FAILURE)
                     .output("Detected circular dependency in story: " + context.getIssueId())
                     .confidence(0.0)
                     .success(false)
@@ -100,7 +110,7 @@ public class StoryProcessingAgent extends AbstractAgent {
         output.append("BUILD SUCCESS\n");
 
         return AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .output(output.toString())
                 .confidence(0.90)
                 .success(true)

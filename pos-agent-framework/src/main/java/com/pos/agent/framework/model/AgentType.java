@@ -85,5 +85,40 @@ public enum AgentType {
     /**
      * Documentation agent - focuses on documentation quality
      */
-    DOCUMENTATION
+    DOCUMENTATION;
+
+    /**
+     * Checks if this AgentType matches the given string, case-insensitive.
+     * 
+     * @param value the string to compare against
+     * @return {@code true} if this AgentType's name matches the value (ignoring
+     *         case), {@code false} otherwise
+     */
+    public boolean equalsIgnoreCase(String value) {
+        if (value == null) {
+            return false;
+        }
+        return this.name().equalsIgnoreCase(value);
+    }
+
+    /**
+     * Finds an AgentType from a string value, case-insensitive.
+     * Handles both underscore and hyphen separators.
+     * 
+     * @param value the string to search for
+     * @return the matching AgentType, or {@code null} if no match found
+     */
+    public static AgentType fromString(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase().replace("-", "_").replace(" ", "_");
+        for (AgentType type : AgentType.values()) {
+            if (type.name().equals(normalized)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
 }

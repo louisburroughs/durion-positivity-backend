@@ -146,7 +146,7 @@ class DomainBoundaryEnforcementPropertyTest {
                                 .type("architecture")
                                 .description("Domain ownership validation property test")
                                 .context(AgentContext.builder()
-                                                .domain(domain)
+                                                .agentDomain(domain)
                                                 .property("query", String.format(
                                                                 "domain ownership for %s service in %s domain", service,
                                                                 domain))

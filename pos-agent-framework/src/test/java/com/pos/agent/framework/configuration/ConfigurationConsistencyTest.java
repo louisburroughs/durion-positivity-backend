@@ -29,7 +29,7 @@ class ConfigurationConsistencyTest {
         @DisplayName("Processes configuration guidance request successfully")
         void processesConfigurationRequest() {
                 AgentContext context = DefaultContext.builder()
-                                .domain("configuration")
+                                .agentDomain("configuration")
                                 .property("service", "pos-config")
                                 .property("scenario", "consistency-check")
                                 .build();

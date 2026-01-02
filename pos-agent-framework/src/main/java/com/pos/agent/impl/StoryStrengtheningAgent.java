@@ -1,10 +1,11 @@
-package com.pos.agent.story;
+package com.pos.agent.impl;
 
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
+import com.pos.agent.core.AgentProcessingState;
+import com.pos.agent.framework.model.AgentType;
 import com.pos.agent.story.analysis.RequirementsAnalyzer;
 import com.pos.agent.story.config.StoryConfiguration;
 import com.pos.agent.story.loop.LoopDetectionResult;
@@ -17,6 +18,7 @@ import com.pos.agent.story.transformation.RequirementsTransformer;
 import com.pos.agent.story.validation.IssueValidator;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -59,6 +61,12 @@ public class StoryStrengtheningAgent extends AbstractAgent {
             OutputGenerator outputGenerator,
             LoopDetector loopDetector,
             StoryConfiguration configuration) {
+        super(AgentType.BUSINESS_DOMAIN, List.of(
+                "story-analysis",
+                "requirement-analysis",
+                "requirement-transformation",
+                "quality-improvement",
+                "loop-detection"));
         this.validator = Objects.requireNonNull(validator, "Validator cannot be null");
         this.parser = Objects.requireNonNull(parser, "Parser cannot be null");
         this.analyzer = Objects.requireNonNull(analyzer, "Analyzer cannot be null");
@@ -84,7 +92,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
 
             if (processingResult.isSuccess()) {
                 return AgentResponse.builder()
-                        .status(AgentStatus.SUCCESS)
+                        .status(AgentProcessingState.SUCCESS)
                         .output(processingResult.getOutput())
                         .success(true)
                         .confidence(0.9)
@@ -92,7 +100,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
                         .build();
             } else {
                 return AgentResponse.builder()
-                        .status(AgentStatus.FAILURE)
+                        .status(AgentProcessingState.FAILURE)
                         .output(processingResult.getStopPhrase() + ": " + processingResult.getReason())
                         .success(false)
                         .confidence(0.0)
@@ -114,7 +122,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
      * @return A GitHubIssue extracted from the request
      */
     private GitHubIssue extractIssueFromRequest(AgentRequest request) {
-        String body = request.getDescription();
+        String body = request.getAgentContext().getDescription();
         String repo = "unknown";
 
         // Extract from AgentContext properties if available
@@ -134,7 +142,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
         }
 
         return new GitHubIssue(
-                request.getDescription(),
+                request.getAgentContext().getDescription(),
                 body,
                 Collections.singletonList("story"),
                 repo,

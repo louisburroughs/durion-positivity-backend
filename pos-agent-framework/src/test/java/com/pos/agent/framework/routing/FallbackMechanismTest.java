@@ -93,15 +93,15 @@ class FallbackMechanismTest {
         @Provide
         Arbitrary<AgentContext> contextFallbackScenarios() {
                 return Arbitraries.of(
-                                 ImplementationContext.builder()
+                                ImplementationContext.builder()
                                                 .property("technicalContext", "Spring Boot microservice")
                                                 .build(),
                                 DefaultContext.builder()
-                                                        .domain("context-fallback")
-                                                        .property("requestType", "unknown")
-                                                        .property("description", "Unknown context")
-                                                        .property("requiresFallback", true)
-                                                        .build());
+                                                .agentDomain("context-fallback")
+                                                .property("requestType", "unknown")
+                                                .property("description", "Unknown context")
+                                                .property("requiresFallback", true)
+                                                .build());
         }
 
         @Provide
@@ -111,7 +111,7 @@ class FallbackMechanismTest {
                                 "security",
                                 "unknown-domain").map(
                                                 domain -> DefaultContext.builder()
-                                                                .domain("domain-fallback")
+                                                                .agentDomain("domain-fallback")
                                                                 .property("requestDomain", domain)
                                                                 .property("requiresFallback",
                                                                                 "unknown-domain".equals(domain))
@@ -127,7 +127,7 @@ class FallbackMechanismTest {
                                 "none:unavailable").map(scenario -> {
                                         String[] parts = scenario.split(":");
                                         return DefaultContext.builder()
-                                                        .domain("universal-fallback")
+                                                        .agentDomain("universal-fallback")
                                                         .property("fallbackAgent", parts[0])
                                                         .property("agentAvailable", "available".equals(parts[1]))
                                                         .build();
@@ -148,7 +148,7 @@ class FallbackMechanismTest {
                                 "unknown:none").map(scenario -> {
                                         String[] parts = scenario.split(":");
                                         return DefaultContext.builder()
-                                                        .domain("agent-failure-fallback")
+                                                        .agentDomain("agent-failure-fallback")
                                                         .property("failedAgent", parts[0])
                                                         .property("fallbackAgent", parts[1])
                                                         .property("hasFallback", !"none".equals(parts[1]))

@@ -370,7 +370,7 @@ class SecurityValidationSystemTest {
         private AgentContext createSecureContext() {
                 return DefaultContext.builder()
                                 .type("secure-operation")
-                                .domain("security")
+                                .agentDomain("security")
                                 .requiresAuthentication(true)
                                 .build();
         }
@@ -378,7 +378,7 @@ class SecurityValidationSystemTest {
         private AgentContext createTLSValidationContext() {
                 return DefaultContext.builder()
                                 .type("tls-validation")
-                                .domain("security")
+                                .agentDomain("security")
                                 .requiresTLS13(true)
                                 .build();
         }
@@ -386,7 +386,7 @@ class SecurityValidationSystemTest {
         private AgentContext createServiceContext() {
                 return DefaultContext.builder()
                                 .type("service-integration")
-                                .domain("microservice")
+                                .agentDomain("microservice")
                                 .serviceType("spring-boot")
                                 .build();
         }
@@ -394,7 +394,7 @@ class SecurityValidationSystemTest {
         private AgentContext createAuditContext(String agentType) {
                 return DefaultContext.builder()
                                 .type(agentType)
-                                .domain("audit-test")
+                                .agentDomain("audit-test")
                                 .requiresAuditTrail(true)
                                 .build();
         }
@@ -402,7 +402,7 @@ class SecurityValidationSystemTest {
         private AgentContext createConcurrentSecurityContext(int index) {
                 return DefaultContext.builder()
                                 .type("concurrent-security")
-                                .domain("performance")
+                                .agentDomain("performance")
                                 .requestId("req-" + index)
                                 .build();
         }
@@ -410,7 +410,7 @@ class SecurityValidationSystemTest {
         private AgentContext createSecretsContext(String secretsProvider) {
                 return DefaultContext.builder()
                                 .type("secrets-management")
-                                .domain("configuration")
+                                .agentDomain("configuration")
                                 .secretsProvider(secretsProvider)
                                 .build();
         }
@@ -437,7 +437,7 @@ class SecurityValidationSystemTest {
         private AgentContext createContextForPermission(String permission) {
                 return DefaultContext.builder()
                                 .type("permission-test")
-                                .domain("security")
+                                .agentDomain("security")
                                 .requiredPermission(permission)
                                 .build();
         }
@@ -445,7 +445,7 @@ class SecurityValidationSystemTest {
         private AgentContext createAdminContext() {
                 return DefaultContext.builder()
                                 .type("admin-operation")
-                                .domain("administration")
+                                .agentDomain("administration")
                                 .requiresAdminRole(true)
                                 .build();
         }
@@ -475,7 +475,7 @@ class SecurityValidationSystemTest {
                                         .description("Security event generation for " + eventType)
                                         .context(DefaultContext.builder()
                                                         .type(eventType)
-                                                        .domain("compliance")
+                                                        .agentDomain("compliance")
                                                         .build())
                                         .securityContext(createAdminSecurityContext())
                                         .build();

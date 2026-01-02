@@ -80,7 +80,7 @@ class ConfigurationManagementConsistencyPropertyTest {
                 return Arbitraries.of(
                                 "development", "staging", "production")
                                 .map(environment -> AgentContext.builder()
-                                                .domain("configuration")
+                                                .agentDomain("configuration")
                                                 .property("environment", environment)
                                                 .property("configType", "centralized")
                                                 .property("topic", "configuration-management")

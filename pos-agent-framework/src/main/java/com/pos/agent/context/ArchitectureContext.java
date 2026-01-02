@@ -37,7 +37,6 @@ public class ArchitectureContext extends AgentContext {
         this.qualityAttributes = builder.qualityAttributes;
     }
 
-
     public static Builder builder() {
         return new Builder();
     }
@@ -172,7 +171,7 @@ public class ArchitectureContext extends AgentContext {
         private Set<String> qualityAttributes = new LinkedHashSet<>();
 
         public Builder() {
-            domain("architecture");
+            agentDomain("architecture");
             contextType("architecture-context");
         }
 

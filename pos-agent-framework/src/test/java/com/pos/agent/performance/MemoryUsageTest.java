@@ -266,7 +266,7 @@ public class MemoryUsageTest {
                 .type("memory-test")
                 .description("Memory usage test for " + domain + " domain, iteration " + index)
                 .context(AgentContext.builder()
-                        .domain(domain)
+                        .agentDomain(domain)
                         .property("testIndex", index)
                         .property("query", "Memory test query for " + domain + " iteration " + index)
                         .build())

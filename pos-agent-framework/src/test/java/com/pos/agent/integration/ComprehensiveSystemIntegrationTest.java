@@ -5,9 +5,18 @@ import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.SecurityContext;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ArchitectureContext;
+import com.pos.agent.context.BusinessContext;
+import com.pos.agent.context.CICDContext;
+import com.pos.agent.context.ConfigurationContext;
+import com.pos.agent.context.DefaultContext;
+import com.pos.agent.context.EventDrivenContext;
+import com.pos.agent.context.ResilienceContext;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.w3c.dom.events.Event;
 
 import java.time.Duration;
 import java.util.List;
@@ -89,9 +98,9 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest architectureRequest = AgentRequest.builder()
                                 .type("architecture")
                                 .description("Architecture guidance for scalable microservice design")
-                                .context(AgentContext.builder()
+                                .context(ArchitectureContext.builder()
                                                 .serviceType("microservice")
-                                                .domain("inventory")
+                                                .property("domain", "inventory")
                                                 .property("scalabilityRequirements", "high")
                                                 .build())
                                 .build();
@@ -113,8 +122,7 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest securityRequest = AgentRequest.builder()
                                 .type("security")
                                 .description("Security validation for encryption and audit requirements")
-                                .context(AgentContext.builder()
-                                                .domain("all")
+                                .context(com.pos.agent.context.SecurityContext.builder()
                                                 .property("securityRequirements", List.of("encryption", "audit"))
                                                 .build())
                                 .securityContext(security)
@@ -132,7 +140,7 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest eventRequest = AgentRequest.builder()
                                 .type("event-driven")
                                 .description("Event-driven architecture for domain events handling")
-                                .context(AgentContext.builder()
+                                .context(EventDrivenContext.builder()
                                                 .property("eventType", "domain-event")
                                                 .property("messagingPlatform", "kafka")
                                                 .property("consistencyModel", "eventual")
@@ -236,8 +244,8 @@ class ComprehensiveSystemIntegrationTest {
                                                         .type(agentType)
                                                         .description("Load test request " + (i + 1)
                                                                         + " for agent type: " + agentType)
-                                                        .context(AgentContext.builder()
-                                                                        .type(agentType)
+                                                        .context(DefaultContext.builder()
+                                                                        .property("agentType", agentType)
                                                                         .serviceType("microservice")
                                                                         .property("framework", "spring-boot")
                                                                         .build())
@@ -270,7 +278,7 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest request = AgentRequest.builder()
                                 .type("implementation")
                                 .description("Failover test with invalid security credentials")
-                                .context(AgentContext.builder().build())
+                                .context(DefaultContext.builder().build())
                                 .securityContext(SecurityContext.builder().jwtToken("invalid.jwt.token").build())
                                 .build();
 
@@ -286,8 +294,8 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest businessRequest = AgentRequest.builder()
                                 .type("business-domain")
                                 .description("Business domain collaboration for vehicle fitment process")
-                                .context(AgentContext.builder()
-                                                .domain("automotive")
+                                .context(BusinessContext.builder()
+                                                .property("domain", "automotive")
                                                 .property("businessProcess", "vehicle-fitment")
                                                 .build())
                                 .build();
@@ -299,7 +307,7 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest cicdRequest = AgentRequest.builder()
                                 .type("cicd-pipeline")
                                 .description("CI/CD pipeline integration for automotive deployment")
-                                .context(AgentContext.builder()
+                                .context(CICDContext.builder()
                                                 .property("pipelineType", "deployment")
                                                 .property("targetEnvironment", "production")
                                                 .property("securityScanning", true)
@@ -317,7 +325,7 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest configRequest = AgentRequest.builder()
                                 .type("configuration-management")
                                 .description("Configuration management for production application settings")
-                                .context(AgentContext.builder()
+                                .context(ConfigurationContext.builder()
                                                 .property("configurationType", "application")
                                                 .property("environment", "production")
                                                 .property("secretsManagement", true)
@@ -335,7 +343,7 @@ class ComprehensiveSystemIntegrationTest {
                 AgentRequest resilienceRequest = AgentRequest.builder()
                                 .type("resilience-engineering")
                                 .description("Resilience pattern implementation for inventory service")
-                                .context(AgentContext.builder()
+                                .context(ResilienceContext.builder()
                                                 .property("resiliencePattern", "circuit-breaker")
                                                 .property("targetService", "pos-inventory")
                                                 .property("failureThreshold", 5)
@@ -358,9 +366,9 @@ class ComprehensiveSystemIntegrationTest {
         }
 
         private AgentContext createContextForAgent(String agentType) {
-                return AgentContext.builder()
+                return DefaultContext.builder()
                                 .type(agentType)
-                                .domain("test")
+                                .agentDomain("test")
                                 .build();
         }
 }

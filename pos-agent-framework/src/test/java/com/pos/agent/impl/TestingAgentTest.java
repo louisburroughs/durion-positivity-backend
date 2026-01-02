@@ -3,7 +3,7 @@ package com.pos.agent.impl;
 import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
+import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.context.TestingContext;
 import com.pos.agent.core.SecurityContext;
@@ -33,7 +33,7 @@ class TestingAgentTest {
         @Test
         void shouldProvideUnitTestingGuidance() {
                 AgentContext context = TestingContext.builder()
-                                
+
                                 .property("service", "pos-catalog")
                                 .property("topic", "unit-testing")
                                 .property("query", "How to implement unit tests with JUnit 5?")
@@ -55,7 +55,7 @@ class TestingAgentTest {
         @Test
         void shouldProvideTDDGuidance() {
                 AgentContext context = TestingContext.builder()
-                                
+
                                 .property("service", "pos-inventory")
                                 .property("topic", "tdd")
                                 .property("query", "How to implement Test-Driven Development?")
@@ -77,7 +77,7 @@ class TestingAgentTest {
         @Test
         void shouldProvidePropertyBasedTestingGuidance() {
                 AgentContext context = TestingContext.builder()
-                                
+
                                 .property("service", "pos-price")
                                 .property("topic", "property-based-testing")
                                 .property("query", "How to implement property-based testing with jqwik?")
@@ -99,7 +99,7 @@ class TestingAgentTest {
         @Test
         void shouldProvideIntegrationTestingGuidance() {
                 AgentContext context = TestingContext.builder()
-                                
+
                                 .property("service", "pos-order")
                                 .property("topic", "integration-testing")
                                 .property("query", "How to implement integration tests with TestContainers?")
@@ -122,7 +122,7 @@ class TestingAgentTest {
         void shouldExtendAbstractAgentAndValidateRequests() {
                 TestingAgent agent = new TestingAgent();
                 AgentContext context = TestingContext.builder()
-                                
+
                                 .property("service", "pos-catalog")
                                 .build();
 
@@ -134,7 +134,7 @@ class TestingAgentTest {
 
                 AgentResponse response = agent.processRequest(request);
 
-                assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+                assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum());
                 assertTrue(response.isSuccess());
                 assertNotNull(response.getOutput());
                 assertTrue(response.getOutput().contains("Testing pattern recommendation"));
@@ -147,7 +147,7 @@ class TestingAgentTest {
 
                 AgentResponse response = agent.processRequest(null);
 
-                assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+                assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
                 assertFalse(response.isSuccess());
                 assertEquals("Invalid request: request is null", response.getOutput());
         }

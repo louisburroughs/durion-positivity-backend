@@ -36,7 +36,6 @@ public class ImplementationContext extends AgentContext {
         this.buildTools = builder.buildTools;
     }
 
-   
     public static Builder builder() {
         return new Builder();
     }
@@ -173,7 +172,7 @@ public class ImplementationContext extends AgentContext {
         private Map<String, String> buildTools = new HashMap<>();
 
         public Builder() {
-            domain("implementation");
+            agentDomain("implementation");
             contextType("implementation-context");
         }
 
