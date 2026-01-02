@@ -1,5 +1,7 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -7,12 +9,16 @@ import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * IntegrationGatewayAgent
  * Extends AbstractAgent for centralized validation and error handling.
  */
 public class IntegrationGatewayAgent extends AbstractAgent {
+
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
     public IntegrationGatewayAgent() {
         super(AgentType.INTEGRATION_GATEWAY, List.of(
@@ -26,6 +32,12 @@ public class IntegrationGatewayAgent extends AbstractAgent {
     @Override
     public List<String> getRequiredPermissions() {
         return List.of("SERVICE_READ", "SERVICE_WRITE", "AGENT_READ", "AGENT_WRITE");
+    }
+
+    @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> DefaultContext.builder().requestId(sessionId).build());
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -8,6 +9,8 @@ import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ConfigurationManagementAgent - provides configuration management guidance and
@@ -15,6 +18,8 @@ import java.util.List;
  * Extends AbstractAgent for common validation and failure handling
  */
 public class ConfigurationManagementAgent extends AbstractAgent {
+
+        private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
         public ConfigurationManagementAgent() {
                 super(AgentType.CONFIGURATION_MANAGEMENT, List.of(
@@ -33,6 +38,12 @@ public class ConfigurationManagementAgent extends AbstractAgent {
         @Override
         public List<String> getRequiredPermissions() {
                 return List.of("CONFIG_MANAGE", "SECRETS_MANAGE");
+        }
+
+        @Override
+        public AgentContext getOrCreateContext(String sessionId) {
+                return contextMap.computeIfAbsent(sessionId,
+                                sid -> ConfigurationContext.builder().requestId(sessionId).build());
         }
 
         @Override

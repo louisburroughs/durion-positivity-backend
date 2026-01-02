@@ -1,6 +1,7 @@
 package com.pos.agent.impl;
 
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ArchitectureContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -8,6 +9,7 @@ import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -26,6 +28,8 @@ import java.util.stream.Collectors;
  */
 public class ArchitectureAgent extends AbstractAgent {
 
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+
     public ArchitectureAgent() {
         super(AgentType.ARCHITECTURE, List.of(
                 "system-design",
@@ -33,6 +37,12 @@ public class ArchitectureAgent extends AbstractAgent {
                 "technology-stack",
                 "architectural-review",
                 "scalability-design"));
+    }
+
+    @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> ArchitectureContext.builder().requestId(sessionId).build());
     }
 
     @Override

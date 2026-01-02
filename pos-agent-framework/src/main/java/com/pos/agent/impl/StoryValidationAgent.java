@@ -5,10 +5,13 @@ import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.StoryContext;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Agent responsible for validating story requests and checking activation
@@ -20,6 +23,7 @@ import java.util.List;
  * Implements Requirements 1.5 from upgrade-story-quality feature.
  */
 public class StoryValidationAgent extends AbstractAgent {
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
     public StoryValidationAgent() {
         super(AgentType.BUSINESS_DOMAIN, List.of(
@@ -28,6 +32,12 @@ public class StoryValidationAgent extends AbstractAgent {
                 "backend-story-check",
                 "content-validation",
                 "story-requirements"));
+    }
+
+     @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> StoryContext.builder().requestId(sessionId).build());
     }
 
     /**

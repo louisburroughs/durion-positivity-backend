@@ -5,11 +5,14 @@ import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.StoryContext;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -18,6 +21,8 @@ import java.util.regex.Pattern;
  */
 public class StoryProcessingAgent extends AbstractAgent {
 
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+
     public StoryProcessingAgent() {
         super(AgentType.BUSINESS_DOMAIN, List.of(
                 "story-analysis",
@@ -25,6 +30,12 @@ public class StoryProcessingAgent extends AbstractAgent {
                 "story-validation",
                 "build-orchestration",
                 "acceptance-criteria"));
+    }
+
+     @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> StoryContext.builder().requestId(sessionId).build());
     }
 
     private static final Pattern MODULE_PATTERN = Pattern.compile("Module[s]?:\\s*([^\\n]+)", Pattern.CASE_INSENSITIVE);

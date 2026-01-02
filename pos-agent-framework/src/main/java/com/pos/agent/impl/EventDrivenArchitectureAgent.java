@@ -1,5 +1,8 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ArchitectureContext;
+import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -7,6 +10,9 @@ import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 
 /**
  * EventDrivenArchitectureAgent - provides event-driven architecture guidance
@@ -15,6 +21,8 @@ import java.util.List;
  */
 public class EventDrivenArchitectureAgent extends AbstractAgent {
 
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+
     public EventDrivenArchitectureAgent() {
         super(AgentType.EVENT_DRIVEN_ARCHITECTURE, List.of(
                 "event-sourcing",
@@ -22,6 +30,12 @@ public class EventDrivenArchitectureAgent extends AbstractAgent {
                 "event-schema-design",
                 "saga-patterns",
                 "event-streaming"));
+    }
+
+     @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> EventDrivenContext.builder().requestId(sessionId).build());
     }
 
     @Override

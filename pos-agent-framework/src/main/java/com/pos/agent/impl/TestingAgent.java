@@ -1,5 +1,7 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.TestingContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -7,12 +9,16 @@ import com.pos.agent.framework.model.AgentType;
 import com.pos.agent.core.AgentProcessingState;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * TestingAgent - provides testing guidance and recommendations
  * Extends AbstractAgent for common validation and failure handling
  */
 public class TestingAgent extends AbstractAgent {
+
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
     public TestingAgent() {
         super(AgentType.TESTING, List.of(
@@ -21,6 +27,12 @@ public class TestingAgent extends AbstractAgent {
                 "integration-testing",
                 "test-automation",
                 "tdd-bdd"));
+    }
+
+    @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> TestingContext.builder().requestId(sessionId).build());
     }
 
     @Override

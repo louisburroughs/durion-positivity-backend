@@ -1,5 +1,8 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.EventDrivenContext;
+import com.pos.agent.context.ImplementationContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -7,11 +10,15 @@ import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * PairNavigatorAgent
  */
 public class PairNavigatorAgent extends AbstractAgent {
+
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
     public PairNavigatorAgent() {
         super(AgentType.PAIR_PROGRAMMING, List.of(
@@ -20,6 +27,12 @@ public class PairNavigatorAgent extends AbstractAgent {
                 "collaborative-development",
                 "knowledge-sharing",
                 "code-quality-feedback"));
+    }
+
+     @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> ImplementationContext.builder().requestId(sessionId).build());
     }
 
     @Override
