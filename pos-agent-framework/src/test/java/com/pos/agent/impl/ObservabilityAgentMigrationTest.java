@@ -2,7 +2,7 @@ package com.pos.agent.impl;
 
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
+import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.framework.model.AgentType;
 
 import org.junit.jupiter.api.BeforeEach;

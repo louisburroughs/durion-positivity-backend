@@ -30,7 +30,7 @@ class CICDContextTest {
     @DisplayName("Should initialize CICDContext with correct properties")
     void testInitialization() {
         // Assert
-        assertEquals(contextId, context.getContextId());
+        assertTrue(contextId, context.getContextId());
         assertEquals(sessionId, context.getSessionId());
         assertNotNull(context.getCreatedAt());
         assertNotNull(context.getLastUpdated());

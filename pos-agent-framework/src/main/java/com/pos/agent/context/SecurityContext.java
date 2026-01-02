@@ -37,7 +37,6 @@ public class SecurityContext extends AgentContext {
         this.riskLevel = builder.riskLevel;
     }
 
-   
     public static Builder builder() {
         return new Builder();
     }
@@ -173,7 +172,7 @@ public class SecurityContext extends AgentContext {
         private String riskLevel = "medium";
 
         public Builder() {
-            domain("security");
+            agentDomain("security");
             contextType("security-context");
         }
 

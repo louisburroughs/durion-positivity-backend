@@ -20,337 +20,337 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class KubernetesDeploymentIntegrationTest {
 
-    private CICDPipelineAgent cicdAgent;
-    private ConfigurationManagementAgent configAgent;
-    private ResilienceEngineeringAgent resilienceAgent;
-    private SecurityContext security;
+        private CICDPipelineAgent cicdAgent;
+        private ConfigurationManagementAgent configAgent;
+        private ResilienceEngineeringAgent resilienceAgent;
+        private SecurityContext security;
 
-    @BeforeEach
-    void setUp() {
-        cicdAgent = new CICDPipelineAgent();
-        configAgent = new ConfigurationManagementAgent();
-        resilienceAgent = new ResilienceEngineeringAgent();
-        security = SecurityContext.builder()
-                .build();
-    }
+        @BeforeEach
+        void setUp() {
+                cicdAgent = new CICDPipelineAgent();
+                configAgent = new ConfigurationManagementAgent();
+                resilienceAgent = new ResilienceEngineeringAgent();
+                security = SecurityContext.builder()
+                                .build();
+        }
 
-    @Test
-    @DisplayName("CI/CD agent provides Kubernetes deployment strategies")
-    void testKubernetesDeploymentStrategies() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-api-gateway")
-                .property("deploymentTarget", "kubernetes")
-                .property("deploymentStrategy", "rolling")
-                .build();
+        @Test
+        @DisplayName("CI/CD agent provides Kubernetes deployment strategies")
+        void testKubernetesDeploymentStrategies() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("cicd")
+                                .property("service", "pos-api-gateway")
+                                .property("deploymentTarget", "kubernetes")
+                                .property("deploymentStrategy", "rolling")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("kubernetes-deployment")
-                .description("CI/CD agent provides Kubernetes deployment strategies")
-                .context(context)
-                .securityContext(security)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("kubernetes-deployment")
+                                .description("CI/CD agent provides Kubernetes deployment strategies")
+                                .context(context)
+                                .securityContext(security)
+                                .build();
 
-        AgentResponse guidance = cicdAgent.processRequest(request);
+                AgentResponse guidance = cicdAgent.processRequest(request);
 
-        assertNotNull(guidance);
-        assertTrue(guidance.isSuccess() || guidance.getStatus() != null);
-        assertTrue(guidance.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(guidance);
+                assertTrue(guidance.isSuccess() || guidance.getStatus() != null);
+                assertTrue(guidance.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("Configuration agent provides ConfigMap and Secret management")
-    void testKubernetesConfigManagement() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
-                .property("service", "pos-inventory")
-                .property("configurationType", "application-config")
-                .property("platform", "kubernetes")
-                .build();
+        @Test
+        @DisplayName("Configuration agent provides ConfigMap and Secret management")
+        void testKubernetesConfigManagement() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("configuration")
+                                .property("service", "pos-inventory")
+                                .property("configurationType", "application-config")
+                                .property("platform", "kubernetes")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("kubernetes-config")
-                .description("Configuration agent provides ConfigMap and Secret management")
-                .context(context)
-                .securityContext(security)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("kubernetes-config")
+                                .description("Configuration agent provides ConfigMap and Secret management")
+                                .context(context)
+                                .securityContext(security)
+                                .build();
 
-        AgentResponse response = configAgent.processRequest(request);
+                AgentResponse response = configAgent.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess() || response.getStatus() != null);
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess() || response.getStatus() != null);
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("Resilience agent provides Kubernetes health checks and probes")
-    void testKubernetesHealthChecks() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
-                .property("service", "pos-customer")
-                .property("platform", "kubernetes")
-                .property("failureType", "application")
-                .build();
+        @Test
+        @DisplayName("Resilience agent provides Kubernetes health checks and probes")
+        void testKubernetesHealthChecks() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("resilience")
+                                .property("service", "pos-customer")
+                                .property("platform", "kubernetes")
+                                .property("failureType", "application")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("kubernetes-health-check")
-                .description("Resilience agent provides Kubernetes health checks and probes")
-                .context(context)
-                .securityContext(security)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("kubernetes-health-check")
+                                .description("Resilience agent provides Kubernetes health checks and probes")
+                                .context(context)
+                                .securityContext(security)
+                                .build();
 
-        AgentResponse response = resilienceAgent.processRequest(request);
+                AgentResponse response = resilienceAgent.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess() || response.getStatus() != null);
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess() || response.getStatus() != null);
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("CI/CD agent provides Helm chart deployment guidance")
-    void testHelmChartDeployment() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-order")
-                .property("deploymentTarget", "kubernetes")
-                .property("packagingTool", "helm")
-                .build();
+        @Test
+        @DisplayName("CI/CD agent provides Helm chart deployment guidance")
+        void testHelmChartDeployment() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("cicd")
+                                .property("service", "pos-order")
+                                .property("deploymentTarget", "kubernetes")
+                                .property("packagingTool", "helm")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("helm-deployment")
-                .description("CI/CD agent provides Helm chart deployment guidance")
-                .context(context)
-                .securityContext(security)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("helm-deployment")
+                                .description("CI/CD agent provides Helm chart deployment guidance")
+                                .context(context)
+                                .securityContext(security)
+                                .build();
 
-        AgentResponse response = cicdAgent.processRequest(request);
+                AgentResponse response = cicdAgent.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess() || response.getStatus() != null);
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess() || response.getStatus() != null);
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("Resilience agent provides pod disruption budget guidance")
-    void testPodDisruptionBudget() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
-                .property("service", "pos-catalog")
-                .property("platform", "kubernetes")
-                .property("failureType", "node")
-                .build();
+        @Test
+        @DisplayName("Resilience agent provides pod disruption budget guidance")
+        void testPodDisruptionBudget() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("resilience")
+                                .property("service", "pos-catalog")
+                                .property("platform", "kubernetes")
+                                .property("failureType", "node")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("pod-disruption-budget")
-                .description("Resilience agent provides pod disruption budget guidance")
-                .context(context)
-                .securityContext(security)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("pod-disruption-budget")
+                                .description("Resilience agent provides pod disruption budget guidance")
+                                .context(context)
+                                .securityContext(security)
+                                .build();
 
-        AgentResponse response = resilienceAgent.processRequest(request);
+                AgentResponse response = resilienceAgent.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess() || response.getStatus() != null);
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess() || response.getStatus() != null);
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("Configuration agent provides service mesh configuration")
-    void testServiceMeshConfiguration() {
-        AgentContext context = AgentContext.builder()
-                .domain("configuration")
-                .property("service", "pos-vehicle-inventory")
-                .property("configurationType", "service-mesh")
-                .property("platform", "kubernetes")
-                .property("serviceMesh", "istio")
-                .build();
+        @Test
+        @DisplayName("Configuration agent provides service mesh configuration")
+        void testServiceMeshConfiguration() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("configuration")
+                                .property("service", "pos-vehicle-inventory")
+                                .property("configurationType", "service-mesh")
+                                .property("platform", "kubernetes")
+                                .property("serviceMesh", "istio")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("service-mesh-config")
-                .description("Configuration agent provides service mesh configuration")
-                .context(context)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("service-mesh-config")
+                                .description("Configuration agent provides service mesh configuration")
+                                .context(context)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse response = configAgent.processRequest(request);
+                AgentResponse response = configAgent.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess() || response.getStatus() != null);
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess() || response.getStatus() != null);
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("CI/CD agent provides canary deployment with Kubernetes")
-    void testCanaryDeploymentKubernetes() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-price")
-                .property("deploymentTarget", "kubernetes")
-                .property("deploymentStrategy", "canary")
-                .build();
+        @Test
+        @DisplayName("CI/CD agent provides canary deployment with Kubernetes")
+        void testCanaryDeploymentKubernetes() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("cicd")
+                                .property("service", "pos-price")
+                                .property("deploymentTarget", "kubernetes")
+                                .property("deploymentStrategy", "canary")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("canary-deployment")
-                .description("CI/CD agent provides canary deployment with Kubernetes")
-                .context(context)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("canary-deployment")
+                                .description("CI/CD agent provides canary deployment with Kubernetes")
+                                .context(context)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse response = cicdAgent.processRequest(request);
+                AgentResponse response = cicdAgent.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess() || response.getStatus() != null);
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess() || response.getStatus() != null);
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("Resilience agent provides horizontal pod autoscaling")
-    void testHorizontalPodAutoscaling() {
-        AgentContext context = AgentContext.builder()
-                .domain("resilience")
-                .property("service", "pos-work-order")
-                .property("platform", "kubernetes")
-                .property("scalingType", "horizontal")
-                .build();
+        @Test
+        @DisplayName("Resilience agent provides horizontal pod autoscaling")
+        void testHorizontalPodAutoscaling() {
+                AgentContext context = AgentContext.builder()
+                                .agentDomain("resilience")
+                                .property("service", "pos-work-order")
+                                .property("platform", "kubernetes")
+                                .property("scalingType", "horizontal")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("horizontal-pod-autoscaler")
-                .description("Resilience agent provides horizontal pod autoscaling")
-                .context(context)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("horizontal-pod-autoscaler")
+                                .description("Resilience agent provides horizontal pod autoscaling")
+                                .context(context)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse response = resilienceAgent.processRequest(request);
+                AgentResponse response = resilienceAgent.processRequest(request);
 
-        assertNotNull(response);
-        assertTrue(response.isSuccess() || response.getStatus() != null);
-        assertTrue(response.getProcessingTimeMs() >= 0);
-    }
+                assertNotNull(response);
+                assertTrue(response.isSuccess() || response.getStatus() != null);
+                assertTrue(response.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("Complete Kubernetes microservice deployment scenario")
-    void testCompleteKubernetesMicroserviceDeployment() {
-        String serviceName = "pos-shop-manager";
+        @Test
+        @DisplayName("Complete Kubernetes microservice deployment scenario")
+        void testCompleteKubernetesMicroserviceDeployment() {
+                String serviceName = "pos-shop-manager";
 
-        // CI/CD deployment strategy
-        AgentContext cicdContext = AgentContext.builder()
-                .domain("cicd")
-                .property("service", serviceName)
-                .property("deploymentTarget", "kubernetes")
-                .property("deploymentStrategy", "blue-green")
-                .build();
+                // CI/CD deployment strategy
+                AgentContext cicdContext = AgentContext.builder()
+                                .agentDomain("cicd")
+                                .property("service", serviceName)
+                                .property("deploymentTarget", "kubernetes")
+                                .property("deploymentStrategy", "blue-green")
+                                .build();
 
-        AgentRequest cicdRequest = AgentRequest.builder()
-                .type("kubernetes-deployment")
-                .description("CI/CD agent provides Kubernetes deployment strategies")
-                .context(cicdContext)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest cicdRequest = AgentRequest.builder()
+                                .type("kubernetes-deployment")
+                                .description("CI/CD agent provides Kubernetes deployment strategies")
+                                .context(cicdContext)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse deploymentResponse = cicdAgent.processRequest(cicdRequest);
+                AgentResponse deploymentResponse = cicdAgent.processRequest(cicdRequest);
 
-        // Configuration management
-        AgentContext configContext = AgentContext.builder()
-                .domain("configuration")
-                .property("service", serviceName)
-                .property("configurationType", "application-config")
-                .property("platform", "kubernetes")
-                .build();
+                // Configuration management
+                AgentContext configContext = AgentContext.builder()
+                                .agentDomain("configuration")
+                                .property("service", serviceName)
+                                .property("configurationType", "application-config")
+                                .property("platform", "kubernetes")
+                                .build();
 
-        AgentRequest configRequest = AgentRequest.builder()
-                .type("kubernetes-config")
-                .description("Configuration agent provides ConfigMap and Secret management")
-                .context(configContext)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest configRequest = AgentRequest.builder()
+                                .type("kubernetes-config")
+                                .description("Configuration agent provides ConfigMap and Secret management")
+                                .context(configContext)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse configResponse = configAgent.processRequest(configRequest);
+                AgentResponse configResponse = configAgent.processRequest(configRequest);
 
-        // Resilience patterns
-        AgentContext resilienceContext = AgentContext.builder()
-                .domain("resilience")
-                .property("service", serviceName)
-                .property("platform", "kubernetes")
-                .property("failureType", "application")
-                .build();
+                // Resilience patterns
+                AgentContext resilienceContext = AgentContext.builder()
+                                .agentDomain("resilience")
+                                .property("service", serviceName)
+                                .property("platform", "kubernetes")
+                                .property("failureType", "application")
+                                .build();
 
-        AgentRequest resilienceRequest = AgentRequest.builder()
-                .type("kubernetes-health-check")
-                .description("Resilience agent provides Kubernetes health checks and probes")
-                .context(resilienceContext)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest resilienceRequest = AgentRequest.builder()
+                                .type("kubernetes-health-check")
+                                .description("Resilience agent provides Kubernetes health checks and probes")
+                                .context(resilienceContext)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse resilienceResponse = resilienceAgent.processRequest(resilienceRequest);
+                AgentResponse resilienceResponse = resilienceAgent.processRequest(resilienceRequest);
 
-        // Verify comprehensive Kubernetes guidance
-        assertNotNull(deploymentResponse);
-        assertNotNull(configResponse);
-        assertNotNull(resilienceResponse);
+                // Verify comprehensive Kubernetes guidance
+                assertNotNull(deploymentResponse);
+                assertNotNull(configResponse);
+                assertNotNull(resilienceResponse);
 
-        assertTrue(deploymentResponse.isSuccess() || deploymentResponse.getStatus() != null);
-        assertTrue(configResponse.isSuccess() || configResponse.getStatus() != null);
-        assertTrue(resilienceResponse.isSuccess() || resilienceResponse.getStatus() != null);
+                assertTrue(deploymentResponse.isSuccess() || deploymentResponse.getStatus() != null);
+                assertTrue(configResponse.isSuccess() || configResponse.getStatus() != null);
+                assertTrue(resilienceResponse.isSuccess() || resilienceResponse.getStatus() != null);
 
-        assertTrue(deploymentResponse.getProcessingTimeMs() >= 0);
-        assertTrue(configResponse.getProcessingTimeMs() >= 0);
-        assertTrue(resilienceResponse.getProcessingTimeMs() >= 0);
-    }
+                assertTrue(deploymentResponse.getProcessingTimeMs() >= 0);
+                assertTrue(configResponse.getProcessingTimeMs() >= 0);
+                assertTrue(resilienceResponse.getProcessingTimeMs() >= 0);
+        }
 
-    @Test
-    @DisplayName("Multi-environment Kubernetes deployment guidance")
-    void testMultiEnvironmentKubernetesDeployment() {
-        String serviceName = "pos-accounting";
+        @Test
+        @DisplayName("Multi-environment Kubernetes deployment guidance")
+        void testMultiEnvironmentKubernetesDeployment() {
+                String serviceName = "pos-accounting";
 
-        // Development environment
-        AgentContext devContext = AgentContext.builder()
-                .domain("cicd")
-                .property("service", serviceName)
-                .property("deploymentTarget", "kubernetes")
-                .property("environment", "development")
-                .build();
+                // Development environment
+                AgentContext devContext = AgentContext.builder()
+                                .agentDomain("cicd")
+                                .property("service", serviceName)
+                                .property("deploymentTarget", "kubernetes")
+                                .property("environment", "development")
+                                .build();
 
-        AgentRequest devRequest = AgentRequest.builder()
-                .type("kubernetes-deployment")
-                .description("CI/CD agent provides Kubernetes deployment guidance for development environment")
-                .context(devContext)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest devRequest = AgentRequest.builder()
+                                .type("kubernetes-deployment")
+                                .description("CI/CD agent provides Kubernetes deployment guidance for development environment")
+                                .context(devContext)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse devResponse = cicdAgent.processRequest(devRequest);
+                AgentResponse devResponse = cicdAgent.processRequest(devRequest);
 
-        // Production environment
-        AgentContext prodContext = AgentContext.builder()
-                .domain("cicd")
-                .property("service", serviceName)
-                .property("deploymentTarget", "kubernetes")
-                .property("environment", "production")
-                .build();
+                // Production environment
+                AgentContext prodContext = AgentContext.builder()
+                                .agentDomain("cicd")
+                                .property("service", serviceName)
+                                .property("deploymentTarget", "kubernetes")
+                                .property("environment", "production")
+                                .build();
 
-        AgentRequest prodRequest = AgentRequest.builder()
-                .type("kubernetes-deployment")
-                .description("CI/CD agent provides Kubernetes deployment guidance for production environment")
-                .context(prodContext)
-                .securityContext(security)
-                .requireTLS13(true)
-                .build();
+                AgentRequest prodRequest = AgentRequest.builder()
+                                .type("kubernetes-deployment")
+                                .description("CI/CD agent provides Kubernetes deployment guidance for production environment")
+                                .context(prodContext)
+                                .securityContext(security)
+                                .requireTLS13(true)
+                                .build();
 
-        AgentResponse prodResponse = cicdAgent.processRequest(prodRequest);
+                AgentResponse prodResponse = cicdAgent.processRequest(prodRequest);
 
-        assertNotNull(devResponse);
-        assertNotNull(prodResponse);
+                assertNotNull(devResponse);
+                assertNotNull(prodResponse);
 
-        assertTrue(devResponse.isSuccess() || devResponse.getStatus() != null);
-        assertTrue(prodResponse.isSuccess() || prodResponse.getStatus() != null);
+                assertTrue(devResponse.isSuccess() || devResponse.getStatus() != null);
+                assertTrue(prodResponse.isSuccess() || prodResponse.getStatus() != null);
 
-        assertTrue(devResponse.getProcessingTimeMs() >= 0);
-        assertTrue(prodResponse.getProcessingTimeMs() >= 0);
-    }
+                assertTrue(devResponse.getProcessingTimeMs() >= 0);
+                assertTrue(prodResponse.getProcessingTimeMs() >= 0);
+        }
 }

@@ -56,7 +56,7 @@ class AgentDomainCoveragePropertyTest {
 
                 // Then: The system should provide successful guidance
                 assertTrue(response.isSuccess(),
-                                "Response for domain " + context.getDomain() + " should be successful");
+                                "Response for domain " + context.getAgentDomain() + " should be successful");
 
                 // And: Response status should be meaningful
                 assertNotNull(response.getStatus(),
@@ -73,7 +73,7 @@ class AgentDomainCoveragePropertyTest {
                 for (AgentContext context : contexts) {
                         AgentRequest request = AgentRequest.builder()
                                         .description("All major domains have coverage property test - "
-                                                        + context.getDomain())
+                                                        + context.getAgentDomain())
                                         .type("domain-validation")
                                         .context(context)
                                         .securityContext(securityContext)
@@ -83,10 +83,10 @@ class AgentDomainCoveragePropertyTest {
 
                         // Then: Each domain should be handled successfully
                         assertTrue(response.isSuccess(),
-                                        "Domain " + context.getDomain() + " should have coverage");
+                                        "Domain " + context.getAgentDomain() + " should have coverage");
 
                         assertNotNull(response.getStatus(),
-                                        "Status should be present for " + context.getDomain());
+                                        "Status should be present for " + context.getAgentDomain());
                 }
         }
 
@@ -122,7 +122,7 @@ class AgentDomainCoveragePropertyTest {
         Arbitrary<AgentContext> domainContexts() {
                 return Arbitraries.of("architecture", "implementation", "testing", "deployment")
                                 .map(domain -> AgentContext.builder()
-                                                .domain(domain)
+                                                .agentDomain(domain)
                                                 .property("coverageType", domain + "-guidance")
                                                 .build());
         }
@@ -132,7 +132,7 @@ class AgentDomainCoveragePropertyTest {
                 List<String> domains = List.of("architecture", "implementation", "testing", "deployment");
                 return Arbitraries.just(domains.stream()
                                 .map(domain -> AgentContext.builder()
-                                                .domain(domain)
+                                                .agentDomain(domain)
                                                 .property("coverageType", domain + "-validation")
                                                 .build())
                                 .toList());

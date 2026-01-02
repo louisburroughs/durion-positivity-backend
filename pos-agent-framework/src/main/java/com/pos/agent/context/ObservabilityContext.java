@@ -60,7 +60,6 @@ public class ObservabilityContext extends AgentContext {
         this.healthStatuses = builder.healthStatuses;
     }
 
-   
     public static Builder builder() {
         return new Builder();
     }
@@ -288,7 +287,7 @@ public class ObservabilityContext extends AgentContext {
         private Map<String, String> healthStatuses = new HashMap<>();
 
         public Builder() {
-            domain("observability");
+            agentDomain("observability");
             contextType("observability-context");
         }
 

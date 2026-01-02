@@ -284,7 +284,7 @@ class ComprehensiveSystemIntegrationTest {
                 return DefaultContext.builder()
                                 .type("microservice-implementation")
                                 .serviceType("spring-boot")
-                                .domain("inventory")
+                                .agentDomain("inventory")
                                 .property("database", "postgresql")
                                 .property("messaging", "kafka")
                                 .build();
@@ -293,7 +293,7 @@ class ComprehensiveSystemIntegrationTest {
         private AgentContext createContextForAgentType(String agentType) {
                 return DefaultContext.builder()
                                 .type(agentType)
-                                .domain("general")
+                                .agentDomain("general")
                                 .build();
         }
 
@@ -301,7 +301,7 @@ class ComprehensiveSystemIntegrationTest {
                 return DefaultContext.builder()
                                 .type("architecture")
                                 .serviceType("microservice")
-                                .domain("catalog")
+                                .agentDomain("catalog")
                                 .build();
         }
 
@@ -309,7 +309,7 @@ class ComprehensiveSystemIntegrationTest {
                 return DefaultContext.builder()
                                 .type("implementation")
                                 .serviceType("spring-boot")
-                                .domain("inventory")
+                                .agentDomain("inventory")
                                 .build();
         }
 
@@ -317,7 +317,7 @@ class ComprehensiveSystemIntegrationTest {
                 return DefaultContext.builder()
                                 .type("security")
                                 .property("securityType", "jwt-authentication")
-                                .domain("all")
+                                .agentDomain("all")
                                 .build();
         }
 
@@ -333,7 +333,7 @@ class ComprehensiveSystemIntegrationTest {
                 String[] domains = { "catalog", "inventory", "customer", "order", "security" };
                 return DefaultContext.builder()
                                 .type("general")
-                                .domain(domains[(int) (Math.random() * domains.length)])
+                                .agentDomain(domains[(int) (Math.random() * domains.length)])
                                 .build();
         }
 

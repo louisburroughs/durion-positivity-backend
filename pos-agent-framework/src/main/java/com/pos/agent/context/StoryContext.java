@@ -63,7 +63,7 @@ public class StoryContext extends AgentContext {
 
         public Builder() {
             // Set default domain for story context
-            domain("story");
+            agentDomain("story");
         }
 
         public Builder repositoryUrl(String repositoryUrl) {

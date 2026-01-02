@@ -2,7 +2,8 @@ package com.pos.agent.story;
 
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
+import com.pos.agent.core.AgentProcessingState;
+import com.pos.agent.impl.StoryStrengtheningAgent;
 import com.pos.agent.story.analysis.RequirementsAnalyzer;
 import com.pos.agent.story.config.StoryConfiguration;
 import com.pos.agent.story.loop.LoopDetectionResult;
@@ -81,7 +82,7 @@ class StoryStrengtheningAgentInterfaceTest {
         AgentRequest request = validRequestBuilder.build();
         AgentResponse response = agent.processRequest(request);
 
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum(), "Status should be SUCCESS");
+        assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum(), "Status should be SUCCESS");
         assertNotNull(response.getOutput(), "Output should be present");
         assertNull(response.getErrorMessage(), "Error message should be null for success");
         assertTrue(response.getConfidence() > 0, "Confidence should be positive for success");
@@ -132,7 +133,8 @@ class StoryStrengtheningAgentInterfaceTest {
         AgentRequest request = validRequestBuilder.build();
         AgentResponse response = loopAgent.processRequest(request);
 
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum(), "Status should be FAILURE when loop detected");
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum(),
+                "Status should be FAILURE when loop detected");
         assertFalse(response.isSuccess(), "Response should indicate failure");
         assertNotNull(response.getOutput(), "Output should be present");
         // The output should contain the stop phrase from loop detection

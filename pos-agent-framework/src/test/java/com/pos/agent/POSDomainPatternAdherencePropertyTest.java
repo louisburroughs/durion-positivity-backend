@@ -59,75 +59,81 @@ class POSDomainPatternAdherencePropertyTest {
         Arbitrary<AgentContext> posDomainConsultationRequests() {
                 return Arbitraries.of(
                                 // Sales and transaction contexts
-                                AgentContext.builder().domain("business").property("topic", "sales-transactions")
+                                AgentContext.builder().agentDomain("business").property("topic", "sales-transactions")
                                                 .property("pattern", "atomic").build(),
-                                AgentContext.builder().domain("business").property("topic", "pos-transaction")
+                                AgentContext.builder().agentDomain("business").property("topic", "pos-transaction")
                                                 .property("pattern", "processing").build(),
-                                AgentContext.builder().domain("business").property("topic", "sales-tax")
+                                AgentContext.builder().agentDomain("business").property("topic", "sales-tax")
                                                 .property("pattern", "multi-location").build(),
 
                                 // Inventory management contexts
-                                AgentContext.builder().domain("business").property("topic", "inventory-management")
+                                AgentContext.builder().agentDomain("business").property("topic", "inventory-management")
                                                 .property("pattern", "event-driven").build(),
-                                AgentContext.builder().domain("business").property("topic", "stock-movement")
+                                AgentContext.builder().agentDomain("business").property("topic", "stock-movement")
                                                 .property("pattern", "tracking").build(),
-                                AgentContext.builder().domain("business").property("topic", "inventory-sync")
+                                AgentContext.builder().agentDomain("business").property("topic", "inventory-sync")
                                                 .property("pattern", "multi-location").build(),
 
                                 // Customer lifecycle contexts
-                                AgentContext.builder().domain("business").property("topic", "customer-registration")
+                                AgentContext.builder().agentDomain("business")
+                                                .property("topic", "customer-registration")
                                                 .property("pattern", "loyalty").build(),
-                                AgentContext.builder().domain("business").property("topic", "customer-segmentation")
+                                AgentContext.builder().agentDomain("business")
+                                                .property("topic", "customer-segmentation")
                                                 .property("pattern", "pos").build(),
-                                AgentContext.builder().domain("business").property("topic", "customer-hierarchy")
+                                AgentContext.builder().agentDomain("business").property("topic", "customer-hierarchy")
                                                 .property("pattern", "b2b").build(),
 
                                 // Payment processing contexts
-                                AgentContext.builder().domain("business").property("topic", "payment-stripe")
+                                AgentContext.builder().agentDomain("business").property("topic", "payment-stripe")
                                                 .property("pattern", "webhook").build(),
-                                AgentContext.builder().domain("business").property("topic", "payment-token")
+                                AgentContext.builder().agentDomain("business").property("topic", "payment-token")
                                                 .property("pattern", "security").build(),
-                                AgentContext.builder().domain("business").property("topic", "payment-reconciliation")
+                                AgentContext.builder().agentDomain("business")
+                                                .property("topic", "payment-reconciliation")
                                                 .property("pattern", "processing").build(),
 
                                 // Automotive service contexts
-                                AgentContext.builder().domain("business").property("topic", "vehicle-reference")
+                                AgentContext.builder().agentDomain("business").property("topic", "vehicle-reference")
                                                 .property("pattern", "compatibility").build(),
-                                AgentContext.builder().domain("business").property("topic", "service-appointment")
+                                AgentContext.builder().agentDomain("business").property("topic", "service-appointment")
                                                 .property("pattern", "scheduling").build(),
-                                AgentContext.builder().domain("business").property("topic", "vehicle-service-history")
+                                AgentContext.builder().agentDomain("business")
+                                                .property("topic", "vehicle-service-history")
                                                 .property("pattern", "tracking").build(),
 
                                 // Event-driven architecture contexts
-                                AgentContext.builder().domain("business").property("topic", "domain-events")
+                                AgentContext.builder().agentDomain("business").property("topic", "domain-events")
                                                 .property("pattern", "state-changes").build(),
-                                AgentContext.builder().domain("business").property("topic", "saga-patterns")
+                                AgentContext.builder().agentDomain("business").property("topic", "saga-patterns")
                                                 .property("pattern", "implementation").build(),
-                                AgentContext.builder().domain("business").property("topic", "event-ordering")
+                                AgentContext.builder().agentDomain("business").property("topic", "event-ordering")
                                                 .property("pattern", "idempotency").build(),
 
                                 // Business rule contexts
-                                AgentContext.builder().domain("business").property("topic", "business-rules")
+                                AgentContext.builder().agentDomain("business").property("topic", "business-rules")
                                                 .property("pattern", "configurable").build(),
-                                AgentContext.builder().domain("business").property("topic", "rule-validation")
+                                AgentContext.builder().agentDomain("business").property("topic", "rule-validation")
                                                 .property("pattern", "patterns").build(),
-                                AgentContext.builder().domain("business").property("topic", "regulatory-compliance")
+                                AgentContext.builder().agentDomain("business")
+                                                .property("topic", "regulatory-compliance")
                                                 .property("pattern", "business-processes").build(),
 
                                 // Integration contexts
-                                AgentContext.builder().domain("business").property("topic", "api-integration")
+                                AgentContext.builder().agentDomain("business").property("topic", "api-integration")
                                                 .property("pattern", "circuit-breaker").build(),
-                                AgentContext.builder().domain("business").property("topic", "webhook-validation")
+                                AgentContext.builder().agentDomain("business").property("topic", "webhook-validation")
                                                 .property("pattern", "signature").build(),
-                                AgentContext.builder().domain("business").property("topic", "api-rate-limiting")
+                                AgentContext.builder().agentDomain("business").property("topic", "api-rate-limiting")
                                                 .property("pattern", "retry").build(),
 
                                 // Distributed transaction contexts
-                                AgentContext.builder().domain("business").property("topic", "distributed-transactions")
+                                AgentContext.builder().agentDomain("business")
+                                                .property("topic", "distributed-transactions")
                                                 .property("pattern", "microservices").build(),
-                                AgentContext.builder().domain("business").property("topic", "eventual-consistency")
+                                AgentContext.builder().agentDomain("business").property("topic", "eventual-consistency")
                                                 .property("pattern", "best-practices").build(),
-                                AgentContext.builder().domain("business").property("topic", "compensation-actions")
+                                AgentContext.builder().agentDomain("business").property("topic", "compensation-actions")
                                                 .property("pattern", "saga").build());
         }
 }

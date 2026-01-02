@@ -1,11 +1,13 @@
 package com.pos.agent.collaboration;
 
-import com.pos.agent.AgentConsultationRequest;
-import com.pos.agent.AgentGuidanceResponse;
+
 import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.CICDContext;
 import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.context.ResilienceContext;
+import com.pos.agent.core.AgentRequest;
+import com.pos.agent.core.AgentResponse;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -26,15 +28,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class ContextAwareGuidanceManagerTest {
 
     private ContextAwareGuidanceManager contextManager;
-    private AgentConsultationRequest testRequest;
-    private AgentGuidanceResponse testResponse;
+    private AgentRequest testRequest;
+    private AgentResponse testResponse;
 
     @BeforeEach
     void setUp() {
         contextManager = new ContextAwareGuidanceManager();
 
         // Create test request with session context
-        Map<String, Object> context = new HashMap<>();
+        AgentContext context = new HashMap<>();
         context.put("session-id", "test-session-123");
         context.put("project-context", "test-project");
         context.put("architectural-decisions", "microservices-architecture");
@@ -45,21 +47,18 @@ class ContextAwareGuidanceManagerTest {
         context.put("configuration-context", "spring-cloud-config");
         context.put("resilience-context", "circuit-breaker-patterns");
 
-        testRequest = AgentConsultationRequest.create(
+        testRequest = AgentRequest.builder()
                 "event-driven-architecture",
                 "How to implement Kafka event streaming?",
                 context,
                 "integration",
-                AgentConsultationRequest.Priority.NORMAL);
+                AgentRequest.Priority.NORMAL);
 
         // Create test response
-        testResponse = AgentGuidanceResponse.success(
-                "test-request-123",
-                "event-driven-agent",
+        testResponse = AgentResponse.success(
                 "Implement Kafka with idempotent handlers and dead letter queues for resilience",
-                0.95,
-                List.of("Use Kafka Connect", "Implement schema registry", "Add monitoring"),
-                Duration.ofMillis(150));
+                0.95
+               );
     }
 
     // Context Validation Tests
@@ -68,7 +67,7 @@ class ContextAwareGuidanceManagerTest {
     @DisplayName("Should validate sufficient context with all required keys")
     void testValidateContext_SufficientContext() {
         // Act
-        ContextAwareGuidanceManager.ContextValidationResult result = contextManager.validateContext(testRequest);
+        ContextValidationResult result = contextManager.validateContext(testRequest);
 
         // Assert
         assertTrue(result.isSufficient());
@@ -88,15 +87,15 @@ class ContextAwareGuidanceManagerTest {
         // Missing: architectural-decisions, current-task, domain-constraints,
         // specialized contexts
 
-        AgentConsultationRequest incompleteRequest = AgentConsultationRequest.create(
+        AgentRequest incompleteRequest = AgentRequest.create(
                 "test-agent",
                 "test query",
                 incompleteContext,
                 "test",
-                AgentConsultationRequest.Priority.NORMAL);
+                AgentRequest.Priority.NORMAL);
 
         // Act
-        ContextAwareGuidanceManager.ContextValidationResult result = contextManager.validateContext(incompleteRequest);
+        ContextValidationResult result = contextManager.validateContext(incompleteRequest);
 
         // Assert
         assertFalse(result.isSufficient());
@@ -122,23 +121,23 @@ class ContextAwareGuidanceManagerTest {
         contextManager.updateSessionProgress(sessionId, "old-task", Map.of(), List.of());
 
         // Manually access session context to make it stale (simulate time passage)
-        Optional<ContextAwareGuidanceManager.SessionContext> sessionOpt = contextManager.getSessionContext(sessionId);
+        Optional<SessionContext> sessionOpt = contextManager.getSessionContext(sessionId);
         assertTrue(sessionOpt.isPresent());
-        ContextAwareGuidanceManager.SessionContext session = sessionOpt.get();
+        SessionContext session = sessionOpt.get();
         session.setLastUpdated(Instant.now().minus(Duration.ofHours(1))); // Make it stale
 
         Map<String, Object> context = new HashMap<>(testRequest.context());
         context.put("session-id", sessionId);
 
-        AgentConsultationRequest staleRequest = AgentConsultationRequest.create(
+        AgentRequest staleRequest = AgentRequest.create(
                 "test-agent",
                 "test query",
                 context,
                 "test",
-                AgentConsultationRequest.Priority.NORMAL);
+                AgentRequest.Priority.NORMAL);
 
         // Act
-        ContextAwareGuidanceManager.ContextValidationResult result = contextManager.validateContext(staleRequest);
+        ContextValidationResult result = contextManager.validateContext(staleRequest);
 
         // Assert
         assertFalse(result.isSufficient());
@@ -218,7 +217,7 @@ class ContextAwareGuidanceManagerTest {
     void testUpdateSpecializedContext_EventDriven() {
         // Arrange
         String sessionId = "event-session";
-        AgentGuidanceResponse eventResponse = AgentGuidanceResponse.success(
+        AgentResponse eventResponse = AgentResponse.success(
                 "event-request",
                 "event-driven-agent",
                 "Use Kafka for event streaming with idempotent handlers and dead letter queues for failed events. " +
@@ -249,7 +248,7 @@ class ContextAwareGuidanceManagerTest {
     void testUpdateSpecializedContext_CICD() {
         // Arrange
         String sessionId = "cicd-session";
-        AgentGuidanceResponse cicdResponse = AgentGuidanceResponse.success(
+        AgentResponse cicdResponse = AgentResponse.success(
                 "cicd-request",
                 "cicd-pipeline-agent",
                 "Use Maven for build automation with Docker containerization. " +
@@ -281,7 +280,7 @@ class ContextAwareGuidanceManagerTest {
     void testUpdateSpecializedContext_Configuration() {
         // Arrange
         String sessionId = "config-session";
-        AgentGuidanceResponse configResponse = AgentGuidanceResponse.success(
+        AgentResponse configResponse = AgentResponse.success(
                 "config-request",
                 "configuration-management-agent",
                 "Use Spring Cloud Config for centralized configuration with Consul for service discovery. " +
@@ -316,7 +315,7 @@ class ContextAwareGuidanceManagerTest {
     void testUpdateSpecializedContext_Resilience() {
         // Arrange
         String sessionId = "resilience-session";
-        AgentGuidanceResponse resilienceResponse = AgentGuidanceResponse.success(
+        AgentResponse resilienceResponse = AgentResponse.success(
                 "resilience-request",
                 "resilience-engineering-agent",
                 "Use Resilience4j for circuit breaker patterns with exponential backoff and jitter for retry mechanisms. "
@@ -450,12 +449,12 @@ class ContextAwareGuidanceManagerTest {
         Map<String, Object> context = new HashMap<>(testRequest.context());
         context.put("session-id", sessionId);
 
-        AgentConsultationRequest enhanceRequest = AgentConsultationRequest.create(
+        AgentRequest enhanceRequest = AgentRequest.create(
                 "event-driven-agent",
                 "How to implement event streaming?",
                 context,
                 "integration",
-                AgentConsultationRequest.Priority.NORMAL);
+                AgentRequest.Priority.NORMAL);
 
         // Create and populate specialized contexts
         EventDrivenContext eventContext = contextManager.getOrCreateEventDrivenContext(sessionId);
@@ -468,7 +467,7 @@ class ContextAwareGuidanceManagerTest {
         cicdContext.addDeploymentStrategy("blue-green", Map.of("type", "zero-downtime"));
 
         // Act
-        AgentGuidanceResponse enhancedResponse = contextManager.enhanceWithContext(testResponse, enhanceRequest);
+        AgentResponse enhancedResponse = contextManager.enhanceWithContext(testResponse, enhanceRequest);
 
         // Assert
         assertNotNull(enhancedResponse);
@@ -596,10 +595,10 @@ class ContextAwareGuidanceManagerTest {
         contextManager.updateSessionProgress(sessionId, "implement-event-driven-system", decisions, nextSteps);
 
         // Assert
-        Optional<ContextAwareGuidanceManager.SessionContext> sessionOpt = contextManager.getSessionContext(sessionId);
+        Optional<SessionContext> sessionOpt = contextManager.getSessionContext(sessionId);
         assertTrue(sessionOpt.isPresent());
 
-        ContextAwareGuidanceManager.SessionContext session = sessionOpt.get();
+        SessionContext session = sessionOpt.get();
         assertEquals(sessionId, session.getSessionId());
         assertEquals("implement-event-driven-system", session.getTaskObjective());
         assertEquals(3, session.getArchitecturalDecisions().size());
@@ -621,10 +620,10 @@ class ContextAwareGuidanceManagerTest {
         String sessionId = "stale-test";
         contextManager.updateSessionProgress(sessionId, "old-task", Map.of(), List.of());
 
-        Optional<ContextAwareGuidanceManager.SessionContext> sessionOpt = contextManager.getSessionContext(sessionId);
+        Optional<SessionContext> sessionOpt = contextManager.getSessionContext(sessionId);
         assertTrue(sessionOpt.isPresent());
 
-        ContextAwareGuidanceManager.SessionContext session = sessionOpt.get();
+        SessionContext session = sessionOpt.get();
 
         // Make session stale
         session.setLastUpdated(Instant.now().minus(Duration.ofMinutes(35)));
@@ -642,7 +641,7 @@ class ContextAwareGuidanceManagerTest {
         String sessionId = "complete-workflow";
 
         // Step 1: Validate initial context
-        ContextAwareGuidanceManager.ContextValidationResult validation = contextManager.validateContext(testRequest);
+        ContextValidationResult validation = contextManager.validateContext(testRequest);
         assertTrue(validation.isSufficient());
 
         // Step 2: Create specialized contexts
@@ -652,7 +651,7 @@ class ContextAwareGuidanceManagerTest {
         contextManager.getOrCreateResilienceContext(sessionId);
 
         // Step 3: Update contexts from agent guidance
-        AgentGuidanceResponse eventResponse = AgentGuidanceResponse.success(
+        AgentResponse eventResponse = AgentResponse.success(
                 "event-req", "event-driven-agent",
                 "Use Kafka with idempotent handlers and saga patterns for event sourcing",
                 0.9, List.of("Configure Kafka"), Duration.ofMillis(100));
@@ -665,11 +664,11 @@ class ContextAwareGuidanceManagerTest {
         // Step 5: Enhance guidance with context
         Map<String, Object> requestContext = new HashMap<>(testRequest.context());
         requestContext.put("session-id", sessionId);
-        AgentConsultationRequest workflowRequest = AgentConsultationRequest.create(
+        AgentRequest workflowRequest = AgentRequest.create(
                 "architecture-agent", "Design system architecture", requestContext, "architecture",
-                AgentConsultationRequest.Priority.NORMAL);
+                AgentRequest.Priority.NORMAL);
 
-        AgentGuidanceResponse enhancedResponse = contextManager.enhanceWithContext(testResponse, workflowRequest);
+        AgentResponse enhancedResponse = contextManager.enhanceWithContext(testResponse, workflowRequest);
         assertNotNull(enhancedResponse);
         assertTrue(enhancedResponse.guidance().contains("Context-Aware Guidance"));
 

@@ -111,7 +111,7 @@ class IntelligentAgentRouterTest {
                 "pos-catalog:business:Catalog management").map(scenario -> {
                     String[] parts = scenario.split(":");
                     return AgentContext.builder()
-                            .domain("service-mapping")
+                            .agentDomain("service-mapping")
                             .property("targetService", parts[0])
                             .property("primaryAgent", parts[1])
                             .property("description", parts[2])
@@ -127,7 +127,7 @@ class IntelligentAgentRouterTest {
                 "general:Security configuration:security").map(scenario -> {
                     String[] parts = scenario.split(":");
                     return AgentContext.builder()
-                            .domain("context-fallback")
+                            .agentDomain("context-fallback")
                             .property("requestType", parts[0])
                             .property("description", parts[1])
                             .property("selectedAgent", parts[2])
@@ -144,7 +144,7 @@ class IntelligentAgentRouterTest {
                     String[] parts = scenario.split(":");
                     boolean hasAgent = !"none".equals(parts[2]);
                     return AgentContext.builder()
-                            .domain("universal-fallback")
+                            .agentDomain("universal-fallback")
                             .property("requestType", parts[0])
                             .property("description", parts[1])
                             .property("fallbackAgent", parts[2])
@@ -161,7 +161,7 @@ class IntelligentAgentRouterTest {
                 "pos-order:implementation:suggested:Order management").map(scenario -> {
                     String[] parts = scenario.split(":");
                     return AgentContext.builder()
-                            .domain("service-routing")
+                            .agentDomain("service-routing")
                             .property("targetService", parts[0])
                             .property("agentType", parts[1])
                             .property("mappingType", parts[2])
@@ -179,7 +179,7 @@ class IntelligentAgentRouterTest {
                     String[] parts = scenario.split(":");
                     boolean hasAgent = !"none".equals(parts[1]);
                     return AgentContext.builder()
-                            .domain("domain-routing")
+                            .agentDomain("domain-routing")
                             .property("requestDomain", parts[0])
                             .property("bestAgent", parts[1])
                             .property("hasAvailableAgent", hasAgent)

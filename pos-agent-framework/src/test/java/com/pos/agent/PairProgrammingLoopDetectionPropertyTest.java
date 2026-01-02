@@ -135,7 +135,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
         void shouldProcessLoopDetectionRequests() {
                 // Given: A loop context
                 AgentContext context = AgentContext.builder()
-                                .domain("collaboration")
+                                .agentDomain("collaboration")
                                 .property("scenario", "entity-churn")
                                 .property("requestType", "loop-detection")
                                 .build();
@@ -160,7 +160,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
         void shouldMeetPerformanceRequirements() {
                 // Given: A standard consultation context
                 AgentContext context = AgentContext.builder()
-                                .domain("collaboration")
+                                .agentDomain("collaboration")
                                 .property("requestType", "performance-test")
                                 .build();
 
@@ -183,28 +183,33 @@ public class PairProgrammingLoopDetectionPropertyTest {
         @Provide
         Arbitrary<AgentContext> stalledImplementationContexts() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("collaboration").property("scenario", "entity-churn")
+                                AgentContext.builder().agentDomain("collaboration").property("scenario", "entity-churn")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "data-model-changes")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "entity-redesign")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "entity-redesign")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "relationship-refactor")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "service-explosion")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "service-explosion")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "policy-boundaries")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "policy-boundaries")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "crud-wrapping")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "crud-wrapping")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "service-layer-expansion")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "decision-churn")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "decision-churn")
                                                 .property("requestType", "loop-detection").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "repeated-decisions")
                                                 .property("requestType", "loop-detection").build());
         }
@@ -212,24 +217,28 @@ public class PairProgrammingLoopDetectionPropertyTest {
         @Provide
         Arbitrary<AgentContext> architecturalDriftContexts() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("collaboration").property("scenario", "bypass-gateway")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "bypass-gateway")
                                                 .property("requestType", "architectural-drift").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "direct-database-access")
                                                 .property("requestType", "architectural-drift").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "violate-boundaries")
                                                 .property("requestType", "architectural-drift").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "ignore-contract")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "ignore-contract")
                                                 .property("requestType", "architectural-drift").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "break-pattern")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "break-pattern")
                                                 .property("requestType", "architectural-drift").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "tight-coupling")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "tight-coupling")
                                                 .property("requestType", "architectural-drift").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "circular-dependency")
                                                 .property("requestType", "architectural-drift").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "bypass-integration")
                                                 .property("requestType", "architectural-drift").build());
         }
@@ -237,36 +246,43 @@ public class PairProgrammingLoopDetectionPropertyTest {
         @Provide
         Arbitrary<AgentContext> scopeCreepContexts() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("collaboration").property("scenario", "extra-validation")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "extra-validation")
                                                 .property("requestType", "scope-creep").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "nice-to-have")
+                                AgentContext.builder().agentDomain("collaboration").property("scenario", "nice-to-have")
                                                 .property("requestType", "scope-creep").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "future-proof")
+                                AgentContext.builder().agentDomain("collaboration").property("scenario", "future-proof")
                                                 .property("requestType", "scope-creep").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "add-optimization")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "add-optimization")
                                                 .property("requestType", "scope-creep").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "generic-handling")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "generic-handling")
                                                 .property("requestType", "scope-creep").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "add-enhancement")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "add-enhancement")
                                                 .property("requestType", "scope-creep").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "extensibility")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "extensibility")
                                                 .property("requestType", "scope-creep").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "extra-features")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "extra-features")
                                                 .property("requestType", "scope-creep").build());
         }
 
         @Provide
         Arbitrary<AgentContext> validCollaborationContexts() {
                 return Arbitraries.of(
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "user-authentication")
                                                 .property("requestType", "collaboration-guidance").build(),
-                                AgentContext.builder().domain("collaboration").property("scenario", "order-processing")
+                                AgentContext.builder().agentDomain("collaboration")
+                                                .property("scenario", "order-processing")
                                                 .property("requestType", "collaboration-guidance").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "inventory-management")
                                                 .property("requestType", "collaboration-guidance").build(),
-                                AgentContext.builder().domain("collaboration")
+                                AgentContext.builder().agentDomain("collaboration")
                                                 .property("scenario", "payment-integration")
                                                 .property("requestType", "collaboration-guidance").build());
         }

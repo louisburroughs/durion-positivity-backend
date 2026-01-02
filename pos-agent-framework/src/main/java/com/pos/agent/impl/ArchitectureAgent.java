@@ -4,7 +4,8 @@ import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
+import com.pos.agent.core.AgentProcessingState;
+import com.pos.agent.framework.model.AgentType;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,6 +26,15 @@ import java.util.stream.Collectors;
  */
 public class ArchitectureAgent extends AbstractAgent {
 
+    public ArchitectureAgent() {
+        super(AgentType.ARCHITECTURE, List.of(
+                "system-design",
+                "pattern-selection",
+                "technology-stack",
+                "architectural-review",
+                "scalability-design"));
+    }
+
     @Override
     protected AgentResponse doProcessRequest(AgentRequest request) {
         // Extract properties from AgentContext
@@ -40,7 +50,7 @@ public class ArchitectureAgent extends AbstractAgent {
 
         // Perform architecture analysis
         ArchitectureAnalysis analysis = analyzeArchitecture(
-                request.getDescription(),
+                request.getAgentContext().getDescription(),
                 systemType,
                 currentPatterns,
                 requirements,
@@ -48,19 +58,18 @@ public class ArchitectureAgent extends AbstractAgent {
                 targetScale);
 
         // Build context map for response
-        Map<String, Object> responseContext = new HashMap<>();
-        responseContext.put("patterns_evaluated", analysis.getPatternsEvaluated());
-        responseContext.put("trade_offs", analysis.getTradeOffs());
-        responseContext.put("system_type", systemType);
-        responseContext.put("target_scale", targetScale);
+        agentContext.getProperties().put("patterns_evaluated", analysis.getPatternsEvaluated());
+        agentContext.getProperties().put("trade_offs", analysis.getTradeOffs());
+        agentContext.getProperties().put("system_type", systemType);
+        agentContext.getProperties().put("target_scale", targetScale);
 
         return AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .output(analysis.getSummary())
                 .confidence(analysis.getConfidence())
                 .success(true)
                 .recommendations(analysis.getRecommendations())
-                .context(responseContext)
+                .context(agentContext)
                 .build();
     }
 

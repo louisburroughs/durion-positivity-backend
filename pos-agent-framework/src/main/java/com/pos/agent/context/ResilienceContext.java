@@ -44,13 +44,8 @@ public class ResilienceContext extends AgentContext {
         this.sliSloDefinitions = builder.sliSloDefinitions;
     }
 
-    
     public static Builder builder() {
         return new Builder();
-    }
-
-    public void setSessionId(String sessionId) {
-        super.setSessionId(sessionId);
     }
 
     public String getServiceName() {
@@ -233,7 +228,7 @@ public class ResilienceContext extends AgentContext {
         private Map<String, Object> sliSloDefinitions = new HashMap<>();
 
         public Builder() {
-            domain("resilience");
+            agentDomain("resilience");
             contextType("resilience-context");
         }
 

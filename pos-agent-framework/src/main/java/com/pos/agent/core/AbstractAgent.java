@@ -1,6 +1,10 @@
 package com.pos.agent.core;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+
+import com.pos.agent.framework.model.AgentType;
 
 /**
  * Abstract base class for all agents.
@@ -9,6 +13,74 @@ import java.util.Collections;
  * Part of frozen contract specification (REQ-016)
  */
 public abstract class AbstractAgent implements Agent {
+
+    private AgentStatus status = AgentStatus.HEALTHY;
+    private final List<String> capabilities = new ArrayList<>();
+    private final AgentType technicalDomain;
+
+    public AbstractAgent(AgentType technicalDomain, List<String> capabilities) {
+        this.technicalDomain = technicalDomain;
+        if (capabilities != null) {
+            this.capabilities.addAll(capabilities);
+        }
+    }
+
+    public AgentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(AgentStatus status) {
+        this.status = status;
+    }
+
+    public boolean isHealthy() {
+        return this.status == AgentStatus.HEALTHY;
+    }
+
+    public List<String> getCapabilities() {
+        return Collections.unmodifiableList(capabilities);
+    }
+
+    public AgentType getTechnicalDomain() {
+        return technicalDomain;
+    }
+
+    /**
+     * Gets the list of roles required to access this agent.
+     * Default implementation returns empty list - override in concrete agents to
+     * specify requirements.
+     * 
+     * @return list of required role names
+     */
+    @Override
+    public List<String> getRequiredRoles() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Gets the list of permissions required to access this agent.
+     * Default implementation returns basic permissions: AGENT_READ, AGENT_WRITE.
+     * Override in concrete agents to specify different requirements.
+     * 
+     * @return list of required permission names
+     */
+    @Override
+    public List<String> getRequiredPermissions() {
+        return List.of("AGENT_READ", "AGENT_WRITE");
+    }
+
+    /**
+     * Default implementation for generating output.
+     * Provides basic fallback behavior that can be overridden by concrete agents.
+     * 
+     * @param query the agent query
+     * @return generated output string
+     */
+    @Override
+    public String generateOutput(String query) {
+        String domain = getTechnicalDomain().name().toLowerCase().replace('_', '-');
+        return "Agent guidance for: " + query + " in " + domain + " domain";
+    }
 
     /**
      * Process an agent request and return response.
@@ -26,11 +98,11 @@ public abstract class AbstractAgent implements Agent {
         if (validationError != null) {
             return createFailureResponse(validationError);
         }
-        
+
         // Delegate to implementation
         return doProcessRequest(request);
     }
-    
+
     /**
      * Validate the request. Returns null if valid, error message otherwise.
      * 
@@ -41,18 +113,14 @@ public abstract class AbstractAgent implements Agent {
         if (request == null) {
             return "Invalid request: request is null";
         }
-        if (request.getDescription() == null || request.getDescription().trim().isEmpty()) {
-            return "Invalid request: description is required";
-        }
+
         if (request.getAgentContext() == null) {
             return "Invalid request: agent context is required";
         }
-        if (request.getType() == null || request.getType().contains("invalid")) {
-            return "Invalid request: invalid type";
-        }
+
         return null;
     }
-    
+
     /**
      * Create a failure response with the given message.
      * 
@@ -61,7 +129,7 @@ public abstract class AbstractAgent implements Agent {
      */
     protected AgentResponse createFailureResponse(String message) {
         return AgentResponse.builder()
-                .status(AgentStatus.FAILURE)
+                .status(AgentProcessingState.FAILURE)
                 .output(message)
                 .confidence(0.0)
                 .success(false)
@@ -69,7 +137,7 @@ public abstract class AbstractAgent implements Agent {
                 .recommendations(Collections.emptyList())
                 .build();
     }
-    
+
     /**
      * Process the request after validation.
      * Subclasses must implement this method to provide their specific logic.
