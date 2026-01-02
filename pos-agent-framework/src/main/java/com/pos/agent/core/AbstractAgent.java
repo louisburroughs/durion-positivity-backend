@@ -3,7 +3,11 @@ package com.pos.agent.core;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
 import com.pos.agent.framework.model.AgentType;
 
 /**
@@ -17,12 +21,20 @@ public abstract class AbstractAgent implements Agent {
     private AgentStatus status = AgentStatus.HEALTHY;
     private final List<String> capabilities = new ArrayList<>();
     private final AgentType technicalDomain;
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
     public AbstractAgent(AgentType technicalDomain, List<String> capabilities) {
         this.technicalDomain = technicalDomain;
         if (capabilities != null) {
             this.capabilities.addAll(capabilities);
         }
+    }
+
+   
+     @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> DefaultContext.builder().requestId(sessionId).build());
     }
 
     public AgentStatus getStatus() {

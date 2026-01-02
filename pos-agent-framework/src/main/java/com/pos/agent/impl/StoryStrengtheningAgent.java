@@ -1,6 +1,7 @@
 package com.pos.agent.impl;
 
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.StoryContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Main orchestrator for the Story Strengthening Agent pipeline.
@@ -41,6 +43,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
     private final OutputGenerator outputGenerator;
     private final LoopDetector loopDetector;
     private final StoryConfiguration configuration;
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
     /**
      * Creates a new Story Strengthening Agent with all required components.
@@ -74,6 +77,13 @@ public class StoryStrengtheningAgent extends AbstractAgent {
         this.outputGenerator = Objects.requireNonNull(outputGenerator, "Output generator cannot be null");
         this.loopDetector = Objects.requireNonNull(loopDetector, "Loop detector cannot be null");
         this.configuration = Objects.requireNonNull(configuration, "Configuration cannot be null");
+    }
+
+
+     @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> StoryContext.builder().requestId(sessionId).build());
     }
 
     /**

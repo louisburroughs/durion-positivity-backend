@@ -1,5 +1,7 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -7,11 +9,15 @@ import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * DocumentationAgent
  */
 public class DocumentationAgent extends AbstractAgent {
+
+    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
     public DocumentationAgent() {
         super(AgentType.DOCUMENTATION, List.of(
@@ -20,6 +26,12 @@ public class DocumentationAgent extends AbstractAgent {
                 "user-guides",
                 "technical-writing",
                 "documentation-generation"));
+    }
+
+    @Override
+    public AgentContext getOrCreateContext(String sessionId) {
+        return contextMap.computeIfAbsent(sessionId,
+                sid -> DefaultContext.builder().requestId(sessionId).build());
     }
 
     @Override
@@ -35,7 +47,6 @@ public class DocumentationAgent extends AbstractAgent {
 
     @Override
     public String generateOutput(String query) {
-        
 
         // Pre-allocate StringBuilder with estimated capacity for better performance
         StringBuilder guidance = new StringBuilder(1024);

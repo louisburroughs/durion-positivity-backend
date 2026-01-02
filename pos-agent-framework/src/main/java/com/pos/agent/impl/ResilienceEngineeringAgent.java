@@ -1,13 +1,16 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
+import com.pos.agent.framework.model.AgentType;
 import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.context.ResilienceContext;
-import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ResilienceEngineeringAgent - provides resilience engineering guidance and
@@ -16,6 +19,8 @@ import java.util.List;
  */
 public class ResilienceEngineeringAgent extends AbstractAgent {
 
+        private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+
         public ResilienceEngineeringAgent() {
                 super(AgentType.RESILIENCE_ENGINEERING, List.of(
                                 "fault-tolerance",
@@ -23,6 +28,12 @@ public class ResilienceEngineeringAgent extends AbstractAgent {
                                 "retry-strategies",
                                 "disaster-recovery",
                                 "chaos-engineering"));
+        }
+
+        @Override
+        public AgentContext getOrCreateContext(String sessionId) {
+                return contextMap.computeIfAbsent(sessionId,
+                                sid -> ResilienceContext.builder().requestId(sessionId).build());
         }
 
         @Override

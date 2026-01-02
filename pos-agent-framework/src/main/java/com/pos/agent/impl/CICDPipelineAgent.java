@@ -1,5 +1,6 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -8,12 +9,16 @@ import com.pos.agent.context.CICDContext;
 import com.pos.agent.framework.model.AgentType;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * CICDPipelineAgent - provides CI/CD pipeline guidance and recommendations
  * Extends AbstractAgent for common validation and failure handling
  */
 public class CICDPipelineAgent extends AbstractAgent {
+
+        private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
 
         public CICDPipelineAgent() {
                 super(AgentType.CICD_PIPELINE, List.of(
@@ -22,6 +27,12 @@ public class CICDPipelineAgent extends AbstractAgent {
                                 "deployment-automation",
                                 "security-scanning",
                                 "artifact-management"));
+        }
+
+        @Override
+        public AgentContext getOrCreateContext(String sessionId) {
+                return contextMap.computeIfAbsent(sessionId,
+                                sid -> CICDContext.builder().requestId(sessionId).build());
         }
 
         @Override
@@ -84,14 +95,14 @@ public class CICDPipelineAgent extends AbstractAgent {
         }
 
         @Override
-    public String generateOutput(String query) {
-       
-        return "CI/CD Pipeline Security and Configuration Guidance:\n\n" +
-                "For query: " + query + "\n\n" +
-                "- Implement security scanning in pipeline stages\n" +
-                "- Use artifact verification and signing\n" +
-                "- Apply blue-green deployment strategies\n" +
-                "- Integrate static analysis (SAST) tools\n" +
-                "- Enforce policy checks before deployment\n";
-    }
+        public String generateOutput(String query) {
+
+                return "CI/CD Pipeline Security and Configuration Guidance:\n\n" +
+                                "For query: " + query + "\n\n" +
+                                "- Implement security scanning in pipeline stages\n" +
+                                "- Use artifact verification and signing\n" +
+                                "- Apply blue-green deployment strategies\n" +
+                                "- Integrate static analysis (SAST) tools\n" +
+                                "- Enforce policy checks before deployment\n";
+        }
 }

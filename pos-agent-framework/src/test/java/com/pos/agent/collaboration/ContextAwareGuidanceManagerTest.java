@@ -7,6 +7,8 @@ import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.context.ResilienceContext;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
+import com.pos.agent.core.ContextValidationResult;
+import com.pos.agent.core.SessionContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
