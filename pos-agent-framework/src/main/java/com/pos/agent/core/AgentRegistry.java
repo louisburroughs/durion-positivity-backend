@@ -11,7 +11,7 @@ public interface AgentRegistry {
     boolean unregisterAgent(Agent agent);
     void clearAgents();
     List<Agent> listAgents();
-    CompletableFuture<AgentResponse> consultBestAgent(AgentRequest request);
+    CompletableFuture<Agent> consultBestAgent(AgentRequest request);
     RegistryHealthStatus getHealthStatus();
     List<Agent> getAgentsWithCapabilities(Set<String> capabilities);
     List<Agent> getAgentsForTechnicalDomain(String technicalDomain);
