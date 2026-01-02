@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ObservabilityContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,8 +31,7 @@ class MonitoringValidationTest {
         @Test
         @DisplayName("Monitoring readiness request processes successfully")
         void processesMonitoringReadinessRequest() {
-                AgentContext context = AgentContext.builder()
-                                .domain("observability")
+                AgentContext context = ObservabilityContext.builder()
                                 .property("check", "metrics")
                                 .build();
 

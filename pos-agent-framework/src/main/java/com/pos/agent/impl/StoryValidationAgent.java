@@ -5,6 +5,7 @@ import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentStatus;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.StoryContext;
 
 import java.util.List;
 
@@ -27,43 +28,38 @@ public class StoryValidationAgent extends AbstractAgent {
      * @return true if this agent can handle the request, false otherwise
      */
     public boolean canHandle(AgentRequest request) {
-        Object contextObj = request.getContext();
-        if (!(contextObj instanceof AgentContext)) {
-            return false;
-        }
-
-        AgentContext context = (AgentContext) contextObj;
+        AgentContext contextObj = request.getAgentContext();
+       
 
         // Only handle requests in the "story" domain
-        if (!"story".equals(context.getDomain())) {
+        if (!"story".equals(contextObj.getDomain())) {
             return false;
         }
 
         // Check activation conditions
-        return isBackendStory(context) && isValidContent(context);
+        return isBackendStory(contextObj) && isValidContent(contextObj);
     }
 
     @Override
     protected AgentResponse doProcessRequest(AgentRequest request) {
-        Object contextObj = request.getContext();
-        if (!(contextObj instanceof AgentContext)) {
-            return AgentResponse.builder()
-                    .status(AgentStatus.FAILURE)
-                    .output("Invalid context type: expected AgentContext")
-                    .errorMessage("Context must be of type AgentContext")
-                    .confidence(0.0)
-                    .success(false)
-                    .recommendations(List.of("Use AgentContext for story validation"))
-                    .build();
-        }
+        AgentContext contextObj = request.getAgentContext();
 
-        AgentContext context = (AgentContext) contextObj;
+        if(!(contextObj instanceof StoryContext)){
+        return AgentResponse.builder()
+                .status(AgentStatus.FAILURE)
+                .output("Invalid context type: expected AgentContext")
+                .errorMessage("Context must be of type AgentContext")
+                .confidence(0.0)
+                .success(false)
+                .recommendations(List.of("Use AgentContext for story validation"))
+                .build();
+        }
 
         // Check if agent can handle this request
         if (!canHandle(request)) {
             // Determine which condition failed
-            boolean isBackend = isBackendStory(context);
-            boolean isValid = isValidContent(context);
+            boolean isBackend = isBackendStory(contextObj);
+            boolean isValid = isValidContent(contextObj);
 
             String reason;
             List<String> recommendations;
@@ -91,7 +87,7 @@ public class StoryValidationAgent extends AbstractAgent {
         }
 
         // Story passed validation
-        String storyName = (String) context.getProperty("storyName");
+        String storyName = (String) contextObj.getProperty("storyName");
         return AgentResponse.builder()
                 .status(AgentStatus.SUCCESS)
                 .output("Story validated successfully: " + storyName)

@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ArchitectureContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.Test;
 
@@ -30,8 +31,7 @@ class ArchitectureAgentTest {
 
         @Test
         void testDomainDrivenDesignGuidance() {
-                AgentContext context = AgentContext.builder()
-                                .domain("architecture")
+                AgentContext context = ArchitectureContext.builder()
                                 .property("topic", "ddd")
                                 .property("query", "I need guidance on domain boundaries for the POS system")
                                 .property("keywords", "ddd domain boundaries pos system")
@@ -52,8 +52,7 @@ class ArchitectureAgentTest {
 
         @Test
         void testMicroserviceBoundaryEnforcement() {
-                AgentContext context = AgentContext.builder()
-                                .domain("architecture")
+                AgentContext context = ArchitectureContext.builder()
                                 .property("topic", "microservices")
                                 .property("query", "How should I structure microservices for the POS system?")
                                 .property("keywords", "microservice boundaries pos services")
@@ -74,8 +73,7 @@ class ArchitectureAgentTest {
 
         @Test
         void testIntegrationPatternSpecification() {
-                AgentContext context = AgentContext.builder()
-                                .domain("architecture")
+                AgentContext context =  ArchitectureContext.builder()
                                 .property("topic", "integration-patterns")
                                 .property("query", "What integration patterns should I use for the POS system?")
                                 .property("keywords", "integration patterns api gateway messaging events")
@@ -96,8 +94,7 @@ class ArchitectureAgentTest {
 
         @Test
         void testTechnologyStackValidation() {
-                AgentContext context = AgentContext.builder()
-                                .domain("architecture")
+                AgentContext context =  ArchitectureContext.builder()
                                 .property("topic", "technology-stack")
                                 .property("query", "What technology stack should I use for Java development?")
                                 .property("keywords", "technology stack java spring boot aws")
@@ -118,8 +115,7 @@ class ArchitectureAgentTest {
 
         @Test
         void testCloudArchitectureGuidance() {
-                AgentContext context = AgentContext.builder()
-                                .domain("architecture")
+                AgentContext context =  ArchitectureContext.builder()
                                 .property("topic", "cloud-architecture")
                                 .property("query", "How to design cloud-native architecture for POS?")
                                 .property("keywords", "cloud native aws microservices")

@@ -10,11 +10,7 @@ import java.util.*;
  * 
  * Requirements: REQ-013.1 - Build automation guidance
  */
-public class CICDContext {
-    private final String contextId;
-    private final String sessionId;
-    private final Instant createdAt;
-    private Instant lastUpdated;
+public class CICDContext extends AgentContext {
 
     // Build automation
     private final Set<String> buildTools;
@@ -53,70 +49,47 @@ public class CICDContext {
     private String packagingTool;
     private String environment;
 
-    /**
-     * Creates a new CI/CD context with the specified identifiers.
-     * 
-     * @param contextId Unique identifier for this context
-     * @param sessionId Session identifier for tracking
-     */
-    public CICDContext(String contextId, String sessionId) {
-        this.contextId = Objects.requireNonNull(contextId, "Context ID cannot be null");
-        this.sessionId = Objects.requireNonNull(sessionId, "Session ID cannot be null");
-        this.createdAt = Instant.now();
-        this.lastUpdated = Instant.now();
+    private CICDContext(Builder builder) {
+        super(builder);
 
-        // Initialize collections
-        this.buildTools = new LinkedHashSet<>();
-        this.buildStages = new LinkedHashSet<>();
-        this.buildConfigurations = new HashMap<>();
-        this.artifactRepositories = new LinkedHashSet<>();
+        this.buildTools = builder.buildTools;
+        this.buildStages = builder.buildStages;
+        this.buildConfigurations = builder.buildConfigurations;
+        this.artifactRepositories = builder.artifactRepositories;
 
-        this.testingFrameworks = new LinkedHashSet<>();
-        this.testTypes = new LinkedHashSet<>();
-        this.testConfigurations = new HashMap<>();
-        this.codeQualityTools = new LinkedHashSet<>();
+        this.testingFrameworks = builder.testingFrameworks;
+        this.testTypes = builder.testTypes;
+        this.testConfigurations = builder.testConfigurations;
+        this.codeQualityTools = builder.codeQualityTools;
 
-        this.securityScanners = new LinkedHashSet<>();
-        this.vulnerabilityChecks = new LinkedHashSet<>();
-        this.securityPolicies = new HashMap<>();
-        this.complianceChecks = new LinkedHashSet<>();
+        this.securityScanners = builder.securityScanners;
+        this.vulnerabilityChecks = builder.vulnerabilityChecks;
+        this.securityPolicies = builder.securityPolicies;
+        this.complianceChecks = builder.complianceChecks;
 
-        this.deploymentStrategies = new LinkedHashSet<>();
-        this.environments = new LinkedHashSet<>();
-        this.deploymentConfigurations = new HashMap<>();
-        this.rollbackStrategies = new LinkedHashSet<>();
+        this.deploymentStrategies = builder.deploymentStrategies;
+        this.environments = builder.environments;
+        this.deploymentConfigurations = builder.deploymentConfigurations;
+        this.rollbackStrategies = builder.rollbackStrategies;
 
-        this.orchestrationTools = new LinkedHashSet<>();
-        this.pipelineConfigurations = new HashMap<>();
-        this.triggers = new LinkedHashSet<>();
-        this.notifications = new LinkedHashSet<>();
+        this.orchestrationTools = builder.orchestrationTools;
+        this.pipelineConfigurations = builder.pipelineConfigurations;
+        this.triggers = builder.triggers;
+        this.notifications = builder.notifications;
+
+        this.serviceName = builder.serviceName;
+        this.deploymentTarget = builder.deploymentTarget;
+        this.deploymentStrategy = builder.deploymentStrategy;
+        this.packagingTool = builder.packagingTool;
+        this.environment = builder.environment;
     }
 
-    /**
-     * Creates a new CI/CD context with default identifiers.
-     * Used for testing and simple scenarios.
-     */
-    public CICDContext() {
-        this("context-" + System.currentTimeMillis(), "session-" + System.currentTimeMillis());
+   
+    public static Builder builder() {
+        return new Builder();
     }
 
     // ========== Getters (return defensive copies) ==========
-
-    public String getContextId() {
-        return contextId;
-    }
-
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getLastUpdated() {
-        return lastUpdated;
-    }
 
     public Set<String> getBuildTools() {
         return new LinkedHashSet<>(buildTools);
@@ -241,6 +214,230 @@ public class CICDContext {
     public void setEnvironment(String environment) {
         this.environment = environment;
         updateTimestamp();
+    }
+
+    // ========== Builder ==========
+
+    public static class Builder extends AgentContext.Builder<Builder> {
+        private Set<String> buildTools = new LinkedHashSet<>();
+        private Set<String> buildStages = new LinkedHashSet<>();
+        private Map<String, Object> buildConfigurations = new HashMap<>();
+        private Set<String> artifactRepositories = new LinkedHashSet<>();
+
+        private Set<String> testingFrameworks = new LinkedHashSet<>();
+        private Set<String> testTypes = new LinkedHashSet<>();
+        private Map<String, Object> testConfigurations = new HashMap<>();
+        private Set<String> codeQualityTools = new LinkedHashSet<>();
+
+        private Set<String> securityScanners = new LinkedHashSet<>();
+        private Set<String> vulnerabilityChecks = new LinkedHashSet<>();
+        private Map<String, Object> securityPolicies = new HashMap<>();
+        private Set<String> complianceChecks = new LinkedHashSet<>();
+
+        private Set<String> deploymentStrategies = new LinkedHashSet<>();
+        private Set<String> environments = new LinkedHashSet<>();
+        private Map<String, Object> deploymentConfigurations = new HashMap<>();
+        private Set<String> rollbackStrategies = new LinkedHashSet<>();
+
+        private Set<String> orchestrationTools = new LinkedHashSet<>();
+        private Map<String, Object> pipelineConfigurations = new HashMap<>();
+        private Set<String> triggers = new LinkedHashSet<>();
+        private Set<String> notifications = new LinkedHashSet<>();
+
+        private String serviceName;
+        private String deploymentTarget;
+        private String deploymentStrategy;
+        private String packagingTool;
+        private String environment;
+
+        public Builder() {
+            domain("cicd");
+            contextType("cicd-context");
+        }
+
+        public Builder addBuildTool(String tool, Map<String, Object> config) {
+            if (tool != null) {
+                this.buildTools.add(tool);
+                if (config != null) {
+                    this.buildConfigurations.put(tool, config);
+                }
+            }
+            return this;
+        }
+
+        public Builder buildTools(Set<String> tools) {
+            if (tools != null) {
+                this.buildTools.addAll(tools);
+            }
+            return this;
+        }
+
+        public Builder buildStages(Set<String> stages) {
+            if (stages != null) {
+                this.buildStages.addAll(stages);
+            }
+            return this;
+        }
+
+        public Builder buildConfigurations(Map<String, Object> configs) {
+            if (configs != null) {
+                this.buildConfigurations.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder artifactRepositories(Set<String> repos) {
+            if (repos != null) {
+                this.artifactRepositories.addAll(repos);
+            }
+            return this;
+        }
+
+        public Builder testingFrameworks(Set<String> frameworks) {
+            if (frameworks != null) {
+                this.testingFrameworks.addAll(frameworks);
+            }
+            return this;
+        }
+
+        public Builder testTypes(Set<String> types) {
+            if (types != null) {
+                this.testTypes.addAll(types);
+            }
+            return this;
+        }
+
+        public Builder testConfigurations(Map<String, Object> configs) {
+            if (configs != null) {
+                this.testConfigurations.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder codeQualityTools(Set<String> tools) {
+            if (tools != null) {
+                this.codeQualityTools.addAll(tools);
+            }
+            return this;
+        }
+
+        public Builder securityScanners(Set<String> scanners) {
+            if (scanners != null) {
+                this.securityScanners.addAll(scanners);
+            }
+            return this;
+        }
+
+        public Builder vulnerabilityChecks(Set<String> checks) {
+            if (checks != null) {
+                this.vulnerabilityChecks.addAll(checks);
+            }
+            return this;
+        }
+
+        public Builder securityPolicies(Map<String, Object> policies) {
+            if (policies != null) {
+                this.securityPolicies.putAll(policies);
+            }
+            return this;
+        }
+
+        public Builder complianceChecks(Set<String> checks) {
+            if (checks != null) {
+                this.complianceChecks.addAll(checks);
+            }
+            return this;
+        }
+
+        public Builder deploymentStrategies(Set<String> strategies) {
+            if (strategies != null) {
+                this.deploymentStrategies.addAll(strategies);
+            }
+            return this;
+        }
+
+        public Builder environments(Set<String> envs) {
+            if (envs != null) {
+                this.environments.addAll(envs);
+            }
+            return this;
+        }
+
+        public Builder deploymentConfigurations(Map<String, Object> configs) {
+            if (configs != null) {
+                this.deploymentConfigurations.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder rollbackStrategies(Set<String> strategies) {
+            if (strategies != null) {
+                this.rollbackStrategies.addAll(strategies);
+            }
+            return this;
+        }
+
+        public Builder orchestrationTools(Set<String> tools) {
+            if (tools != null) {
+                this.orchestrationTools.addAll(tools);
+            }
+            return this;
+        }
+
+        public Builder pipelineConfigurations(Map<String, Object> configs) {
+            if (configs != null) {
+                this.pipelineConfigurations.putAll(configs);
+            }
+            return this;
+        }
+
+        public Builder triggers(Set<String> triggers) {
+            if (triggers != null) {
+                this.triggers.addAll(triggers);
+            }
+            return this;
+        }
+
+        public Builder notifications(Set<String> notifications) {
+            if (notifications != null) {
+                this.notifications.addAll(notifications);
+            }
+            return this;
+        }
+
+        public Builder serviceName(String serviceName) {
+            this.serviceName = serviceName;
+            return this;
+        }
+
+        public Builder deploymentTarget(String deploymentTarget) {
+            this.deploymentTarget = deploymentTarget;
+            return this;
+        }
+
+        public Builder deploymentStrategy(String deploymentStrategy) {
+            this.deploymentStrategy = deploymentStrategy;
+            return this;
+        }
+
+        public Builder packagingTool(String packagingTool) {
+            this.packagingTool = packagingTool;
+            return this;
+        }
+
+        public Builder environment(String environment) {
+            this.environment = environment;
+            return this;
+        }
+
+        @Override
+        protected Builder self() {
+            return this;
+        }
+
+        public CICDContext build() {
+            return new CICDContext(this);
+        }
     }
 
     // ========== Build Automation Methods ==========
@@ -505,23 +702,23 @@ public class CICDContext {
     /**
      * Updates the last updated timestamp to the current time.
      */
-    private void updateTimestamp() {
-        this.lastUpdated = Instant.now();
+    protected void updateTimestamp() {
+        super.updateTimestamp();
     }
 
     @Override
     public String toString() {
         return "CICDContext{" +
-                "contextId='" + contextId + '\'' +
-                ", sessionId='" + sessionId + '\'' +
+                "contextId='" + getContextId() + '\'' +
+                ", sessionId='" + getSessionId() + '\'' +
                 ", buildTools=" + buildTools.size() +
                 ", testFrameworks=" + testingFrameworks.size() +
                 ", securityScanners=" + securityScanners.size() +
                 ", deployStrategies=" + deploymentStrategies.size() +
                 ", environments=" + environments.size() +
                 ", valid=" + isValid() +
-                ", createdAt=" + createdAt +
-                ", lastUpdated=" + lastUpdated +
+                ", createdAt=" + getCreatedAt() +
+                ", lastUpdated=" + getLastUpdated() +
                 '}';
     }
 
@@ -532,12 +729,12 @@ public class CICDContext {
         if (o == null || getClass() != o.getClass())
             return false;
         CICDContext that = (CICDContext) o;
-        return Objects.equals(contextId, that.contextId) &&
-                Objects.equals(sessionId, that.sessionId);
+        return Objects.equals(getContextId(), that.getContextId()) &&
+                Objects.equals(getSessionId(), that.getSessionId());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(contextId, sessionId);
+        return Objects.hash(getContextId(), getSessionId());
     }
 }

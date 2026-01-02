@@ -1,5 +1,6 @@
 package com.pos.agent.story;
 
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -16,6 +17,7 @@ import com.pos.agent.story.transformation.RequirementsTransformer;
 import com.pos.agent.story.validation.IssueValidator;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -115,18 +117,19 @@ public class StoryStrengtheningAgent extends AbstractAgent {
         String body = request.getDescription();
         String repo = "unknown";
 
-        // Try to extract from context if available
-        Object contextObj = request.getContext();
-        if (contextObj instanceof java.util.Map) {
-            @SuppressWarnings("unchecked")
-            java.util.Map<String, Object> contextMap = (java.util.Map<String, Object>) contextObj;
-            Object bodyObj = contextMap.get("body");
-            Object repoObj = contextMap.get("repo");
-            if (bodyObj != null) {
-                body = bodyObj.toString();
-            }
-            if (repoObj != null) {
-                repo = repoObj.toString();
+        // Extract from AgentContext properties if available
+        AgentContext agentContext = request.getAgentContext();
+        if (agentContext != null) {
+            Map<String, Object> contextMap = agentContext.getProperties();
+            if (contextMap != null) {
+                Object bodyObj = contextMap.get("body");
+                Object repoObj = contextMap.get("repo");
+                if (bodyObj != null) {
+                    body = bodyObj.toString();
+                }
+                if (repoObj != null) {
+                    repo = repoObj.toString();
+                }
             }
         }
 

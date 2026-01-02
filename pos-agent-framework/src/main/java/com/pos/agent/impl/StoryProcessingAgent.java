@@ -4,6 +4,7 @@ import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentStatus;
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.context.StoryContext;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ public class StoryProcessingAgent extends AbstractAgent {
     @Override
     protected AgentResponse doProcessRequest(AgentRequest request) {
         // Extract StoryContext from context
-        StoryContext context = extractStoryContext(request.getContext());
+        StoryContext context = extractStoryContext(request.getAgentContext());
         if (context == null) {
             return AgentResponse.builder()
                     .status(AgentStatus.FAILURE)
@@ -110,7 +111,7 @@ public class StoryProcessingAgent extends AbstractAgent {
                 .build();
     }
 
-    private StoryContext extractStoryContext(Object contextObj) {
+    private StoryContext extractStoryContext(AgentContext contextObj) {
         if (contextObj instanceof StoryContext) {
             return (StoryContext) contextObj;
         }

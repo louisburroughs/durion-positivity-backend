@@ -1,6 +1,8 @@
 package com.pos.agent.core;
 
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -51,7 +53,7 @@ class AbstractAgentTest {
     @Test
     void shouldRejectRequestWithNullDescription() {
         TestAgent agent = new TestAgent();
-        AgentContext context = AgentContext.builder()
+        AgentContext context = DefaultContext.builder()
                 .domain("test")
                 .build();
 
@@ -68,8 +70,7 @@ class AbstractAgentTest {
     @Test
     void shouldRejectRequestWithEmptyDescription() {
         TestAgent agent = new TestAgent();
-        AgentContext context = AgentContext.builder()
-                .domain("test")
+        AgentContext context = DefaultContext.builder()
                 .build();
 
         // AgentRequest builder throws IllegalStateException for whitespace-only
@@ -100,7 +101,7 @@ class AbstractAgentTest {
     @Test
     void shouldRejectRequestWithInvalidType() {
         TestAgent agent = new TestAgent();
-        AgentContext context = AgentContext.builder()
+        AgentContext context = DefaultContext.builder()
                 .domain("test")
                 .build();
 
@@ -121,7 +122,7 @@ class AbstractAgentTest {
     @Test
     void shouldProcessValidRequest() {
         TestAgent agent = new TestAgent();
-        AgentContext context = AgentContext.builder()
+        AgentContext context = DefaultContext.builder()
                 .domain("test")
                 .property("key", "value")
                 .build();

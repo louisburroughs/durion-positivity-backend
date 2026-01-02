@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.Test;
 
@@ -30,8 +31,8 @@ class EventDrivenArchitectureAgentTest {
 
     @Test
     void testEventSchemaDesignGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("event-driven")
+        AgentContext context = EventDrivenContext.builder()
+                
                 .property("service", "pos-events")
                 .property("topic", "event-schema-design")
                 .property("query", "How to design event schemas with versioning for the POS system?")
@@ -53,8 +54,8 @@ class EventDrivenArchitectureAgentTest {
 
     @Test
     void testIdempotentEventHandlerGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("event-driven")
+        AgentContext context = EventDrivenContext.builder()
+                
                 .property("service", "pos-order")
                 .property("topic", "idempotent-handlers")
                 .property("query", "How to implement idempotent event handlers?")
@@ -76,8 +77,8 @@ class EventDrivenArchitectureAgentTest {
 
     @Test
     void testKafkaConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("event-driven")
+        AgentContext context = EventDrivenContext.builder()
+                
                 .property("service", "pos-catalog")
                 .property("topic", "kafka")
                 .property("query", "How to configure Kafka for Spring Boot microservices?")
@@ -99,8 +100,8 @@ class EventDrivenArchitectureAgentTest {
 
     @Test
     void testSNSSQSConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("event-driven")
+        AgentContext context = EventDrivenContext.builder()
+                
                 .property("service", "pos-inventory")
                 .property("topic", "sns-sqs")
                 .property("query", "How to configure AWS SNS and SQS for event processing?")
@@ -122,8 +123,8 @@ class EventDrivenArchitectureAgentTest {
 
     @Test
     void testRabbitMQConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("event-driven")
+        AgentContext context = EventDrivenContext.builder()
+                
                 .property("service", "pos-customer")
                 .property("topic", "rabbitmq")
                 .property("query", "How to configure RabbitMQ for microservices communication?")
@@ -145,8 +146,8 @@ class EventDrivenArchitectureAgentTest {
 
     @Test
     void testEventSourcingGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("event-driven")
+        AgentContext context = EventDrivenContext.builder()
+                
                 .property("service", "pos-order")
                 .property("topic", "event-sourcing")
                 .property("query", "How to implement event sourcing patterns?")
@@ -168,8 +169,8 @@ class EventDrivenArchitectureAgentTest {
 
     @Test
     void testEventFailureHandlingGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("event-driven")
+        AgentContext context = EventDrivenContext.builder()
+                
                 .property("service", "pos-price")
                 .property("topic", "failure-handling")
                 .property("query", "How to handle event processing failures?")

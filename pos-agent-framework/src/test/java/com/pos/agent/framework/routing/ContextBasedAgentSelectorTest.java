@@ -4,6 +4,16 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.ArchitectureContext;
+import com.pos.agent.context.BusinessContext;
+import com.pos.agent.context.CICDContext;
+import com.pos.agent.context.ConfigurationContext;
+import com.pos.agent.context.DefaultContext;
+import com.pos.agent.context.DeploymentContext;
+import com.pos.agent.context.EventDrivenContext;
+import com.pos.agent.context.ImplementationContext;
+import com.pos.agent.context.ResilienceContext;
+import com.pos.agent.context.TestingContext;
 import com.pos.agent.core.SecurityContext;
 import net.jqwik.api.*;
 
@@ -92,22 +102,36 @@ class ContextBasedAgentSelectorTest {
         @Provide
         Arbitrary<AgentContext> technicalContexts() {
                 return Arbitraries.of(
-                                "implementation:Spring Boot microservice",
-                                "security:JWT authentication",
-                                "architecture:Microservices design",
-                                "testing:JUnit integration tests",
-                                "deployment:Docker containerization",
-                                "event-driven:Kafka streaming",
-                                "cicd:Jenkins pipeline",
-                                "configuration:Spring Cloud Config",
-                                "resilience:Circuit breaker patterns",
-                                "business:POS inventory management").map(contextStr -> {
-                                        String[] parts = contextStr.split(":");
-                                        return AgentContext.builder()
-                                                        .domain(parts[0])
-                                                        .property("technicalContext", parts[1])
-                                                        .build();
-                                });
+                                ImplementationContext.builder()
+                                                .property("technicalContext", "Spring Boot microservice")
+                                                .build(),
+                               com.pos.agent.context.SecurityContext.builder()
+                                                .property("technicalContext", "JWT authentication")
+                                                .build(),
+                                ArchitectureContext.builder()
+                                                .property("technicalContext", "Microservices design")
+                                                .build(),
+                                TestingContext.builder()
+                                                .property("technicalContext", "JUnit integration tests")
+                                                .build(),
+                                DeploymentContext.builder()
+                                                .property("technicalContext", "Docker containerization")
+                                                .build(),
+                                EventDrivenContext.builder()
+                                                .property("technicalContext", "Kafka streaming")
+                                                .build(),
+                                CICDContext.builder()
+                                                .property("technicalContext", "Jenkins pipeline")
+                                                .build(),
+                                ConfigurationContext.builder()
+                                                .property("technicalContext", "Spring Cloud Config")
+                                                .build(),
+                                ResilienceContext.builder()
+                                                .property("technicalContext", "Circuit breaker patterns")
+                                                .build(),
+                                BusinessContext.builder()
+                                                .property("technicalContext", "POS inventory management")
+                                                .build());
         }
 
         @Provide
@@ -116,7 +140,7 @@ class ContextBasedAgentSelectorTest {
                                 "Spring Boot with Docker and security",
                                 "Microservices with Kafka and testing",
                                 "CI/CD with deployment and resilience").map(
-                                                description -> AgentContext.builder()
+                                                description -> DefaultContext.builder()
                                                                 .domain("multi-domain")
                                                                 .property("description", description)
                                                                 .property("isComplex", true)
@@ -130,7 +154,7 @@ class ContextBasedAgentSelectorTest {
                                 "unrecognized:Random unrelated content",
                                 "minimal:X").map(contextStr -> {
                                         String[] parts = contextStr.split(":", 2);
-                                        return AgentContext.builder()
+                                        return DefaultContext.builder()
                                                         .domain(parts[0])
                                                         .property("context", parts.length > 1 ? parts[1] : "")
                                                         .property("isEdgeCase", true)
@@ -145,7 +169,7 @@ class ContextBasedAgentSelectorTest {
                                 "complex:Spring Boot with Docker, JWT, Kafka, and circuit breakers").map(contextStr -> {
                                         String[] parts = contextStr.split(":", 2);
                                         boolean isComplex = "complex".equals(parts[0]);
-                                        return AgentContext.builder()
+                                        return DefaultContext.builder()
                                                         .domain("complexity-analysis")
                                                         .property("description", parts[1])
                                                         .property("isComplex", isComplex)

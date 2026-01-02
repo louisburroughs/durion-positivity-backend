@@ -4,7 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.SecurityContext;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -65,7 +65,7 @@ class AuditTrailValidationTest {
                     .type(agentType)
                     .description("Basic audit trail generation for " + agentType + " agent")
                     .securityContext(developerContext)
-                    .context(AgentContext.builder()
+                    .context(DefaultContext.builder()
                             .property("service", "pos-test-" + agentType)
                             .build())
                     .build();
@@ -84,7 +84,7 @@ class AuditTrailValidationTest {
                 .type("security")
                 .description("Detailed audit trail content verification")
                 .securityContext(adminContext)
-                .context(AgentContext.builder()
+                .context(DefaultContext.builder()
                         .property("service", "pos-payment")
                         .property("securityType", "jwt-authentication")
                         .property("environment", "production")
@@ -105,7 +105,7 @@ class AuditTrailValidationTest {
                 .type("security")
                 .description("Failed request audit trail verification")
                 .securityContext(guestContext) // Guest doesn't have security agent access
-                .context(AgentContext.builder()
+                .context(DefaultContext.builder()
                         .property("service", "pos-security")
                         .build())
                 .build();
@@ -132,7 +132,7 @@ class AuditTrailValidationTest {
                         .type("architecture")
                         .description("Concurrent audit trail generation request " + requestId)
                         .securityContext(developerContext)
-                        .context(AgentContext.builder()
+                        .context(DefaultContext.builder()
                                 .property("service", "pos-concurrent-" + requestId)
                                 .build())
                         .build();
@@ -159,7 +159,7 @@ class AuditTrailValidationTest {
                 .type("security")
                 .description("Audit trail retention verification")
                 .securityContext(adminContext)
-                .context(AgentContext.builder()
+                .context(DefaultContext.builder()
                         .property("auditContext", "retention-test")
                         .build())
                 .build();
@@ -180,7 +180,7 @@ class AuditTrailValidationTest {
                     .type(agentType)
                     .description("Audit trail search test for " + agentType + " agent")
                     .securityContext(developerContext)
-                    .context(AgentContext.builder()
+                    .context(DefaultContext.builder()
                             .property("service", "pos-search-test")
                             .build())
                     .build();
@@ -196,7 +196,7 @@ class AuditTrailValidationTest {
                     .type(agentType)
                     .description("Verify audit trail entry for " + agentType + " agent")
                     .securityContext(developerContext)
-                    .context(AgentContext.builder()
+                    .context(DefaultContext.builder()
                             .property("verify", "true")
                             .build())
                     .build();
@@ -215,7 +215,7 @@ class AuditTrailValidationTest {
                 .type("documentation")
                 .description("Audit trail export functionality test")
                 .securityContext(adminContext)
-                .context(AgentContext.builder()
+                .context(DefaultContext.builder()
                         .property("service", "pos-export-test")
                         .build())
                 .build();
@@ -234,7 +234,7 @@ class AuditTrailValidationTest {
                 .type("observability")
                 .description("Audit trail integrity verification")
                 .securityContext(adminContext)
-                .context(AgentContext.builder()
+                .context(DefaultContext.builder()
                         .property("service", "pos-integrity-test")
                         .build())
                 .build();
@@ -260,7 +260,7 @@ class AuditTrailValidationTest {
                     .type((String) testRequest.get("type"))
                     .description("Compliance reporting test for " + testRequest.get("type") + " agent")
                     .securityContext((SecurityContext) testRequest.get("context"))
-                    .context(AgentContext.builder()
+                    .context(DefaultContext.builder()
                             .property("service", "pos-compliance-test")
                             .build())
                     .build();

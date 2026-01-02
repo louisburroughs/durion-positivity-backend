@@ -1,5 +1,6 @@
 package com.pos.agent.impl;
 
+import com.pos.agent.context.AgentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
@@ -26,8 +27,9 @@ public class ArchitectureAgent extends AbstractAgent {
 
     @Override
     protected AgentResponse doProcessRequest(AgentRequest request) {
-        // Extract and cast context to Map
-        Map<String, Object> requestContext = extractMap(request.getContext());
+        // Extract properties from AgentContext
+        AgentContext agentContext = request.getAgentContext();
+        Map<String, Object> requestContext = agentContext != null ? agentContext.getProperties() : new HashMap<>();
 
         // Extract architecture context with defaults
         String systemType = (String) requestContext.getOrDefault("systemType", "unknown");
@@ -78,7 +80,7 @@ public class ArchitectureAgent extends AbstractAgent {
         // Generate recommendations based on requirements
         List<String> recommendations = new ArrayList<>();
         recommendations.add(String.format("Implement %s architecture for %s to %s",
-            systemType, description, getSystemTypeRationale(systemType)));
+                systemType, description, getSystemTypeRationale(systemType)));
 
         // Add pattern-specific recommendations
         for (String pattern : recommendedPatterns) {
@@ -240,7 +242,6 @@ public class ArchitectureAgent extends AbstractAgent {
         return Math.min(confidence, 0.95); // Cap at 0.95
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> extractStringList(Object obj) {
         if (obj instanceof List<?>) {
             return ((List<?>) obj).stream()

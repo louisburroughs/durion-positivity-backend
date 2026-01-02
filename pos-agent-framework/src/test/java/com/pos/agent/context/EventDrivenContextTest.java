@@ -23,7 +23,7 @@ class EventDrivenContextTest {
 
     @BeforeEach
     void setUp() {
-        context = new EventDrivenContext(contextId, sessionId);
+        context =  EventDrivenContext.builder().contextId(contextId).sessionId(sessionId).build();
     }
 
     @Test
@@ -291,7 +291,7 @@ class EventDrivenContextTest {
         context.getEventSchemas().add("should-not-be-added");
         context.getEventHandlers().add("should-not-be-added");
         context.getSchemaVersions().put("should-not", "be-added");
-        context.getBrokerConfigurations().put("should-not", "be-added");
+        context.getBrokerConfigurations().put("should-not", Map.of("should-not","be-added"));
         context.getIdempotencyPatterns().add("should-not-be-added");
 
         // Assert - Original collections should be unchanged

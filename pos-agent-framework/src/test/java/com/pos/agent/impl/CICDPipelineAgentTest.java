@@ -4,6 +4,7 @@ import com.pos.agent.core.AgentManager;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.CICDContext;
 import com.pos.agent.core.SecurityContext;
 import org.junit.jupiter.api.Test;
 
@@ -19,220 +20,220 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class CICDPipelineAgentTest {
 
-    private final AgentManager agentManager = new AgentManager();
-    private final SecurityContext securityContext = SecurityContext.builder()
-            .jwtToken("valid-jwt-token-for-tests")
-            .userId("cicd-agent-tester")
-            .roles(List.of("DEVOPS_ENGINEER", "PIPELINE_ARCHITECT"))
-            .permissions(List.of("AGENT_READ", "AGENT_WRITE","cicd.configure", "deployment.execute"))
-            .serviceId("pos-cicd-agent-tests")
-            .serviceType("test")
-            .build();
+        private final AgentManager agentManager = new AgentManager();
+        private final SecurityContext securityContext = SecurityContext.builder()
+                        .jwtToken("valid-jwt-token-for-tests")
+                        .userId("cicd-agent-tester")
+                        .roles(List.of("DEVOPS_ENGINEER", "PIPELINE_ARCHITECT"))
+                        .permissions(List.of("AGENT_READ", "AGENT_WRITE", "cicd.configure", "deployment.execute"))
+                        .serviceId("pos-cicd-agent-tests")
+                        .serviceType("test")
+                        .build();
 
-    @Test
-    void testBuildAutomationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-catalog")
-                .property("topic", "build-automation")
-                .property("query", "How to configure Maven build automation for Spring Boot?")
-                .property("keywords", "maven build automation spring boot")
-                .build();
+        @Test
+        void testBuildAutomationGuidance() {
+                AgentContext context = CICDContext.builder()
+                                .property("service", "pos-catalog")
+                                .property("topic", "build-automation")
+                                .property("query", "How to configure Maven build automation for Spring Boot?")
+                                .property("keywords", "maven build automation spring boot")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("Build automation guidance for pos-catalog service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("Build automation guidance for pos-catalog service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-    @Test
-    void testTestingPipelineGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-order")
-                .property("topic", "testing-pipeline")
-                .property("query", "How to configure testing pipelines with unit integration contract tests?")
-                .property("keywords", "testing pipeline junit mockito")
-                .build();
+        @Test
+        void testTestingPipelineGuidance() {
+                AgentContext context = CICDContext.builder()
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("Testing pipeline guidance for pos-order service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                                .property("service", "pos-order")
+                                .property("topic", "testing-pipeline")
+                                .property("query",
+                                                "How to configure testing pipelines with unit integration contract tests?")
+                                .property("keywords", "testing pipeline junit mockito")
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("Testing pipeline guidance for pos-order service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                AgentResponse response = agentManager.processRequest(request);
 
-    @Test
-    void testSecurityScanningGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-security-service")
-                .property("topic", "security-scanning")
-                .property("query", "How to integrate security scanning in CI/CD?")
-                .property("keywords", "security scanning sast dast dependency")
-                .build();
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("Security scanning guidance for pos-security-service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+        @Test
+        void testSecurityScanningGuidance() {
+                AgentContext context = CICDContext.builder()
 
-        AgentResponse response = agentManager.processRequest(request);
+                                .property("service", "pos-security-service")
+                                .property("topic", "security-scanning")
+                                .property("query", "How to integrate security scanning in CI/CD?")
+                                .property("keywords", "security scanning sast dast dependency")
+                                .build();
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("Security scanning guidance for pos-security-service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-    @Test
-    void testJenkinsConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-inventory")
-                .property("topic", "jenkins")
-                .property("query", "How to configure Jenkins pipelines for microservices?")
-                .property("keywords", "jenkins pipeline groovy declarative")
-                .build();
+                AgentResponse response = agentManager.processRequest(request);
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("Jenkins configuration guidance for pos-inventory service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-        AgentResponse response = agentManager.processRequest(request);
+        @Test
+        void testJenkinsConfigurationGuidance() {
+                AgentContext context = CICDContext.builder()
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                                .property("service", "pos-inventory")
+                                .property("topic", "jenkins")
+                                .property("query", "How to configure Jenkins pipelines for microservices?")
+                                .property("keywords", "jenkins pipeline groovy declarative")
+                                .build();
 
-    @Test
-    void testGitHubActionsConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-customer")
-                .property("topic", "github-actions")
-                .property("query", "How to configure GitHub Actions workflows?")
-                .property("keywords", "github actions workflow yaml")
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("Jenkins configuration guidance for pos-inventory service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("GitHub Actions configuration guidance for pos-customer service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                AgentResponse response = agentManager.processRequest(request);
 
-        AgentResponse response = agentManager.processRequest(request);
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+        @Test
+        void testGitHubActionsConfigurationGuidance() {
+                AgentContext context = CICDContext.builder()
 
-    @Test
-    void testGitLabCIConfigurationGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-price")
-                .property("topic", "gitlab-ci")
-                .property("query", "How to configure GitLab CI/CD pipelines?")
-                .property("keywords", "gitlab ci yaml pipeline")
-                .build();
+                                .property("service", "pos-customer")
+                                .property("topic", "github-actions")
+                                .property("query", "How to configure GitHub Actions workflows?")
+                                .property("keywords", "github actions workflow yaml")
+                                .build();
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("GitLab CI configuration guidance for pos-price service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("GitHub Actions configuration guidance for pos-customer service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentResponse response = agentManager.processRequest(request);
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-    @Test
-    void testBlueGreenDeploymentGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-api-gateway")
-                .property("topic", "blue-green")
-                .property("query", "How to implement Blue-Green deployment strategy?")
-                .property("keywords", "blue green deployment kubernetes")
-                .build();
+        @Test
+        void testGitLabCIConfigurationGuidance() {
+                AgentContext context = CICDContext.builder()
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("Blue-Green deployment guidance for pos-api-gateway service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                                .property("service", "pos-price")
+                                .property("topic", "gitlab-ci")
+                                .property("query", "How to configure GitLab CI/CD pipelines?")
+                                .property("keywords", "gitlab ci yaml pipeline")
+                                .build();
 
-        AgentResponse response = agentManager.processRequest(request);
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("GitLab CI configuration guidance for pos-price service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                AgentResponse response = agentManager.processRequest(request);
 
-    @Test
-    void testCanaryDeploymentGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-order")
-                .property("topic", "canary")
-                .property("query", "How to implement Canary deployment?")
-                .property("keywords", "canary deployment gradual rollout")
-                .build();
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("Canary deployment guidance for pos-order service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+        @Test
+        void testBlueGreenDeploymentGuidance() {
+                AgentContext context = CICDContext.builder()
 
-        AgentResponse response = agentManager.processRequest(request);
+                                .property("service", "pos-api-gateway")
+                                .property("topic", "blue-green")
+                                .property("query", "How to implement Blue-Green deployment strategy?")
+                                .property("keywords", "blue green deployment kubernetes")
+                                .build();
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("Blue-Green deployment guidance for pos-api-gateway service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
 
-    @Test
-    void testDockerBuildGuidance() {
-        AgentContext context = AgentContext.builder()
-                .domain("cicd")
-                .property("service", "pos-inventory")
-                .property("topic", "docker-build")
-                .property("query", "How to integrate Docker builds in CI/CD?")
-                .property("keywords", "docker build multi stage dockerfile")
-                .build();
+                AgentResponse response = agentManager.processRequest(request);
 
-        AgentRequest request = AgentRequest.builder()
-                .type("cicd")
-                .description("Docker build guidance for pos-inventory service")
-                .context(context)
-                .securityContext(securityContext)
-                .build();
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 
-        AgentResponse response = agentManager.processRequest(request);
+        @Test
+        void testCanaryDeploymentGuidance() {
+                AgentContext context = CICDContext.builder()
 
-        assertTrue(response.isSuccess());
-        assertNotNull(response.getStatus());
-    }
+                                .property("service", "pos-order")
+                                .property("topic", "canary")
+                                .property("query", "How to implement Canary deployment?")
+                                .property("keywords", "canary deployment gradual rollout")
+                                .build();
+
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("Canary deployment guidance for pos-order service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
+
+                AgentResponse response = agentManager.processRequest(request);
+
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
+
+        @Test
+        void testDockerBuildGuidance() {
+                AgentContext context = CICDContext.builder()
+
+                                .property("service", "pos-inventory")
+                                .property("topic", "docker-build")
+                                .property("query", "How to integrate Docker builds in CI/CD?")
+                                .property("keywords", "docker build multi stage dockerfile")
+                                .build();
+
+                AgentRequest request = AgentRequest.builder()
+                                .type("cicd")
+                                .description("Docker build guidance for pos-inventory service")
+                                .context(context)
+                                .securityContext(securityContext)
+                                .build();
+
+                AgentResponse response = agentManager.processRequest(request);
+
+                assertTrue(response.isSuccess());
+                assertNotNull(response.getStatus());
+        }
 }

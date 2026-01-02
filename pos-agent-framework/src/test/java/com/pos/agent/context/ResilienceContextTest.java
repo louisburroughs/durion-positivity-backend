@@ -23,7 +23,7 @@ class ResilienceContextTest {
 
     @BeforeEach
     void setUp() {
-        context = new ResilienceContext(contextId, sessionId);
+        context =  ResilienceContext.builder().contextId(contextId).sessionId(sessionId).build();
     }
 
     @Test

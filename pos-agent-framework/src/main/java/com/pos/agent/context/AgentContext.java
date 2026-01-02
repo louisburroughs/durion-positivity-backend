@@ -1,21 +1,54 @@
 package com.pos.agent.context;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.HashMap;
 
 /**
  * Context information for agent operations.
  * Provides environment and configuration details for agent execution.
+ * 
+ * This is an abstract base class - concrete implementations should extend this
+ * and provide their own Builder that extends AgentContext.Builder<T>.
  */
-public class AgentContext {
+public abstract class AgentContext {
+    private final String contextId;
+    private String sessionId;
+    private final Instant createdAt;
+    private Instant lastUpdated;
     private final String contextType;
     private final String domain;
     private final Map<String, Object> properties;
 
-    private AgentContext(Builder builder) {
+    protected AgentContext(Builder<?> builder) {
+        this.contextId = builder.contextId != null ? builder.contextId : "context-" + System.currentTimeMillis();
+        this.sessionId = builder.sessionId != null ? builder.sessionId : "session-" + System.currentTimeMillis();
+        this.createdAt = builder.createdAt != null ? builder.createdAt : Instant.now();
+        this.lastUpdated = builder.lastUpdated != null ? builder.lastUpdated : this.createdAt;
         this.contextType = builder.contextType;
         this.domain = builder.domain;
         this.properties = builder.properties;
+    }
+
+    public String getContextId() {
+        return contextId;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+        updateTimestamp();
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getLastUpdated() {
+        return lastUpdated;
     }
 
     public String getContextType() {
@@ -34,84 +67,116 @@ public class AgentContext {
         return properties.get(key);
     }
 
-    public static Builder builder() {
-        return new Builder();
+    protected void updateTimestamp() {
+        this.lastUpdated = Instant.now();
     }
 
-    public static class Builder {
+    /**
+     * Generic builder for AgentContext subclasses.
+     * Uses the self-bounded generic pattern to enable fluent method chaining
+     * while maintaining type safety across inheritance hierarchies.
+     * 
+     * @param <T> The concrete builder type
+     */
+    public static class Builder<T extends Builder<T>> {
         private String contextType;
         private String domain;
         private Map<String, Object> properties = new HashMap<>();
+        private String contextId;
+        private String sessionId;
+        private Instant createdAt;
+        private Instant lastUpdated;
 
-        public Builder contextType(String contextType) {
+        @SuppressWarnings("unchecked")
+        protected T self() {
+            return (T) this;
+        }
+
+        public T contextType(String contextType) {
             this.contextType = contextType;
-            return this;
+            return self();
         }
 
-        public Builder type(String type) {
+        public T type(String type) {
             this.contextType = type;
-            return this;
+            return self();
         }
 
-        public Builder domain(String domain) {
+        public T domain(String domain) {
             this.domain = domain;
-            return this;
+            return self();
         }
 
-        public Builder property(String key, Object value) {
+        public T contextId(String contextId) {
+            this.contextId = contextId;
+            return self();
+        }
+
+        public T sessionId(String sessionId) {
+            this.sessionId = sessionId;
+            return self();
+        }
+
+        public T createdAt(Instant createdAt) {
+            this.createdAt = createdAt;
+            return self();
+        }
+
+        public T lastUpdated(Instant lastUpdated) {
+            this.lastUpdated = lastUpdated;
+            return self();
+        }
+
+        public T property(String key, Object value) {
             this.properties.put(key, value);
-            return this;
+            return self();
         }
 
-        public Builder properties(Map<String, Object> properties) {
+        public T properties(Map<String, Object> properties) {
             this.properties.putAll(properties);
-            return this;
+            return self();
         }
 
         // Security-related methods
-        public Builder requiresAuthentication(boolean requiresAuthentication) {
+        public T requiresAuthentication(boolean requiresAuthentication) {
             this.properties.put("requiresAuthentication", requiresAuthentication);
-            return this;
+            return self();
         }
 
-        public Builder requiresTLS13(boolean requiresTLS13) {
+        public T requiresTLS13(boolean requiresTLS13) {
             this.properties.put("requiresTLS13", requiresTLS13);
-            return this;
+            return self();
         }
 
-        public Builder requiresAuditTrail(boolean requiresAuditTrail) {
+        public T requiresAuditTrail(boolean requiresAuditTrail) {
             this.properties.put("requiresAuditTrail", requiresAuditTrail);
-            return this;
+            return self();
         }
 
-        public Builder requiresAdminRole(boolean requiresAdminRole) {
+        public T requiresAdminRole(boolean requiresAdminRole) {
             this.properties.put("requiresAdminRole", requiresAdminRole);
-            return this;
+            return self();
         }
 
-        public Builder requiredPermission(String requiredPermission) {
+        public T requiredPermission(String requiredPermission) {
             this.properties.put("requiredPermission", requiredPermission);
-            return this;
+            return self();
         }
 
         // Service-related methods
-        public Builder serviceType(String serviceType) {
+        public T serviceType(String serviceType) {
             this.properties.put("serviceType", serviceType);
-            return this;
+            return self();
         }
 
-        public Builder requestId(String requestId) {
+        public T requestId(String requestId) {
             this.properties.put("requestId", requestId);
-            return this;
+            return self();
         }
 
-        public Builder secretsProvider(String secretsProvider) {
+        public T secretsProvider(String secretsProvider) {
             this.properties.put("secretsProvider", secretsProvider);
-            return this;
-        }
-
-        public AgentContext build() {
-            return new AgentContext(this);
+            return self();
         }
     }
 }
