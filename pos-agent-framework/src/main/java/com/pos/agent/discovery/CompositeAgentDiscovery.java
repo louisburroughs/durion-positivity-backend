@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
  * 3. Falls back to lower-priority strategies if no match
  * 4. Applies health checks on selected agent
  */
-public class CompositeAgentDiscovery {
+public class CompositeAgentDiscovery implements AgentDiscovery {
 
     private final List<AgentDiscoveryStrategy> strategies;
     private final HealthBasedDiscoveryStrategy healthStrategy;
