@@ -29,7 +29,6 @@ public class BusinessContext extends AgentContext {
         this.regulations = builder.regulations;
     }
 
-   
     public static Builder builder() {
         return new Builder();
     }
@@ -126,7 +125,7 @@ public class BusinessContext extends AgentContext {
         private Set<String> regulations = new LinkedHashSet<>();
 
         public Builder() {
-            domain("business");
+            agentDomain("business");
             contextType("business-context");
         }
 

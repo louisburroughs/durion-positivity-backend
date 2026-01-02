@@ -276,7 +276,8 @@ public class AgentPerformanceTest {
                 .jwtToken("test-token-12345")
                 .userId("test-user")
                 .roles(List.of("developer", "architect", "CONFIG_MANAGER"))
-                .permissions(List.of("AGENT_READ", "AGENT_WRITE","performance:test", "domain:access", "CONFIG_MANAGE", "SECRETS_MANAGE"))
+                .permissions(List.of("AGENT_READ", "AGENT_WRITE", "performance:test", "domain:access", "CONFIG_MANAGE",
+                        "SECRETS_MANAGE"))
                 .serviceId("test-service")
                 .serviceType("test")
                 .build()
@@ -286,7 +287,7 @@ public class AgentPerformanceTest {
                 .type(agentType.name())
                 .description(description)
                 .context(AgentContext.builder()
-                        .domain(domain)
+                        .agentDomain(domain)
                         .property("testType", "performance")
                         .property("timestamp", System.nanoTime())
                         .build())

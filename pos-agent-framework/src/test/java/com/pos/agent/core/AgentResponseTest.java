@@ -16,14 +16,14 @@ class AgentResponseTest {
     void testBuilderCreatesImmutableResponse() {
         // Create response using builder
         AgentResponse response = AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .output("Test output")
                 .confidence(0.95)
                 .recommendations(List.of("recommendation1", "recommendation2"))
                 .build();
 
         // Verify fields
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum());
         assertEquals("SUCCESS", response.getStatus());
         assertEquals("Test output", response.getOutput());
         assertEquals(0.95, response.getConfidence());
@@ -35,7 +35,7 @@ class AgentResponseTest {
     void testSuccessFactoryMethod() {
         AgentResponse response = AgentResponse.success("Success message", 0.9);
 
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum());
         assertEquals("Success message", response.getOutput());
         assertEquals(0.9, response.getConfidence());
         assertTrue(response.isSuccess());
@@ -47,7 +47,7 @@ class AgentResponseTest {
     void testFailureFactoryMethod() {
         AgentResponse response = AgentResponse.failure("Error occurred");
 
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
         assertEquals("Error occurred", response.getOutput());
         assertEquals(0.0, response.getConfidence());
         assertFalse(response.isSuccess());
@@ -63,7 +63,7 @@ class AgentResponseTest {
                 .build();
 
         assertEquals("SUCCESS", response.getStatus());
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum());
     }
 
     @Test
@@ -74,7 +74,7 @@ class AgentResponseTest {
                 .build();
 
         assertTrue(success.isSuccess());
-        assertEquals(AgentStatus.SUCCESS, success.getStatusEnum());
+        assertEquals(AgentProcessingState.SUCCESS, success.getStatusEnum());
 
         AgentResponse failure = AgentResponse.builder()
                 .success(false)
@@ -82,7 +82,7 @@ class AgentResponseTest {
                 .build();
 
         assertFalse(failure.isSuccess());
-        assertEquals(AgentStatus.FAILURE, failure.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, failure.getStatusEnum());
     }
 
     @Test
@@ -91,14 +91,14 @@ class AgentResponseTest {
                 .errorMessage("Error message")
                 .build();
 
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
         assertEquals("Error message", response.getOutput());
     }
 
     @Test
     void testBackwardCompatibilityWithMetadata() {
         AgentResponse response = AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .output("Output")
                 .confidence(0.8)
                 .processingTimeMs(100L)
@@ -148,7 +148,7 @@ class AgentResponseTest {
     @Test
     void testNullSafeRecommendations() {
         AgentResponse response = AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .output("Output")
                 .recommendations(null)
                 .build();
@@ -160,7 +160,7 @@ class AgentResponseTest {
     @Test
     void testNullSafeMetadata() {
         AgentResponse response = AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .output("Output")
                 .context(null)
                 .build();
@@ -172,28 +172,28 @@ class AgentResponseTest {
     @Test
     void testIsSuccessMethod() {
         AgentResponse success = AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .output("Success")
                 .success(true)
                 .build();
         assertTrue(success.isSuccess());
 
         AgentResponse failure = AgentResponse.builder()
-                .status(AgentStatus.FAILURE)
+                .status(AgentProcessingState.FAILURE)
                 .output("Failure")
                 .success(false)
                 .build();
         assertFalse(failure.isSuccess());
 
         AgentResponse pending = AgentResponse.builder()
-                .status(AgentStatus.PENDING)
+                .status(AgentProcessingState.PENDING)
                 .output("Pending")
                 .success(false)
                 .build();
         assertFalse(pending.isSuccess());
 
         AgentResponse stopped = AgentResponse.builder()
-                .status(AgentStatus.STOPPED)
+                .status(AgentProcessingState.STOPPED)
                 .output("Stopped")
                 .success(false)
                 .build();

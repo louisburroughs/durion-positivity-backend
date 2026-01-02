@@ -162,7 +162,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                 .ofMaxSize(3))
                                 .as((domain, query, contextMap) -> {
                                         AgentContext.Builder builder = AgentContext.builder()
-                                                        .domain(domain)
+                                                        .agentDomain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> builder.property(k, v));
                                         return builder.build();
@@ -191,7 +191,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                 .ofMaxSize(3))
                                 .as((domain, query, contextMap) -> {
                                         AgentContext.Builder builder = AgentContext.builder()
-                                                        .domain(domain)
+                                                        .agentDomain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> builder.property(k, v));
                                         return builder.build();
@@ -218,7 +218,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                 .ofMaxSize(3))
                                 .as((domain, query, contextMap) -> {
                                         AgentContext.Builder ctxBuilder = AgentContext.builder()
-                                                        .domain(domain)
+                                                        .agentDomain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> ctxBuilder.property(k, v));
                                         return ctxBuilder.build();
@@ -244,7 +244,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                 .ofMaxSize(3))
                                 .as((domain, query, contextMap) -> {
                                         AgentContext.Builder ctxBuilder = AgentContext.builder()
-                                                        .domain(domain)
+                                                        .agentDomain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> ctxBuilder.property(k, v));
                                         return ctxBuilder.build();
@@ -270,7 +270,7 @@ class DataStoreGuidanceAppropriatenessPropertyTest {
                                                 .ofMaxSize(2))
                                 .as((domain, query, contextMap) -> {
                                         AgentContext.Builder ctxBuilder = AgentContext.builder()
-                                                        .domain(domain)
+                                                        .agentDomain(domain)
                                                         .property("query", query);
                                         contextMap.forEach((k, v) -> ctxBuilder.property(k, v));
                                         return ctxBuilder.build();

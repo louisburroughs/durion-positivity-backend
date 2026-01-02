@@ -62,7 +62,7 @@ class CrossAgentCollaborationPropertyTest {
                                 .of("microservice-implementation", "event-driven-system", "cicd-pipeline-setup",
                                                 "resilient-architecture")
                                 .map(scenario -> AgentContext.builder()
-                                                .domain("collaboration")
+                                                .agentDomain("collaboration")
                                                 .property("scenario", scenario)
                                                 .property("complexity", "high")
                                                 .property("requiredAgents", 5)

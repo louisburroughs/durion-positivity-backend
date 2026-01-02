@@ -13,7 +13,7 @@ public class DefaultContext extends AgentContext {
 
     public static class Builder extends AgentContext.Builder<Builder> {
         public Builder() {
-            domain("default");
+            agentDomain("default");
             contextType("default-context");
         }
 

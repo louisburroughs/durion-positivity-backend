@@ -1,5 +1,6 @@
 package com.pos.agent.story;
 
+import com.pos.agent.impl.StoryStrengtheningAgent;
 import com.pos.agent.story.analysis.RequirementsAnalyzer;
 import com.pos.agent.story.config.StoryConfiguration;
 import com.pos.agent.story.loop.LoopDetectionResult;

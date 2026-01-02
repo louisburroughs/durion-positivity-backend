@@ -70,7 +70,8 @@ public class AgentContractPropertyTest {
     @Property
     @Report(Reporting.GENERATED)
     void agentInputValidationRejectsInvalidRequests(@ForAll("invalidAgentRequests") AgentRequest request) {
-        //TODO this requires refinement to have the agent validate the request and return FAILURE
+        // TODO this requires refinement to have the agent validate the request and
+        // return FAILURE
         for (Agent agent : getAgents()) {
             try {
                 AgentResponse response = agent.processRequest(request);

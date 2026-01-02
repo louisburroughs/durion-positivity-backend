@@ -33,7 +33,7 @@ public class TestingAgentManualTest {
 
                 // TDD request via core APIs
                 AgentContext tddCtx = AgentContext.builder()
-                                .domain("testing")
+                                .agentDomain("testing")
                                 .property("service", "pos-inventory")
                                 .property("topic", "tdd")
                                 .build();
@@ -55,7 +55,7 @@ public class TestingAgentManualTest {
 
                 // Property-based testing request via core APIs
                 AgentContext pbtCtx = AgentContext.builder()
-                                .domain("testing")
+                                .agentDomain("testing")
                                 .property("service", "pos-price")
                                 .property("topic", "property-based-testing")
                                 .build();

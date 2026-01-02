@@ -27,7 +27,7 @@ class AbstractAgentTest {
             }
 
             return AgentResponse.builder()
-                    .status(AgentStatus.SUCCESS)
+                    .status(AgentProcessingState.SUCCESS)
                     .output("Test output: " + request.getDescription())
                     .confidence(0.9)
                     .success(true)
@@ -42,7 +42,7 @@ class AbstractAgentTest {
 
         AgentResponse response = agent.processRequest(null);
 
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: request is null", response.getOutput());
         assertEquals(0.0, response.getConfidence());
@@ -54,7 +54,7 @@ class AbstractAgentTest {
     void shouldRejectRequestWithNullDescription() {
         TestAgent agent = new TestAgent();
         AgentContext context = DefaultContext.builder()
-                .domain("test")
+                .agentDomain("test")
                 .build();
 
         // AgentRequest builder throws IllegalStateException for null description
@@ -102,7 +102,7 @@ class AbstractAgentTest {
     void shouldRejectRequestWithInvalidType() {
         TestAgent agent = new TestAgent();
         AgentContext context = DefaultContext.builder()
-                .domain("test")
+                .agentDomain("test")
                 .build();
 
         AgentRequest request = AgentRequest.builder()
@@ -114,7 +114,7 @@ class AbstractAgentTest {
 
         AgentResponse response = agent.processRequest(request);
 
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals("Invalid request: invalid type", response.getOutput());
     }
@@ -123,7 +123,7 @@ class AbstractAgentTest {
     void shouldProcessValidRequest() {
         TestAgent agent = new TestAgent();
         AgentContext context = DefaultContext.builder()
-                .domain("test")
+                .agentDomain("test")
                 .property("key", "value")
                 .build();
 
@@ -136,7 +136,7 @@ class AbstractAgentTest {
 
         AgentResponse response = agent.processRequest(request);
 
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum());
         assertTrue(response.isSuccess());
         assertEquals("Test output: test description", response.getOutput());
         assertEquals(0.9, response.getConfidence());
@@ -152,7 +152,7 @@ class AbstractAgentTest {
 
         AgentResponse response = agent.createFailureResponse(errorMessage);
 
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertEquals(errorMessage, response.getOutput());
         assertEquals(errorMessage, response.getErrorMessage());

@@ -1,9 +1,11 @@
 package com.pos.agent.core;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+
 import java.util.List;
-import java.util.Map;
+
+import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.DefaultContext;
 
 /**
  * Response object for agent processing.
@@ -13,17 +15,18 @@ import java.util.Map;
  */
 public class AgentResponse {
     // Core fields
-    private AgentStatus status;
+    private String responseId;
+    private String requestId;
+    private AgentProcessingState status;
     private String output;
     private double confidence;
     private List<String> recommendations;
     private String escalationReason;
-    private Map<String, Object> context;
+    private AgentContext context;
 
     // Enhanced security fields
     private boolean success;
     private String errorMessage;
-    private AgentManager.SecurityValidation securityValidation;
 
     // Performance tracking fields
     private long processingTimeMs;
@@ -42,8 +45,9 @@ public class AgentResponse {
         this.context = builder.context;
         this.success = builder.success;
         this.errorMessage = builder.errorMessage;
-        this.securityValidation = builder.securityValidation;
         this.processingTimeMs = builder.processingTimeMs;
+        this.responseId = java.util.UUID.randomUUID().toString();
+        this.requestId = builder.context != null ? builder.context.getContextId() : null;
     }
 
     // Getters with backward compatibility
@@ -52,7 +56,7 @@ public class AgentResponse {
      * 
      * @return status as AgentStatus enum
      */
-    public AgentStatus getStatusEnum() {
+    public AgentProcessingState getStatusEnum() {
         return status;
     }
 
@@ -70,7 +74,7 @@ public class AgentResponse {
      */
     public static AgentResponse failure(String errorMessage) {
         return AgentResponse.builder()
-                .status(AgentStatus.FAILURE)
+                .status(AgentProcessingState.FAILURE)
                 .errorMessage(errorMessage)
                 .success(false)
                 .build();
@@ -81,11 +85,19 @@ public class AgentResponse {
      */
     public static AgentResponse success(String successMessage, double confidence) {
         return AgentResponse.builder()
-                .status(AgentStatus.SUCCESS)
+                .status(AgentProcessingState.SUCCESS)
                 .confidence(confidence)
                 .output(successMessage)
                 .success(true)
                 .build();
+    }
+
+    public String getResponseId() {
+        return responseId;
+    }
+
+    public String getRequestId() {
+        return requestId;
     }
 
     public double getConfidence() {
@@ -104,7 +116,7 @@ public class AgentResponse {
         return output;
     }
 
-    public Map<String, Object> getContext() {
+    public AgentContext getContext() {
         return context;
     }
 
@@ -116,10 +128,6 @@ public class AgentResponse {
         return errorMessage;
     }
 
-    public AgentManager.SecurityValidation getSecurityValidation() {
-        return securityValidation;
-    }
-
     public long getProcessingTimeMs() {
         return processingTimeMs;
     }
@@ -128,15 +136,15 @@ public class AgentResponse {
     public void setStatus(String status) {
         if (status != null) {
             try {
-                this.status = AgentStatus.valueOf(status);
+                this.status = AgentProcessingState.valueOf(status);
             } catch (IllegalArgumentException e) {
                 // If string doesn't match enum, default to FAILURE
-                this.status = AgentStatus.FAILURE;
+                this.status = AgentProcessingState.FAILURE;
             }
         }
     }
 
-    public void setStatus(AgentStatus status) {
+    public void setStatus(AgentProcessingState status) {
         this.status = status;
     }
 
@@ -156,7 +164,7 @@ public class AgentResponse {
         this.escalationReason = escalationReason;
     }
 
-    public void setContext(Map<String, Object> context) {
+    public void setContext(AgentContext context) {
         this.context = context;
     }
 
@@ -166,10 +174,6 @@ public class AgentResponse {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
-    }
-
-    public void setSecurityValidation(AgentManager.SecurityValidation securityValidation) {
-        this.securityValidation = securityValidation;
     }
 
     public void setProcessingTimeMs(long processingTimeMs) {
@@ -185,18 +189,17 @@ public class AgentResponse {
      * Builder class for AgentResponse
      */
     public static class Builder {
-        private AgentStatus status;
+        private AgentProcessingState status;
         private String output = "";
         private double confidence;
         private List<String> recommendations = new ArrayList<>();
         private String escalationReason;
-        private Map<String, Object> context = new HashMap<>();
+        private AgentContext context;
         private boolean success;
         private String errorMessage;
-        private AgentManager.SecurityValidation securityValidation;
         private long processingTimeMs;
 
-        public Builder status(AgentStatus status) {
+        public Builder status(AgentProcessingState status) {
             this.status = status;
             return this;
         }
@@ -210,10 +213,10 @@ public class AgentResponse {
         public Builder status(String status) {
             if (status != null) {
                 try {
-                    this.status = AgentStatus.valueOf(status.toUpperCase());
+                    this.status = AgentProcessingState.valueOf(status.toUpperCase());
                 } catch (IllegalArgumentException e) {
                     // Default to FAILURE if unknown status
-                    this.status = AgentStatus.FAILURE;
+                    this.status = AgentProcessingState.FAILURE;
                 }
             }
             return this;
@@ -234,15 +237,15 @@ public class AgentResponse {
             return this;
         }
 
-        public Builder context(Map<String, Object> context) {
-            this.context = context != null ? new HashMap<>(context) : new HashMap<>();
+        public Builder context(AgentContext context) {
+            this.context = context != null ? context : DefaultContext.builder().build();
             return this;
         }
 
         // Backward compatibility methods
         public Builder success(boolean success) {
             this.success = success;
-            this.status = success ? AgentStatus.SUCCESS : AgentStatus.FAILURE;
+            this.status = success ? AgentProcessingState.SUCCESS : AgentProcessingState.FAILURE;
             return this;
         }
 
@@ -250,15 +253,11 @@ public class AgentResponse {
             this.errorMessage = errorMessage;
             if (errorMessage != null && !errorMessage.isEmpty()) {
                 this.output = errorMessage;
-                this.status = AgentStatus.FAILURE;
+                this.status = AgentProcessingState.FAILURE;
             }
             return this;
         }
 
-        public Builder securityValidation(AgentManager.SecurityValidation securityValidation) {
-            this.securityValidation = securityValidation;
-            return this;
-        }
 
         public Builder processingTimeMs(long processingTimeMs) {
             this.processingTimeMs = processingTimeMs;
@@ -273,5 +272,12 @@ public class AgentResponse {
         public AgentResponse build() {
             return new AgentResponse(this);
         }
+    }
+
+    public double getAgentId() {
+        if (context != null) {
+            return context.getContextId().hashCode();
+        }
+        return -1;
     }
 }

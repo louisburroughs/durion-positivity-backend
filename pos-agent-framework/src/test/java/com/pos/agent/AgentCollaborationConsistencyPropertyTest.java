@@ -123,7 +123,7 @@ class AgentCollaborationConsistencyPropertyTest {
                         @ForAll("workflowDomains") String domain) {
 
                 AgentContext context = AgentContext.builder()
-                                .domain("collaboration")
+                                .agentDomain("collaboration")
                                 .property("workflowDomain", domain)
                                 .build();
 
@@ -166,7 +166,7 @@ class AgentCollaborationConsistencyPropertyTest {
                                                 "spring-boot", "microservices", "aws", "security",
                                                 "testing", "performance", "documentation"))
                                 .as((scenario, technology) -> AgentContext.builder()
-                                                .domain("collaboration")
+                                                .agentDomain("collaboration")
                                                 .property("scenario", scenario)
                                                 .property("technology", technology)
                                                 .property("moduleName", "pos-order")
@@ -198,7 +198,7 @@ class AgentCollaborationConsistencyPropertyTest {
                                 Arbitraries.of("architecture", "implementation", "testing", "deployment"),
                                 Arbitraries.of("conservative", "aggressive", "balanced"))
                                 .as((scenario, domain, approach) -> AgentContext.builder()
-                                                .domain("collaboration")
+                                                .agentDomain("collaboration")
                                                 .property("scenario", scenario)
                                                 .property("targetDomain", domain)
                                                 .property("resolutionApproach", approach)

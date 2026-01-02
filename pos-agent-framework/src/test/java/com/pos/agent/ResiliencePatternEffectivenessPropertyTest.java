@@ -64,22 +64,22 @@ class ResiliencePatternEffectivenessPropertyTest {
         Arbitrary<AgentContext> resilienceRequests() {
                 return Arbitraries.of(
                                 AgentContext.builder()
-                                                .domain("resilience")
+                                                .agentDomain("resilience")
                                                 .property("resiliencePattern", "circuit-breaker")
                                                 .property("targetService", "database")
                                                 .build(),
                                 AgentContext.builder()
-                                                .domain("resilience")
+                                                .agentDomain("resilience")
                                                 .property("resiliencePattern", "retry")
                                                 .property("targetService", "external-api")
                                                 .build(),
                                 AgentContext.builder()
-                                                .domain("resilience")
+                                                .agentDomain("resilience")
                                                 .property("resiliencePattern", "bulkhead")
                                                 .property("targetService", "message-queue")
                                                 .build(),
                                 AgentContext.builder()
-                                                .domain("resilience")
+                                                .agentDomain("resilience")
                                                 .property("resiliencePattern", "chaos")
                                                 .property("targetService", "cache")
                                                 .build());

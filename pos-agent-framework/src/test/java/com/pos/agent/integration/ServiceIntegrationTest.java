@@ -218,7 +218,7 @@ class ServiceIntegrationTest {
         @DisplayName("Service-specific routing via request context works")
         void testServiceSpecificAgentRouting() {
                 AgentContext ctx = AgentContext.builder()
-                                .domain("business")
+                                .agentDomain("business")
                                 .property("serviceName", "pos-order")
                                 .property("businessContext", "order-processing")
                                 .property("technology", "spring-boot")

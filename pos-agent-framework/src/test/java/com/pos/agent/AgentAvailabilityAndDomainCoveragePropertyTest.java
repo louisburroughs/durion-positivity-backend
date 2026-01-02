@@ -101,7 +101,7 @@ class AgentAvailabilityAndDomainCoveragePropertyTest {
                                 "architecture", "implementation", "testing", "deployment",
                                 "observability", "security", "performance", "documentation")
                                 .map(domain -> AgentContext.builder()
-                                                .domain(domain)
+                                                .agentDomain(domain)
                                                 .property("domainType", domain)
                                                 .build());
         }

@@ -47,7 +47,6 @@ public class OperationsContext extends AgentContext {
         this.environments = builder.environments;
     }
 
-    
     public static Builder builder() {
         return new Builder();
     }
@@ -222,7 +221,7 @@ public class OperationsContext extends AgentContext {
         private Set<String> environments = new LinkedHashSet<>();
 
         public Builder() {
-            domain("operations");
+            agentDomain("operations");
             contextType("operations-context");
         }
 

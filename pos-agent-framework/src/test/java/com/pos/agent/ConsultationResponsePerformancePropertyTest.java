@@ -173,7 +173,7 @@ class ConsultationResponsePerformancePropertyTest {
                                 "code-review",
                                 "architecture-consultation")
                                 .map(scenario -> AgentContext.builder()
-                                                .domain("collaboration")
+                                                .agentDomain("collaboration")
                                                 .property("scenario", scenario)
                                                 .property("complexity", "medium")
                                                 .build());
@@ -183,7 +183,7 @@ class ConsultationResponsePerformancePropertyTest {
         Arbitrary<AgentContext> springBootRequests() {
                 return Arbitraries.of("pos-inventory", "pos-order", "pos-price")
                                 .map(service -> AgentContext.builder()
-                                                .domain("implementation")
+                                                .agentDomain("implementation")
                                                 .property("service", service)
                                                 .property("framework", "spring-boot")
                                                 .property("topic", "microservice-patterns")
@@ -194,7 +194,7 @@ class ConsultationResponsePerformancePropertyTest {
         Arbitrary<AgentContext> awsRequests() {
                 return Arbitraries.of("dynamodb", "elasticache", "fargate", "lambda")
                                 .map(awsService -> AgentContext.builder()
-                                                .domain("deployment")
+                                                .agentDomain("deployment")
                                                 .property("platform", "aws")
                                                 .property("service", awsService)
                                                 .property("topic", "deployment-patterns")

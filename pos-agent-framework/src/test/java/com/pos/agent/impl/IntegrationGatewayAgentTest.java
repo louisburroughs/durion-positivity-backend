@@ -2,7 +2,7 @@ package com.pos.agent.impl;
 
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentStatus;
+import com.pos.agent.core.AgentProcessingState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -59,7 +59,7 @@ public class IntegrationGatewayAgentTest {
         AgentResponse response = agent.processRequest(request);
 
         // Assert
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum());
         assertTrue(response.isSuccess());
         assertNotNull(response.getOutput());
         assertTrue(response.getOutput().contains("Integration guidance:"));
@@ -125,7 +125,7 @@ public class IntegrationGatewayAgentTest {
         AgentResponse response = agent.processRequest(request);
 
         // Assert
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertTrue(response.getOutput().contains("invalid type"));
     }
@@ -145,7 +145,7 @@ public class IntegrationGatewayAgentTest {
         AgentResponse response = agent.processRequest(request);
 
         // Assert
-        assertEquals(AgentStatus.SUCCESS, response.getStatusEnum());
+        assertEquals(AgentProcessingState.SUCCESS, response.getStatusEnum());
         assertTrue(response.getRecommendations().contains("implement pattern"));
         assertTrue(response.getRecommendations().contains("configure system"));
         assertTrue(response.getRecommendations().contains("add monitoring"));
@@ -157,7 +157,7 @@ public class IntegrationGatewayAgentTest {
         AgentResponse response = agent.processRequest(null);
 
         // Assert
-        assertEquals(AgentStatus.FAILURE, response.getStatusEnum());
+        assertEquals(AgentProcessingState.FAILURE, response.getStatusEnum());
         assertFalse(response.isSuccess());
         assertTrue(response.getOutput().contains("request is null"));
     }

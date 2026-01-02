@@ -29,7 +29,6 @@ public class TestingContext extends AgentContext {
         this.defects = builder.defects;
     }
 
-   
     public static Builder builder() {
         return new Builder();
     }
@@ -133,7 +132,7 @@ public class TestingContext extends AgentContext {
         private Set<String> defects = new LinkedHashSet<>();
 
         public Builder() {
-            domain("testing");
+            agentDomain("testing");
             contextType("testing-context");
         }
 

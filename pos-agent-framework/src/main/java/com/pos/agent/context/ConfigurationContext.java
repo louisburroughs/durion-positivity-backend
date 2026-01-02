@@ -81,15 +81,11 @@ public class ConfigurationContext extends AgentContext {
         this.configAuditing = builder.configAuditing;
     }
 
-    
     public static Builder builder() {
         return new Builder();
     }
 
-    public void setSessionId(String sessionId) {
-        super.setSessionId(sessionId);
-    }
-
+    
     public String getServiceName() {
         return serviceName;
     }
@@ -384,7 +380,7 @@ public class ConfigurationContext extends AgentContext {
         private Set<String> configAuditing = new LinkedHashSet<>();
 
         public Builder() {
-            domain("configuration");
+            agentDomain("configuration");
             contextType("configuration-context");
         }
 

@@ -56,7 +56,6 @@ public class EventDrivenContext extends AgentContext {
         this.orchestration = builder.orchestration;
     }
 
-    
     public static Builder builder() {
         return new Builder();
     }
@@ -285,7 +284,7 @@ public class EventDrivenContext extends AgentContext {
         private Set<String> orchestration = new LinkedHashSet<>();
 
         public Builder() {
-            domain("event-driven");
+            agentDomain("event-driven");
             contextType("event-driven-context");
         }
 
