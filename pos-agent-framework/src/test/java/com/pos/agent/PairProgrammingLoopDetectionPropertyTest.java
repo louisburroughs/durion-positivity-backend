@@ -167,6 +167,7 @@ public class PairProgrammingLoopDetectionPropertyTest {
                 // When: Processing the request
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
                                 .type("collaboration")
+                                .description("Performance requirements unit test")
                                 .context(context)
                                 .securityContext(securityContext)
                                 .build());
