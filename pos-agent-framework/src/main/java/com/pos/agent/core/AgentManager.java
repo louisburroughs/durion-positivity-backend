@@ -41,7 +41,6 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
     private final AuditTrailManager auditTrailManager;
     private final List<Agent> registeredAgents;
     private final CompositeAgentDiscovery agentDiscovery;
-   
 
     static final Duration SESSION_TIMEOUT = Duration.ofMinutes(30);
     private static final Set<String> REQUIRED_CONTEXT_KEYS = Set.of(
@@ -62,7 +61,6 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
 
     public AgentManager(AuditTrailManager auditTrailManager, ServiceAgentMapping serviceMapping) {
         this.auditTrailManager = auditTrailManager;
-        this.serviceMapping = serviceMapping;
         this.registeredAgents = new ArrayList<>();
         this.agentDiscovery = new CompositeAgentDiscovery();
 
@@ -181,20 +179,43 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
 
     private String generateOutput(AgentRequest request, Agent agent) {
         AgentContext contextObj = request.getAgentContext();
-    
-    if (contextObj == null) {
-        return agent.generateOutput("general request");
-    }
-    
-    // Extract query from context properties in priority order
-    String query = Optional.ofNullable(contextObj.getProperties().get("objective"))
-        .or(() -> Optional.ofNullable(contextObj.getProperties().get("task")))
-        .or(() -> Optional.ofNullable(contextObj.getProperties().get("focus")))
-        .map(Object::toString)
-        .orElse("general request");
-    
-    // Generate output based on extracted query
-    return agent.generateOutput(query);
+
+        if (contextObj == null) {
+            return agent.generateOutput("general request");
+        }
+
+        // Build a comprehensive query from available context
+        StringBuilder queryBuilder = new StringBuilder();
+
+        // Primary query source: objective, task, or focus
+        Optional<String> primaryQuery = Optional.ofNullable(contextObj.getProperties().get("objective"))
+                .or(() -> Optional.ofNullable(contextObj.getProperties().get("task")))
+                .or(() -> Optional.ofNullable(contextObj.getProperties().get("focus")))
+                .map(Object::toString);
+
+        if (primaryQuery.isPresent()) {
+            queryBuilder.append(primaryQuery.get());
+        } else {
+            queryBuilder.append("general request");
+        }
+
+        // Enhance query with domain context if available
+        String domain = contextObj.getAgentDomain();
+        if (domain != null && !domain.isEmpty() && !queryBuilder.toString().contains(domain)) {
+            queryBuilder.append(" for ").append(domain);
+        }
+
+        // Add session context if available for continuity
+        String sessionId = contextObj.getSessionId();
+        if (sessionId != null) {
+            getSessionContext(sessionId).ifPresent(session -> {
+                if (session.getTaskObjective() != null && !session.getTaskObjective().isEmpty()) {
+                    queryBuilder.append(" (Task: ").append(session.getTaskObjective()).append(")");
+                }
+            });
+        }
+
+        return agent.generateOutput(queryBuilder.toString());
 
     }
 
