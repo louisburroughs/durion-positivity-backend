@@ -173,6 +173,7 @@ class ObservabilityInstrumentationCompletenessPropertyTest {
                 long startTime = System.currentTimeMillis();
                 AgentResponse response = agentManager.processRequest(AgentRequest.builder()
                                 .type("observability-guidance")
+                                .description("Observability guidance performance property test")
                                 .context(context)
                                 .securityContext(securityContext)
                                 .build());
