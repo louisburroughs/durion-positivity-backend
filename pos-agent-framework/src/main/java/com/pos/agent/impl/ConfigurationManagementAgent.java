@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ConfigurationManagementAgent extends AbstractAgent {
 
-        private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+        protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
         public ConfigurationManagementAgent() {
                 super(AgentType.CONFIGURATION_MANAGEMENT, List.of(
@@ -42,7 +42,7 @@ public class ConfigurationManagementAgent extends AbstractAgent {
 
         @Override
         public AgentContext getOrCreateContext(String sessionId) {
-                return contextMap.computeIfAbsent(sessionId,
+                return CONTEXT_MAP.computeIfAbsent(sessionId,
                                 sid -> ConfigurationContext.builder().requestId(sessionId).build());
         }
 
@@ -90,4 +90,31 @@ public class ConfigurationManagementAgent extends AbstractAgent {
                                                 "Set up observability with distributed tracing"))
                                 .build();
         }
+
+        @Override
+        public void updateContext(String sessionId, String guidance) {
+                ConfigurationContext ctx = (ConfigurationContext) getOrCreateContext(sessionId);
+
+                if (guidance.contains("spring cloud config"))
+                        ctx.addConfigSource("spring-cloud-config", Map.of());
+                if (guidance.contains("consul"))
+                        ctx.addConfigSource("consul", Map.of());
+                if (guidance.contains("feature flag"))
+                        ctx.addFeatureFlag("feature-toggles", Map.of());
+                if (guidance.contains("gradual rollout"))
+                        ctx.addRolloutStrategy("gradual-rollout");
+                if (guidance.contains("aws secrets manager"))
+                        ctx.addSecretsManager("aws-secrets-manager", Map.of());
+                if (guidance.contains("development"))
+                        ctx.addEnvironment("development", Map.of());
+                if (guidance.contains("staging"))
+                        ctx.addEnvironment("staging", Map.of());
+                if (guidance.contains("production"))
+                        ctx.addEnvironment("production", Map.of());
+        }
+
+        @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
+    }
 }

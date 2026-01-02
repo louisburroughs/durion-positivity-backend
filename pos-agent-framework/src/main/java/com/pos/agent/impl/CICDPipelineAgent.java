@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class CICDPipelineAgent extends AbstractAgent {
 
-        private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+        protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
         public CICDPipelineAgent() {
                 super(AgentType.CICD_PIPELINE, List.of(
@@ -31,7 +31,7 @@ public class CICDPipelineAgent extends AbstractAgent {
 
         @Override
         public AgentContext getOrCreateContext(String sessionId) {
-                return contextMap.computeIfAbsent(sessionId,
+                return CONTEXT_MAP.computeIfAbsent(sessionId,
                                 sid -> CICDContext.builder().requestId(sessionId).build());
         }
 
@@ -105,4 +105,27 @@ public class CICDPipelineAgent extends AbstractAgent {
                                 "- Integrate static analysis (SAST) tools\n" +
                                 "- Enforce policy checks before deployment\n";
         }
+
+        @Override
+        public void updateContext(String sessionId, String guidance) {
+                CICDContext ctx = (CICDContext) getOrCreateContext(sessionId);
+
+                if (guidance.contains("maven"))
+                        ctx.addBuildTool("maven", Map.of("type", "java-build"));
+                if (guidance.contains("docker"))
+                        ctx.addBuildTool("docker", Map.of("type", "containerization"));
+                if (guidance.contains("blue-green"))
+                        ctx.addDeploymentStrategy("blue-green", Map.of("type", "zero-downtime"));
+                if (guidance.contains("sast"))
+                        ctx.addSecurityScanner("sast", Map.of("type", "static-analysis"));
+                if (guidance.contains("dast"))
+                        ctx.addSecurityScanner("dast", Map.of("type", "dynamic-analysis"));
+                if (guidance.contains("jenkins"))
+                        ctx.addOrchestrationTool("jenkins", Map.of("type", "ci-server"));
+        }
+
+        @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
+    }
 }

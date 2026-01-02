@@ -1,7 +1,6 @@
 package com.pos.agent.impl;
 
 import com.pos.agent.context.AgentContext;
-import com.pos.agent.context.ArchitectureContext;
 import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
@@ -21,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class EventDrivenArchitectureAgent extends AbstractAgent {
 
-    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+    protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
     public EventDrivenArchitectureAgent() {
         super(AgentType.EVENT_DRIVEN_ARCHITECTURE, List.of(
@@ -34,7 +33,7 @@ public class EventDrivenArchitectureAgent extends AbstractAgent {
 
      @Override
     public AgentContext getOrCreateContext(String sessionId) {
-        return contextMap.computeIfAbsent(sessionId,
+        return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> EventDrivenContext.builder().requestId(sessionId).build());
     }
 
@@ -59,5 +58,26 @@ public class EventDrivenArchitectureAgent extends AbstractAgent {
                 "- Ensure idempotent event handlers\n" +
                 "- Consider dead-letter queues for failed events\n" +
                 "- Implement saga patterns for distributed transactions\n";
+    }
+
+    @Override
+    public void updateContext(String sessionId, String guidance) {
+        EventDrivenContext ctx = (EventDrivenContext) getOrCreateContext(sessionId);
+
+        if (guidance.contains("kafka"))
+            ctx.addMessageBroker("kafka", Map.of("type", "streaming"));
+        if (guidance.contains("idempotent"))
+            ctx.addEventHandler("idempotent-handler", "idempotency");
+        if (guidance.contains("dead letter"))
+            ctx.addDeadLetterQueue("failed-events", "dlq-config");
+        if (guidance.contains("event sourcing") || guidance.contains("event store"))
+            ctx.addEventStore("event-store");
+        if (guidance.contains("saga"))
+            ctx.addSaga("saga-pattern");
+    }
+
+    @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
     }
 }

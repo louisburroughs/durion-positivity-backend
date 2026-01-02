@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DocumentationAgent extends AbstractAgent {
 
-    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+    protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
     public DocumentationAgent() {
         super(AgentType.DOCUMENTATION, List.of(
@@ -30,7 +30,7 @@ public class DocumentationAgent extends AbstractAgent {
 
     @Override
     public AgentContext getOrCreateContext(String sessionId) {
-        return contextMap.computeIfAbsent(sessionId,
+        return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> DefaultContext.builder().requestId(sessionId).build());
     }
 
@@ -77,5 +77,10 @@ public class DocumentationAgent extends AbstractAgent {
                 .append("- Version control integration for change tracking\n");
 
         return guidance.toString();
+    }
+
+    @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
     }
 }

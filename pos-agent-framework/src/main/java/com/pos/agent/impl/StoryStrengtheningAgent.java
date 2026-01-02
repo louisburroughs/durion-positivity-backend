@@ -43,7 +43,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
     private final OutputGenerator outputGenerator;
     private final LoopDetector loopDetector;
     private final StoryConfiguration configuration;
-    private final Map<String, AgentContext> contextMap = new ConcurrentHashMap<>();
+    protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
 
     /**
      * Creates a new Story Strengthening Agent with all required components.
@@ -82,7 +82,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
 
      @Override
     public AgentContext getOrCreateContext(String sessionId) {
-        return contextMap.computeIfAbsent(sessionId,
+        return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> StoryContext.builder().requestId(sessionId).build());
     }
 
@@ -394,5 +394,10 @@ public class StoryStrengtheningAgent extends AbstractAgent {
 
     public StoryConfiguration getConfiguration() {
         return configuration;
+    }
+
+    @Override
+    public void removeContext(String sessionId) {
+        CONTEXT_MAP.remove(sessionId);
     }
 }

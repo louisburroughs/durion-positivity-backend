@@ -83,12 +83,13 @@ public class AgentResponse {
     /**
      * Creates a failure response with error message
      */
-    public static AgentResponse success(String successMessage, double confidence) {
+    public static AgentResponse success(String successMessage, double confidence, List<String> recommendations) {
         return AgentResponse.builder()
                 .status(AgentProcessingState.SUCCESS)
                 .confidence(confidence)
                 .output(successMessage)
                 .success(true)
+                .recommendations(recommendations != null ? recommendations : new ArrayList<>())
                 .build();
     }
 
@@ -257,7 +258,6 @@ public class AgentResponse {
             }
             return this;
         }
-
 
         public Builder processingTimeMs(long processingTimeMs) {
             this.processingTimeMs = processingTimeMs;
