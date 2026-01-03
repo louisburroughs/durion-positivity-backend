@@ -22,7 +22,7 @@ public class AgentResponse {
     private double confidence;
     private List<String> recommendations;
     private String escalationReason;
-    private AgentContext context;
+    private AgentContext agentContext;
 
     // Enhanced security fields
     private boolean success;
@@ -42,12 +42,12 @@ public class AgentResponse {
         this.confidence = builder.confidence;
         this.recommendations = builder.recommendations;
         this.escalationReason = builder.escalationReason;
-        this.context = builder.context;
+        this.agentContext = builder.agentContext;
         this.success = builder.success;
         this.errorMessage = builder.errorMessage;
         this.processingTimeMs = builder.processingTimeMs;
         this.responseId = java.util.UUID.randomUUID().toString();
-        this.requestId = builder.context != null ? builder.context.getContextId() : null;
+        this.requestId = builder.agentContext != null ? builder.agentContext.getContextId() : null;
     }
 
     // Getters with backward compatibility
@@ -117,8 +117,8 @@ public class AgentResponse {
         return output;
     }
 
-    public AgentContext getContext() {
-        return context;
+    public AgentContext getAgentContext() {
+        return agentContext;
     }
 
     public boolean isSuccess() {
@@ -165,8 +165,8 @@ public class AgentResponse {
         this.escalationReason = escalationReason;
     }
 
-    public void setContext(AgentContext context) {
-        this.context = context;
+    public void setAgentContext(AgentContext context) {
+        this.agentContext = context;
     }
 
     public void setSuccess(boolean success) {
@@ -195,7 +195,7 @@ public class AgentResponse {
         private double confidence;
         private List<String> recommendations = new ArrayList<>();
         private String escalationReason;
-        private AgentContext context;
+        private AgentContext agentContext;
         private boolean success;
         private String errorMessage;
         private long processingTimeMs;
@@ -238,8 +238,8 @@ public class AgentResponse {
             return this;
         }
 
-        public Builder context(AgentContext context) {
-            this.context = context != null ? context : DefaultContext.builder().build();
+        public Builder agentContext(AgentContext agentContext) {
+            this.agentContext = agentContext != null ? agentContext : DefaultContext.builder().build();
             return this;
         }
 
@@ -275,8 +275,8 @@ public class AgentResponse {
     }
 
     public double getAgentId() {
-        if (context != null) {
-            return context.getContextId().hashCode();
+        if (agentContext != null) {
+            return agentContext.getContextId().hashCode();
         }
         return -1;
     }

@@ -2,6 +2,7 @@ package com.pos.agent.context;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.Objects;
 
 /**
  * Context model for resilience engineering scenarios.
@@ -53,7 +54,7 @@ public class ResilienceContext extends AgentContext {
     }
 
     public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
+        this.serviceName = Objects.requireNonNull(serviceName, "Service name cannot be null");
         updateTimestamp();
     }
 
@@ -62,7 +63,7 @@ public class ResilienceContext extends AgentContext {
     }
 
     public void setPlatform(String platform) {
-        this.platform = platform;
+        this.platform = Objects.requireNonNull(platform, "Platform cannot be null");
         updateTimestamp();
     }
 
@@ -71,7 +72,7 @@ public class ResilienceContext extends AgentContext {
     }
 
     public void setFailureType(String failureType) {
-        this.failureType = failureType;
+        this.failureType = Objects.requireNonNull(failureType, "Failure type cannot be null");
         updateTimestamp();
     }
 
@@ -80,7 +81,7 @@ public class ResilienceContext extends AgentContext {
     }
 
     public void setScalingType(String scalingType) {
-        this.scalingType = scalingType;
+        this.scalingType = Objects.requireNonNull(scalingType, "Scaling type cannot be null");
         updateTimestamp();
     }
 
@@ -253,134 +254,115 @@ public class ResilienceContext extends AgentContext {
         }
 
         public Builder addCircuitBreaker(String circuitBreaker, Map<String, Object> config) {
-            if (circuitBreaker != null) {
-                circuitBreakers.add(circuitBreaker);
-                if (config != null) {
-                    circuitBreakerConfigurations.put(circuitBreaker, config);
-                }
-            }
+            Objects.requireNonNull(circuitBreaker, "Circuit breaker cannot be null");
+            Objects.requireNonNull(config, "Circuit breaker config cannot be null");
+            circuitBreakers.add(circuitBreaker);
+            circuitBreakerConfigurations.put(circuitBreaker, config);
             return this;
         }
 
         public Builder circuitBreakers(Set<String> breakers) {
-            if (breakers != null) {
-                circuitBreakers.addAll(breakers);
-            }
+            Objects.requireNonNull(breakers, "Circuit breakers cannot be null");
+            circuitBreakers.addAll(breakers);
             return this;
         }
 
         public Builder circuitBreakerConfigurations(Map<String, Object> configs) {
-            if (configs != null) {
-                circuitBreakerConfigurations.putAll(configs);
-            }
+            Objects.requireNonNull(configs, "Circuit breaker configurations cannot be null");
+            circuitBreakerConfigurations.putAll(configs);
             return this;
         }
 
         public Builder addRetryPattern(String pattern, Map<String, Object> config) {
-            if (pattern != null) {
-                retryPatterns.add(pattern);
-                if (config != null) {
-                    retryConfigurations.put(pattern, config);
-                }
-            }
+            Objects.requireNonNull(pattern, "Retry pattern cannot be null");
+            Objects.requireNonNull(config, "Retry configuration cannot be null");
+            retryPatterns.add(pattern);
+            retryConfigurations.put(pattern, config);
             return this;
         }
 
         public Builder retryPatterns(Set<String> patterns) {
-            if (patterns != null) {
-                retryPatterns.addAll(patterns);
-            }
+            Objects.requireNonNull(patterns, "Retry patterns cannot be null");
+            retryPatterns.addAll(patterns);
             return this;
         }
 
         public Builder retryConfigurations(Map<String, Object> configs) {
-            if (configs != null) {
-                retryConfigurations.putAll(configs);
-            }
+            Objects.requireNonNull(configs, "Retry configurations cannot be null");
+            retryConfigurations.putAll(configs);
             return this;
         }
 
         public Builder addBackoffStrategy(String strategy) {
-            if (strategy != null) {
-                backoffStrategies.add(strategy);
-            }
+            Objects.requireNonNull(strategy, "Backoff strategy cannot be null");
+            backoffStrategies.add(strategy);
             return this;
         }
 
         public Builder backoffStrategies(Set<String> strategies) {
-            if (strategies != null) {
-                backoffStrategies.addAll(strategies);
-            }
+            Objects.requireNonNull(strategies, "Backoff strategies cannot be null");
+            backoffStrategies.addAll(strategies);
             return this;
         }
 
         public Builder addBulkheadPattern(String pattern) {
-            if (pattern != null) {
-                bulkheadPatterns.add(pattern);
-            }
+            Objects.requireNonNull(pattern, "Bulkhead pattern cannot be null");
+            bulkheadPatterns.add(pattern);
             return this;
         }
 
         public Builder bulkheadPatterns(Set<String> patterns) {
-            if (patterns != null) {
-                bulkheadPatterns.addAll(patterns);
-            }
+            Objects.requireNonNull(patterns, "Bulkhead patterns cannot be null");
+            bulkheadPatterns.addAll(patterns);
             return this;
         }
 
         public Builder addThreadPool(String pool) {
-            if (pool != null) {
-                threadPools.add(pool);
-            }
+            Objects.requireNonNull(pool, "Thread pool cannot be null");
+            threadPools.add(pool);
             return this;
         }
 
         public Builder threadPools(Set<String> pools) {
-            if (pools != null) {
-                threadPools.addAll(pools);
-            }
+            Objects.requireNonNull(pools, "Thread pools cannot be null");
+            threadPools.addAll(pools);
             return this;
         }
 
         public Builder addChaosExperiment(String experiment) {
-            if (experiment != null) {
-                chaosExperiments.add(experiment);
-            }
+            Objects.requireNonNull(experiment, "Chaos experiment cannot be null");
+            chaosExperiments.add(experiment);
             return this;
         }
 
         public Builder chaosExperiments(Set<String> experiments) {
-            if (experiments != null) {
-                chaosExperiments.addAll(experiments);
-            }
+            Objects.requireNonNull(experiments, "Chaos experiments cannot be null");
+            chaosExperiments.addAll(experiments);
             return this;
         }
 
         public Builder addHealthCheck(String check) {
-            if (check != null) {
-                healthChecks.add(check);
-            }
+            Objects.requireNonNull(check, "Health check cannot be null");
+            healthChecks.add(check);
             return this;
         }
 
         public Builder healthChecks(Set<String> checks) {
-            if (checks != null) {
-                healthChecks.addAll(checks);
-            }
+            Objects.requireNonNull(checks, "Health checks cannot be null");
+            healthChecks.addAll(checks);
             return this;
         }
 
         public Builder addSliSloDefinition(String key, Object definition) {
-            if (key != null && definition != null) {
-                sliSloDefinitions.put(key, definition);
-            }
+            Objects.requireNonNull(key, "SLI/SLO key cannot be null");
+            Objects.requireNonNull(definition, "SLI/SLO definition cannot be null");
+            sliSloDefinitions.put(key, definition);
             return this;
         }
 
         public Builder sliSloDefinitions(Map<String, Object> definitions) {
-            if (definitions != null) {
-                sliSloDefinitions.putAll(definitions);
-            }
+            Objects.requireNonNull(definitions, "SLI/SLO definitions cannot be null");
+            sliSloDefinitions.putAll(definitions);
             return this;
         }
 

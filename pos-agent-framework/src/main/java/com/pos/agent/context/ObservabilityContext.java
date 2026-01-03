@@ -1,9 +1,9 @@
 package com.pos.agent.context;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -127,97 +127,99 @@ public class ObservabilityContext extends AgentContext {
 
     // Mutators
     public void addMetricsCheck(String check) {
-        if (check != null && this.metricsChecks.add(check)) {
+        Objects.requireNonNull(check, "check cannot be null");
+        if (this.metricsChecks.add(check)) {
             updateTimestamp();
         }
     }
 
     public void addMetricValue(String name, Object value) {
-        if (name != null && value != null) {
-            this.metricValues.put(name, value);
-            updateTimestamp();
-        }
+        Objects.requireNonNull(name, "name cannot be null");
+        Objects.requireNonNull(value, "value cannot be null");
+        this.metricValues.put(name, value);
+        updateTimestamp();
     }
 
     public void addMetricCollector(String collector) {
-        if (collector != null && this.metricCollectors.add(collector)) {
+        Objects.requireNonNull(collector, "collector cannot be null");
+        if (this.metricCollectors.add(collector)) {
             updateTimestamp();
         }
     }
 
     public void addLogSource(String source, String logLevel) {
-        if (source != null) {
-            this.logSources.add(source);
-            if (logLevel != null) {
-                this.logLevels.put(source, logLevel);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(source, "source cannot be null");
+        Objects.requireNonNull(logLevel, "logLevel cannot be null");
+        this.logSources.add(source);
+        this.logLevels.put(source, logLevel);
+        updateTimestamp();
     }
 
     public void addLogAggregator(String aggregator) {
-        if (aggregator != null && this.logAggregators.add(aggregator)) {
+        Objects.requireNonNull(aggregator, "aggregator cannot be null");
+        if (this.logAggregators.add(aggregator)) {
             updateTimestamp();
         }
     }
 
     public void addTracingSystem(String system, String configuration) {
-        if (system != null) {
-            this.tracingSystems.add(system);
-            if (configuration != null) {
-                this.traceConfigurations.put(system, configuration);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(system, "system cannot be null");
+        Objects.requireNonNull(configuration, "configuration cannot be null");
+        this.tracingSystems.add(system);
+        this.traceConfigurations.put(system, configuration);
+        updateTimestamp();
     }
 
     public void addSpanProcessor(String processor) {
-        if (processor != null && this.spanProcessors.add(processor)) {
+        Objects.requireNonNull(processor, "processor cannot be null");
+        if (this.spanProcessors.add(processor)) {
             updateTimestamp();
         }
     }
 
     public void addDashboard(String dashboard) {
-        if (dashboard != null && this.dashboards.add(dashboard)) {
+        Objects.requireNonNull(dashboard, "dashboard cannot be null");
+        if (this.dashboards.add(dashboard)) {
             updateTimestamp();
         }
     }
 
     public void addAlertRule(String rule, String configuration) {
-        if (rule != null) {
-            this.alertRules.add(rule);
-            if (configuration != null) {
-                this.alertConfigurations.put(rule, configuration);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(rule, "rule cannot be null");
+        Objects.requireNonNull(configuration, "configuration cannot be null");
+        this.alertRules.add(rule);
+        this.alertConfigurations.put(rule, configuration);
+        updateTimestamp();
     }
 
     public void addNotificationChannel(String channel) {
-        if (channel != null && this.notificationChannels.add(channel)) {
+        Objects.requireNonNull(channel, "channel cannot be null");
+        if (this.notificationChannels.add(channel)) {
             updateTimestamp();
         }
     }
 
     public void addHealthEndpoint(String endpoint, String status) {
-        if (endpoint != null) {
-            this.healthEndpoints.add(endpoint);
-            if (status != null) {
-                this.healthStatuses.put(endpoint, status);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(endpoint, "endpoint cannot be null");
+        Objects.requireNonNull(status, "status cannot be null");
+        this.healthEndpoints.add(endpoint);
+        this.healthStatuses.put(endpoint, status);
+        updateTimestamp();
     }
 
     public void updateHealthStatus(String endpoint, String status) {
-        if (endpoint != null && status != null && this.healthEndpoints.contains(endpoint)) {
+        Objects.requireNonNull(endpoint, "endpoint cannot be null");
+        Objects.requireNonNull(status, "status cannot be null");
+        if (this.healthEndpoints.contains(endpoint)) {
             this.healthStatuses.put(endpoint, status);
             updateTimestamp();
         }
     }
 
     public void updateLogLevel(String source, String level) {
-        if (source != null && level != null && this.logSources.contains(source)) {
+        Objects.requireNonNull(source, "source cannot be null");
+        Objects.requireNonNull(level, "level cannot be null");
+        if (this.logSources.contains(source)) {
             this.logLevels.put(source, level);
             updateTimestamp();
         }
@@ -292,9 +294,8 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addMetricsCheck(String check) {
-            if (check != null) {
-                metricsChecks.add(check);
-            }
+            Objects.requireNonNull(check, "check cannot be null");
+            metricsChecks.add(check);
             return this;
         }
 
@@ -306,9 +307,9 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addMetricValue(String name, Object value) {
-            if (name != null && value != null) {
-                metricValues.put(name, value);
-            }
+            Objects.requireNonNull(name, "name cannot be null");
+            Objects.requireNonNull(value, "value cannot be null");
+            metricValues.put(name, value);
             return this;
         }
 
@@ -320,9 +321,8 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addMetricCollector(String collector) {
-            if (collector != null) {
-                metricCollectors.add(collector);
-            }
+            Objects.requireNonNull(collector, "collector cannot be null");
+            metricCollectors.add(collector);
             return this;
         }
 
@@ -334,12 +334,10 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addLogSource(String source, String logLevel) {
-            if (source != null) {
-                logSources.add(source);
-                if (logLevel != null) {
-                    logLevels.put(source, logLevel);
-                }
-            }
+            Objects.requireNonNull(source, "source cannot be null");
+            Objects.requireNonNull(logLevel, "logLevel cannot be null");
+            logSources.add(source);
+            logLevels.put(source, logLevel);
             return this;
         }
 
@@ -358,9 +356,8 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addLogAggregator(String aggregator) {
-            if (aggregator != null) {
-                logAggregators.add(aggregator);
-            }
+            Objects.requireNonNull(aggregator, "aggregator cannot be null");
+            logAggregators.add(aggregator);
             return this;
         }
 
@@ -372,12 +369,10 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addTracingSystem(String system, String configuration) {
-            if (system != null) {
-                tracingSystems.add(system);
-                if (configuration != null) {
-                    traceConfigurations.put(system, configuration);
-                }
-            }
+            Objects.requireNonNull(system, "system cannot be null");
+            Objects.requireNonNull(configuration, "configuration cannot be null");
+            tracingSystems.add(system);
+            traceConfigurations.put(system, configuration);
             return this;
         }
 
@@ -396,9 +391,8 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addSpanProcessor(String processor) {
-            if (processor != null) {
-                spanProcessors.add(processor);
-            }
+            Objects.requireNonNull(processor, "processor cannot be null");
+            spanProcessors.add(processor);
             return this;
         }
 
@@ -410,9 +404,8 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addDashboard(String dashboard) {
-            if (dashboard != null) {
-                dashboards.add(dashboard);
-            }
+            Objects.requireNonNull(dashboard, "dashboard cannot be null");
+            dashboards.add(dashboard);
             return this;
         }
 
@@ -424,12 +417,10 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addAlertRule(String rule, String configuration) {
-            if (rule != null) {
-                alertRules.add(rule);
-                if (configuration != null) {
-                    alertConfigurations.put(rule, configuration);
-                }
-            }
+            Objects.requireNonNull(rule, "rule cannot be null");
+            Objects.requireNonNull(configuration, "configuration cannot be null");
+            alertRules.add(rule);
+            alertConfigurations.put(rule, configuration);
             return this;
         }
 
@@ -448,9 +439,8 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addNotificationChannel(String channel) {
-            if (channel != null) {
-                notificationChannels.add(channel);
-            }
+            Objects.requireNonNull(channel, "channel cannot be null");
+            notificationChannels.add(channel);
             return this;
         }
 
@@ -462,12 +452,10 @@ public class ObservabilityContext extends AgentContext {
         }
 
         public Builder addHealthEndpoint(String endpoint, String status) {
-            if (endpoint != null) {
-                healthEndpoints.add(endpoint);
-                if (status != null) {
-                    healthStatuses.put(endpoint, status);
-                }
-            }
+            Objects.requireNonNull(endpoint, "endpoint cannot be null");
+            Objects.requireNonNull(status, "status cannot be null");
+            healthEndpoints.add(endpoint);
+            healthStatuses.put(endpoint, status);
             return this;
         }
 

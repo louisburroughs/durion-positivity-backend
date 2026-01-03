@@ -1,9 +1,9 @@
 package com.pos.agent.context;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -98,75 +98,77 @@ public class OperationsContext extends AgentContext {
 
     // Mutators
     public void addReadinessCheck(String check, String status) {
-        if (check != null) {
-            this.readinessChecks.add(check);
-            if (status != null) {
-                this.checkStatuses.put(check, status);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(check, "check cannot be null");
+        Objects.requireNonNull(status, "status cannot be null");
+        this.readinessChecks.add(check);
+        this.checkStatuses.put(check, status);
+        updateTimestamp();
     }
 
     public void addHealthCheck(String check, String status) {
-        if (check != null) {
-            this.healthChecks.add(check);
-            if (status != null) {
-                this.healthStatuses.put(check, status);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(check, "check cannot be null");
+        Objects.requireNonNull(status, "status cannot be null");
+        this.healthChecks.add(check);
+        this.healthStatuses.put(check, status);
+        updateTimestamp();
     }
 
     public void addMonitoringTool(String tool) {
-        if (tool != null && this.monitoringTools.add(tool)) {
+        Objects.requireNonNull(tool, "tool cannot be null");
+        if (this.monitoringTools.add(tool)) {
             updateTimestamp();
         }
     }
 
     public void addMetric(String name, Object value) {
-        if (name != null && value != null) {
-            this.metrics.put(name, value);
-            updateTimestamp();
-        }
+        Objects.requireNonNull(name, "name cannot be null");
+        Objects.requireNonNull(value, "value cannot be null");
+        this.metrics.put(name, value);
+        updateTimestamp();
     }
 
     public void addAlertRule(String rule) {
-        if (rule != null && this.alertRules.add(rule)) {
+        Objects.requireNonNull(rule, "rule cannot be null");
+        if (this.alertRules.add(rule)) {
             updateTimestamp();
         }
     }
 
     public void addDashboard(String dashboard) {
-        if (dashboard != null && this.dashboards.add(dashboard)) {
+        Objects.requireNonNull(dashboard, "dashboard cannot be null");
+        if (this.dashboards.add(dashboard)) {
             updateTimestamp();
         }
     }
 
     public void addDeploymentTarget(String target, String configuration) {
-        if (target != null) {
-            this.deploymentTargets.add(target);
-            if (configuration != null) {
-                this.deploymentConfigurations.put(target, configuration);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(target, "target cannot be null");
+        Objects.requireNonNull(configuration, "configuration cannot be null");
+        this.deploymentTargets.add(target);
+        this.deploymentConfigurations.put(target, configuration);
+        updateTimestamp();
     }
 
     public void addEnvironment(String environment) {
-        if (environment != null && this.environments.add(environment)) {
+        Objects.requireNonNull(environment, "environment cannot be null");
+        if (this.environments.add(environment)) {
             updateTimestamp();
         }
     }
 
     public void updateCheckStatus(String check, String status) {
-        if (check != null && status != null && this.readinessChecks.contains(check)) {
+        Objects.requireNonNull(check, "check cannot be null");
+        Objects.requireNonNull(status, "status cannot be null");
+        if (this.readinessChecks.contains(check)) {
             this.checkStatuses.put(check, status);
             updateTimestamp();
         }
     }
 
     public void updateHealthStatus(String check, String status) {
-        if (check != null && status != null && this.healthChecks.contains(check)) {
+        Objects.requireNonNull(check, "check cannot be null");
+        Objects.requireNonNull(status, "status cannot be null");
+        if (this.healthChecks.contains(check)) {
             this.healthStatuses.put(check, status);
             updateTimestamp();
         }
@@ -226,12 +228,10 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addReadinessCheck(String check, String status) {
-            if (check != null) {
-                readinessChecks.add(check);
-                if (status != null) {
-                    checkStatuses.put(check, status);
-                }
-            }
+            Objects.requireNonNull(check, "check cannot be null");
+            Objects.requireNonNull(status, "status cannot be null");
+            readinessChecks.add(check);
+            checkStatuses.put(check, status);
             return this;
         }
 
@@ -250,12 +250,10 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addHealthCheck(String check, String status) {
-            if (check != null) {
-                healthChecks.add(check);
-                if (status != null) {
-                    healthStatuses.put(check, status);
-                }
-            }
+            Objects.requireNonNull(check, "check cannot be null");
+            Objects.requireNonNull(status, "status cannot be null");
+            healthChecks.add(check);
+            healthStatuses.put(check, status);
             return this;
         }
 
@@ -274,9 +272,8 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addMonitoringTool(String tool) {
-            if (tool != null) {
-                monitoringTools.add(tool);
-            }
+            Objects.requireNonNull(tool, "tool cannot be null");
+            monitoringTools.add(tool);
             return this;
         }
 
@@ -288,9 +285,9 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addMetric(String name, Object value) {
-            if (name != null && value != null) {
-                metrics.put(name, value);
-            }
+            Objects.requireNonNull(name, "name cannot be null");
+            Objects.requireNonNull(value, "value cannot be null");
+            metrics.put(name, value);
             return this;
         }
 
@@ -302,9 +299,8 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addAlertRule(String rule) {
-            if (rule != null) {
-                alertRules.add(rule);
-            }
+            Objects.requireNonNull(rule, "rule cannot be null");
+            alertRules.add(rule);
             return this;
         }
 
@@ -316,9 +312,8 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addDashboard(String dashboard) {
-            if (dashboard != null) {
-                dashboards.add(dashboard);
-            }
+            Objects.requireNonNull(dashboard, "dashboard cannot be null");
+            dashboards.add(dashboard);
             return this;
         }
 
@@ -330,12 +325,10 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addDeploymentTarget(String target, String configuration) {
-            if (target != null) {
-                deploymentTargets.add(target);
-                if (configuration != null) {
-                    deploymentConfigurations.put(target, configuration);
-                }
-            }
+            Objects.requireNonNull(target, "target cannot be null");
+            Objects.requireNonNull(configuration, "configuration cannot be null");
+            deploymentTargets.add(target);
+            deploymentConfigurations.put(target, configuration);
             return this;
         }
 
@@ -354,9 +347,8 @@ public class OperationsContext extends AgentContext {
         }
 
         public Builder addEnvironment(String environment) {
-            if (environment != null) {
-                environments.add(environment);
-            }
+            Objects.requireNonNull(environment, "environment cannot be null");
+            environments.add(environment);
             return this;
         }
 

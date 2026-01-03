@@ -2,9 +2,7 @@ package com.pos.agent.core;
 
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.context.CICDContext;
-import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.context.EventDrivenContext;
-import com.pos.agent.context.ResilienceContext;
 import com.pos.agent.discovery.AgentDiscovery;
 import com.pos.agent.discovery.CapabilityBasedDiscoveryStrategy;
 import com.pos.agent.discovery.CompositeAgentDiscovery;
@@ -57,7 +55,8 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
 
     /**
      * Creates an AgentManager with default collaborators.
-     * Uses SecurityValidation singleton, CompositeAgentDiscovery, and ArchitectureAgent fallback.
+     * Uses SecurityValidation singleton, CompositeAgentDiscovery, and
+     * ArchitectureAgent fallback.
      */
     public AgentManager() {
         this(new AuditTrailManager(), new ServiceAgentMapping());
@@ -65,7 +64,8 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
 
     /**
      * Creates an AgentManager with custom audit manager.
-     * Uses default service mapping, SecurityValidation singleton, CompositeAgentDiscovery, and ArchitectureAgent fallback.
+     * Uses default service mapping, SecurityValidation singleton,
+     * CompositeAgentDiscovery, and ArchitectureAgent fallback.
      */
     public AgentManager(AuditTrailManager auditTrailManager) {
         this(auditTrailManager, new ServiceAgentMapping());
@@ -73,28 +73,33 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
 
     /**
      * Creates an AgentManager with custom audit manager and service mapping.
-     * Uses SecurityValidation singleton, CompositeAgentDiscovery, and ArchitectureAgent fallback.
+     * Uses SecurityValidation singleton, CompositeAgentDiscovery, and
+     * ArchitectureAgent fallback.
      */
     public AgentManager(AuditTrailManager auditTrailManager, ServiceAgentMapping serviceMapping) {
-        this(auditTrailManager, serviceMapping, new DefaultSecurityValidator(), 
-             createDefaultDiscovery(serviceMapping), ArchitectureAgent::new);
+        this(auditTrailManager, serviceMapping, new DefaultSecurityValidator(),
+                createDefaultDiscovery(serviceMapping), ArchitectureAgent::new);
     }
 
     /**
      * Full constructor accepting all collaborators for dependency injection.
-     * Allows complete control over security validation, discovery, and fallback behavior.
+     * Allows complete control over security validation, discovery, and fallback
+     * behavior.
      * 
-     * @param auditTrailManager the audit manager for tracking request processing
-     * @param serviceMapping the service-to-agent mapping configuration
-     * @param securityValidator the security validator for authentication/authorization
-     * @param agentDiscovery the discovery strategy for routing requests
-     * @param fallbackAgentSupplier supplier for the fallback agent when discovery times out
+     * @param auditTrailManager     the audit manager for tracking request
+     *                              processing
+     * @param serviceMapping        the service-to-agent mapping configuration
+     * @param securityValidator     the security validator for
+     *                              authentication/authorization
+     * @param agentDiscovery        the discovery strategy for routing requests
+     * @param fallbackAgentSupplier supplier for the fallback agent when discovery
+     *                              times out
      */
-    public AgentManager(AuditTrailManager auditTrailManager, 
-                       ServiceAgentMapping serviceMapping,
-                       SecurityValidator securityValidator,
-                       AgentDiscovery agentDiscovery,
-                       Supplier<Agent> fallbackAgentSupplier) {
+    public AgentManager(AuditTrailManager auditTrailManager,
+            ServiceAgentMapping serviceMapping,
+            SecurityValidator securityValidator,
+            AgentDiscovery agentDiscovery,
+            Supplier<Agent> fallbackAgentSupplier) {
         this.auditTrailManager = auditTrailManager;
         this.registeredAgents = new ArrayList<>();
         this.agentDiscovery = agentDiscovery;
@@ -449,9 +454,10 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
             enhancedGuidance.append("- Message Brokers: ").append(eventCtx.getMessageBrokers()).append("\n");
             enhancedGuidance.append("- Event Handlers: ").append(eventCtx.getEventHandlers()).append("\n");
             enhancedGuidance.append("- Event Schemas: ").append(eventCtx.getEventSchemas()).append("\n\n");
-
-            enhancedRecommendations.add("Consider event schema versioning for " + eventCtx.getMessageBrokers());
-            enhancedRecommendations.add("Ensure idempotent event handlers for reliability");
+            if (eventCtx.getMessageBrokers() != null && !eventCtx.getMessageBrokers().isEmpty()) {
+                enhancedRecommendations.add("Consider event schema versioning for " + eventCtx.getMessageBrokers());
+                enhancedRecommendations.add("Ensure idempotent event handlers for reliability");
+            }
         }
 
         if (agent.getTechnicalDomain().equals(AgentType.EVENT_DRIVEN_ARCHITECTURE)) {
