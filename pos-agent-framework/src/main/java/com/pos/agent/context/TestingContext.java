@@ -1,10 +1,10 @@
 package com.pos.agent.context;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
 
 /**
  * Context model for testing scenarios.
@@ -12,8 +12,19 @@ import java.util.Set;
  */
 public class TestingContext extends AgentContext {
 
+    /**
+     * Status values for a test suite.
+     */
+    public enum TestSuiteStatus {
+        PASSED,
+        FAILED,
+        IN_PROGRESS,
+        NOT_STARTED,
+        SUCCESS
+    }
+
     private final Set<String> testSuites;
-    private final Map<String, String> suiteStatuses;
+    private final Map<String, TestSuiteStatus> suiteStatuses;
     private final Set<String> frameworks;
     private final Set<String> environments;
     private final Map<String, Double> coverageMetrics;
@@ -37,7 +48,7 @@ public class TestingContext extends AgentContext {
         return new LinkedHashSet<>(testSuites);
     }
 
-    public Map<String, String> getSuiteStatuses() {
+    public Map<String, TestSuiteStatus> getSuiteStatuses() {
         return new HashMap<>(suiteStatuses);
     }
 
@@ -58,43 +69,43 @@ public class TestingContext extends AgentContext {
     }
 
     // Mutators
-    public void addTestSuite(String suite, String status) {
-        if (suite != null) {
-            this.testSuites.add(suite);
-            if (status != null) {
-                this.suiteStatuses.put(suite, status);
-            }
-            updateTimestamp();
-        }
+    public void addTestSuite(String suite, TestSuiteStatus status) {
+        Objects.requireNonNull(suite, "suite must not be null");
+        Objects.requireNonNull(status, "status must not be null");
+        this.testSuites.add(suite);
+        this.suiteStatuses.put(suite, status);
+        updateTimestamp();
     }
 
     public void addFramework(String framework) {
-        if (framework != null && this.frameworks.add(framework)) {
-            updateTimestamp();
-        }
+        Objects.requireNonNull(framework, "framework must not be null");
+        this.frameworks.add(framework);
+        updateTimestamp();
     }
 
     public void addEnvironment(String environment) {
-        if (environment != null && this.environments.add(environment)) {
-            updateTimestamp();
-        }
+        Objects.requireNonNull(environment, "environment must not be null");
+        this.environments.add(environment);
+        updateTimestamp();
     }
 
     public void addCoverageMetric(String metric, Double value) {
-        if (metric != null && value != null) {
-            this.coverageMetrics.put(metric, value);
-            updateTimestamp();
-        }
+        Objects.requireNonNull(metric, "metric must not be null");
+        Objects.requireNonNull(value, "value must not be null");
+        this.coverageMetrics.put(metric, value);
+        updateTimestamp();
     }
 
     public void addDefect(String defectId) {
-        if (defectId != null && this.defects.add(defectId)) {
-            updateTimestamp();
-        }
+        Objects.requireNonNull(defectId, "defectId must not be null");
+        this.defects.add(defectId);
+        updateTimestamp();
     }
 
-    public void updateSuiteStatus(String suite, String status) {
-        if (suite != null && status != null && this.testSuites.contains(suite)) {
+    public void updateSuiteStatus(String suite, TestSuiteStatus status) {
+        Objects.requireNonNull(suite, "suite must not be null");
+        Objects.requireNonNull(status, "status must not be null");
+        if (this.testSuites.contains(suite)) {
             this.suiteStatuses.put(suite, status);
             updateTimestamp();
         }
@@ -107,8 +118,8 @@ public class TestingContext extends AgentContext {
 
     public boolean isPassing() {
         return !testSuites.isEmpty() && testSuites.stream().allMatch(suite -> {
-            String status = suiteStatuses.get(suite);
-            return "PASSED".equalsIgnoreCase(status) || "SUCCESS".equalsIgnoreCase(status);
+            TestSuiteStatus status = suiteStatuses.get(suite);
+            return TestSuiteStatus.PASSED == status || TestSuiteStatus.SUCCESS == status;
         });
     }
 
@@ -125,7 +136,7 @@ public class TestingContext extends AgentContext {
 
     public static class Builder extends AgentContext.Builder<Builder> {
         private Set<String> testSuites = new LinkedHashSet<>();
-        private Map<String, String> suiteStatuses = new HashMap<>();
+        private Map<String, TestSuiteStatus> suiteStatuses = new HashMap<>();
         private Set<String> frameworks = new LinkedHashSet<>();
         private Set<String> environments = new LinkedHashSet<>();
         private Map<String, Double> coverageMetrics = new HashMap<>();
@@ -136,13 +147,11 @@ public class TestingContext extends AgentContext {
             contextType("testing-context");
         }
 
-        public Builder addTestSuite(String suite, String status) {
-            if (suite != null) {
-                testSuites.add(suite);
-                if (status != null) {
-                    suiteStatuses.put(suite, status);
-                }
-            }
+        public Builder addTestSuite(String suite, TestSuiteStatus status) {
+            Objects.requireNonNull(suite, "suite must not be null");
+            Objects.requireNonNull(status, "status must not be null");
+            testSuites.add(suite);
+            suiteStatuses.put(suite, status);
             return this;
         }
 
@@ -153,7 +162,7 @@ public class TestingContext extends AgentContext {
             return this;
         }
 
-        public Builder suiteStatuses(Map<String, String> statuses) {
+        public Builder suiteStatuses(Map<String, TestSuiteStatus> statuses) {
             if (statuses != null) {
                 this.suiteStatuses.putAll(statuses);
             }
@@ -161,9 +170,8 @@ public class TestingContext extends AgentContext {
         }
 
         public Builder addFramework(String framework) {
-            if (framework != null) {
-                frameworks.add(framework);
-            }
+            Objects.requireNonNull(framework, "framework must not be null");
+            frameworks.add(framework);
             return this;
         }
 
@@ -175,9 +183,8 @@ public class TestingContext extends AgentContext {
         }
 
         public Builder addEnvironment(String environment) {
-            if (environment != null) {
-                environments.add(environment);
-            }
+            Objects.requireNonNull(environment, "environment must not be null");
+            environments.add(environment);
             return this;
         }
 
@@ -189,9 +196,9 @@ public class TestingContext extends AgentContext {
         }
 
         public Builder addCoverageMetric(String metric, Double value) {
-            if (metric != null && value != null) {
-                coverageMetrics.put(metric, value);
-            }
+            Objects.requireNonNull(metric, "metric must not be null");
+            Objects.requireNonNull(value, "value must not be null");
+            coverageMetrics.put(metric, value);
             return this;
         }
 
@@ -203,9 +210,8 @@ public class TestingContext extends AgentContext {
         }
 
         public Builder addDefect(String defectId) {
-            if (defectId != null) {
-                defects.add(defectId);
-            }
+            Objects.requireNonNull(defectId, "defectId must not be null");
+            defects.add(defectId);
             return this;
         }
 

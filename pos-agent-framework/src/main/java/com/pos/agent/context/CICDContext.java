@@ -1,6 +1,5 @@
 package com.pos.agent.context;
 
-import java.time.Instant;
 import java.util.*;
 
 /**
@@ -175,7 +174,7 @@ public class CICDContext extends AgentContext {
     }
 
     public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
+        this.serviceName = Objects.requireNonNull(serviceName, "Service name cannot be null");
         updateTimestamp();
     }
 
@@ -184,7 +183,7 @@ public class CICDContext extends AgentContext {
     }
 
     public void setDeploymentTarget(String deploymentTarget) {
-        this.deploymentTarget = deploymentTarget;
+        this.deploymentTarget = Objects.requireNonNull(deploymentTarget, "Deployment target cannot be null");
         updateTimestamp();
     }
 
@@ -193,7 +192,7 @@ public class CICDContext extends AgentContext {
     }
 
     public void setDeploymentStrategy(String deploymentStrategy) {
-        this.deploymentStrategy = deploymentStrategy;
+        this.deploymentStrategy = Objects.requireNonNull(deploymentStrategy, "Deployment strategy cannot be null");
         updateTimestamp();
     }
 
@@ -202,7 +201,7 @@ public class CICDContext extends AgentContext {
     }
 
     public void setPackagingTool(String packagingTool) {
-        this.packagingTool = packagingTool;
+        this.packagingTool = Objects.requireNonNull(packagingTool, "Packaging tool cannot be null");
         updateTimestamp();
     }
 
@@ -211,7 +210,7 @@ public class CICDContext extends AgentContext {
     }
 
     public void setEnvironment(String environment) {
-        this.environment = environment;
+        this.environment = Objects.requireNonNull(environment, "Environment cannot be null");
         updateTimestamp();
     }
 

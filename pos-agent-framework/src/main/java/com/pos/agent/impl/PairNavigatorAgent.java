@@ -1,7 +1,6 @@
 package com.pos.agent.impl;
 
 import com.pos.agent.context.AgentContext;
-import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.ImplementationContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;

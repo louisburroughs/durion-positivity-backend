@@ -2,6 +2,7 @@ package com.pos.agent.context;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 import java.util.HashMap;
 
 /**
@@ -22,8 +23,9 @@ public abstract class AgentContext {
     private final Map<String, Object> properties;
 
     protected AgentContext(Builder<?> builder) {
-        this.contextId = builder.contextId != null ? builder.contextId : "context-" + System.currentTimeMillis();
-        this.sessionId = builder.sessionId != null ? builder.sessionId : "session-" + System.currentTimeMillis();
+        UUID uuid = UUID.randomUUID();
+        this.contextId = builder.contextId != null ? builder.contextId : "context-" + System.currentTimeMillis() + "-" + uuid.toString();
+        this.sessionId = builder.sessionId != null ? builder.sessionId : "session-" + System.currentTimeMillis() + "-" + uuid.toString();
         this.createdAt = builder.createdAt != null ? builder.createdAt : Instant.now();
         this.lastUpdated = builder.lastUpdated != null ? builder.lastUpdated : this.createdAt;
         this.contextType = builder.contextType;

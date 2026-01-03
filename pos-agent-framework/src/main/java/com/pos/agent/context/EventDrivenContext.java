@@ -1,9 +1,9 @@
 package com.pos.agent.context;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -133,103 +133,112 @@ public class EventDrivenContext extends AgentContext {
 
     // Mutators
     public void addMessageBroker(String broker, Map<String, Object> config) {
-        if (broker != null && this.messageBrokers.add(broker)) {
-            if (config != null) {
-                this.brokerConfigurations.put(broker, new HashMap<>(config));
-            }
+        Objects.requireNonNull(broker, "Message broker cannot be null");
+        Objects.requireNonNull(config, "Broker configuration cannot be null");
+        if (this.messageBrokers.add(broker)) {
+            this.brokerConfigurations.put(broker, new HashMap<>(config));
             updateTimestamp();
         }
     }
 
     public void addDeadLetterQueue(String queueName, String config) {
-        if (queueName != null) {
-            this.deadLetterQueues.add(queueName);
-            this.dlqConfigurations.put(queueName, config);
-            updateTimestamp();
-        }
+        Objects.requireNonNull(queueName, "Queue name cannot be null");
+        Objects.requireNonNull(config, "DLQ configuration cannot be null");
+        this.deadLetterQueues.add(queueName);
+        this.dlqConfigurations.put(queueName, config);
+        updateTimestamp();
     }
 
     public void addEventHandler(String handler, String idempotencyPattern) {
-        if (handler != null) {
-            this.eventHandlers.add(handler);
-            if (idempotencyPattern != null) {
-                this.idempotencyPatterns.add(idempotencyPattern);
-            }
-            updateTimestamp();
-        }
+        Objects.requireNonNull(handler, "Event handler cannot be null");
+        Objects.requireNonNull(idempotencyPattern, "Idempotency pattern cannot be null");
+        this.eventHandlers.add(handler);
+        this.idempotencyPatterns.add(idempotencyPattern);
+        updateTimestamp();
     }
 
     public void addEventStore(String store) {
-        if (store != null && this.eventStores.add(store)) {
+        Objects.requireNonNull(store, "Event store cannot be null");
+        if (this.eventStores.add(store)) {
             updateTimestamp();
         }
     }
 
     public void addEventSchema(String schemaName, String version) {
-        if (schemaName != null && version != null) {
-            this.eventSchemas.put(schemaName, version);
-            updateTimestamp();
-        }
+        Objects.requireNonNull(schemaName, "Schema name cannot be null");
+        Objects.requireNonNull(version, "Schema version cannot be null");
+        this.eventSchemas.put(schemaName, version);
+        updateTimestamp();
     }
 
     public void addSaga(String saga) {
-        if (saga != null && this.sagas.add(saga)) {
+        Objects.requireNonNull(saga, "Saga cannot be null");
+        if (this.sagas.add(saga)) {
             updateTimestamp();
         }
     }
 
     public void updateSchemaVersion(String schemaName, String newVersion) {
-        if (schemaName != null && newVersion != null && this.eventSchemas.containsKey(schemaName)) {
+        Objects.requireNonNull(schemaName, "Schema name cannot be null");
+        Objects.requireNonNull(newVersion, "Schema version cannot be null");
+        if (this.eventSchemas.containsKey(schemaName)) {
             this.eventSchemas.put(schemaName, newVersion);
             updateTimestamp();
         }
     }
 
     public void addEventSource(String source) {
-        if (source != null && this.eventSources.add(source)) {
+        Objects.requireNonNull(source, "Event source cannot be null");
+        if (this.eventSources.add(source)) {
             updateTimestamp();
         }
     }
 
     public void addEventConsumer(String consumer) {
-        if (consumer != null && this.eventConsumers.add(consumer)) {
+        Objects.requireNonNull(consumer, "Event consumer cannot be null");
+        if (this.eventConsumers.add(consumer)) {
             updateTimestamp();
         }
     }
 
     public void addErrorHandlingStrategy(String strategy) {
-        if (strategy != null && this.errorHandlingStrategies.add(strategy)) {
+        Objects.requireNonNull(strategy, "Error handling strategy cannot be null");
+        if (this.errorHandlingStrategies.add(strategy)) {
             updateTimestamp();
         }
     }
 
     public void addProjection(String projection) {
-        if (projection != null && this.projections.add(projection)) {
+        Objects.requireNonNull(projection, "Projection cannot be null");
+        if (this.projections.add(projection)) {
             updateTimestamp();
         }
     }
 
     public void addIdempotencyPattern(String pattern) {
-        if (pattern != null && this.idempotencyPatterns.add(pattern)) {
+        Objects.requireNonNull(pattern, "Idempotency pattern cannot be null");
+        if (this.idempotencyPatterns.add(pattern)) {
             updateTimestamp();
         }
     }
 
     public void addHandlerType(String handler, String type) {
-        if (handler != null && type != null) {
-            this.handlerTypes.put(handler, type);
-            updateTimestamp();
-        }
+        Objects.requireNonNull(handler, "Handler cannot be null");
+        Objects.requireNonNull(type, "Handler type cannot be null");
+        this.handlerTypes.put(handler, type);
+        updateTimestamp();
     }
 
     public void addOrchestration(String pattern) {
-        if (pattern != null && this.orchestration.add(pattern)) {
+        Objects.requireNonNull(pattern, "Orchestration pattern cannot be null");
+        if (this.orchestration.add(pattern)) {
             updateTimestamp();
         }
     }
 
     public void addChoreography(String pattern) {
-        if (pattern != null && this.choreography.add(pattern)) {
+        Objects.requireNonNull(pattern, "Choreography pattern cannot be null");
+        if (this.choreography.add(pattern)) {
             updateTimestamp();
         }
     }
@@ -289,198 +298,178 @@ public class EventDrivenContext extends AgentContext {
         }
 
         public Builder addMessageBroker(String broker, Map<String, Object> config) {
-            if (broker != null) {
-                messageBrokers.add(broker);
-                if (config != null) {
-                    brokerConfigurations.put(broker, new HashMap<>(config));
-                }
-            }
+            Objects.requireNonNull(broker, "Message broker cannot be null");
+            Objects.requireNonNull(config, "Broker configuration cannot be null");
+            messageBrokers.add(broker);
+            brokerConfigurations.put(broker, new HashMap<>(config));
             return this;
         }
 
         public Builder messageBrokers(Set<String> brokers) {
-            if (brokers != null) {
-                messageBrokers.addAll(brokers);
-            }
+            Objects.requireNonNull(brokers, "Message brokers cannot be null");
+            messageBrokers.addAll(brokers);
             return this;
         }
 
         public Builder brokerConfigurations(Map<String, Map<String, Object>> configs) {
-            if (configs != null) {
-                configs.forEach((k, v) -> brokerConfigurations.put(k, v != null ? new HashMap<>(v) : new HashMap<>()));
-            }
+            Objects.requireNonNull(configs, "Broker configurations cannot be null");
+            configs.forEach((k, v) -> brokerConfigurations.put(k, v != null ? new HashMap<>(v) : new HashMap<>()));
             return this;
         }
 
         public Builder addDeadLetterQueue(String queueName, String config) {
-            if (queueName != null) {
-                deadLetterQueues.add(queueName);
-                dlqConfigurations.put(queueName, config);
-            }
+            Objects.requireNonNull(queueName, "Queue name cannot be null");
+            Objects.requireNonNull(config, "DLQ configuration cannot be null");
+            deadLetterQueues.add(queueName);
+            dlqConfigurations.put(queueName, config);
             return this;
         }
 
         public Builder deadLetterQueues(Set<String> queues) {
-            if (queues != null) {
-                deadLetterQueues.addAll(queues);
-            }
+            Objects.requireNonNull(queues, "Dead letter queues cannot be null");
+            deadLetterQueues.addAll(queues);
             return this;
         }
 
         public Builder dlqConfigurations(Map<String, String> configs) {
-            if (configs != null) {
-                dlqConfigurations.putAll(configs);
-            }
+            Objects.requireNonNull(configs, "DLQ configurations cannot be null");
+            dlqConfigurations.putAll(configs);
             return this;
         }
 
         public Builder addEventHandler(String handler, String idempotencyPattern) {
-            if (handler != null) {
-                eventHandlers.add(handler);
-                if (idempotencyPattern != null) {
-                    idempotencyPatterns.add(idempotencyPattern);
-                }
-            }
+            Objects.requireNonNull(handler, "Event handler cannot be null");
+            Objects.requireNonNull(idempotencyPattern, "Idempotency pattern cannot be null");
+            eventHandlers.add(handler);
+            idempotencyPatterns.add(idempotencyPattern);
             return this;
         }
 
         public Builder eventHandlers(Set<String> handlers) {
-            if (handlers != null) {
-                eventHandlers.addAll(handlers);
-            }
+            Objects.requireNonNull(handlers, "Event handlers cannot be null");
+            eventHandlers.addAll(handlers);
             return this;
         }
 
         public Builder handlerTypes(Map<String, String> types) {
-            if (types != null) {
-                handlerTypes.putAll(types);
-            }
+            Objects.requireNonNull(types, "Handler types cannot be null");
+            handlerTypes.putAll(types);
+            return this;
+        }
+
+        public Builder addHandlerType(String handler, String event) {
+            Objects.requireNonNull(handler, "Handler cannot be null");
+            Objects.requireNonNull(event, "Handler type cannot be null");
+            handlerTypes.put(handler, event);
             return this;
         }
 
         public Builder addEventStore(String store) {
-            if (store != null) {
-                eventStores.add(store);
-            }
+            Objects.requireNonNull(store, "Event store cannot be null");
+            eventStores.add(store);
             return this;
         }
 
         public Builder eventStores(Set<String> stores) {
-            if (stores != null) {
-                eventStores.addAll(stores);
-            }
+            Objects.requireNonNull(stores, "Event stores cannot be null");
+            eventStores.addAll(stores);
             return this;
         }
 
         public Builder addEventSchema(String name, String version) {
-            if (name != null && version != null) {
-                eventSchemas.put(name, version);
-            }
+            Objects.requireNonNull(name, "Schema name cannot be null");
+            Objects.requireNonNull(version, "Schema version cannot be null");
+            eventSchemas.put(name, version);
             return this;
         }
 
         public Builder eventSchemas(Map<String, String> schemas) {
-            if (schemas != null) {
-                eventSchemas.putAll(schemas);
-            }
+            Objects.requireNonNull(schemas, "Event schemas cannot be null");
+            eventSchemas.putAll(schemas);
             return this;
         }
 
         public Builder addEventSource(String source) {
-            if (source != null) {
-                eventSources.add(source);
-            }
+            Objects.requireNonNull(source, "Event source cannot be null");
+            eventSources.add(source);
             return this;
         }
 
         public Builder eventSources(Set<String> sources) {
-            if (sources != null) {
-                eventSources.addAll(sources);
-            }
+            Objects.requireNonNull(sources, "Event sources cannot be null");
+            eventSources.addAll(sources);
             return this;
         }
 
         public Builder addEventConsumer(String consumer) {
-            if (consumer != null) {
-                eventConsumers.add(consumer);
-            }
+            Objects.requireNonNull(consumer, "Event consumer cannot be null");
+            eventConsumers.add(consumer);
             return this;
         }
 
         public Builder eventConsumers(Set<String> consumers) {
-            if (consumers != null) {
-                eventConsumers.addAll(consumers);
-            }
+            Objects.requireNonNull(consumers, "Event consumers cannot be null");
+            eventConsumers.addAll(consumers);
             return this;
         }
 
         public Builder addErrorHandlingStrategy(String strategy) {
-            if (strategy != null) {
-                errorHandlingStrategies.add(strategy);
-            }
+            Objects.requireNonNull(strategy, "Error handling strategy cannot be null");
+            errorHandlingStrategies.add(strategy);
             return this;
         }
 
         public Builder errorHandlingStrategies(Set<String> strategies) {
-            if (strategies != null) {
-                errorHandlingStrategies.addAll(strategies);
-            }
+            Objects.requireNonNull(strategies, "Error handling strategies cannot be null");
+            errorHandlingStrategies.addAll(strategies);
             return this;
         }
 
         public Builder addProjections(Set<String> projections) {
-            if (projections != null) {
-                this.projections.addAll(projections);
-            }
+            Objects.requireNonNull(projections, "Projections cannot be null");
+            this.projections.addAll(projections);
             return this;
         }
 
         public Builder addProjection(String projection) {
-            if (projection != null) {
-                this.projections.add(projection);
-            }
+            Objects.requireNonNull(projection, "Projection cannot be null");
+            this.projections.add(projection);
             return this;
         }
 
         public Builder addSaga(String saga) {
-            if (saga != null) {
-                sagas.add(saga);
-            }
+            Objects.requireNonNull(saga, "Saga cannot be null");
+            sagas.add(saga);
             return this;
         }
 
         public Builder sagas(Set<String> sagas) {
-            if (sagas != null) {
-                this.sagas.addAll(sagas);
-            }
+            Objects.requireNonNull(sagas, "Sagas cannot be null");
+            this.sagas.addAll(sagas);
             return this;
         }
 
         public Builder choreography(Set<String> choreography) {
-            if (choreography != null) {
-                this.choreography.addAll(choreography);
-            }
+            Objects.requireNonNull(choreography, "Choreography cannot be null");
+            this.choreography.addAll(choreography);
             return this;
         }
 
         public Builder addChoreography(String pattern) {
-            if (pattern != null) {
-                this.choreography.add(pattern);
-            }
+            Objects.requireNonNull(pattern, "Choreography pattern cannot be null");
+            this.choreography.add(pattern);
             return this;
         }
 
         public Builder orchestration(Set<String> orchestration) {
-            if (orchestration != null) {
-                this.orchestration.addAll(orchestration);
-            }
+            Objects.requireNonNull(orchestration, "Orchestration cannot be null");
+            this.orchestration.addAll(orchestration);
             return this;
         }
 
         public Builder addOrchestration(String pattern) {
-            if (pattern != null) {
-                this.orchestration.add(pattern);
-            }
+            Objects.requireNonNull(pattern, "Orchestration pattern cannot be null");
+            this.orchestration.add(pattern);
             return this;
         }
 

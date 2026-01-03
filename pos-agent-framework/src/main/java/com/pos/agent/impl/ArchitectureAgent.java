@@ -103,7 +103,7 @@ public class ArchitectureAgent extends AbstractAgent {
                 .confidence(analysis.getConfidence())
                 .success(true)
                 .recommendations(analysis.getRecommendations())
-                .context(agentContext)
+                .agentContext(agentContext)
                 .build();
     }
 

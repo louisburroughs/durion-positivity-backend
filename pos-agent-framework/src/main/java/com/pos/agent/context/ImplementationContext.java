@@ -3,6 +3,7 @@ package com.pos.agent.context;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -177,12 +178,10 @@ public class ImplementationContext extends AgentContext {
         }
 
         public Builder addComponent(String component, String status) {
-            if (component != null) {
-                components.add(component);
-                if (status != null) {
-                    componentStatuses.put(component, status);
-                }
-            }
+            Objects.requireNonNull(component, "component cannot be null");
+            Objects.requireNonNull(status, "status cannot be null");
+            components.add(component);
+            componentStatuses.put(component, status);
             return this;
         }
 
@@ -201,12 +200,10 @@ public class ImplementationContext extends AgentContext {
         }
 
         public Builder addRepository(String repository, String branch) {
-            if (repository != null) {
-                repositories.add(repository);
-                if (branch != null) {
-                    branches.put(repository, branch);
-                }
-            }
+            Objects.requireNonNull(repository, "repository cannot be null");
+            Objects.requireNonNull(branch, "branch cannot be null");
+            repositories.add(repository);
+            branches.put(repository, branch);
             return this;
         }
 
@@ -225,9 +222,8 @@ public class ImplementationContext extends AgentContext {
         }
 
         public Builder addLanguage(String language) {
-            if (language != null) {
-                languages.add(language);
-            }
+            Objects.requireNonNull(language, "language cannot be null");
+            languages.add(language);
             return this;
         }
 
@@ -239,9 +235,8 @@ public class ImplementationContext extends AgentContext {
         }
 
         public Builder addFramework(String framework) {
-            if (framework != null) {
-                frameworks.add(framework);
-            }
+            Objects.requireNonNull(framework, "framework cannot be null");
+            frameworks.add(framework);
             return this;
         }
 
@@ -253,12 +248,10 @@ public class ImplementationContext extends AgentContext {
         }
 
         public Builder addTask(String task, String status) {
-            if (task != null) {
-                tasks.add(task);
-                if (status != null) {
-                    taskStatuses.put(task, status);
-                }
-            }
+            Objects.requireNonNull(task, "task cannot be null");
+            Objects.requireNonNull(status, "status cannot be null");
+            tasks.add(task);
+            taskStatuses.put(task, status);
             return this;
         }
 
@@ -277,9 +270,9 @@ public class ImplementationContext extends AgentContext {
         }
 
         public Builder addDependency(String dependency, String version) {
-            if (dependency != null && version != null) {
-                dependencies.put(dependency, version);
-            }
+            Objects.requireNonNull(dependency, "dependency cannot be null");
+            Objects.requireNonNull(version, "version cannot be null");
+            dependencies.put(dependency, version);
             return this;
         }
 
@@ -291,9 +284,9 @@ public class ImplementationContext extends AgentContext {
         }
 
         public Builder addBuildTool(String tool, String version) {
-            if (tool != null) {
-                buildTools.put(tool, version);
-            }
+            Objects.requireNonNull(tool, "tool cannot be null");
+            Objects.requireNonNull(version, "version cannot be null");
+            buildTools.put(tool, version);
             return this;
         }
 

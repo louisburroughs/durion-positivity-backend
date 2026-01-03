@@ -85,13 +85,12 @@ public class ConfigurationContext extends AgentContext {
         return new Builder();
     }
 
-    
     public String getServiceName() {
         return serviceName;
     }
 
     public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
+        this.serviceName = Objects.requireNonNull(serviceName, "Service name cannot be null");
         updateTimestamp();
     }
 
@@ -100,7 +99,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void setConfigurationType(String configurationType) {
-        this.configurationType = configurationType;
+        this.configurationType = Objects.requireNonNull(configurationType, "Configuration type cannot be null");
         updateTimestamp();
     }
 
@@ -109,7 +108,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void setPlatform(String platform) {
-        this.platform = platform;
+        this.platform = Objects.requireNonNull(platform, "Platform cannot be null");
         updateTimestamp();
     }
 
@@ -118,7 +117,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void setServiceMesh(String serviceMesh) {
-        this.serviceMesh = serviceMesh;
+        this.serviceMesh = Objects.requireNonNull(serviceMesh, "Service mesh cannot be null");
         updateTimestamp();
     }
 
@@ -135,6 +134,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addConfigSource(String source, Map<String, Object> config) {
+        Objects.requireNonNull(source, "Config source cannot be null");
+        Objects.requireNonNull(config, "Config source configuration cannot be null");
         if (!this.configSources.contains(source)) {
             this.configSources.add(source);
             this.configSourceSettings.put(source, config);
@@ -151,6 +152,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addConfigFormat(String format) {
+        Objects.requireNonNull(format, "Config format cannot be null");
         this.configFormats.add(format);
         updateTimestamp();
     }
@@ -160,6 +162,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addConfigValidation(String key, String validation) {
+        Objects.requireNonNull(key, "Config validation key cannot be null");
+        Objects.requireNonNull(validation, "Config validation value cannot be null");
         this.configValidation.put(key, validation);
         updateTimestamp();
     }
@@ -170,6 +174,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addFeatureFlag(String flag, Map<String, Object> config) {
+        Objects.requireNonNull(flag, "Feature flag cannot be null");
+        Objects.requireNonNull(config, "Feature flag configuration cannot be null");
         if (!this.featureFlags.contains(flag)) {
             this.featureFlags.add(flag);
             this.flagConfigurations.put(flag, config);
@@ -186,6 +192,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addRolloutStrategy(String strategy) {
+        Objects.requireNonNull(strategy, "Rollout strategy cannot be null");
         this.rolloutStrategies.add(strategy);
         updateTimestamp();
     }
@@ -195,6 +202,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addFlagTargeting(String flag, String targeting) {
+        Objects.requireNonNull(flag, "Flag name cannot be null");
+        Objects.requireNonNull(targeting, "Flag targeting cannot be null");
         this.flagTargeting.put(flag, targeting);
         updateTimestamp();
     }
@@ -205,6 +214,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addSecretsManager(String manager, Map<String, Object> config) {
+        Objects.requireNonNull(manager, "Secrets manager cannot be null");
+        Objects.requireNonNull(config, "Secrets manager configuration cannot be null");
         if (!this.secretsManagers.contains(manager)) {
             this.secretsManagers.add(manager);
             this.secretsConfigurations.put(manager, config);
@@ -221,6 +232,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addRotationPolicy(String policy) {
+        Objects.requireNonNull(policy, "Rotation policy cannot be null");
         this.rotationPolicies.add(policy);
         updateTimestamp();
     }
@@ -230,6 +242,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addAccessPolicy(String secret, String policy) {
+        Objects.requireNonNull(secret, "Secret name cannot be null");
+        Objects.requireNonNull(policy, "Access policy cannot be null");
         this.accessPolicies.put(secret, policy);
         updateTimestamp();
     }
@@ -240,6 +254,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addEnvironment(String environment, Map<String, Object> config) {
+        Objects.requireNonNull(environment, "Environment cannot be null");
+        Objects.requireNonNull(config, "Environment configuration cannot be null");
         if (!this.environments.contains(environment)) {
             this.environments.add(environment);
             this.environmentConfigs.put(environment, config);
@@ -256,6 +272,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addConfigProfile(String profile) {
+        Objects.requireNonNull(profile, "Config profile cannot be null");
         this.configProfiles.add(profile);
         updateTimestamp();
     }
@@ -265,6 +282,8 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addProfileMapping(String profile, String environment) {
+        Objects.requireNonNull(profile, "Profile cannot be null");
+        Objects.requireNonNull(environment, "Environment cannot be null");
         this.profileMappings.put(profile, environment);
         updateTimestamp();
     }
@@ -275,6 +294,7 @@ public class ConfigurationContext extends AgentContext {
     }
 
     public void addValidationRule(String rule) {
+        Objects.requireNonNull(rule, "Validation rule cannot be null");
         this.validationRules.add(rule);
         updateTimestamp();
     }
