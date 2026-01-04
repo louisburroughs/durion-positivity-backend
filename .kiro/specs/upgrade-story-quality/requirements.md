@@ -186,3 +186,15 @@ The Story Strengthening Agent (SSA) is a workspace agent that transforms existin
 2. WHEN the agent completes successfully THEN a tester SHALL be able to derive tests directly from the output
 3. WHEN the agent completes successfully THEN an auditor SHALL be able to trace changes to original text
 4. WHEN the agent completes successfully THEN all uncertainties SHALL be explicitly surfaced in open questions
+
+### Requirement 14
+
+**User Story:** As a system integrator, I want the Story Strengthening Agent to integrate with the POS Agent Framework, so that it can be invoked through the standard agent request/response protocol.
+
+#### Acceptance Criteria
+
+1. WHEN an AgentRequest is received with domain "story" THEN the system SHALL route it to the StoryStrengtheningAgent
+2. WHEN the agent processes a request THEN the system SHALL validate the SecurityContext
+3. WHEN the agent completes processing THEN the system SHALL return an AgentResponse with success status and output
+4. WHEN the agent encounters an error THEN the system SHALL return an AgentResponse with failure status and error message
+5. THE system SHALL record all processing attempts in the audit trail

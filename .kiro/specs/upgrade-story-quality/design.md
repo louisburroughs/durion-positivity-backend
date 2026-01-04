@@ -56,6 +56,46 @@ GitHub Issue → Validation → Parsing → Analysis → Transformation → Outp
    - Append original story verbatim
    - Validate output completeness
 
+## Agent Framework Integration
+
+The Story Strengthening Agent integrates with the POS Agent Framework through the `StoryStrengtheningAgent` class, which extends `AbstractAgent` and is registered with the `AgentManager` for request routing.
+
+### Request Flow
+
+1. **External Request** → `AgentManager.processRequest(AgentRequest)`
+2. **Agent Discovery** → AgentManager routes to `StoryStrengtheningAgent` based on domain
+3. **Security Validation** → SecurityContext validated by framework
+4. **Request Conversion** → `AgentRequest` with `StoryContext` → `GitHubIssue`
+5. **Pipeline Processing** → Story pipeline processes issue through validation → parsing → analysis → transformation → output
+6. **Response Conversion** → `ProcessingResult` → `AgentResponse`
+7. **Response Return** → AgentResponse returned to caller with success/failure status
+
+### Context Usage
+
+The agent uses `StoryContext` (extends `AgentContext`) to provide:
+- Repository URL for GitHub API access
+- Issue ID, title, and body content
+- Module name for context-specific processing
+- Dependencies for requirement analysis
+
+### Security Integration
+
+The agent respects the framework's security model:
+- `SecurityContext` provides user identity, roles, and permissions
+- `SecurityValidator` validates authentication and authorization before processing
+- Audit trail records all processing attempts with user context
+- Stop phrases are logged with security context for traceability
+
+### Integration Point
+
+The `StoryStrengtheningAgent` class (in `com.pos.agent.impl` package):
+- Extends `AbstractAgent` to inherit common agent behaviors
+- Implements `processRequest(AgentRequest)` to handle story strengthening requests
+- Wraps the story processing pipeline components
+- Converts between agent framework types and story pipeline types
+- Handles errors and converts them to appropriate AgentResponse failures
+- Registered with AgentManager using domain identifier "story"
+
 ## Components and Interfaces
 
 ### IssueValidator
@@ -414,7 +454,7 @@ Unit tests will verify individual components in isolation:
 
 ### Property-Based Testing Approach
 
-Property-based tests will verify universal properties across many randomly generated inputs using a PBT library appropriate for the implementation language (e.g., QuickCheck for Haskell, Hypothesis for Python, fast-check for TypeScript, jqwik for Java).
+Property-based tests will verify universal properties across many randomly generated inputs using a PBT library appropriate for the implementation language (e.g., QuickCheck for Haskell, Hypothesis for Python, fast-check for TypeScript, Mockito for Java).
 
 Each property-based test will run a minimum of 100 iterations to ensure thorough coverage of the input space.
 
@@ -554,34 +594,36 @@ This feature should follow the code organization patterns established in the exi
 
 1. **Package Structure**:
    ```
-   com.durion.story/
-   ├── StoryStrengtheningAgent.java        (Main orchestrator, similar to MissingIssuesAuditSystem)
-   ├── validation/
-   │   ├── IssueValidator.java
-   │   └── ValidationResult.java
-   ├── parsing/
-   │   ├── IssueParser.java
-   │   └── ParsedIssue.java
-   ├── analysis/
-   │   ├── RequirementsAnalyzer.java
-   │   └── AnalysisResult.java
-   ├── transformation/
-   │   ├── RequirementsTransformer.java
-   │   ├── EarsPatternTransformer.java
-   │   └── GherkinScenarioGenerator.java
-   ├── output/
-   │   ├── OutputGenerator.java
-   │   └── TransformedRequirements.java
-   ├── loop/
-   │   ├── LoopDetector.java
-   │   └── ProcessingContext.java
-   ├── models/
-   │   ├── GitHubIssue.java
-   │   ├── Requirement.java
-   │   ├── OpenQuestion.java
-   │   └── GherkinScenario.java
-   └── config/
-       └── StoryConfiguration.java
+   com.pos.agent
+   ├── impl/
+   |   ├── StoryStrengtheningAgent.java        (Main orchestrator, similar to MissingIssuesAuditSystem)
+   ├── story/
+   |   ├── validation/
+   |   │   ├── IssueValidator.java
+   |   │   └── ValidationResult.java
+   |   ├── parsing/
+   |   │   ├── IssueParser.java
+   |   │   └── ParsedIssue.java
+   |   ├── analysis/
+   |   │   ├── RequirementsAnalyzer.java
+   |   │   └── AnalysisResult.java
+   |   ├── transformation/
+   |   │   ├── RequirementsTransformer.java
+   |   │   ├── EarsPatternTransformer.java
+   |   │   └── GherkinScenarioGenerator.java
+   |   ├── output/
+   |   │   ├── OutputGenerator.java
+   |   │   └── TransformedRequirements.java
+   |   ├── loop/
+   |   │   ├── LoopDetector.java
+   |   │   └── ProcessingContext.java
+   |   ├── models/
+   |   │   ├── GitHubIssue.java
+   |   │   ├── Requirement.java
+   |   │   ├── OpenQuestion.java
+   |   │   └── GherkinScenario.java
+   |   └── config/
+   |      └── StoryConfiguration.java
    ```
 
 2. **Main Orchestrator Pattern** (Reference: `MissingIssuesAuditSystem.java`):
@@ -637,8 +679,8 @@ Based on the reference implementation, this feature should use:
 
 - **Java 21**: Consistent with existing workspace-agents codebase
 - **Maven**: Build system matching the reference implementation
-- **jqwik**: Property-based testing library (Java standard)
 - **JUnit 5**: Unit testing framework
+- **Mockito**: Mock framework
 - **Jackson**: JSON processing for GitHub API integration
 - **SLF4J**: Logging framework
 
@@ -649,7 +691,6 @@ Based on the reference implementation patterns:
 - **GitHub API Client**: Use existing `GitHubApiClientWrapper` pattern from audit implementation
 - **Markdown Parser**: CommonMark or Flexmark for parsing and generating markdown
 - **Pattern Matching Library**: Java regex with helper utilities
-- **Property-Based Testing Library**: jqwik for comprehensive test coverage
 - **JSON Processing**: Jackson for configuration and data serialization
 - **Logging**: SLF4J with Logback for structured logging
 
