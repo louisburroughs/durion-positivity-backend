@@ -8,7 +8,6 @@
   - Create package structure under `com.positivity.agent.story` in pos-agent-framework
   - Create subpackages: validation, parsing, analysis, transformation, output, loop, models, config
   - Define core interfaces following reference implementation patterns from workspace-agents
-  - Verify jqwik is configured in pom.xml (already present)
   - Add markdown parsing library dependency to pom.xml (commonmark-java or flexmark-java)
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
@@ -65,7 +64,7 @@
     - **Property 4: Processing continuation on valid issues**
     - **Validates: Requirements 1.5**
 
-- [-] 3. Implement issue parsing
+- [x] 3. Implement issue parsing
 
 
 
@@ -78,7 +77,7 @@
     - Follow reference patterns from workspace-agents/audit/StoryMetadataParser
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [ ] 3.2 Write unit tests for IssueParser
+  - [x] 3.2 Write unit tests for IssueParser
 
 
     - Test metadata extraction with various issue formats
@@ -86,8 +85,8 @@
     - Verify all fields are captured correctly
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 4. Implement requirements analysis
-  - [ ] 4.1 Create RequirementsAnalyzer component in analysis package
+- [x] 4. Implement requirements analysis
+  - [x] 4.1 Create RequirementsAnalyzer component in analysis package
     - Implement actor and stakeholder identification using pattern matching
     - Implement business intent extraction from issue body
     - Implement precondition and state detection
@@ -98,14 +97,14 @@
     - Implement ambiguity flagging logic (vague terms, missing information)
     - _Requirements: 3.1, 7.1, 7.3, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 4.2 Write unit tests for RequirementsAnalyzer
+  - [x] 4.2 Write unit tests for RequirementsAnalyzer
     - Test actor identification with various issue formats
     - Test intent extraction with different writing styles
     - Test ambiguity detection with known unclear scenarios
     - _Requirements: 3.1, 7.1, 7.3, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 5. Implement EARS pattern transformation
-  - [ ] 5.1 Create EARS pattern transformer in transformation package
+- [x] 5. Implement EARS pattern transformation
+  - [x] 5.1 Create EARS pattern transformer in transformation package
     - Implement ubiquitous pattern application (THE system SHALL)
     - Implement state-driven pattern application (WHILE ... THE system SHALL)
     - Implement event-driven pattern application (WHEN ... THE system SHALL)
@@ -114,19 +113,19 @@
     - Create helper methods for pattern detection and application
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [ ] 5.2 Write property test for EARS phrasing consistency
+  - [x] 5.2 Write property test for EARS phrasing consistency
     - **Property 13: EARS phrasing consistency**
     - **Validates: Requirements 6.5**
 
-  - [ ] 5.3 Write unit tests for EARS patterns
+  - [x] 5.3 Write unit tests for EARS patterns
     - Test ubiquitous pattern application with sample requirements
     - Test state-driven pattern application with preconditions
     - Test event-driven pattern application with triggers
     - Test unwanted behavior pattern application with error cases
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 6. Implement Gherkin transformation
-  - [ ] 6.1 Create Gherkin scenario generator in transformation package
+- [x] 6. Implement Gherkin transformation
+  - [x] 6.1 Create Gherkin scenario generator in transformation package
     - Implement Given/When/Then/And keyword usage with proper formatting
     - Implement verifiable Then clause generation (must be testable)
     - Implement compound condition avoidance (split into multiple clauses)
@@ -135,26 +134,26 @@
     - Create helper methods for Gherkin validation and formatting
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-  - [ ] 6.2 Write property test for Gherkin keyword usage
+  - [x] 6.2 Write property test for Gherkin keyword usage
     - **Property 10: Gherkin keyword usage**
     - **Validates: Requirements 5.1**
 
-  - [ ] 6.3 Write property test for no prose in Gherkin
+  - [x] 6.3 Write property test for no prose in Gherkin
     - **Property 11: No prose in Gherkin blocks**
     - **Validates: Requirements 5.5**
 
-  - [ ] 6.4 Write property test for no modal verbs
+  - [x] 6.4 Write property test for no modal verbs
     - **Property 12: No modal verbs in Gherkin**
     - **Validates: Requirements 5.6**
 
-  - [ ] 6.5 Write unit tests for Gherkin generation
+  - [x] 6.5 Write unit tests for Gherkin generation
     - Test Given/When/Then structure with various scenarios
     - Test compound condition detection and splitting
     - Test modal verb filtering with edge cases
     - _Requirements: 5.1, 5.4, 5.6_
 
-- [ ] 7. Implement ISO/IEC/IEEE 29148 compliance checks
-  - [ ] 7.1 Create quality standards validator in analysis package
+- [x] 7. Implement ISO/IEC/IEEE 29148 compliance checks
+  - [x] 7.1 Create quality standards validator in analysis package
     - Implement vague term detection and replacement (quickly, adequate, etc.)
     - Implement acceptance criteria presence verification
     - Implement requirement completeness checks (actor, trigger, outcome)
@@ -163,15 +162,15 @@
     - Create configurable lists of vague terms and quality rules
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.6_
 
-  - [ ] 7.2 Write property test for acceptance criteria presence
+  - [x] 7.2 Write property test for acceptance criteria presence
     - **Property 14: Acceptance criteria presence**
     - **Validates: Requirements 7.2**
 
-  - [ ] 7.3 Write property test for requirement completeness
+  - [x] 7.3 Write property test for requirement completeness
     - **Property 15: Requirement completeness**
     - **Validates: Requirements 7.3**
 
-  - [ ] 7.4 Write unit tests for quality standards
+  - [x] 7.4 Write unit tests for quality standards
     - Test vague term detection with known problematic terms
     - Test acceptance criteria verification with various formats
     - Test completeness checks with incomplete requirements
@@ -314,4 +313,25 @@
 
 - [ ] 16. Final Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 17. Integration with Agent Framework
+  - [ ] 17.1 Test AgentRequest to GitHubIssue conversion
+    - Verify all StoryContext properties are correctly extracted
+    - Test with various StoryContext configurations (different repositories, issue formats)
+    - Test error handling for missing or invalid context properties
+    - _Requirements: 14.1, 14.2_
+
+  - [ ] 17.2 Test AgentResponse generation
+    - Verify success responses include complete output with all sections
+    - Verify failure responses include error messages and stop phrases
+    - Test processing time tracking and metadata inclusion
+    - Test response format consistency across different processing outcomes
+    - _Requirements: 14.3, 14.4_
+
+  - [ ] 17.3 Test security integration
+    - Verify SecurityContext validation before processing
+    - Test authorization checks for different user roles and permissions
+    - Verify audit trail recording with user context and timestamps
+    - Test security failure handling and appropriate error responses
+    - _Requirements: 14.2, 14.5_
 
