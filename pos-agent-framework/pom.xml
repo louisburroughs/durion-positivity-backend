@@ -159,7 +159,20 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<version>3.2.2</version>
+				<version>3.2.5</version>
+				<configuration>
+					<systemPropertyVariables>
+						<!-- Expose GitHub token as system property for tests that read github.token -->
+						<github.token>${GITHUB_TOKEN}</github.token>
+					</systemPropertyVariables>
+					<environmentVariables>
+						<!-- Inject GitHub token into test environment without hardcoding secrets -->
+						<GITHUB_TOKEN>${settings.servers.github-token.password}</GITHUB_TOKEN>
+					</environmentVariables>
+					<!-- Ensure tests run in a forked JVM (so env var injection applies) -->
+					<forkCount>1</forkCount>
+					<reuseForks>true</reuseForks>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.jacoco</groupId>

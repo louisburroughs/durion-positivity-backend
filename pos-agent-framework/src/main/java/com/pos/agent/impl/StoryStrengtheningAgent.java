@@ -79,8 +79,7 @@ public class StoryStrengtheningAgent extends AbstractAgent {
         this.configuration = Objects.requireNonNull(configuration, "Configuration cannot be null");
     }
 
-
-     @Override
+    @Override
     public AgentContext getOrCreateContext(String sessionId) {
         return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> StoryContext.builder().requestId(sessionId).build());
@@ -245,6 +244,12 @@ public class StoryStrengtheningAgent extends AbstractAgent {
             AnalysisResult analysisResult,
             TransformedRequirements transformedRequirements) {
         ProcessingContext context = new ProcessingContext();
+
+        // Set the issue text for diagnostic purposes (enables detailed keyword
+        // scanning)
+        if (parsedIssue != null) {
+            context.setIssueText(parsedIssue.getBody());
+        }
 
         // Set acceptance criteria count from transformed requirements if available
         if (transformedRequirements != null) {

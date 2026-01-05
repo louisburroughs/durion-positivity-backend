@@ -5,7 +5,6 @@ import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
 import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.context.AgentContext;
-import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.StoryContext;
 import com.pos.agent.framework.model.AgentType;
 

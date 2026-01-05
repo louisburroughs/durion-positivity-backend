@@ -1,0 +1,131 @@
+name: Clarification Request
+description: Ask for missing information needed to finalize a story for development.
+title: "[CLARIFICATION] <short summary>"
+labels:
+  - type:clarification
+  - blocked:clarification
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue exists to resolve missing information required to finalize a related user story.
+        **Do not implement here.** Answer questions and decide policy; the story agent will update the story.
+
+  - type: input
+    id: origin_repo
+    attributes:
+      label: Origin Repository
+      description: Repository that owns the originating story issue.
+      placeholder: "louisburroughs/durion-positivity-backend"
+    validations:
+      required: true
+
+  - type: input
+    id: origin_issue
+    attributes:
+      label: Origin Story Issue
+      description: GitHub issue number or URL for the story being blocked.
+      placeholder: "#123 or https://github.com/<org>/<repo>/issues/123"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Domain
+      description: Primary domain responsible for answering this clarification.
+      options:
+        - domain:accounting
+        - domain:inventory
+        - domain:product
+        - domain:pricing
+        - domain:crm
+        - domain:shopmgmt
+        - domain:workexec
+        - domain:billing
+        - domain:people
+        - domain:location
+        - domain:positivity
+        - domain:security
+        - domain:audit
+    validations:
+      required: true
+
+  - type: dropdown
+    id: clarification_type
+    attributes:
+      label: Clarification Type
+      description: What kind of missing information is this?
+      options:
+        - clarification:domain
+        - clarification:policy
+        - clarification:data
+        - clarification:workflow
+        - clarification:integration
+        - clarification:security
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is missing and why is this needed?
+      placeholder: "We cannot finalize acceptance criteria because the state transitions and authorization rules for X are undefined."
+    validations:
+      required: true
+
+  - type: textarea
+    id: questions
+    attributes:
+      label: Questions (Answer Required)
+      description: Provide numbered questions. Each should be answerable.
+      placeholder: |
+        1) Who is authorized to do X?
+        2) What states are valid before/after X?
+        3) What should happen if Y occurs?
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Options (If Applicable)
+      description: If you see plausible choices, list them. This is optional but helps decision-making.
+      placeholder: |
+        Option A:
+        Option B:
+        Option C:
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact if Unanswered
+      description: What breaks if we proceed without answers?
+      placeholder: "Development would require guessing policy; test cases cannot be derived; audit integrity may be compromised."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Resolution Acceptance Criteria
+      description: What a good answer must include so the story can be unblocked.
+      placeholder: |
+        - Confirm the authoritative system of record for X
+        - Provide the state transition table for X
+        - Provide role/permission rules for X
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I understand this issue is for clarification/decision only (not implementation).
+          required: true
+        - label: I will link any relevant policy docs or prior decisions.
+          required: false
