@@ -29,10 +29,29 @@ The framework includes 14 specialized agents:
 ## Configuration
 
 Agent configurations are managed through environment-specific YAML files:
+
 - `application.yml` - Base configuration
 - `application-dev.yml` - Development environment
 - `application-staging.yml` - Staging environment
 - `application-prod.yml` - Production environment
+
+### GitHub token for integration tests
+
+Integration tests in `GitHubApiClientTest` require `GITHUB_TOKEN` to be present. Provide it securely through Maven settings so it is available to the Surefire test environment:
+
+1. Encrypt your token with Maven: `mvn --encrypt-password "<personal-access-token>"`
+2. Add a server entry to `~/.m2/settings.xml` (Maven will decrypt the password at runtime):
+
+```xml
+<servers>
+	<server>
+		<id>github-token</id>
+		<password>{enc:...}</password>
+	</server>
+</servers>
+```
+
+The build maps `GITHUB_TOKEN` to `settings.servers.github-token.password`, so the tests are enabled only when the token is present and remain skipped otherwise.
 
 ## Deployment
 

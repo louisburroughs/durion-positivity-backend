@@ -1,28 +1,35 @@
 package com.pos.agent.core;
 
 import com.pos.agent.context.AgentContext;
+import com.pos.agent.context.CICDContext;
 import com.pos.agent.context.DefaultContext;
+import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.discovery.AgentDiscovery;
 import com.pos.agent.framework.audit.AuditTrailManager;
 import com.pos.agent.framework.model.AgentType;
 import com.pos.agent.framework.service.ServiceAgentMapping;
+import com.pos.agent.impl.ArchitectureAgent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
  * Comprehensive unit tests for AgentManager covering all public methods.
- * Uses Mockito for dependency injection to avoid static mocking and enable deterministic testing.
+ * Uses Mockito for dependency injection to avoid static mocking and enable
+ * deterministic testing.
  */
 @ExtendWith(MockitoExtension.class)
 class AgentManagerTest {
@@ -48,14 +55,13 @@ class AgentManagerTest {
     void setUp() {
         // Set up JWT secret for tests
         System.setProperty("agent.jwt.secret", "test-secret-key-for-unit-tests");
-        
+
         agentManager = new AgentManager(
                 mockAuditManager,
                 new ServiceAgentMapping(),
                 mockSecurityValidator,
                 mockAgentDiscovery,
-                mockFallbackSupplier
-        );
+                mockFallbackSupplier);
     }
 
     // ===== Constructor and Audit Manager Tests =====
@@ -160,8 +166,10 @@ class AgentManagerTest {
 
         RegistryHealthStatus status = agentManager.getHealthStatus();
 
-        // AgentManager registers StoryValidationAgent by default, so totalAgents = 3 (default + 2 test agents)
-        // Assuming default agent is healthy, availableAgents = 2 (default + 1 healthy test agent)
+        // AgentManager registers StoryValidationAgent by default, so totalAgents = 3
+        // (default + 2 test agents)
+        // Assuming default agent is healthy, availableAgents = 2 (default + 1 healthy
+        // test agent)
         assertEquals(3, status.totalAgents());
         assertEquals(2, status.availableAgents());
     }
@@ -318,6 +326,29 @@ class AgentManagerTest {
     }
 
     @Test
+    void testValidateContextDetectsStaleSession() {
+        String sessionId = "stale-session";
+        agentManager.updateSessionProgress(sessionId, "objective", Map.of(), List.of());
+        Optional<SessionContext> session = agentManager.getSessionContext(sessionId);
+        assertTrue(session.isPresent());
+        session.get().setLastUpdated(Instant.now().minus(Duration.ofMinutes(45)));
+
+        AgentContext context = DefaultContext.builder()
+                .sessionId(sessionId)
+                .property("session-id", sessionId)
+                .build();
+        AgentRequest request = AgentRequest.builder()
+                .agentContext(context)
+                .securityContext(createSecurityContext())
+                .build();
+
+        ContextValidationResult result = agentManager.validateContext(request);
+
+        assertFalse(result.isSufficient());
+        assertThat(result.getMissingInputs()).contains("stale-session-context");
+    }
+
+    @Test
     void testUpdateSessionProgress() {
         String sessionId = "session123";
         String taskObjective = "Test objective";
@@ -382,9 +413,29 @@ class AgentManagerTest {
     }
 
     @Test
+    void testGetSharedContextForArchitectureAgentAddsSpecializedContexts() {
+        String sessionId = "arch-session";
+        ArchitectureAgent architectureAgent = new ArchitectureAgent();
+
+        agentManager.updateSessionProgress(sessionId, "arch objective", Map.of(), List.of());
+
+        Map<String, Object> sharedContext = agentManager.getSharedContextForAgent(sessionId, architectureAgent);
+
+        assertTrue(sharedContext.containsKey("session"));
+        assertTrue(sharedContext.containsKey("ARCHITECTURE"));
+        assertTrue(sharedContext.containsKey("event-driven"));
+        assertTrue(sharedContext.containsKey("cicd"));
+        assertTrue(sharedContext.containsKey("configuration"));
+        assertTrue(sharedContext.containsKey("resilience"));
+
+        architectureAgent.removeContext(sessionId);
+    }
+
+    @Test
     void testEnhanceWithContext() {
         String sessionId = "session123";
         AgentContext context = DefaultContext.builder()
+                .sessionId(sessionId)
                 .property("session-id", sessionId)
                 .build();
         AgentRequest request = AgentRequest.builder()
@@ -412,6 +463,51 @@ class AgentManagerTest {
     }
 
     @Test
+    void testEnhanceWithContextAddsEventDrivenDetails() {
+        String sessionId = "eda-session";
+        AgentContext context = DefaultContext.builder()
+                .sessionId(sessionId)
+                .property("session-id", sessionId)
+                .build();
+        AgentRequest request = AgentRequest.builder()
+                .agentContext(context)
+                .securityContext(createSecurityContext())
+                .build();
+        AgentResponse originalResponse = AgentResponse.builder()
+                .success(true)
+                .output("Original output")
+                .confidence(0.9)
+                .recommendations(List.of("rec1"))
+                .build();
+
+        EventDrivenContext eventCtx = EventDrivenContext.builder()
+                .requestId(sessionId)
+                .messageBrokers(Set.of("Kafka"))
+                .eventHandlers(Set.of("handler"))
+                .eventSchemas(Map.of("schema", "new-schema"))
+                .build();
+
+        CICDContext cicdContext = CICDContext.builder()
+                .requestId(sessionId)
+                .buildTools(Set.of("Maven"))
+                .deploymentStrategies(Set.of("blue-green"))
+                .build();
+
+        when(mockAgent.getTechnicalDomain()).thenReturn(AgentType.EVENT_DRIVEN_ARCHITECTURE);
+        when(mockAgent.getOrCreateContext(sessionId)).thenReturn(eventCtx, cicdContext);
+
+        AgentResponse enhanced = agentManager.enhanceWithContext(originalResponse, request, mockAgent);
+
+        assertThat(enhanced.getOutput())
+                .contains("Event-Driven Architecture Context")
+                .contains("Kafka")
+                .contains("CI/CD Pipeline Context");
+        assertThat(enhanced.getRecommendations())
+                .anyMatch(rec -> rec.contains("idempotent"))
+                .anyMatch(rec -> rec.contains("security scanning"));
+    }
+
+    @Test
     void testCleanupStaleContexts() {
         String sessionId1 = "session1";
         String sessionId2 = "session2";
@@ -423,13 +519,12 @@ class AgentManagerTest {
         // Mark one as stale by setting its last access time far in the past
         Optional<SessionContext> session1 = agentManager.getSessionContext(sessionId1);
         assertTrue(session1.isPresent());
-        // The session will naturally become stale after SESSION_TIMEOUT, but we can't easily
-        // mock time here. This test verifies the method runs without error.
+        session1.get().setLastUpdated(Instant.now().minus(Duration.ofMinutes(45)));
 
         agentManager.cleanupStaleContexts();
 
-        // Both should still exist if not enough time has passed
-        assertTrue(agentManager.getSessionContext(sessionId1).isPresent());
+        // Stale session should be removed
+        assertFalse(agentManager.getSessionContext(sessionId1).isPresent());
         assertTrue(agentManager.getSessionContext(sessionId2).isPresent());
     }
 

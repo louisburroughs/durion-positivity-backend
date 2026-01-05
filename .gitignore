@@ -39,3 +39,6 @@ build/
 #Kiro logs
 .kiro/run-logs/*
 .kiro/run-logs
+
+.story-work/work
+.story-work/inbox

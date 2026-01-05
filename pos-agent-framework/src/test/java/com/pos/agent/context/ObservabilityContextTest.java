@@ -4,6 +4,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Nested;
 
+import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.*;
 
 /**
@@ -103,7 +107,6 @@ class ObservabilityContextTest {
             // Then
             assertThat(context.getLogAggregators()).contains("ELK Stack");
         }
-
 
         @Test
         @DisplayName("should add tracing system")
@@ -538,6 +541,257 @@ class ObservabilityContextTest {
                     .addHealthEndpoint("/health", null)
                     .build()).isInstanceOf(NullPointerException.class)
                     .hasMessageContaining("status cannot be null");
+        }
+    }
+
+    @Nested
+    @DisplayName("Mutator Behavior Tests")
+    class MutatorBehaviorTests {
+
+        @Test
+        @DisplayName("should update timestamp when adding new metrics check")
+        void shouldUpdateTimestampWhenAddingMetricsCheck() {
+            ObservabilityContext context = ObservabilityContext.builder().build();
+            Instant before = context.getLastUpdated();
+
+            context.addMetricsCheck("CPU");
+
+            assertThat(context.getMetricsChecks()).contains("CPU");
+            assertThat(context.getLastUpdated()).isAfter(before);
+        }
+
+        @Test
+        @DisplayName("should not update timestamp when adding duplicate metrics check")
+        void shouldNotUpdateTimestampWhenAddingDuplicateMetricsCheck() {
+            ObservabilityContext context = ObservabilityContext.builder().build();
+            context.addMetricsCheck("CPU");
+            Instant afterFirstAdd = context.getLastUpdated();
+
+            context.addMetricsCheck("CPU");
+
+            assertThat(context.getLastUpdated()).isEqualTo(afterFirstAdd);
+        }
+
+        @Test
+        @DisplayName("should update health status when endpoint exists")
+        void shouldUpdateHealthStatusWhenEndpointExists() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addHealthEndpoint("/health", "UP")
+                    .build();
+            Instant before = context.getLastUpdated();
+
+            context.updateHealthStatus("/health", "DOWN");
+
+            assertThat(context.getHealthStatuses()).containsEntry("/health", "DOWN");
+            assertThat(context.getLastUpdated()).isAfter(before);
+        }
+
+        @Test
+        @DisplayName("should not update health status when endpoint missing")
+        void shouldNotUpdateHealthStatusWhenEndpointMissing() {
+            ObservabilityContext context = ObservabilityContext.builder().build();
+            Instant before = context.getLastUpdated();
+
+            context.updateHealthStatus("/health", "DOWN");
+
+            assertThat(context.getHealthStatuses()).isEmpty();
+            assertThat(context.getLastUpdated()).isEqualTo(before);
+        }
+
+        @Test
+        @DisplayName("should update log level when source exists")
+        void shouldUpdateLogLevelWhenSourceExists() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addLogSource("app", "INFO")
+                    .build();
+            Instant before = context.getLastUpdated();
+
+            context.updateLogLevel("app", "DEBUG");
+
+            assertThat(context.getLogLevels()).containsEntry("app", "DEBUG");
+            assertThat(context.getLastUpdated()).isAfter(before);
+        }
+
+        @Test
+        @DisplayName("should not update log level when source missing")
+        void shouldNotUpdateLogLevelWhenSourceMissing() {
+            ObservabilityContext context = ObservabilityContext.builder().build();
+            Instant before = context.getLastUpdated();
+
+            context.updateLogLevel("app", "DEBUG");
+
+            assertThat(context.getLogLevels()).isEmpty();
+            assertThat(context.getLastUpdated()).isEqualTo(before);
+        }
+
+        @Test
+        @DisplayName("should add health endpoint and update timestamp")
+        void shouldAddHealthEndpointAndUpdateTimestamp() {
+            ObservabilityContext context = ObservabilityContext.builder().build();
+            Instant before = context.getLastUpdated();
+
+            context.addHealthEndpoint("/ready", "UP");
+
+            assertThat(context.getHealthEndpoints()).contains("/ready");
+            assertThat(context.getHealthStatuses()).containsEntry("/ready", "UP");
+            assertThat(context.getLastUpdated()).isAfter(before);
+        }
+    }
+
+    @Nested
+    @DisplayName("Defensive Copy Map Tests")
+    class DefensiveCopyMapTests {
+
+        @Test
+        @DisplayName("should return defensive copy of metric values")
+        void shouldReturnDefensiveCopyOfMetricValues() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addMetricValue("cpu", 70)
+                    .build();
+
+            Map<String, Object> values = context.getMetricValues();
+            values.put("cpu", 90);
+
+            assertThat(context.getMetricValues()).containsEntry("cpu", 70);
+        }
+
+        @Test
+        @DisplayName("should return defensive copy of log levels")
+        void shouldReturnDefensiveCopyOfLogLevels() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addLogSource("app", "INFO")
+                    .build();
+
+            Map<String, String> levels = context.getLogLevels();
+            levels.put("app", "DEBUG");
+
+            assertThat(context.getLogLevels()).containsEntry("app", "INFO");
+        }
+
+        @Test
+        @DisplayName("should return defensive copy of alert configurations")
+        void shouldReturnDefensiveCopyOfAlertConfigurations() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addAlertRule("cpu", "cpu > 80%")
+                    .build();
+
+            Map<String, String> configs = context.getAlertConfigurations();
+            configs.put("cpu", "cpu > 90%");
+
+            assertThat(context.getAlertConfigurations()).containsEntry("cpu", "cpu > 80%");
+        }
+    }
+
+    @Nested
+    @DisplayName("Validation Helper Tests")
+    class ValidationHelperTests {
+
+        @Test
+        @DisplayName("should be valid when metrics exist")
+        void shouldBeValidWhenMetricsExist() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addMetricsCheck("cpu")
+                    .build();
+
+            assertThat(context.isValid()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should be invalid when empty")
+        void shouldBeInvalidWhenEmpty() {
+            ObservabilityContext context = ObservabilityContext.builder().build();
+
+            assertThat(context.isValid()).isFalse();
+        }
+
+        @Test
+        @DisplayName("should detect metrics via collectors")
+        void shouldDetectMetricsViaCollectors() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addMetricCollector("Prometheus")
+                    .build();
+
+            assertThat(context.hasMetrics()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should detect logging via aggregators")
+        void shouldDetectLoggingViaAggregators() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addLogAggregator("ELK")
+                    .build();
+
+            assertThat(context.hasLogging()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should detect tracing")
+        void shouldDetectTracing() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addTracingSystem("jaeger", "http://jaeger")
+                    .build();
+
+            assertThat(context.hasTracing()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should detect alerting")
+        void shouldDetectAlerting() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addAlertRule("cpu", "cpu > 80%")
+                    .build();
+
+            assertThat(context.hasAlerting()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should be healthy when all endpoints are up or healthy")
+        void shouldBeHealthyWhenAllEndpointsUp() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addHealthEndpoint("/health", "UP")
+                    .addHealthEndpoint("/live", "HEALTHY")
+                    .build();
+
+            assertThat(context.isHealthy()).isTrue();
+        }
+
+        @Test
+        @DisplayName("should be unhealthy when any endpoint is down")
+        void shouldBeUnhealthyWhenAnyEndpointDown() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addHealthEndpoint("/health", "UP")
+                    .addHealthEndpoint("/db", "DOWN")
+                    .build();
+
+            assertThat(context.isHealthy()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("ToString Tests")
+    class ToStringTests {
+
+        @Test
+        @DisplayName("should include key counts in toString")
+        void shouldIncludeKeyCountsInToString() {
+            ObservabilityContext context = ObservabilityContext.builder()
+                    .addMetricsCheck("cpu")
+                    .addMetricsCheck("memory")
+                    .addLogSource("app", "INFO")
+                    .addTracingSystem("jaeger", "http://jaeger")
+                    .addAlertRule("cpu", "cpu > 80%")
+                    .addHealthEndpoint("/health", "UP")
+                    .build();
+
+            String value = context.toString();
+
+            assertThat(value).contains(
+                    "metricsChecks=2",
+                    "logSources=1",
+                    "tracingSystems=1",
+                    "alertRules=1",
+                    "healthEndpoints=1");
+            assertThat(value).contains("contextId=");
         }
     }
 }

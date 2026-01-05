@@ -111,6 +111,16 @@ public abstract class AgentContext {
             return self();
         }
 
+         public T sessionId(String sessionId) {
+            this.sessionId = sessionId;
+            return self();
+        }
+
+         public T contextId(String contextId) {
+            this.contextId = contextId;
+            return self();
+        }
+
         public T description(String description) {
             this.description = description;
             return self();

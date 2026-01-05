@@ -471,3 +471,498 @@ class ConfigurationContextTest {
         }
     }
 }
+
+@Nested
+@DisplayName("Setter Tests")
+class SetterTests {
+
+    @Test
+    @DisplayName("should update service name via setter")
+    void shouldUpdateServiceNameViaSetter() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder()
+                .serviceName("original-service")
+                .build();
+
+        // When
+        context.setServiceName("updated-service");
+
+        // Then
+        assertThat(context.getServiceName()).isEqualTo("updated-service");
+    }
+
+    @Test
+    @DisplayName("should update configuration type via setter")
+    void shouldUpdateConfigurationTypeViaSetter() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder()
+                .configurationType("original-type")
+                .build();
+
+        // When
+        context.setConfigurationType("updated-type");
+
+        // Then
+        assertThat(context.getConfigurationType()).isEqualTo("updated-type");
+    }
+
+    @Test
+    @DisplayName("should update platform via setter")
+    void shouldUpdatePlatformViaSetter() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder()
+                .platform("Docker")
+                .build();
+
+        // When
+        context.setPlatform("Kubernetes");
+
+        // Then
+        assertThat(context.getPlatform()).isEqualTo("Kubernetes");
+    }
+
+    @Test
+    @DisplayName("should set and retrieve service mesh")
+    void shouldSetAndRetrieveServiceMesh() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When
+        context.setServiceMesh("Istio");
+
+        // Then
+        assertThat(context.getServiceMesh()).isEqualTo("Istio");
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException when setting null service mesh")
+    void shouldThrowWhenSettingNullServiceMesh() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When/Then
+        assertThatThrownBy(() -> context.setServiceMesh(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Service mesh cannot be null");
+    }
+}
+
+@Nested
+@DisplayName("Config Formats and Validation Tests")
+class ConfigFormatsAndValidationTests {
+
+    @Test
+    @DisplayName("should add config format")
+    void shouldAddConfigFormat() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigFormat("YAML")
+                .addConfigFormat("JSON")
+                .addConfigFormat("Properties")
+                .build();
+
+        // Then
+        assertThat(context.getConfigFormats()).hasSize(3);
+        assertThat(context.getConfigFormats()).containsExactlyInAnyOrder("YAML", "JSON", "Properties");
+    }
+
+    @Test
+    @DisplayName("should add config validation rules")
+    void shouldAddConfigValidationRules() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigValidation("timeout", "30s")
+                .addConfigValidation("retry-count", "3")
+                .addConfigValidation("batch-size", "100")
+                .build();
+
+        // Then
+        assertThat(context.getConfigValidation()).hasSize(3);
+        assertThat(context.getConfigValidation()).containsEntry("timeout", "30s");
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException when adding null config format")
+    void shouldThrowWhenAddingNullConfigFormat() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When/Then
+        assertThatThrownBy(() -> context.addConfigFormat(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Config format cannot be null");
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException when adding null config validation key")
+    void shouldThrowWhenAddingNullValidationKey() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When/Then
+        assertThatThrownBy(() -> context.addConfigValidation(null, "value"))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Config validation key cannot be null");
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException when adding null config validation value")
+    void shouldThrowWhenAddingNullValidationValue() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When/Then
+        assertThatThrownBy(() -> context.addConfigValidation("key", null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Config validation value cannot be null");
+    }
+}
+
+@Nested
+@DisplayName("Config Profiles and Mappings Tests")
+class ConfigProfilesAndMappingsTests {
+
+    @Test
+    @DisplayName("should add config profile")
+    void shouldAddConfigProfile() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigProfile("development")
+                .addConfigProfile("production")
+                .addConfigProfile("testing")
+                .build();
+
+        // Then
+        assertThat(context.getConfigProfiles()).hasSize(3);
+        assertThat(context.getConfigProfiles()).contains("development", "production", "testing");
+    }
+
+    @Test
+    @DisplayName("should add profile mapping")
+    void shouldAddProfileMapping() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigProfile("fast")
+                .addProfileMapping("fast", "Production")
+                .addConfigProfile("slow")
+                .addProfileMapping("slow", "Development")
+                .build();
+
+        // Then
+        assertThat(context.getProfileMappings()).hasSize(2);
+        assertThat(context.getProfileMappings()).containsEntry("fast", "Production");
+        assertThat(context.getProfileMappings()).containsEntry("slow", "Development");
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException when adding null config profile")
+    void shouldThrowWhenAddingNullConfigProfile() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When/Then
+        assertThatThrownBy(() -> context.addConfigProfile(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Config profile cannot be null");
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException when adding null profile in mapping")
+    void shouldThrowWhenAddingNullProfileMapping() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When/Then
+        assertThatThrownBy(() -> context.addProfileMapping(null, "Production"))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Profile cannot be null");
+    }
+
+    @Test
+    @DisplayName("should throw NullPointerException when adding null environment in mapping")
+    void shouldThrowWhenAddingNullEnvironmentMapping() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // When/Then
+        assertThatThrownBy(() -> context.addProfileMapping("production", null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Environment cannot be null");
+    }
+}
+
+@Nested
+@DisplayName("Monitoring, Drift Detection, and Auditing Tests")
+class MonitoringDriftAndAuditingTests {
+
+    @Test
+    @DisplayName("should add config monitoring")
+    void shouldAddConfigMonitoring() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigMonitoring("Prometheus")
+                .addConfigMonitoring("Datadog")
+                .addConfigMonitoring("CloudWatch")
+                .build();
+
+        // Then
+        assertThat(context.getConfigMonitoring()).hasSize(3);
+        assertThat(context.getConfigMonitoring()).contains("Prometheus", "Datadog", "CloudWatch");
+    }
+
+    @Test
+    @DisplayName("should add drift detection")
+    void shouldAddDriftDetection() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addDriftDetection("database-url", "scheduled-check-every-5-minutes")
+                .addDriftDetection("cache-size", "real-time-monitoring")
+                .build();
+
+        // Then
+        assertThat(context.getDriftDetection()).hasSize(2);
+        assertThat(context.getDriftDetection()).containsEntry("database-url", "scheduled-check-every-5-minutes");
+    }
+
+    @Test
+    @DisplayName("should add config auditing")
+    void shouldAddConfigAuditing() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigAuditing("AWS CloudTrail")
+                .addConfigAuditing("Kubernetes Audit Logs")
+                .addConfigAuditing("ELK Stack")
+                .build();
+
+        // Then
+        assertThat(context.getConfigAuditing()).hasSize(3);
+        assertThat(context.getConfigAuditing()).contains("AWS CloudTrail", "Kubernetes Audit Logs", "ELK Stack");
+    }
+}
+
+@Nested
+@DisplayName("State Validation Tests")
+class StateValidationTests {
+
+    @Test
+    @DisplayName("should return true for isValid when config sources exist")
+    void shouldReturnTrueForValidWithConfigSources() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigSource("ConfigServer", Map.of("url", "http://config"))
+                .build();
+
+        // Then
+        assertThat(context.isValid()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should return true for isValid when feature flags exist")
+    void shouldReturnTrueForValidWithFeatureFlags() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addFeatureFlag("new-feature", Map.of("enabled", true))
+                .build();
+
+        // Then
+        assertThat(context.isValid()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should return true for isValid when secrets managers exist")
+    void shouldReturnTrueForValidWithSecretsManagers() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addSecretsManager("Vault", Map.of("url", "http://vault"))
+                .build();
+
+        // Then
+        assertThat(context.isValid()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should return false for isValid when empty")
+    void shouldReturnFalseForValidWhenEmpty() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // Then
+        assertThat(context.isValid()).isFalse();
+    }
+
+    @Test
+    @DisplayName("should return true for hasFeatureFlags when flags and strategies exist")
+    void shouldReturnTrueForHasFeatureFlags() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addFeatureFlag("feature1", Map.of("description", "Feature"))
+                .addRolloutStrategy("canary")
+                .build();
+
+        // Then
+        assertThat(context.hasFeatureFlags()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should return false for hasFeatureFlags when no strategies")
+    void shouldReturnFalseForHasFeaturesWhenNoStrategy() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addFeatureFlag("feature1", Map.of("description", "Feature"))
+                .build();
+
+        // Then
+        assertThat(context.hasFeatureFlags()).isFalse();
+    }
+
+    @Test
+    @DisplayName("should return true for hasSecretsManagement when managers and policies exist")
+    void shouldReturnTrueForHasSecretsManagement() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addSecretsManager("Vault", Map.of("url", "http://vault"))
+                .addRotationPolicy("30-days")
+                .build();
+
+        // Then
+        assertThat(context.hasSecretsManagement()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should return false for hasSecretsManagement when no policies")
+    void shouldReturnFalseForHasSecretsWhenNoPolicy() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addSecretsManager("Vault", Map.of("url", "http://vault"))
+                .build();
+
+        // Then
+        assertThat(context.hasSecretsManagement()).isFalse();
+    }
+
+    @Test
+    @DisplayName("should return true for hasEnvironmentIsolation when 2 or more environments")
+    void shouldReturnTrueForHasEnvironmentIsolation() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addEnvironment("Development", Map.of("replicas", 1))
+                .addEnvironment("Production", Map.of("replicas", 5))
+                .build();
+
+        // Then
+        assertThat(context.hasEnvironmentIsolation()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should return false for hasEnvironmentIsolation when less than 2 environments")
+    void shouldReturnFalseForHasEnvironmentIsolationWithOneEnv() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addEnvironment("Production", Map.of("replicas", 5))
+                .build();
+
+        // Then
+        assertThat(context.hasEnvironmentIsolation()).isFalse();
+    }
+
+    @Test
+    @DisplayName("should return true for hasConfigValidation when validation rules exist")
+    void shouldReturnTrueForHasConfigValidation() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addValidationRule("Timeout Check")
+                .build();
+
+        // Then
+        assertThat(context.hasConfigValidation()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should return false for hasConfigValidation when no rules")
+    void shouldReturnFalseForHasConfigValidation() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder().build();
+
+        // Then
+        assertThat(context.hasConfigValidation()).isFalse();
+    }
+}
+
+@Nested
+@DisplayName("Timestamp Update Tests")
+class TimestampUpdateTests {
+
+    @Test
+    @DisplayName("should update lastUpdated timestamp when adding config source")
+    void shouldUpdateTimestampWhenAddingConfigSource() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+        var initialTimestamp = context.getLastUpdated();
+
+        // When
+        context.addConfigSource("NewServer", Map.of("url", "http://new"));
+
+        // Then
+        assertThat(context.getLastUpdated()).isAfterOrEqualTo(initialTimestamp);
+    }
+
+    @Test
+    @DisplayName("should update lastUpdated timestamp when setting service name")
+    void shouldUpdateTimestampWhenSettingServiceName() {
+        // Given
+        ConfigurationContext context = ConfigurationContext.builder().build();
+        var initialTimestamp = context.getLastUpdated();
+
+        // When
+        context.setServiceName("new-service");
+
+        // Then
+        assertThat(context.getLastUpdated()).isAfterOrEqualTo(initialTimestamp);
+    }
+}
+
+@Nested
+@DisplayName("toString Tests")
+class ToStringTests {
+
+    @Test
+    @DisplayName("should contain service name in toString output")
+    void shouldContainServiceNameInToString() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .serviceName("test-service")
+                .build();
+
+        // Then
+        assertThat(context.toString()).contains("test-service");
+    }
+
+    @Test
+    @DisplayName("should contain configuration type in toString output")
+    void shouldContainConfigTypeInToString() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .configurationType("microservices")
+                .build();
+
+        // Then
+        assertThat(context.toString()).contains("microservices");
+    }
+
+    @Test
+    @DisplayName("should contain configuration counts in toString output")
+    void shouldContainCountsInToString() {
+        // When
+        ConfigurationContext context = ConfigurationContext.builder()
+                .addConfigSource("Server1", Map.of("url", "http://server1"))
+                .addFeatureFlag("flag1", Map.of("enabled", true))
+                .addSecretsManager("Vault", Map.of("url", "http://vault"))
+                .build();
+
+        // Then
+        String output = context.toString();
+        assertThat(output).contains("sources=1");
+        assertThat(output).contains("flags=1");
+        assertThat(output).contains("secrets=1");
+    }
+}

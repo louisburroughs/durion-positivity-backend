@@ -107,7 +107,7 @@ class StoryStrengtheningAgentTest {
         AgentResponse response = agent.processRequest(request);
 
         assertThat(response.isSuccess()).isTrue();
-        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getStatus()).isEqualTo(AgentProcessingState.SUCCESS);
     }
 
     @Test
@@ -118,7 +118,7 @@ class StoryStrengtheningAgentTest {
         AgentResponse response = agent.processRequest(createRequest("test"));
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getStatus()).isEqualTo("FAILURE");
+        assertThat(response.getStatus()).isEqualTo(AgentProcessingState.FAILURE);
     }
 
     @Test
@@ -362,7 +362,7 @@ class StoryStrengtheningAgentTest {
         AgentResponse response = agent.processRequest(request);
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getStatus()).isEqualTo("FAILURE");
+        assertThat(response.getStatus()).isEqualTo(AgentProcessingState.FAILURE);
         assertThat(response.getErrorMessage()).contains("Story strengthening failed");
     }
 

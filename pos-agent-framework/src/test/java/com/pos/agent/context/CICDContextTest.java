@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Nested;
 
 import static org.assertj.core.api.Assertions.*;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -499,5 +500,107 @@ class EdgeCasesTests {
         assertThatThrownBy(() -> context.setEnvironment(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("Environment cannot be null");
+    }
+
+    @Test
+    @DisplayName("should not duplicate build tool and should update timestamp once")
+    void shouldNotDuplicateBuildToolAndUpdateTimestampOnce() {
+        CICDContext context = CICDContext.builder().build();
+        Map<String, Object> cfg = new HashMap<>();
+        cfg.put("version", "1");
+        context.addBuildTool("maven", cfg);
+        Instant first = context.getLastUpdated();
+
+        context.addBuildTool("maven", cfg);
+
+        assertThat(context.getBuildTools()).containsExactly("maven");
+        assertThat(context.getBuildConfigurations()).containsEntry("maven", cfg);
+        assertThat(context.getLastUpdated()).isEqualTo(first);
+    }
+
+    @Test
+    @DisplayName("should update timestamp when adding new deployment strategy")
+    void shouldUpdateTimestampWhenAddingDeploymentStrategy() {
+        CICDContext context = CICDContext.builder().build();
+        Map<String, Object> cfg = new HashMap<>();
+        cfg.put("traffic", "10%");
+        Instant before = context.getLastUpdated();
+
+        context.addDeploymentStrategy("canary", cfg);
+
+        assertThat(context.getDeploymentStrategies()).contains("canary");
+        assertThat(context.getDeploymentConfigurations()).containsEntry("canary", cfg);
+        assertThat(context.getLastUpdated()).isAfter(before);
+    }
+
+    @Test
+    @DisplayName("should not update timestamp when adding duplicate deployment strategy")
+    void shouldNotUpdateTimestampWhenAddingDuplicateDeploymentStrategy() {
+        CICDContext context = CICDContext.builder().build();
+        Map<String, Object> cfg = new HashMap<>();
+        cfg.put("traffic", "10%");
+        context.addDeploymentStrategy("canary", cfg);
+        Instant afterFirst = context.getLastUpdated();
+
+        context.addDeploymentStrategy("canary", cfg);
+
+        assertThat(context.getDeploymentStrategies()).containsExactly("canary");
+        assertThat(context.getLastUpdated()).isEqualTo(afterFirst);
+    }
+
+    @Test
+    @DisplayName("should update timestamp when changing service name via setter")
+    void shouldUpdateTimestampWhenChangingServiceName() {
+        CICDContext context = CICDContext.builder().serviceName("a").build();
+        Instant before = context.getLastUpdated();
+
+        context.setServiceName("b");
+
+        assertThat(context.getServiceName()).isEqualTo("b");
+        assertThat(context.getLastUpdated()).isAfter(before);
+    }
+
+    @Test
+    @DisplayName("should enforce validation helpers")
+    void shouldEnforceValidationHelpers() {
+        CICDContext context = CICDContext.builder().build();
+        assertThat(context.isValid()).isFalse();
+        assertThat(context.hasSecurityIntegration()).isFalse();
+        assertThat(context.hasTestingAutomation()).isFalse();
+        assertThat(context.hasDeploymentAutomation()).isFalse();
+
+        context.addBuildTool("maven", Map.of());
+        context.addTestingFramework("junit", Map.of());
+        context.addTestType("unit");
+        context.addDeploymentStrategy("blue-green", Map.of());
+        context.addEnvironment("prod");
+        context.addSecurityScanner("snyk", Map.of());
+
+        assertThat(context.isValid()).isTrue();
+        assertThat(context.hasSecurityIntegration()).isTrue();
+        assertThat(context.hasTestingAutomation()).isTrue();
+        assertThat(context.hasDeploymentAutomation()).isTrue();
+    }
+
+    @Test
+    @DisplayName("should include key counts in toString")
+    void shouldIncludeKeyCountsInToString() {
+        CICDContext context = CICDContext.builder().build();
+        context.addBuildTool("maven", Map.of());
+        context.addTestingFramework("junit", Map.of());
+        context.addSecurityScanner("snyk", Map.of());
+        context.addDeploymentStrategy("blue-green", Map.of());
+        context.addEnvironment("prod");
+
+        String value = context.toString();
+
+        assertThat(value).contains(
+                "buildTools=1",
+                "testFrameworks=1",
+                "securityScanners=1",
+                "deployStrategies=1",
+                "environments=1",
+                "valid=true");
+        assertThat(value).contains("contextId=");
     }
 }

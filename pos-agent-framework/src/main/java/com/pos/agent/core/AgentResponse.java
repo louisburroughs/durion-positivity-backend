@@ -56,17 +56,8 @@ public class AgentResponse {
      * 
      * @return status as AgentStatus enum
      */
-    public AgentProcessingState getStatusEnum() {
+    public AgentProcessingState getStatus() {
         return status;
-    }
-
-    /**
-     * Get status as string for backward compatibility
-     * 
-     * @return status as string
-     */
-    public String getStatus() {
-        return status != null ? status.name() : null;
     }
 
     /**

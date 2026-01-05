@@ -18,6 +18,7 @@ public class ProcessingContext {
     private boolean requiresFinancialInference;
     private boolean requiresSecurityInference;
     private boolean requiresRegulatoryInference;
+    private String issueText; // Optional issue text for detailed diagnostics
 
     public ProcessingContext() {
         this.sectionRewriteCounts = new HashMap<>();
@@ -27,6 +28,7 @@ public class ProcessingContext {
         this.requiresFinancialInference = false;
         this.requiresSecurityInference = false;
         this.requiresRegulatoryInference = false;
+        this.issueText = null;
     }
 
     public void incrementSectionRewrite(String sectionName) {
@@ -87,13 +89,21 @@ public class ProcessingContext {
     }
 
     public boolean requiresAnyUnsafeInference() {
-        return requiresLegalInference || requiresFinancialInference || 
-               requiresSecurityInference || requiresRegulatoryInference;
+        return requiresLegalInference || requiresFinancialInference ||
+                requiresSecurityInference || requiresRegulatoryInference;
+    }
+
+    public void setIssueText(String text) {
+        this.issueText = text;
+    }
+
+    public String getIssueText() {
+        return issueText;
     }
 
     @Override
     public String toString() {
-        return String.format("ProcessingContext{scenarios=%d, questions=%d, unsafeInference=%s}", 
-                           acceptanceCriteriaCount, openQuestionsCount, requiresAnyUnsafeInference());
+        return String.format("ProcessingContext{scenarios=%d, questions=%d, unsafeInference=%s}",
+                acceptanceCriteriaCount, openQuestionsCount, requiresAnyUnsafeInference());
     }
 }

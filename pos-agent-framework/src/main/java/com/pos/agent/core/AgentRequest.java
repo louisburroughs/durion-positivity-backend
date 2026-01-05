@@ -30,6 +30,7 @@ public class AgentRequest {
         this.agentContext = builder.agentContext;
         this.securityContext = builder.securityContext;
         this.requireTLS13 = builder.requireTLS13;
+        this.priority = builder.priority;
     }
 
     public Priority getPriority() {
