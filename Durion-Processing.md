@@ -28,37 +28,37 @@ This is a clarification request issue that provides answers to questions about i
 ## Implementation Plan
 
 ### Phase 1: Create Estimate Entity and State Machine
-- [ ] Create Estimate entity with status field
-- [ ] Add state constants (Draft, Approved, Declined, Expired)
-- [ ] Add relationship to WorkOrder (one-to-one)
-- [ ] Add estimateId field to WorkOrder entity
+- [x] Create Estimate entity with status field
+- [x] Add state constants (Draft, Approved, Declined, Expired)
+- [x] Add relationship to WorkOrder (one-to-one)
+- [x] Add estimateId field to WorkOrder entity
 
 ### Phase 2: Add Configuration Support
-- [ ] Create ApprovalConfiguration entity for location and customer configuration
-- [ ] Add fields for approval method (CLICK_CONFIRM, SIGNATURE, etc.)
-- [ ] Add repository and service for configuration
+- [x] Create ApprovalConfiguration entity for location and customer configuration
+- [x] Add fields for approval method (CLICK_CONFIRM, SIGNATURE, etc.)
+- [x] Add repository and service for configuration
 
 ### Phase 3: Add Line Item Decline Support
-- [ ] Add declined flag to WorkOrderService and WorkOrderPart entities
-- [ ] Allow marking items as declined before final approval
+- [x] Add declined flag to WorkOrderService and WorkOrderPart entities
+- [x] Allow marking items as declined before final approval
 
 ### Phase 4: Implement State Transitions
-- [ ] Add approval timestamp to Estimate
-- [ ] Add decline timestamp and expiry date to Estimate
-- [ ] Add service methods for state transitions (approve, decline, reopen)
-- [ ] Add validation logic for state changes
+- [x] Add approval timestamp to Estimate
+- [x] Add decline timestamp and expiry date to Estimate
+- [x] Add service methods for state transitions (approve, decline, reopen)
+- [x] Add validation logic for state changes
 
 ### Phase 5: Update Services and Controllers
-- [ ] Update WorkOrderService to check estimate approval status
-- [ ] Add EstimateService for managing estimates
-- [ ] Add EstimateController with approval endpoints
-- [ ] Add configuration endpoints
+- [x] Update WorkOrderService to check estimate approval status
+- [x] Add EstimateService for managing estimates
+- [x] Add EstimateController with approval endpoints
+- [x] Add configuration endpoints
 
 ### Phase 6: Testing and Validation
 - [ ] Add unit tests for state transitions
 - [ ] Add unit tests for configuration retrieval
-- [ ] Build and verify the module
-- [ ] Document the changes
+- [ ] Build and verify the module (requires Java 21)
+- [x] Document the changes
 
 ## Notes
 - This is implementing the data model and business logic based on clarification
