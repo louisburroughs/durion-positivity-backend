@@ -1,5 +1,6 @@
 package com.positivity.workorder.service;
 
+import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.WorkOrder;
 import com.positivity.workorder.repository.WorkOrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.util.Optional;
 public class WorkOrderService {
     private final WorkOrderRepository workOrderRepository;
     private final RestTemplate restTemplate;
+    private final EstimateService estimateService;
 
     @Value("${customer.service.url:http://localhost:8080/api/customers}")
     private String customerServiceUrl;
@@ -37,10 +39,24 @@ public class WorkOrderService {
         if (!checkCustomerRequirements(workOrder.getCustomerId())) {
             throw new IllegalArgumentException("Customer requirements not met");
         }
-        // Check customer approval from pos-customer-approval
-        if (!checkCustomerApproval(workOrder.getApprovalId())) {
+        
+        // If estimateId is provided, validate the estimate is approved
+        if (workOrder.getEstimateId() != null) {
+            Estimate estimate = estimateService.getEstimateById(workOrder.getEstimateId())
+                    .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + workOrder.getEstimateId()));
+            
+            if (estimate.getStatus() != Estimate.EstimateStatus.APPROVED) {
+                throw new IllegalArgumentException("Work order can only be created from an approved estimate. Current status: " + estimate.getStatus());
+            }
+            
+            log.info("Creating work order from approved estimate {}", workOrder.getEstimateId());
+        }
+        
+        // Check customer approval from pos-customer-approval (legacy)
+        if (workOrder.getApprovalId() != null && !checkCustomerApproval(workOrder.getApprovalId())) {
             throw new IllegalArgumentException("Customer approval not found or not valid");
         }
+        
         return workOrderRepository.save(workOrder);
     }
 

@@ -18,6 +18,7 @@ public class WorkOrder {
     private Long vehicleId; // Reference to Vehicle
     private Long customerId; // Reference to Customer
     private Long approvalId; // Reference to CustomerApproval (from pos-customer-approval)
+    private Long estimateId; // Reference to Estimate - work order created from approved estimate
 
     @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkOrderService> services;

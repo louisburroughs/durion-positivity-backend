@@ -1,5 +1,5 @@
 ---
-name: dba_agent
+name: Database Administrator Agent
 description: Expert Database Administrator - Performance tuning, schema design, and database security
 ---
 
