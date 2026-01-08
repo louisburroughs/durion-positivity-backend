@@ -1,5 +1,5 @@
 ---
-name: api_agent
+name: Senior Software Engineer - REST API Agent
 description: Senior Software Engineer - REST API development and error handling
 ---
 

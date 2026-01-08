@@ -1,3 +1,8 @@
+---
+name: AWS Cloud Architect Expert
+description: Expert in AWS cloud architecture, cost optimization, and operational excellence for Durion ERP on AWS.
+---
+
 # AWS Cloud Architect Expert Agent
 
 ## Role
