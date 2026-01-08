@@ -1,21 +1,46 @@
 # Durion Process Log
 
 ## User Request
-- **Request:** "New error, bad model reference.  Check available gemini models and update"
-- **File:** `/home/n541342/IdeaProjects/durion-positivity-backend/.story-work/tools/rewrite_story.py`
+- **Issue:** [CLARIFICATION] Origin #207: [BACKEND] [STORY] Approval: Capture Digital Customer Approval
+- **Type:** Clarification Request
+- **Origin Story:** https://github.com/louisburroughs/durion-positivity-backend/issues/207
+
+## Issue Summary
+This is a clarification request issue that has already been answered by the user. The questions were about:
+1. Entity Type (Estimates vs Work Orders)
+2. Signature Data Format
+3. State Model for approvals
+4. Legal Requirements
+5. Versioning process
+
+All questions have been answered in the problem statement.
 
 ## Action Plan
-1.  [x] **Analyze Error:** User reported a "bad model reference" error with Gemini. This points to the model name being incorrect, deprecated, or unavailable.
-2.  [x] **Identify Solution:** Look up the latest recommended model for the Gemini API. The `gemini-1.5-pro-latest` is a common and robust choice.
-3.  [x] **Implement Change:** Modify the `rewrite_story.py` script to set `gemini-1.5-pro-latest` as the default model when `LLM_PROVIDER` is 'gemini'.
-4.  [x] **Communicate Fix:** Inform the user about the change and instruct them to retry.
+1. [ ] Understand the clarification request and answers provided
+2. [ ] Create documentation capturing the clarification decisions
+3. [ ] Update relevant domain models or documentation to reflect the decisions
+4. [ ] Create a summary document for the Story Authoring Agent
 
-## Phase 3: Execution
-- **Action:** Applied the following change to `/home/n541342/IdeaProjects/durion-positivity-backend/.story-work/tools/rewrite_story.py`:
-  - Changed the default Gemini model from `gemini-pro` to `gemini-1.5-pro-latest`.
-- **Tool Call:** `replace_string_in_file`
-- **Status:** Completed.
+## Clarification Answers Summary
 
-## Phase 4: Summary
-- **Summary:** The user reported an error indicating a bad model reference when using the Gemini LLM provider. I updated the default model in the  script from the potentially outdated 'gemini-pro' to 'gemini-1.5-pro-latest'. This change should align with current model availability and resolve the error.
-- **Next Steps:** Awaiting user confirmation after they retry the script.
+### 1. Entity Type
+**Answer:** Approvals can be for Estimates or Work Orders
+**Implication:** The endpoint should be generic (e.g., `/approvals`) to handle both entity types
+
+### 2. Signature Data Format
+**Answer:** JSON + PNG format
+**Details:** User has added a comment to the original issue describing signature capture process
+
+### 3. State Model
+**Answer:** 
+- `Pending Customer Approval` → `Approved`
+- Other states: `Denied` (Must have cause), `In process`, `On Hold`, `Transferred`
+
+### 4. Legal Requirements
+**Answer:** Not explicitly answered - needs follow-up
+
+### 5. Versioning
+**Answer:** 
+- Estimates are editable until 'Approved'
+- Changes to an estimate in 'Approved' state require a new version
+- If a new version is created, any work orders connected to the old version must be put into 'Transferred' status, with a reference to the new estimate
