@@ -21,6 +21,10 @@ public class WorkOrderService {
     private Long serviceEntityId; // Reference to ServiceEntity in pos-catalog
     private Long technicianId;    // Reference to Technician
 
+    // Flag to indicate this service was declined by customer during estimate approval
+    @Builder.Default
+    private Boolean declined = false;
+
     @OneToMany(mappedBy = "workOrderService", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkOrderPart> parts;
 }
