@@ -20,5 +20,9 @@ public class WorkOrderPart {
     private Long productEntityId; // Reference to ProductEntity in pos-catalog
     private Long nonInventoryProductEntityId; // Reference to NonInventoryProductEntity in pos-catalog
     private Integer quantity;
+
+    // Flag to indicate this part was declined by customer during estimate approval
+    @Builder.Default
+    private Boolean declined = false;
 }
 

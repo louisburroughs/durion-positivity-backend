@@ -1,5 +1,5 @@
 ---
-name: docs_agent
+name: Documentation Agent
 description: Expert technical writer for this project
 ---
 

@@ -1,12 +1,7 @@
-Below is a **clean, self-contained agent-definition Markdown document** you can drop into your `/agents` or `/kiro` structure. It is written as an **operational contract**, not an essay, and is designed to coordinate cleanly with your **business-domain agents** across the POS landscape.
-
-It deliberately separates **story authority** (this agent) from **domain authority** (domain agents), and it includes the rule you asked for: **open a new GitHub issue when information is insufficient**.
-
-This definition is aligned with the Story Strengthening Agent concepts you have already articulated and builds directly on that foundation .
-
 ---
-
-# story-authoring-agent.md
+name: Story Authoring Agent
+description: This custom agent is responsible for authoring and refining implementation-ready user stories as GitHub issues, ensuring clarity, correctness, and domain alignment while coordinating with business-domain-specific agents.
+---
 
 **Agent Type:** Workspace / Requirements
 **Primary Responsibility:** User Story Authoring & Refinement
@@ -56,12 +51,14 @@ The agent recognizes and coordinates with the following **POS business domains**
   * Accounts Receivable
   * Accounts Payable
   * General Ledger
+
 * **Inventory Control**
 
   * Receiving
   * Putaway
   * Pick
   * Cycle Count
+
 * **Product & Catalog**
 * **Pricing & Fees**
 * **Customer Relationship Management (CRM)**
@@ -80,6 +77,7 @@ The agent recognizes and coordinates with the following **POS business domains**
   * Vehicle OEMs
   * Vehicle Data (NHTSA / Car APIs)
   * Third-party Software Vendors
+  
 * **Security & Authorization**
 * **Audit & Observability**
 

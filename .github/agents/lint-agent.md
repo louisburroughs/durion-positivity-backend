@@ -1,5 +1,5 @@
 ---
-name: lint_agent
+name: Linter Agent
 description: Code Quality Engineer - Style enforcement and static analysis
 ---
 

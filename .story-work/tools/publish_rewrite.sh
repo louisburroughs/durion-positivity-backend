@@ -1,3 +1,4 @@
+# .story-work/tools/publish_rewrite.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -8,7 +9,7 @@ AFTER_FILE=""
 INCLUDE_RECOMMENDED=0
 FAIL_ON_BLOCKING=0
 DRY_RUN=0
-AUTO_CREATE_CLARIFICATION=1  # default ON; can disable with --no-clarification
+AUTO_CREATE_CLARIFICATION=1  # default ON; disable with --no-clarification
 
 usage() {
   cat <<EOF
@@ -16,11 +17,13 @@ Usage:
   $0 [-i ISSUE_NUMBER] -f PATH_TO_AFTER_MD [--include-recommended] [--fail-on-blocking] [--dry-run] [--no-clarification]
 
 What it does:
-  1) Validates the rewritten markdown (sections + labels block + original story preservation marker)
+  1) Validates rewritten markdown (sections + labels block + original story preservation marker)
   2) Auto-detects ISSUE_NUMBER if -i is omitted (from file path like .../work/<num>/after.md or <num>.md)
-  3) Applies labels from "## 🏷️ Labels (Proposed)" using apply_labels_from_rewrite.sh
-  4) Updates the GitHub issue body with the rewritten markdown
-  5) If STOP indicates clarification is required, auto-creates a [CLARIFICATION] issue and links it
+  3) Enforces Security+Legal dual-review blocking rules (STOP + label gate)
+  4) Applies labels from "## 🏷️ Labels (Proposed)" using apply_labels_from_rewrite.sh
+  5) Updates the GitHub issue body with the rewritten markdown
+  6) If STOP indicates clarification is required, auto-creates a [CLARIFICATION] issue and links it
+  7) Adds comments for STOP conditions (including optional dual-review comment)
 
 Env:
   REPO=OWNER/REPO  (default: louisburroughs/durion-positivity-backend)
@@ -29,7 +32,7 @@ Exit codes:
   2 usage / missing args
   3 validation failed
   4 label parsing/apply failed
-  5 refused due to blocking (when --fail-on-blocking)
+  5 refused due to blocking / promotion gate
 EOF
 }
 
@@ -46,7 +49,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$AFTER_FILE" ]]; then
+if [[ -z "${AFTER_FILE:-}" ]]; then
   echo "ERROR: -f is required." >&2
   usage
   exit 2
@@ -57,15 +60,22 @@ if [[ ! -f "$AFTER_FILE" ]]; then
   exit 2
 fi
 
+if [[ ! -r "$AFTER_FILE" ]]; then
+  echo "ERROR: File not readable: $AFTER_FILE" >&2
+  ls -l "$AFTER_FILE" >&2 || true
+  exit 2
+fi
+
+# Normalize to absolute path (helps VS Code task shells)
+AFTER_FILE="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$AFTER_FILE")"
+
 # ---------------------------
 # Auto-detect issue number if omitted
 # ---------------------------
-if [[ -z "$ISSUE" ]]; then
-  # Try .../work/<num>/after.md
+if [[ -z "${ISSUE:-}" ]]; then
   if [[ "$AFTER_FILE" =~ /work/([0-9]+)/after\.md$ ]]; then
     ISSUE="${BASH_REMATCH[1]}"
   else
-    # Try basename like 123.md or after-123.md
     base="$(basename "$AFTER_FILE")"
     if [[ "$base" =~ ^([0-9]+)\.md$ ]]; then
       ISSUE="${BASH_REMATCH[1]}"
@@ -75,7 +85,7 @@ if [[ -z "$ISSUE" ]]; then
   fi
 fi
 
-if [[ -z "$ISSUE" ]]; then
+if [[ -z "${ISSUE:-}" ]]; then
   echo "ERROR: Could not auto-detect issue number. Provide -i ISSUE_NUMBER." >&2
   exit 2
 fi
@@ -83,7 +93,7 @@ fi
 # ---------------------------
 # 1) Validate rewritten markdown
 # ---------------------------
-python3 - <<'PY' "$AFTER_FILE"
+python3 - "$AFTER_FILE" <<'PY'
 import re, sys, pathlib
 
 p = pathlib.Path(sys.argv[1])
@@ -140,73 +150,98 @@ print("Validation OK")
 PY
 
 # ---------------------------
-# Helper: read proposed labels (domain + blocking)
+# 2) Dual-review enforcement: parse proposed labels + STOP lines + gate status
 # ---------------------------
-LABEL_JSON="$(python3 - "$AFTER_FILE" <<'PY'
+DUAL_JSON="$(python3 - "$AFTER_FILE" <<'PY'
 import json, re, sys, pathlib
 
-path = pathlib.Path(sys.argv[1])
-text = path.read_text(encoding="utf-8", errors="replace")
+t = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
 
-m = re.search(r"^##\s*🏷️\s*Labels\s*\(Proposed\)\s*$", text, re.MULTILINE)
-if not m:
-  print(json.dumps({"error":"Missing '## 🏷️ Labels (Proposed)' section"}))
-  raise SystemExit(3)
+def section_labels(title):
+  m = re.search(r"^##\s*🏷️\s*Labels\s*\(Proposed\)\s*$", t, re.MULTILINE)
+  if not m:
+    return []
+  rest = t[m.start():]
+  m2 = re.search(r"^\#\#\s+(?!🏷️\s*Labels\s*\(Proposed\)).+$", rest, re.MULTILINE)
+  block = rest if not m2 else rest[:m2.start()]
 
-start = m.start()
-rest = text[start:]
-m2 = re.search(r"^\#\#\s+(?!🏷️\s*Labels\s*\(Proposed\)).+$", rest, re.MULTILINE)
-labels_block = rest if not m2 else rest[:m2.start()]
-
-def extract_list(section_title: str):
-  s = re.search(rf"^###\s*{re.escape(section_title)}\s*$", labels_block, re.MULTILINE)
+  s = re.search(rf"^###\s*{re.escape(title)}\s*$", block, re.MULTILINE)
   if not s:
     return []
-  tail = labels_block[s.end():]
+  tail = block[s.end():]
   nxt = re.search(r"^###\s+.+$", tail, re.MULTILINE)
   chunk = tail if not nxt else tail[:nxt.start()]
-  labels = []
-  for line in chunk.splitlines():
-    line = line.strip()
-    if line.startswith("- "):
-      lab = line[2:].strip()
-      if lab:
-        labels.append(lab)
-  return labels
+  out = []
+  for ln in chunk.splitlines():
+    ln = ln.strip()
+    if ln.startswith("- "):
+      out.append(ln[2:].strip())
+  return [x for x in out if x and x.lower() != "none"]
 
-required = extract_list("Required")
-recommended = extract_list("Recommended")
-blocking = extract_list("Blocking / Risk")
-blocking_norm = [x for x in blocking if x.lower() != "none"]
+required = section_labels("Required")
+recommended = section_labels("Recommended")
+blocking = section_labels("Blocking / Risk")
+all_labels = required + recommended + blocking
 
-domain = None
-for l in required + recommended + blocking_norm:
-  if l.startswith("domain:"):
-    domain = l
+stop_lines = re.findall(r"^STOP:\s*.+$", t, re.MULTILINE)
+
+status = None
+for l in all_labels:
+  if l.startswith("status:"):
+    status = l
     break
 
-print(json.dumps({
+def has(x): return x in all_labels
+
+data = {
+  "labels": all_labels,
   "required": required,
   "recommended": recommended,
-  "blocking_risk": blocking_norm,
-  "domain": domain
-}))
+  "blocking": blocking,
+  "stop_lines": stop_lines,
+  "status": status,
+  "has_blocked_security": has("blocked:security-review"),
+  "has_blocked_legal": has("blocked:legal-review"),
+}
+print(json.dumps(data))
 PY
 )"
 
+HAS_BLOCKED_SECURITY="$(echo "$DUAL_JSON" | python3 -c 'import sys,json; j=json.load(sys.stdin); print("1" if j["has_blocked_security"] else "0")')"
+HAS_BLOCKED_LEGAL="$(echo "$DUAL_JSON" | python3 -c 'import sys,json; j=json.load(sys.stdin); print("1" if j["has_blocked_legal"] else "0")')"
+PROPOSED_STATUS="$(echo "$DUAL_JSON" | python3 -c 'import sys,json; j=json.load(sys.stdin); print(j["status"] or "")')"
+STOP_LINES="$(echo "$DUAL_JSON" | python3 -c 'import sys,json; j=json.load(sys.stdin); print("\n".join(j["stop_lines"]))')"
 
-if echo "$LABEL_JSON" | python3 -c 'import sys,json; j=json.load(sys.stdin); sys.exit(0 if "error" not in j else 4)'; then
-  :
-else
-  echo "ERROR parsing labels: $LABEL_JSON" >&2
-  exit 4
+STOP_SECURITY="$(echo "$STOP_LINES" | grep -E '^STOP:\s*Security risk requires human review' || true)"
+STOP_LEGAL="$(echo "$STOP_LINES" | grep -E '^STOP:\s*Legal ambiguity requires human review' || true)"
+STOP_DUAL="$(echo "$STOP_LINES" | grep -E '^STOP:\s*Security and legal risks require coordinated human review' || true)"
+
+# Additive auto-blocks implied by STOP lines (dual-review enforcement)
+AUTO_BLOCKS=()
+if [[ -n "$STOP_SECURITY" || -n "$STOP_DUAL" ]]; then
+  AUTO_BLOCKS+=( "blocked:security-review" )
+fi
+if [[ -n "$STOP_LEGAL" || -n "$STOP_DUAL" ]]; then
+  AUTO_BLOCKS+=( "blocked:legal-review" )
 fi
 
-DOMAIN_LABEL="$(echo "$LABEL_JSON" | python3 -c 'import sys,json; j=json.load(sys.stdin); print(j.get("domain") or "")')"
-BLOCKING_LABELS="$(echo "$LABEL_JSON" | python3 -c 'import sys,json; j=json.load(sys.stdin); print("\n".join(j.get("blocking_risk") or []))')"
+EFFECTIVE_HAS_SECURITY="$HAS_BLOCKED_SECURITY"
+EFFECTIVE_HAS_LEGAL="$HAS_BLOCKED_LEGAL"
+if [[ " ${AUTO_BLOCKS[*]} " == *" blocked:security-review "* ]]; then EFFECTIVE_HAS_SECURITY=1; fi
+if [[ " ${AUTO_BLOCKS[*]} " == *" blocked:legal-review "* ]]; then EFFECTIVE_HAS_LEGAL=1; fi
+
+# Gate: do not allow proposing ready-for-dev while blocked by security/legal review
+if [[ "$PROPOSED_STATUS" == "status:ready-for-dev" && ( "$EFFECTIVE_HAS_SECURITY" -eq 1 || "$EFFECTIVE_HAS_LEGAL" -eq 1 ) ]]; then
+  echo "ERROR: Proposed status:ready-for-dev while security/legal blocking is present (dual-review enforcement)." >&2
+  echo "  Proposed status: $PROPOSED_STATUS" >&2
+  echo "  Effective blocks: security=$EFFECTIVE_HAS_SECURITY legal=$EFFECTIVE_HAS_LEGAL" >&2
+  echo "  STOP lines:" >&2
+  echo "${STOP_LINES:-<none>}" | sed 's/^/    /' >&2
+  exit 5
+fi
 
 # ---------------------------
-# 2) Apply labels from rewrite
+# 3) Apply labels from rewrite
 # ---------------------------
 APPLY_ARGS=( -r "$REPO" -i "$ISSUE" -f "$AFTER_FILE" )
 if [[ "$INCLUDE_RECOMMENDED" -eq 1 ]]; then
@@ -223,8 +258,22 @@ else
   ./.story-work/tools/apply_labels_from_rewrite.sh "${APPLY_ARGS[@]}"
 fi
 
+# Apply additive auto-block labels required by STOP phrases (dual-review enforcement)
+if [[ "${#AUTO_BLOCKS[@]}" -gt 0 ]]; then
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: would auto-apply dual-review blocks:"
+    printf "%s\n" "${AUTO_BLOCKS[@]}" | sed 's/^/  + /'
+  else
+    for lab in "${AUTO_BLOCKS[@]}"; do
+      gh issue edit "$ISSUE" -R "$REPO" --add-label "$lab" >/dev/null || true
+    done
+    echo "Auto-applied dual-review blocks:"
+    printf "%s\n" "${AUTO_BLOCKS[@]}" | sed 's/^/  + /'
+  fi
+fi
+
 # ---------------------------
-# 3) Update issue body
+# 4) Update issue body
 # ---------------------------
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "DRY RUN: would update issue body:"
@@ -235,22 +284,28 @@ else
 fi
 
 # ---------------------------
-# 4) Auto-create clarification issue (if STOP: Clarification required...)
+# 5) Auto-create clarification issue (STOP: Clarification required...)
 # ---------------------------
 STOP_CLAR="$(grep -E '^STOP:\s*Clarification required before finalization' "$AFTER_FILE" || true)"
 STOP_CONFLICT="$(grep -E '^STOP:\s*Conflicting domain guidance detected' "$AFTER_FILE" || true)"
 
-# Only auto-create for clarification STOP (not domain-conflict STOP)
-if [[ "$AUTO_CREATE_CLARIFICATION" -eq 1 && -n "$STOP_CLAR" ]]; then
-  if [[ -z "$DOMAIN_LABEL" ]]; then
-    echo "WARN: Clarification needed but no domain label was proposed; defaulting to clarification:domain without domain:* label." >&2
-  fi
+# Domain label (best-effort) for routing clarification
+DOMAIN_LABEL="$(python3 - "$AFTER_FILE" <<'PY'
+import re, sys, pathlib
+t = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+m = re.search(r"^##\s*🏷️\s*Labels\s*\(Proposed\)\s*$", t, re.MULTILINE)
+if not m:
+  print("")
+  raise SystemExit(0)
+rest = t[m.start():]
+m2 = re.search(r"^\#\#\s+(?!🏷️\s*Labels\s*\(Proposed\)).+$", rest, re.MULTILINE)
+block = rest if not m2 else rest[:m2.start()]
+labs = re.findall(r"^\-\s*(domain:[^\s]+)\s*$", block, re.MULTILINE)
+print(labs[0] if labs else "")
+PY
+)"
 
-  # Pull origin title/url for template
-  ORIGIN_TITLE="$(gh issue view "$ISSUE" -R "$REPO" --json title -q '.title' || echo "")"
-  ORIGIN_URL="https://github.com/${REPO}/issues/${ISSUE}"
-
-  # Extract Open Questions block (best-effort)
+# Extract Open Questions block (best-effort)
 OPEN_QUESTIONS="$(python3 - "$AFTER_FILE" <<'PY'
 import re, sys, pathlib
 t = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
@@ -267,17 +322,11 @@ print("\n".join(lines).strip())
 PY
 )"
 
-# Guard: ensure AFTER_FILE is readable (and never executed)
-if [[ ! -r "$AFTER_FILE" ]]; then
-  echo "ERROR: after.md is not readable: $AFTER_FILE" >&2
-  ls -l "$AFTER_FILE" >&2 || true
-  exit 2
-fi
+if [[ "$AUTO_CREATE_CLARIFICATION" -eq 1 && -n "$STOP_CLAR" ]]; then
+  ORIGIN_TITLE="$(gh issue view "$ISSUE" -R "$REPO" --json title -q '.title' || echo "")"
+  ORIGIN_URL="https://github.com/${REPO}/issues/${ISSUE}"
 
-AFTER_FILE="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$AFTER_FILE")"
-
-
-  # Heuristic for clarification:* label
+  # Heuristic clarification:* label
   CLAR_LABEL="clarification:domain"
   lower_all="$( (echo "$ORIGIN_TITLE"; echo "$OPEN_QUESTIONS") | tr '[:upper:]' '[:lower:]' )"
 
@@ -293,23 +342,19 @@ AFTER_FILE="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$
     CLAR_LABEL="clarification:policy"
   fi
 
-  # Prevent duplicates: look for an open clarification with "Origin #<ISSUE>"
-  # (This relies on our standard title pattern below.)
+  # Duplicate prevention
   EXISTING="$(gh issue list -R "$REPO" --state open --label "type:clarification" --search "in:title Origin #$ISSUE" --json number -q '.[0].number' 2>/dev/null || true)"
-
   if [[ -n "$EXISTING" ]]; then
     CLAR_URL="https://github.com/${REPO}/issues/${EXISTING}"
     echo "Clarification already exists: $CLAR_URL"
   else
     RUN_ID="$(python3 - <<'PY'
-import uuid, time
-# UUIDv7 not in stdlib; use uuid4 as a pragmatic fallback for now.
+import uuid
 print(str(uuid.uuid4()))
 PY
 )"
     ISO_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-    # Build clarification body (agent template)
     CLAR_BODY="$(cat <<EOF
 # Clarification Request
 
@@ -341,10 +386,6 @@ Proceeding without these answers would require guessing business rules or system
 - Test cases cannot be derived reliably
 - Auditability and integrations may be incorrect
 
-## Relevant Context (From Story)
-- Origin Story: ${ORIGIN_URL}
-- Please review the **Open Questions** section in the origin story body.
-
 ## Resolution Acceptance Criteria
 A response is considered complete when it:
 - Answers each numbered question explicitly
@@ -370,26 +411,23 @@ EOF
       [[ -n "$DOMAIN_LABEL" ]] && echo "  $DOMAIN_LABEL"
       echo "  $CLAR_LABEL"
       echo "  agent:story-authoring"
+      CLAR_URL=""
     else
-      # Create issue
       CREATE_ARGS=(--repo "$REPO" --title "$CLAR_TITLE" --body "$CLAR_BODY"
                   --label "type:clarification" --label "blocked:clarification"
                   --label "$CLAR_LABEL" --label "agent:story-authoring")
-
       if [[ -n "$DOMAIN_LABEL" ]]; then
         CREATE_ARGS+=( --label "$DOMAIN_LABEL" )
       fi
-
       CLAR_URL="$(gh issue create "${CREATE_ARGS[@]}")"
       echo "Created clarification: $CLAR_URL"
     fi
   fi
 
-  # Link + block origin story (if not already)
+  # Link + block origin story
   if [[ "$DRY_RUN" -eq 1 ]]; then
     echo "DRY RUN: would ensure origin story has blocked:clarification and comment link."
   else
-    # Ensure origin is blocked and has a comment linking the clarification
     gh issue edit "$ISSUE" -R "$REPO" --add-label "blocked:clarification" >/dev/null || true
     if [[ -n "${CLAR_URL:-}" ]]; then
       gh issue comment "$ISSUE" -R "$REPO" --body "Auto-created clarification issue: ${CLAR_URL}" >/dev/null
@@ -397,7 +435,21 @@ EOF
   fi
 fi
 
-# If it’s a domain conflict STOP, just comment (no auto-create here)
+# ---------------------------
+# 6) STOP comments (includes optional block C)
+# ---------------------------
+
+# Optional Block C: Dual-review comment
+if [[ -n "$STOP_DUAL" ]]; then
+  MSG="Rewrite published with STOP condition:\n\n\`\`\`\n$STOP_DUAL\n\`\`\`\n\nDual review required. Please resolve security + legal items before promotion."
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: would comment dual-review notice."
+  else
+    gh issue comment "$ISSUE" -R "$REPO" --body "$MSG" >/dev/null
+  fi
+fi
+
+# Comment domain conflict STOP (no auto-create here)
 if [[ -n "$STOP_CONFLICT" ]]; then
   MSG="Rewrite published with STOP condition:\n\n\`\`\`\n$STOP_CONFLICT\n\`\`\`\n\nPlease resolve the **⚠️ Domain Conflict Summary** and **Open Questions** sections."
   if [[ "$DRY_RUN" -eq 1 ]]; then
