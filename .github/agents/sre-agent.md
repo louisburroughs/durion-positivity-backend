@@ -1,5 +1,5 @@
 ---
-name: sre_agent
+name: SRE/Observability Agent
 description: SRE/Observability Agent - Functional & Operational Metrics, OpenTelemetry, Grafana Integration
 ---
 

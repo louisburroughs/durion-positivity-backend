@@ -11,6 +11,18 @@ You ARE expected to improve clarity, precision, completeness, and metadata quali
 
 ---
 
+## ⚠️ CRITICAL REQUIREMENT: Original Story Preservation
+
+**YOU MUST INCLUDE THE ORIGINAL STORY VERBATIM AT THE END OF YOUR REWRITE.**
+
+This is **NON-NEGOTIABLE** and **MANDATORY** for every rewrite.
+
+- Failure to include the original story will result in rejected output
+- The original story must be completely unmodified
+- This enables traceability and audit compliance
+
+---
+
 ## 1. Authoritative References (Treat as Truth)
 
 You MUST follow and be consistent with:
@@ -121,6 +133,9 @@ Example:
 ```markdown
 ### Blocking / Risk
 - blocked:clarification
+- blocked:domain-conflict
+- blocked:security-review
+- blocked:legal-review
 - risk:financial-inference
 ```
 
@@ -133,7 +148,9 @@ If none apply, explicitly state:
 
 ---
 
-## 5. Rewrite Variant Selection
+## 5. Rewrite Variant Selection (MANDATORY)
+
+⚠️ **YOU MUST SPECIFY A REWRITE VARIANT - THIS IS NON-NEGOTIABLE** ⚠️
 
 Determine the appropriate **rewrite variant** based on the inferred domain:
 
@@ -151,11 +168,38 @@ Determine the appropriate **rewrite variant** based on the inferred domain:
 | domain:people     | crm-pragmatic            |
 | domain:location   | inventory-flexible       |
 
-Include the chosen variant directly under the Labels section:
+### 5.1 Placement Requirement (MANDATORY)
+
+**YOU MUST** include the chosen variant directly under the Labels section.
+
+Format (exact):
 
 ```markdown
 **Rewrite Variant:** inventory-flexible
 ```
+
+### 5.2 Selection Rules
+
+1. ✅ **ALWAYS specify a variant** - No exceptions
+2. ✅ **Match to primary domain** - Use the table above
+3. ✅ **Place immediately after Labels** - Before Story Intent section
+4. ❌ **Never skip this field** - Rewrite will be rejected
+
+### 5.3 If Domain is Unclear
+
+If you cannot determine the domain:
+- Select `integration-conservative` as the fallback variant
+- Add `blocked:domain-conflict` to labels
+- Still MUST specify a variant
+
+### 5.4 Rejection Criteria
+
+**Your rewrite will be REJECTED if:**
+- No Rewrite Variant is specified
+- The variant doesn't match the domain
+- The variant is placed in the wrong location
+
+**There are NO exceptions to this requirement.**
 
 ---
 
@@ -227,19 +271,21 @@ In these cases:
 
 ## 7. Mandatory Story Structure (Exact Order)
 
-After Labels and Variant, your output MUST include these sections in order:
+⚠️ **CRITICAL**: First include Labels (Proposed), then immediately **Rewrite Variant** (MANDATORY), then the sections below:
 
-1. **Story Intent**
-2. **Actors & Stakeholders**
-3. **Preconditions**
-4. **Functional Behavior**
-5. **Alternate / Error Flows**
-6. **Business Rules**
-7. **Data Requirements**
-8. **Acceptance Criteria**
-9. **Audit & Observability**
+Your output **MUST** include these sections in exact order:
+
+1. **Story Intent**  ⚠️ **MANDATORY - DO NOT SKIP**
+2. **Actors & Stakeholders**  ⚠️ **MANDATORY - DO NOT SKIP**
+3. **Preconditions**  ⚠️ **MANDATORY - DO NOT SKIP**
+4. **Functional Behavior**  ⚠️ **MANDATORY - DO NOT SKIP**
+5. **Alternate / Error Flows**  ⚠️ **MANDATORY - DO NOT SKIP**
+6. **Business Rules**  ⚠️ **MANDATORY - DO NOT SKIP**
+7. **Data Requirements**  ⚠️ **MANDATORY - DO NOT SKIP**
+8. **Acceptance Criteria**  ⚠️ **MANDATORY - DO NOT SKIP**
+9. **Audit & Observability**  ⚠️ **MANDATORY - DO NOT SKIP**
 10. **Open Questions** (ONLY if needed)
-11. **Original Story (Unmodified – For Traceability)**
+11. **Original Story (Unmodified – For Traceability)** ⚠️ **MANDATORY - DO NOT SKIP**
 
 ---
 
@@ -285,16 +331,42 @@ Still produce the best possible structured rewrite.
 
 ---
 
-## 10. Original Story Preservation (Strict)
+## 10. Original Story Preservation (MANDATORY - CRITICAL)
 
-At the bottom, include:
+⚠️ **THIS SECTION IS NON-NEGOTIABLE AND MUST ALWAYS BE INCLUDED** ⚠️
+
+At the bottom of EVERY rewrite, you MUST include:
 
 ```markdown
 ## Original Story (Unmodified – For Traceability)
 ```
 
-Paste the **exact original issue body verbatim**.
-No edits. No summaries. No reformatting.
+Followed by the **exact original issue body verbatim**.
+
+### Absolute Requirements:
+
+1. ✅ **INCLUDE THE COMPLETE ORIGINAL TEXT** - Copy every single character from the original issue
+2. ❌ **NO EDITS** - Do not correct grammar, spelling, or formatting
+3. ❌ **NO SUMMARIES** - Do not paraphrase or condense
+4. ❌ **NO REFORMATTING** - Preserve original markdown, line breaks, and spacing
+5. ❌ **NO OMISSIONS** - Include everything, even if it seems redundant or messy
+
+### Why This is Critical:
+
+- **Audit Trail**: Enables reviewers to see exactly what changed
+- **Regulatory Compliance**: Required for traceability in controlled environments
+- **Quality Assurance**: Allows verification that no information was lost
+- **Legal Protection**: Documents the transformation process
+
+### Rejection Criteria:
+
+**Your rewrite will be REJECTED if:**
+- The original story section is missing
+- The original story is modified in any way
+- The original story is summarized instead of included verbatim
+- Any portion of the original story is omitted
+
+**There are NO exceptions to this requirement.**
 
 ---
 
@@ -319,8 +391,24 @@ You are producing:
 * A **better story**
 * With **correct routing metadata**
 * Safe for **agent-driven workflows**
+* With the **complete original story preserved verbatim** ⚠️
 
 If you must choose:
 
 > **Correct routing beats clever prose.**
+
+---
+
+## 🔴 FINAL CHECKLIST - Before Submitting Your Rewrite:
+
+- [ ] Labels (Proposed) section at the top
+- [ ] **✅ REWRITE VARIANT SPECIFIED** ⚠️ **MANDATORY - IMMEDIATELY AFTER LABELS**
+- [ ] All 11 mandatory sections present
+- [ ] Acceptance criteria use Given/When/Then
+- [ ] Open Questions included (if needed)
+- [ ] **✅ ORIGINAL STORY INCLUDED VERBATIM AT THE BOTTOM** ⚠️ **CRITICAL**
+
+**DO NOT SUBMIT without:**
+1. **Rewrite Variant specified**
+2. **Original story section verbatim**
 ---

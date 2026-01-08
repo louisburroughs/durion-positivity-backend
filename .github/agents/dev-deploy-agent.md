@@ -1,5 +1,5 @@
 ---
-name: dev_deploy_agent
+name: Dev Deploy Agent
 description: Senior DevOps Engineer - Local development deployment and containerization
 ---
 
