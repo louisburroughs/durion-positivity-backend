@@ -10,3 +10,7 @@
 - [x] Revise acceptance criteria to cover emergency/safety workflow, documentation, customer acknowledgment, approval artifact, and PDF supplemental estimate.
 - [x] Clear Open Questions; update labels/status on #156 (remove blocked:clarification; set status:ready-for-dev).
 - [x] Comment and close clarification #322 after updating the origin story.
+
+## Summary
+- Story #156 updated with emergency/safety definition, Technician authority, required evidence/notes, customer denial acknowledgment before closure/return, Advisor-note approval artifact, and updated PDF supplemental estimate; ACs and flows revised; status set to ready-for-dev and open questions cleared.
+- Clarification #322 commented and closed after applying decisions.
