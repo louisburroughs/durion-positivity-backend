@@ -6,7 +6,7 @@
 - Clarification focus: Awaiting answers from issue #323 to finalize story #157 for development.
 
 ## Action Plan
-- [ ] Gather clarification #323 details and origin story #157 content.
-- [ ] Update story #157 with resolved rules and acceptance criteria per answers.
-- [ ] Clear Open Questions and adjust labels/status on #157 (remove blocked, set ready-for-dev if no gaps).
-- [ ] Comment and close clarification #323 after updates.
+- [x] Gather clarification #323 details and origin story #157 content.
+- [x] Update story #157 with resolved rules and acceptance criteria per answers.
+- [x] Clear Open Questions and adjust labels/status on #157 (remove blocked, set ready-for-dev if no gaps).
+- [x] Comment and close clarification #323 after updates.
