@@ -12,3 +12,8 @@
 - [x] Clear Open Questions section by incorporating answers.
 - [x] Update labels on origin story: remove blocked:clarification; set status:needs-review (or ready-for-dev if all resolved).
 - [x] Comment/close clarification #244 referencing updates and outcomes.
+
+## Summary
+- Story #53 updated with business rules and ACs covering missing-from-feed -> INACTIVE and disabling existing overrides when status becomes INACTIVE.
+- Labels on #53 updated to status:ready-for-dev; blocked:clarification removed.
+- Clarification #244 closed after documenting the applied decisions.
