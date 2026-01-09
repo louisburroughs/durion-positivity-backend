@@ -12,3 +12,7 @@
 - [x] Clear Open Questions section with clarification answers.
 - [x] Update origin story labels: remove blocked:clarification; set status:ready-for-dev.
 - [x] Comment and close clarification #246 referencing applied updates.
+
+## Summary
+- Story #57 updated with confirmed uniqueness/immutability rules, deactivation handling with work order flags and PO admin notifications, search fields, and data notes; open questions cleared and status set to ready-for-dev.
+- Clarification #246 documented, commented, and closed after updating the origin story.
