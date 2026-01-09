@@ -1,19 +1,6 @@
 # Durion Processing
 
 ## Request Details
-- Task: Apply clarification #244 answers to origin story #53 and update status/labels accordingly.
-- Origin story: #53 StorePrice: Sync Locations from durion-hr for Pricing Scope.
-- Clarification answers: Missing from durion-hr feed -> set local location to INACTIVE indefinitely; price overrides for INACTIVE locations must be disabled.
-- Required actions: Update story content (business rules, acceptance criteria, open questions), remove blocked:clarification, set status:needs-review or ready-for-dev per resolution, close clarification.
-
-## Action Plan
-- [x] Update story text: integrate deletion handling (inactive indefinitely when missing in feed), and disable existing price overrides when location becomes INACTIVE.
-- [x] Adjust acceptance criteria to cover inactive-from-missing-feed and override disabling.
-- [x] Clear Open Questions section by incorporating answers.
-- [x] Update labels on origin story: remove blocked:clarification; set status:needs-review (or ready-for-dev if all resolved).
-- [x] Comment/close clarification #244 referencing updates and outcomes.
-
-## Summary
-- Story #53 updated with business rules and ACs covering missing-from-feed -> INACTIVE and disabling existing overrides when status becomes INACTIVE.
-- Labels on #53 updated to status:ready-for-dev; blocked:clarification removed.
-- Clarification #244 closed after documenting the applied decisions.
+- Task: Apply clarification #246 answers to origin story #57 (Product master creation) and update status/labels accordingly.
+- Clarification answers summary: SKU global uniqueness confirmed; Manufacturer+MPN unique; other external IDs not primary keys; SKU immutable, manufacturerId/mpn editable; deactivation allowed even with stock/work orders/POs (with flags/notifications); tire size/spec part of description; search fields: description, category name, attributes, name.
+- Required actions: Update story content and acceptance criteria with resolved rules; clear open questions; adjust labels/status; close clarification.
