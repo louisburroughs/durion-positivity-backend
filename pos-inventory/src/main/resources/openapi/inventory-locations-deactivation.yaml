@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Inventory Location Deactivation API (DRAFT)
+  version: 0.1.0
+  description: Contract stub for deactivating a storage location with atomic stock transfer (Option B). See story #39.
+servers:
+  - url: /api
+paths:
+  /inventory/locations/{locationId}/deactivate:
+    post:
+      tags: [Inventory]
+      summary: Deactivate a storage location
+      operationId: deactivateLocation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: locationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeactivateLocationRequest' }
+      responses:
+        '202': { description: Accepted }
+        '400': { description: Bad Request }
+        '404': { description: Not Found }
+        '409': { description: Conflict }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    DeactivateLocationRequest:
+      type: object
+      properties:
+        destinationLocationId:
+          type: string
+          format: uuid
