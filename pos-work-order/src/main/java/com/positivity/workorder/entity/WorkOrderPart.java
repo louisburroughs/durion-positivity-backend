@@ -24,5 +24,43 @@ public class WorkOrderPart {
     // Flag to indicate this part was declined by customer during estimate approval
     @Builder.Default
     private Boolean declined = false;
+
+    // Status of the work order item
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private WorkOrderItemStatus status = WorkOrderItemStatus.OPEN;
+
+    // Reference to the change request that added this item
+    private Long changeRequestId;
+
+    // Emergency/Safety flags and documentation
+    @Builder.Default
+    private Boolean isEmergencySafety = false;
+
+    private String photoEvidenceUrl;
+
+    @Column(columnDefinition = "TEXT")
+    private String emergencyNotes;
+
+    @Builder.Default
+    private Boolean photoNotPossible = false;
+
+    // Customer denial acknowledgment for emergency items
+    private Boolean customerDenialAcknowledged;
+
+    /**
+     * Check if this item can be executed (not pending approval unless emergency exception)
+     */
+    public boolean canExecute() {
+        return status != WorkOrderItemStatus.PENDING_APPROVAL 
+            || (isEmergencySafety && customerDenialAcknowledged != null);
+    }
+
+    /**
+     * Check if this item can consume inventory
+     */
+    public boolean canConsumeInventory() {
+        return status != WorkOrderItemStatus.PENDING_APPROVAL;
+    }
 }
 
