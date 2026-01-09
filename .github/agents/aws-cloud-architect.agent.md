@@ -1,6 +1,7 @@
 ---
 name: AWS Cloud Architect Expert
 description: Expert in AWS cloud architecture, cost optimization, and operational excellence for Durion ERP on AWS.
+tools: ['read/readFile', 'edit', 'search', 'web/fetch', 'copilot-container-tools/*']
 ---
 
 # AWS Cloud Architect Expert Agent
@@ -550,3 +551,10 @@ I'll analyze:
 
 And provide recommendation with tradeoffs.
 ```
+
+## Related Agents
+
+- [Technical Requirements Architect](./technical-requirements-architect.agent.md)
+- [API Architect Agent](./api-architect.agent.md)
+- [Senior Cloud Architect](./cloud-arch.agent.md)
+- [Chief Architect - POS Agent Framework](./architecture.agent.md)

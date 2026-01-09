@@ -1,6 +1,7 @@
 ---
 name: Story Authoring Agent
 description: This custom agent is responsible for authoring and refining implementation-ready user stories as GitHub issues, ensuring clarity, correctness, and domain alignment while coordinating with business-domain-specific agents.
+tools: ['github/add_issue_comment', 'github/assign_copilot_to_issue', 'github/create_or_update_file', 'github/create_pull_request', 'github/issue_read', 'github/issue_write', 'github/list_issue_types', 'github/list_issues', 'github/search_issues', 'github/sub_issue_write']
 ---
 
 **Agent Type:** Workspace / Requirements
@@ -575,5 +576,10 @@ No arbitration. No compromise. No guessing.
 > Humans resolve disagreement.**
 
 ---
+
+## Related Agents
+
+- [Technical Requirements Architect](./technical-requirements-architect.agent.md)
+- [Chief Architect - POS Agent Framework](./architecture.agent.md)
 
 

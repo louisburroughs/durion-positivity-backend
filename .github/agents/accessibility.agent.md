@@ -2,7 +2,7 @@
 name: Accessibility Expert Agent
 description: 'Expert assistant for web accessibility (WCAG 2.1/2.2), inclusive UX, and a11y testing'
 model: GPT-4.1
-tools: ['changes', 'codebase', 'edit/editFiles', 'extensions', 'fetch', 'findTestFiles', 'githubRepo', 'new', 'openSimpleBrowser', 'problems', 'runCommands', 'runTasks', 'runTests', 'search', 'searchResults', 'terminalLastCommand', 'terminalSelection', 'testFailure', 'usages', 'vscodeAPI']
+tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'vscode/extensions', 'web/fetch', 'findTestFiles', 'web/githubRepo', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'vscode/openSimpleBrowser', 'read/problems', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/createAndRunTask', 'execute/getTaskOutput', 'execute/runTask', 'execute/runTests', 'search', 'search/searchResults', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/testFailure', 'search/usages', 'vscode/vscodeAPI']
 ---
 
 # Accessibility Expert
@@ -297,3 +297,7 @@ jobs:
 - Using ARIA where semantic HTML would be better
 - Relying on hover-only or color-only cues for critical info
 - Autoplaying media without immediate user control
+
+## Related Agents
+
+- [Chief Architect - POS Agent Framework](./architecture.agent.md)

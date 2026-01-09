@@ -1,6 +1,7 @@
 ---
 name: API Gateway & OpenAPI Architect
 description: This custom agent specializes in designing and implementing Spring Cloud Gateway solutions with integrated Netflix Eureka service discovery and Springdoc-OpenAPI documentation aggregation for microservices architectures.
+tools:['vscode', 'execute', 'read', 'edit', 'search', 'web', 'awesome-copilot/*', 'github/*', 'agent', 'vscjava.vscode-java-upgrade/generate_upgrade_plan', 'vscjava.vscode-java-upgrade/confirm_upgrade_plan', 'vscjava.vscode-java-upgrade/setup_upgrade_environment', 'vscjava.vscode-java-upgrade/build_java_project', 'vscjava.vscode-java-upgrade/validate_cves_for_java', 'vscjava.vscode-java-upgrade/validate_behavior_changes', 'vscjava.vscode-java-upgrade/run_tests_for_java', 'vscjava.vscode-java-upgrade/summarize_upgrade', 'vscjava.vscode-java-upgrade/generate_tests_for_java', 'vscjava.vscode-java-upgrade/list_jdks', 'vscjava.vscode-java-upgrade/list_mavens', 'vscjava.vscode-java-upgrade/install_jdk', 'vscjava.vscode-java-upgrade/install_maven', 'todo']
 ---
 Here is a comprehensive agent description for a **Spring Cloud Gateway & OpenAPI Architect**, formatted in Markdown.
 
