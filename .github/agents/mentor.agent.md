@@ -1,7 +1,7 @@
 ---
 name: Coding Mentor Agent
 description: 'Help mentor the engineer by providing guidance and support.'
-tools: ['codebase', 'fetch', 'findTestFiles', 'githubRepo', 'search', 'usages']
+tools: ['search/codebase', 'web/fetch', 'web/githubRepo', 'search', 'search/usages']
 ---
 # Mentor mode instructions
 

@@ -1,6 +1,7 @@
 ---
 name: Spring Boot 3.x Strategic Advisor
 description: This custom agent provides expert recommendations on Spring Boot 3.x starters, libraries, and best practices to optimize application development and maintainability.
+tools: [execute, read, edit, search, web, agent, todo]
 ---
 
 # Agent Persona: Spring Boot 3.x Strategic Advisor

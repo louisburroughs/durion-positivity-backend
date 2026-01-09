@@ -1,6 +1,7 @@
 ---
 name: ADR Generator
 description: Expert agent for creating comprehensive Architectural Decision Records (ADRs) with structured formatting optimized for AI consumption and human readability.
+tools: ['read', 'edit', 'search', 'web', 'awesome-copilot/*', 'todo']
 ---
 
 # ADR Generator Agent

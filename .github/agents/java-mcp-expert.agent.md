@@ -2,6 +2,7 @@
 description: "Expert assistance for building Model Context Protocol servers in Java using reactive streams, the official MCP Java SDK, and Spring Boot integration."
 name: "Java MCP Expert"
 model: GPT-4.1
+tools:['vscode', 'execute', 'read', 'edit', 'search', 'web', 'github/*', 'agent', 'github.vscode-pull-request-github/copilotCodingAgent', 'github.vscode-pull-request-github/issue_fetch', 'github.vscode-pull-request-github/suggest-fix', 'github.vscode-pull-request-github/searchSyntax', 'github.vscode-pull-request-github/doSearch', 'github.vscode-pull-request-github/renderIssues', 'github.vscode-pull-request-github/activePullRequest', 'github.vscode-pull-request-github/openPullRequest', 'vscjava.vscode-java-upgrade/generate_upgrade_plan', 'vscjava.vscode-java-upgrade/confirm_upgrade_plan', 'vscjava.vscode-java-upgrade/setup_upgrade_environment', 'vscjava.vscode-java-upgrade/build_java_project', 'vscjava.vscode-java-upgrade/validate_cves_for_java', 'vscjava.vscode-java-upgrade/validate_behavior_changes', 'vscjava.vscode-java-upgrade/run_tests_for_java', 'vscjava.vscode-java-upgrade/summarize_upgrade', 'vscjava.vscode-java-upgrade/generate_tests_for_java', 'vscjava.vscode-java-upgrade/list_jdks', 'vscjava.vscode-java-upgrade/list_mavens', 'vscjava.vscode-java-upgrade/install_jdk', 'vscjava.vscode-java-upgrade/install_maven', 'todo']
 ---
 
 # Java MCP Expert

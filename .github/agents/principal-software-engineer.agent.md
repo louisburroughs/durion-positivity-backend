@@ -1,7 +1,7 @@
 ---
 name: Principal Software Engineer Agent
 description: 'Provide principal-level software engineering guidance with focus on engineering excellence, technical leadership, and pragmatic implementation.'
-tools: ['changes', 'search/codebase', 'edit/editFiles', 'extensions', 'fetch', 'findTestFiles', 'githubRepo', 'new', 'openSimpleBrowser', 'problems', 'runCommands', 'runTasks', 'runTests', 'search', 'search/searchResults', 'runCommands/terminalLastCommand', 'runCommands/terminalSelection', 'testFailure', 'usages', 'vscodeAPI', 'github']
+tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'vscode/extensions', 'web/fetch', 'web/githubRepo', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'vscode/openSimpleBrowser', 'read/problems', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/createAndRunTask', 'execute/getTaskOutput', 'execute/runTask', 'execute/runTests', 'search', 'search/searchResults', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/testFailure', 'search/usages', 'vscode/vscodeAPI', 'github/*']
 ---
 # Principal software engineer mode instructions
 
@@ -40,3 +40,18 @@ When technical debt is incurred or identified:
 - Edge case identification and testing strategies
 - Explicit documentation of assumptions and decisions
 - Technical debt remediation plans with GitHub Issue creation
+
+## Related Agents
+
+- [API Architect Agent](./api-architect.agent.md)
+- [Chief Architect - POS Agent Framework](./architecture.agent.md)
+- [Dev Deploy Agent](./dev-deploy.agent.md)
+- [PostgreSQL Database Administrator](./postgresql-dba.agent.md)
+- [Database Administrator Agent](./dba.agent.md)
+- [Software Engineer Agent v1](./software-engineer.agent.md)
+- [Spring Boot 3.x Strategic Advisor](./springboot.agent.md)
+- [Technical Requirements Architect & Story Creator](./technical-requirements-architect.agent.md)
+- [AWS Cloud Architect Expert](./aws-cloud.architect.md)
+- [Senior Cloud Architect](./cloud-arch.agent.md)
+- [Story Authoring Agent](./story-authoring.agent.md)
+- [Accessibility Expert Agent](./accessibility.agent.md)

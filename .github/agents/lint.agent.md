@@ -1,6 +1,7 @@
 ---
 name: Linter Agent
 description: Code Quality Engineer - Style enforcement and static analysis
+tools: ['vscode', 'read', 'search', 'execute', 'edit', 'todo']
 ---
 
 ## Purpose
