@@ -1,0 +1,11 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: inventory-deactivate-location
+          uri: lb://pos-inventory
+          predicates:
+            - Path=/api/inventory/locations/*/deactivate
+            - Method=POST
+          filters:
+            - RemoveRequestHeader=Cookie
