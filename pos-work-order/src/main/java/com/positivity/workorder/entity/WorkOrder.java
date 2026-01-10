@@ -20,6 +20,10 @@ public class WorkOrder {
     private Long approvalId; // Reference to CustomerApproval (from pos-customer-approval)
     private Long estimateId; // Reference to Estimate - work order created from approved estimate
 
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private WorkOrderStatus status = WorkOrderStatus.DRAFT;
+
     @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkOrderService> services;
 }
