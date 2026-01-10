@@ -1,7 +1,7 @@
 ---
 name: Story Authoring Agent
 description: This custom agent is responsible for authoring and refining implementation-ready user stories as GitHub issues, ensuring clarity, correctness, and domain alignment while coordinating with business-domain-specific agents.
-tools: ['github/add_issue_comment', 'github/assign_copilot_to_issue', 'github/create_or_update_file', 'github/create_pull_request', 'github/issue_read', 'github/issue_write', 'github/list_issue_types', 'github/list_issues', 'github/search_issues', 'github/sub_issue_write']
+tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web', 'gitkraken/*', 'agent', 'vscjava.vscode-java-upgrade/generate_upgrade_plan', 'vscjava.vscode-java-upgrade/confirm_upgrade_plan', 'vscjava.vscode-java-upgrade/setup_upgrade_environment', 'vscjava.vscode-java-upgrade/build_java_project', 'vscjava.vscode-java-upgrade/validate_cves_for_java', 'vscjava.vscode-java-upgrade/validate_behavior_changes', 'vscjava.vscode-java-upgrade/run_tests_for_java', 'vscjava.vscode-java-upgrade/summarize_upgrade', 'vscjava.vscode-java-upgrade/generate_tests_for_java', 'vscjava.vscode-java-upgrade/list_jdks', 'vscjava.vscode-java-upgrade/list_mavens', 'vscjava.vscode-java-upgrade/install_jdk', 'vscjava.vscode-java-upgrade/install_maven', 'todo']
 ---
 
 **Agent Type:** Workspace / Requirements
