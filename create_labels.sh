@@ -90,20 +90,21 @@ ensure_label "clarification:security"      "D93F0B" "Clarification category: aut
 # ---------------------------
 # 5) Agent interaction labels (optional, but useful)
 # ---------------------------
-ensure_label "agent:story-authoring" "5319E7" "Agent routing: Story Authoring Agent"
-ensure_label "agent:accounting"      "5319E7" "Agent routing: Accounting Domain Agent"
-ensure_label "agent:inventory"       "5319E7" "Agent routing: Inventory Domain Agent"
-ensure_label "agent:product"         "5319E7" "Agent routing: Product Domain Agent"
-ensure_label "agent:pricing"         "5319E7" "Agent routing: Pricing Domain Agent"
-ensure_label "agent:crm"             "5319E7" "Agent routing: CRM Domain Agent"
-ensure_label "agent:shopmgmt"        "5319E7" "Agent routing: Shop Management Domain Agent"
-ensure_label "agent:workexec"        "5319E7" "Agent routing: Workorder Execution Domain Agent"
-ensure_label "agent:billing"         "5319E7" "Agent routing: Billing Domain Agent"
-ensure_label "agent:people"          "5319E7" "Agent routing: People/Roles Domain Agent"
-ensure_label "agent:location"        "5319E7" "Agent routing: Location Domain Agent"
-ensure_label "agent:positivity"      "5319E7" "Agent routing: Positivity (Integrations) Domain Agent"
-ensure_label "agent:security"        "5319E7" "Agent routing: Security Domain Agent"
-ensure_label "agent:audit"           "5319E7" "Agent routing: Audit/Observability Domain Agent"
+ensure_label "agent:story-authoring"            "5319E7" "Agent routing: Story Authoring Agent"
+ensure_label "agent:principal-software-engineer" "5319E7" "Agent routing: Principal Software Engineer Agent"
+ensure_label "agent:accounting"                  "5319E7" "Agent routing: Accounting Domain Agent"
+ensure_label "agent:inventory"                   "5319E7" "Agent routing: Inventory Domain Agent"
+ensure_label "agent:product"                     "5319E7" "Agent routing: Product Domain Agent"
+ensure_label "agent:pricing"                     "5319E7" "Agent routing: Pricing Domain Agent"
+ensure_label "agent:crm"                         "5319E7" "Agent routing: CRM Domain Agent"
+ensure_label "agent:shopmgmt"                    "5319E7" "Agent routing: Shop Management Domain Agent"
+ensure_label "agent:workexec"                    "5319E7" "Agent routing: Workorder Execution Domain Agent"
+ensure_label "agent:billing"                     "5319E7" "Agent routing: Billing Domain Agent"
+ensure_label "agent:people"                      "5319E7" "Agent routing: People/Roles Domain Agent"
+ensure_label "agent:location"                    "5319E7" "Agent routing: Location Domain Agent"
+ensure_label "agent:positivity"                  "5319E7" "Agent routing: Positivity (Integrations) Domain Agent"
+ensure_label "agent:security"                    "5319E7" "Agent routing: Security Domain Agent"
+ensure_label "agent:audit"                       "5319E7" "Agent routing: Audit/Observability Domain Agent"
 
 # ---------------------------
 # 6) Unsafe-inference risk guard labels
