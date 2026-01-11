@@ -42,8 +42,8 @@ public class ChangeRequestService {
         WorkOrder workOrder = workOrderRepository.findById(dto.getWorkOrderId())
                 .orElseThrow(() -> new IllegalArgumentException("Work order not found: " + dto.getWorkOrderId()));
         
-        if (workOrder.getStatus() != WorkOrderStatus.IN_PROGRESS) {
-            throw new IllegalStateException("Work order must be in IN_PROGRESS status to create change request. Current status: " + workOrder.getStatus());
+        if (workOrder.getStatus() != WorkOrderStatus.WORK_IN_PROGRESS) {
+            throw new IllegalStateException("Work order must be in WORK_IN_PROGRESS status to create change request. Current status: " + workOrder.getStatus());
         }
 
         // Emergency/Safety validation

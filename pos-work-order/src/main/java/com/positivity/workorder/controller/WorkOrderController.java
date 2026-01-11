@@ -1,6 +1,11 @@
 package com.positivity.workorder.controller;
 
+import com.positivity.workorder.dto.StartWorkOrderRequest;
+import com.positivity.workorder.dto.StartWorkOrderResponse;
 import com.positivity.workorder.entity.WorkOrder;
+import com.positivity.workorder.entity.WorkOrderStateTransition;
+import com.positivity.workorder.entity.WorkOrderSnapshot;
+import com.positivity.workorder.entity.WorkOrderStatus;
 import com.positivity.workorder.service.WorkOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -9,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.time.Instant;
 import java.util.List;
 
 @Tag(name = "Work Order API", description = "Endpoints for work order management")
@@ -53,5 +59,58 @@ public class WorkOrderController {
             @Parameter(description = "ID of the work order to delete", example = "1") @PathVariable Long id) {
         workOrderService.deleteWorkOrder(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Start a work order", description = "Start work on a work order, transitioning it to WORK_IN_PROGRESS status.")
+    @ApiResponse(responseCode = "200", description = "Work order started successfully.")
+    @ApiResponse(responseCode = "400", description = "Invalid state transition or pending change requests.")
+    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @PostMapping("/{id}/start")
+    public ResponseEntity<StartWorkOrderResponse> startWorkOrder(
+            @Parameter(description = "ID of the work order to start", example = "1") @PathVariable Long id,
+            @RequestBody StartWorkOrderRequest request) {
+        try {
+            WorkOrder workOrder = workOrderService.getWorkOrderById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("WorkOrder not found: " + id));
+            
+            WorkOrderStatus previousStatus = workOrder.getStatus();
+            
+            workOrderService.startWorkOrder(id, request.getUserId(), request.getReason());
+            
+            StartWorkOrderResponse response = StartWorkOrderResponse.builder()
+                    .workOrderId(id)
+                    .previousStatus(previousStatus)
+                    .currentStatus(WorkOrderStatus.WORK_IN_PROGRESS)
+                    .transitionedAt(Instant.now())
+                    .message("Work order started successfully")
+                    .build();
+            
+            return ResponseEntity.ok(response);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(
+                    StartWorkOrderResponse.builder()
+                            .workOrderId(id)
+                            .message(e.getMessage())
+                            .build()
+            );
+        }
+    }
+
+    @Operation(summary = "Get transition history", description = "Retrieve the state transition history for a work order.")
+    @ApiResponse(responseCode = "200", description = "Transition history returned successfully.")
+    @GetMapping("/{id}/transitions")
+    public ResponseEntity<List<WorkOrderStateTransition>> getTransitionHistory(
+            @Parameter(description = "ID of the work order", example = "1") @PathVariable Long id) {
+        List<WorkOrderStateTransition> history = workOrderService.getTransitionHistory(id);
+        return ResponseEntity.ok(history);
+    }
+
+    @Operation(summary = "Get snapshot history", description = "Retrieve the snapshot history for a work order.")
+    @ApiResponse(responseCode = "200", description = "Snapshot history returned successfully.")
+    @GetMapping("/{id}/snapshots")
+    public ResponseEntity<List<WorkOrderSnapshot>> getSnapshotHistory(
+            @Parameter(description = "ID of the work order", example = "1") @PathVariable Long id) {
+        List<WorkOrderSnapshot> history = workOrderService.getSnapshotHistory(id);
+        return ResponseEntity.ok(history);
     }
 }
