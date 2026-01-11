@@ -2,6 +2,7 @@ package com.positivity.workorder.service;
 
 import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.WorkOrder;
+import com.positivity.workorder.entity.WorkOrderStatus;
 import com.positivity.workorder.repository.WorkOrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ public class WorkOrderService {
     private final WorkOrderRepository workOrderRepository;
     private final RestTemplate restTemplate;
     private final EstimateService estimateService;
+    private final WorkOrderStateMachine stateMachine;
 
     @Value("${customer.service.url:http://localhost:8080/api/customers}")
     private String customerServiceUrl;
@@ -82,6 +84,24 @@ public class WorkOrderService {
             log.error("Failed to check customer approval", e);
             return false;
         }
+    }
+
+    @Transactional
+    public void startWorkOrder(Long workOrderId, Long userId, String reason) {
+        stateMachine.startWorkOrder(workOrderId, userId, reason);
+    }
+
+    @Transactional
+    public void transitionWorkOrder(Long workOrderId, WorkOrderStatus toStatus, Long userId, String reason) {
+        stateMachine.transitionWorkOrder(workOrderId, toStatus, userId, reason);
+    }
+
+    public List<com.positivity.workorder.entity.WorkOrderStateTransition> getTransitionHistory(Long workOrderId) {
+        return stateMachine.getTransitionHistory(workOrderId);
+    }
+
+    public List<com.positivity.workorder.entity.WorkOrderSnapshot> getSnapshotHistory(Long workOrderId) {
+        return stateMachine.getSnapshotHistory(workOrderId);
     }
 }
 
