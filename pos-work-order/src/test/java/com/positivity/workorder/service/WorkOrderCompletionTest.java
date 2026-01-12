@@ -185,15 +185,17 @@ class WorkOrderCompletionTest {
     }
 
     @Test
-    void testCompleteWorkOrder_EventEmission() {
-        testWorkOrder.setCompletedAt(Instant.now());
-        testWorkOrder.setCompletedBy(userId);
-        testWorkOrder.setStatus(WorkOrderStatus.COMPLETED);
-        
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkOrder));
+    void testCompleteWorkOrder_EventEmission() throws Exception {
+        testWorkOrder.setStatus(WorkOrderStatus.WORK_IN_PROGRESS);
+        when(workOrderRepository.findById(1L))
+            .thenReturn(Optional.of(testWorkOrder))  // First call by completeWorkOrder in service
+            .thenReturn(Optional.of(testWorkOrder)); // Second call after completion
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
+        // Simulate what happens when completeWorkOrder is called
         WorkCompletedEvent event = workOrderService.completeWorkOrder(1L, userId, "Work done");
 
+        // Verify the event was created correctly
         assertNotNull(event);
         assertEquals("WorkCompleted", event.getEventType());
         assertEquals("workexec", event.getSourceDomain());
