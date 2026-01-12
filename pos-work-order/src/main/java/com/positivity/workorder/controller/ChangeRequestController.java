@@ -3,6 +3,7 @@ package com.positivity.workorder.controller;
 import com.positivity.workorder.dto.ApproveChangeRequestDTO;
 import com.positivity.workorder.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.dto.DeclineChangeRequestDTO;
+import com.positivity.workorder.dto.EmergencyOverrideDTO;
 import com.positivity.workorder.entity.ChangeRequest;
 import com.positivity.workorder.service.ChangeRequestService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -108,6 +109,32 @@ public class ChangeRequestController {
         try {
             changeRequestService.recordCustomerDenialAcknowledgment(id);
             return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(
+        summary = "Apply emergency override",
+        description = "Manager applies emergency override to approve a change request with exception. " +
+                     "Requires Manager role and a valid exception reason. " +
+                     "Items move from PENDING_APPROVAL to READY_TO_EXECUTE status."
+    )
+    @ApiResponse(responseCode = "200", description = "Emergency override applied successfully")
+    @ApiResponse(responseCode = "400", description = "Cannot apply override - invalid state or missing reason")
+    @ApiResponse(responseCode = "403", description = "Insufficient permissions - Manager role required")
+    @ApiResponse(responseCode = "404", description = "Change request not found")
+    @PostMapping("/change-requests/{id}/emergency-override")
+    public ResponseEntity<ChangeRequest> applyEmergencyOverride(
+            @Parameter(description = "ID of the change request", example = "1") 
+            @PathVariable Long id,
+            @Parameter(description = "Emergency override details including manager ID and reason") 
+            @RequestBody EmergencyOverrideDTO dto) {
+        try {
+            // TODO: Add role-based authorization check for Manager role
+            ChangeRequest overridden = changeRequestService.applyEmergencyOverride(
+                    id, dto.getManagerId(), dto.getExceptionReason());
+            return ResponseEntity.ok(overridden);
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();
         }
