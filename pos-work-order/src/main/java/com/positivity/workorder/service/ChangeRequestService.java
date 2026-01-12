@@ -20,6 +20,7 @@ public class ChangeRequestService {
     private final WorkOrderRepository workOrderRepository;
     private final WorkOrderServiceRepository workOrderServiceRepository;
     private final WorkOrderPartRepository workOrderPartRepository;
+    private final ApprovalRecordRepository approvalRecordRepository;
 
     /**
      * Create a new change request with associated work order items.
@@ -110,11 +111,24 @@ public class ChangeRequestService {
         changeRequest.setApprovedBy(approvedBy);
         changeRequest.setApprovalNote(approvalNote);
 
+        changeRequest = changeRequestRepository.save(changeRequest);
+
+        // Create immutable ApprovalRecord for audit trail
+        ApprovalRecord approvalRecord = ApprovalRecord.builder()
+                .changeRequestId(changeRequestId)
+                .workOrderId(changeRequest.getWorkOrderId())
+                .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED)
+                .resolvedAt(LocalDateTime.now())
+                .resolvedBy(approvedBy)
+                .approvalNote(approvalNote)
+                .build();
+        approvalRecordRepository.save(approvalRecord);
+
         // Move associated items from PENDING_APPROVAL to OPEN/READY_TO_EXECUTE
         updateItemsStatus(changeRequest.getId(), WorkOrderItemStatus.READY_TO_EXECUTE);
 
         log.info("Approved change request {} by user {}", changeRequestId, approvedBy);
-        return changeRequestRepository.save(changeRequest);
+        return changeRequest;
     }
 
     /**
@@ -138,11 +152,67 @@ public class ChangeRequestService {
         changeRequest.setDeclinedAt(LocalDateTime.now());
         changeRequest.setApprovalNote(approvalNote);
 
+        changeRequest = changeRequestRepository.save(changeRequest);
+
+        // Create immutable ApprovalRecord for audit trail
+        ApprovalRecord approvalRecord = ApprovalRecord.builder()
+                .changeRequestId(changeRequestId)
+                .workOrderId(changeRequest.getWorkOrderId())
+                .resolutionStatus(ApprovalRecord.ResolutionStatus.REJECTED)
+                .resolvedAt(LocalDateTime.now())
+                .approvalNote(approvalNote)
+                .build();
+        approvalRecordRepository.save(approvalRecord);
+
         // Move associated items from PENDING_APPROVAL to CANCELLED (not billable)
         updateItemsStatus(changeRequest.getId(), WorkOrderItemStatus.CANCELLED);
 
         log.info("Declined change request {}", changeRequestId);
-        return changeRequestRepository.save(changeRequest);
+        return changeRequest;
+    }
+
+    /**
+     * Apply emergency override to approve a change request with exception.
+     * Restricted to users with Manager role or equivalent permission.
+     */
+    @Transactional
+    public ChangeRequest applyEmergencyOverride(Long changeRequestId, Long managerId, String exceptionReason) {
+        ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
+                .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
+
+        if (!changeRequest.canApprove()) {
+            throw new IllegalStateException("Change request cannot be approved in current state: " + changeRequest.getStatus());
+        }
+
+        // Exception reason is required for emergency override
+        if (exceptionReason == null || exceptionReason.trim().isEmpty()) {
+            throw new IllegalArgumentException("Exception reason is required for emergency override");
+        }
+
+        changeRequest.setStatus(ChangeRequestStatus.APPROVED_WITH_EXCEPTION);
+        changeRequest.setApprovedAt(LocalDateTime.now());
+        changeRequest.setApprovedBy(managerId);
+        changeRequest.setIsEmergencyException(true);
+        changeRequest.setExceptionReason(exceptionReason);
+
+        changeRequest = changeRequestRepository.save(changeRequest);
+
+        // Create immutable ApprovalRecord for audit trail with exception flag
+        ApprovalRecord approvalRecord = ApprovalRecord.builder()
+                .changeRequestId(changeRequestId)
+                .workOrderId(changeRequest.getWorkOrderId())
+                .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
+                .resolvedAt(LocalDateTime.now())
+                .resolvedBy(managerId)
+                .exceptionReason(exceptionReason)
+                .build();
+        approvalRecordRepository.save(approvalRecord);
+
+        // Move associated items from PENDING_APPROVAL to READY_TO_EXECUTE
+        updateItemsStatus(changeRequest.getId(), WorkOrderItemStatus.READY_TO_EXECUTE);
+
+        log.info("Applied emergency override to change request {} by manager {}", changeRequestId, managerId);
+        return changeRequest;
     }
 
     /**
@@ -210,6 +280,32 @@ public class ChangeRequestService {
         }
 
         return true;
+    }
+
+    /**
+     * Check if work order has any pending approval-gated change requests.
+     * Returns true if there are unresolved change requests blocking completion.
+     */
+    public boolean hasPendingApprovalGatedRequests(Long workOrderId) {
+        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkOrderIdAndStatus(
+                workOrderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
+        
+        // Filter for approval-gated requests (all are by default, but check field)
+        return pendingRequests.stream()
+                .anyMatch(request -> Boolean.TRUE.equals(request.getIsApprovalGated()));
+    }
+
+    /**
+     * Get all pending approval-gated change requests for a work order.
+     */
+    public List<ChangeRequest> getPendingApprovalGatedRequests(Long workOrderId) {
+        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkOrderIdAndStatus(
+                workOrderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
+        
+        // Filter for approval-gated requests
+        return pendingRequests.stream()
+                .filter(request -> Boolean.TRUE.equals(request.getIsApprovalGated()))
+                .toList();
     }
 
     public List<ChangeRequest> getChangeRequestsByWorkOrder(Long workOrderId) {

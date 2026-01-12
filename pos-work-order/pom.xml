@@ -65,6 +65,12 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.5.0</version>
         </dependency>
+        <!-- POS Events for event emission -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-events</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

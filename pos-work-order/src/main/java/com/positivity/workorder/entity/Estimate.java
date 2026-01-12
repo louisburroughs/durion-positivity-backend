@@ -32,9 +32,14 @@ public class Estimate {
     
     private Long createdByUserId; // User who created the estimate
     private LocalDateTime createdAt;
+    
+    private LocalDateTime updatedAt;
     private LocalDateTime approvedAt;
     private LocalDateTime declinedAt;
     private LocalDateTime expiresAt;
+
+    @Column(nullable = false, updatable = false)
+    private Long createdById; // User who created the estimate
 
     // Configuration reference for approval method
     private Long approvalConfigurationId;
@@ -53,6 +58,12 @@ public class Estimate {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
     public enum EstimateStatus {
