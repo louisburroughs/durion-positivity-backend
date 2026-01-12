@@ -1,6 +1,5 @@
 package com.positivity.workorder.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,17 +10,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Schema(description = "Request to create a new draft estimate")
 public class CreateEstimateRequest {
-    
-    @NotNull(message = "Customer ID is required")
-    @Schema(description = "ID of the customer for whom the estimate is being created", example = "123", required = true)
+    @NotNull(message = "customerId is required")
     private Long customerId;
     
-    @NotNull(message = "Vehicle ID is required")
-    @Schema(description = "ID of the vehicle to be serviced", example = "456", required = true)
+    @NotNull(message = "vehicleId is required")
     private Long vehicleId;
     
-    @Schema(description = "ID of the shop where the service will be performed", example = "1")
-    private Long shopId;
+    private Long locationId; // Optional - will use default from session if not provided
+    private String currencyUomId; // Optional - will use default if not provided
+    private Long taxRegionId; // Optional - will use default if not provided
 }
