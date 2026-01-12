@@ -1,0 +1,26 @@
+domain: security
+serviceName: pos-security-service
+version: "1.0"
+permissions:
+  - name: security:role:view
+    description: View roles and their permissions
+  - name: security:role:create
+    description: Create new roles
+  - name: security:role:edit
+    description: Edit existing roles
+  - name: security:role:delete
+    description: Delete roles
+  - name: security:role:assign
+    description: Assign roles to users
+  - name: security:permission:view
+    description: View registered permissions
+  - name: security:permission:register
+    description: Register new permissions
+  - name: security:user:view
+    description: View user information
+  - name: security:user:create
+    description: Create new users
+  - name: security:user:edit
+    description: Edit user information
+  - name: security:user:delete
+    description: Delete users
