@@ -149,6 +149,20 @@ If the agent detects **insufficient information**, it MUST:
 3. **Link the clarification issue** in the original story
 4. Mark the story with label: `blocked:clarification`
 
+### When Clarifications Are Resolved
+
+When all clarification issues are answered and applied to the story, the agent MUST:
+
+1. **Remove** the `blocked:clarification` label from the story
+2. **Add** the `status:ready-for-dev` label (if no other open questions remain)
+3. **Assign** the issue to:
+   * `@github-copilot` (GitHub Copilot for code generation support)
+   * Principal Software Engineer Agent (for technical execution)
+4. **Post a comment** on the story summarizing:
+   * Which clarifications were resolved
+   * Links to the clarification issue(s)
+   * Confirmation that the story is now ready for implementation
+
 ### Examples of Mandatory Clarification Triggers
 
 * Undefined state transitions
@@ -200,6 +214,39 @@ A story is considered **ready for development** when:
 * Domain agents confirm correctness
 * A developer can implement without guessing
 * A tester can derive tests directly from the story
+
+### Handoff to Execution Team
+
+When a story meets all success criteria, the agent MUST complete the following handoff sequence **in order and without omission**. Skipping any step invalidates the handoff and leaves the story in an incomplete state:
+
+1. **Update labels:**
+   * Remove: `status:draft`, `blocked:clarification`, `risk:missing-requirements`
+   * Add: `status:ready-for-dev`
+   
+2. **Assign the issue** (requires explicit user confirmation or authorized automation):
+   * Assignees: `@github-copilot` and `@principal-software-engineer-agent` for technical implementation oversight
+   * **Sample command:**
+     ```bash
+     gh issue edit <issue-number> --add-assignee "github-copilot" --add-assignee "principal-software-engineer-agent"
+     ```
+   * **Alternative:** Request user to assign via comment: "This story is ready for development. Please assign to `@github-copilot` and `@principal-software-engineer-agent`."
+   * **Note:** Assignment policy may vary by organization. Confirm with user before executing assignment commands.
+
+3. **Post a handoff comment** that includes:
+   * Summary of what was clarified
+   * Link to any related clarification issues
+   * Confirmation that the story is implementation-ready
+
+4. **Close any related clarification issues** that were resolved during story finalization:
+   * Post a completion note to each clarification issue documenting the resolution
+   * Close the clarification issue
+   * **Sample command:**
+     ```bash
+     gh issue comment <clarification-issue-number> --body "Clarification resolved. Story updated and ready for dev." && gh issue close <clarification-issue-number>
+     ```
+   * **Note:** Only close clarification issues that have been fully addressed and incorporated into the story
+
+This ensures clear ownership transfer from story authoring to technical execution.
 
 ---
 
