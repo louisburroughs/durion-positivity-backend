@@ -2,6 +2,7 @@ package com.positivity.workorder.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.time.Instant;
 import java.util.List;
 
 @Entity
@@ -26,5 +27,20 @@ public class WorkOrder {
 
     @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkOrderService> services;
+
+    // Completion-related fields
+    private Instant completedAt;
+    private Long completedBy;
+    
+    @Column(columnDefinition = "TEXT")
+    private String completionNotes;
+
+    /**
+     * Check if the work order is locked from modifications.
+     * A work order is locked if it's in COMPLETED or CANCELLED status.
+     */
+    public boolean isLocked() {
+        return status == WorkOrderStatus.COMPLETED || status == WorkOrderStatus.CANCELLED;
+    }
 }
 

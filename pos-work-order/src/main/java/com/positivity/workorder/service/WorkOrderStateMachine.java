@@ -5,6 +5,7 @@ import com.positivity.workorder.repository.WorkOrderRepository;
 import com.positivity.workorder.repository.WorkOrderStateTransitionRepository;
 import com.positivity.workorder.repository.WorkOrderSnapshotRepository;
 import com.positivity.workorder.repository.ChangeRequestRepository;
+import com.positivity.workorder.repository.AuditEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +24,15 @@ public class WorkOrderStateMachine {
     private final WorkOrderStateTransitionRepository transitionRepository;
     private final WorkOrderSnapshotRepository snapshotRepository;
     private final ChangeRequestRepository changeRequestRepository;
+    private final AuditEventRepository auditEventRepository;
     private final ObjectMapper objectMapper;
+
+    private static final Set<WorkOrderStatus> COMPLETION_ELIGIBLE_STATUSES = Set.of(
+            WorkOrderStatus.WORK_IN_PROGRESS,
+            WorkOrderStatus.AWAITING_PARTS,
+            WorkOrderStatus.AWAITING_APPROVAL,
+            WorkOrderStatus.READY_FOR_PICKUP
+    );
 
     @Transactional
     public void transitionWorkOrder(Long workOrderId, WorkOrderStatus toStatus, Long userId, String reason) {
@@ -71,6 +81,49 @@ public class WorkOrderStateMachine {
     }
 
     @Transactional
+    public void completeWorkOrder(Long workOrderId, Long userId, String completionNotes) {
+        WorkOrder workOrder = workOrderRepository.findById(workOrderId)
+                .orElseThrow(() -> new IllegalArgumentException("WorkOrder not found: " + workOrderId));
+
+        WorkOrderStatus currentStatus = workOrder.getStatus();
+
+        // Validate the work order is in a completable state
+        if (currentStatus == WorkOrderStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    String.format("WorkOrder %d is already completed", workOrderId));
+        }
+
+        if (currentStatus == WorkOrderStatus.CANCELLED) {
+            throw new IllegalStateException(
+                    String.format("WorkOrder %d is cancelled and cannot be completed", workOrderId));
+        }
+
+        if (!COMPLETION_ELIGIBLE_STATUSES.contains(currentStatus)) {
+            throw new IllegalStateException(
+                    String.format("WorkOrder %d cannot be completed from status %s. Must be one of: %s",
+                            workOrderId, currentStatus, COMPLETION_ELIGIBLE_STATUSES));
+        }
+
+        // Capture snapshot before completion
+        captureSnapshot(workOrder, userId, "WORK_COMPLETION", "Capturing state before completion");
+
+        // Set completion fields
+        Instant completedAt = Instant.now();
+        workOrder.setCompletedAt(completedAt);
+        workOrder.setCompletedBy(userId);
+        workOrder.setCompletionNotes(completionNotes);
+
+        // Transition to COMPLETED state
+        transitionWorkOrder(workOrderId, WorkOrderStatus.COMPLETED, userId, "Work Order Completed");
+
+        // Create audit event
+        createAuditEvent(workOrderId, userId, "StateTransition", 
+                String.format("{\"fromState\":\"%s\",\"toState\":\"COMPLETED\"}", currentStatus));
+
+        log.info("WorkOrder {} completed successfully by user {} at {}", workOrderId, userId, completedAt);
+    }
+
+    @Transactional
     public void captureSnapshot(WorkOrder workOrder, Long userId, String snapshotType, String reason) {
         try {
             String snapshotData = objectMapper.writeValueAsString(workOrder);
@@ -114,5 +167,23 @@ public class WorkOrderStateMachine {
 
     public List<WorkOrderSnapshot> getSnapshotHistory(Long workOrderId) {
         return snapshotRepository.findByWorkOrderIdOrderByCapturedAtDesc(workOrderId);
+    }
+
+    private void createAuditEvent(Long workOrderId, Long userId, String eventType, String details) {
+        AuditEvent auditEvent = AuditEvent.builder()
+                .entityType("Workorder")
+                .entityId(workOrderId)
+                .eventType(eventType)
+                .userId(userId)
+                .details(details)
+                .eventTimestamp(Instant.now())
+                .build();
+
+        auditEventRepository.save(auditEvent);
+        log.debug("Created audit event for WorkOrder {}: {}", workOrderId, eventType);
+    }
+
+    public List<AuditEvent> getAuditHistory(Long workOrderId) {
+        return auditEventRepository.findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workOrderId);
     }
 }

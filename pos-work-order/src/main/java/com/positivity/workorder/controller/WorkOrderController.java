@@ -1,5 +1,7 @@
 package com.positivity.workorder.controller;
 
+import com.positivity.workorder.dto.CompleteWorkOrderRequest;
+import com.positivity.workorder.dto.CompleteWorkOrderResponse;
 import com.positivity.workorder.dto.StartWorkOrderRequest;
 import com.positivity.workorder.dto.StartWorkOrderResponse;
 import com.positivity.workorder.entity.WorkOrder;
@@ -112,5 +114,47 @@ public class WorkOrderController {
             @Parameter(description = "ID of the work order", example = "1") @PathVariable Long id) {
         List<WorkOrderSnapshot> history = workOrderService.getSnapshotHistory(id);
         return ResponseEntity.ok(history);
+    }
+
+    @Operation(summary = "Complete a work order", description = "Complete a work order, transitioning it to COMPLETED status and emitting a WorkCompleted event.")
+    @ApiResponse(responseCode = "200", description = "Work order completed successfully.")
+    @ApiResponse(responseCode = "400", description = "Invalid state transition or work order already completed.")
+    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @PostMapping("/{id}/complete")
+    public ResponseEntity<CompleteWorkOrderResponse> completeWorkOrder(
+            @Parameter(description = "ID of the work order to complete", example = "1") @PathVariable Long id,
+            @RequestBody CompleteWorkOrderRequest request) {
+        try {
+            WorkOrder workOrder = workOrderService.getWorkOrderById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("WorkOrder not found: " + id));
+            
+            WorkOrderStatus previousStatus = workOrder.getStatus();
+            
+            // Complete the work order (this will also emit the event)
+            workOrderService.completeWorkOrder(id, request.getUserId(), request.getCompletionNotes());
+            
+            // Fetch the updated work order
+            WorkOrder completedWorkOrder = workOrderService.getWorkOrderById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("WorkOrder not found after completion: " + id));
+            
+            CompleteWorkOrderResponse response = CompleteWorkOrderResponse.builder()
+                    .workOrderId(id)
+                    .previousStatus(previousStatus)
+                    .currentStatus(WorkOrderStatus.COMPLETED)
+                    .completedAt(completedWorkOrder.getCompletedAt())
+                    .message("Work order completed successfully")
+                    .build();
+            
+            return ResponseEntity.ok(response);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(
+                    CompleteWorkOrderResponse.builder()
+                            .workOrderId(id)
+                            .message(e.getMessage())
+                            .build()
+            );
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }
