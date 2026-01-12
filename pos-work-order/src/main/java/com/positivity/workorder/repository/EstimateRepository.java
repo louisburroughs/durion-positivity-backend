@@ -9,6 +9,13 @@ import java.util.List;
 @Repository
 public interface EstimateRepository extends JpaRepository<Estimate, Long> {
     List<Estimate> findByCustomerId(Long customerId);
+    
+    @Deprecated
     List<Estimate> findByShopId(Long shopId);
+    
+    List<Estimate> findByLocationId(Long locationId);
+    
     List<Estimate> findByStatus(Estimate.EstimateStatus status);
+    
+    boolean existsByLocationIdAndEstimateNumber(Long locationId, String estimateNumber);
 }
