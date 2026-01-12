@@ -23,6 +23,7 @@ public class WorkOrderStateMachine {
     private final WorkOrderSnapshotRepository snapshotRepository;
     private final ChangeRequestRepository changeRequestRepository;
     private final ObjectMapper objectMapper;
+    private final ChangeRequestService changeRequestService;
 
     @Transactional
     public void transitionWorkOrder(Long workOrderId, WorkOrderStatus toStatus, Long userId, String reason) {
@@ -37,12 +38,45 @@ public class WorkOrderStateMachine {
                             fromStatus, toStatus, workOrderId));
         }
 
+        // Block completion if there are pending approval-gated change requests
+        if (isCompletionStatus(toStatus)) {
+            validateCompletionRequirements(workOrderId);
+        }
+
         workOrder.setStatus(toStatus);
         workOrderRepository.save(workOrder);
 
         recordTransition(workOrderId, fromStatus, toStatus, userId, reason);
 
         log.info("WorkOrder {} transitioned from {} to {} by user {}", workOrderId, fromStatus, toStatus, userId);
+    }
+
+    /**
+     * Validate that work order meets all requirements for completion.
+     * Throws IllegalStateException if requirements are not met.
+     */
+    private void validateCompletionRequirements(Long workOrderId) {
+        // Check for pending approval-gated change requests
+        if (changeRequestService.hasPendingApprovalGatedRequests(workOrderId)) {
+            List<ChangeRequest> pendingRequests = changeRequestService.getPendingApprovalGatedRequests(workOrderId);
+            throw new IllegalStateException(
+                    String.format("WorkOrder %d cannot be completed. There are %d unresolved approval-gated change request(s) pending approval",
+                            workOrderId, pendingRequests.size()));
+        }
+
+        // Check for declined emergency items requiring acknowledgment
+        if (!changeRequestService.canCloseWorkOrder(workOrderId)) {
+            throw new IllegalStateException(
+                    String.format("WorkOrder %d cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
+                            workOrderId));
+        }
+    }
+
+    /**
+     * Check if the status is a completion-related status.
+     */
+    private boolean isCompletionStatus(WorkOrderStatus status) {
+        return status == WorkOrderStatus.COMPLETED || status == WorkOrderStatus.READY_FOR_PICKUP;
     }
 
     @Transactional
