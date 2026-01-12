@@ -40,6 +40,10 @@ public class ChangeRequest {
     @Column(columnDefinition = "TEXT")
     private String approvalNote;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean isApprovalGated = true;
+
     private Long supplementalEstimatePdfId;
 
     private LocalDateTime approvedAt;
@@ -51,7 +55,8 @@ public class ChangeRequest {
         AWAITING_ADVISOR_REVIEW,
         APPROVED,
         DECLINED,
-        CANCELLED
+        CANCELLED,
+        APPROVED_WITH_EXCEPTION
     }
 
     /**
