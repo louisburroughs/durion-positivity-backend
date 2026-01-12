@@ -12,7 +12,7 @@
     <description>Module to manage work orders for a shop</description>
     <packaging>jar</packaging>
     <dependencies>
-        <!-- Spring Boot Starter Web -->
+        <!-- Spring Boot Starter Web (for REST controllers) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
