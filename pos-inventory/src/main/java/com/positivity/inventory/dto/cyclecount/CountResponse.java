@@ -1,0 +1,31 @@
+package com.positivity.inventory.dto.cyclecount;
+
+import com.positivity.inventory.entity.TaskStatus;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * Response after submitting a count or recount.
+ */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class CountResponse {
+    
+    private UUID countEntryId;
+    private UUID taskId;
+    private Integer actualQuantity;
+    private Integer expectedQuantity;
+    private Integer variance;
+    private Integer recountSequenceNumber;
+    private TaskStatus taskStatus;
+    private LocalDateTime countedAt;
+    private boolean limitExceeded;
+    private String message;
+}
