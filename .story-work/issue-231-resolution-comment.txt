@@ -1,0 +1,37 @@
+# Clarification Resolved
+
+All three questions have been answered by @louisburroughs and the decisions have been incorporated into the origin story #33.
+
+## Decisions Summary
+
+### 1. Confirmation Policy
+**Decision:** Two-step with configurable auto-issue, defaulting to manual confirmation.
+- Default behavior requires manual confirmation with "You are about to issue X × PART to WO-###. Confirm?" prompt
+- Auto-issue allowed only under strict conditions (exact SKU match, quantity valid, no exceptions, policy enabled)
+- All operations must audit `issueMode` (MANUAL_CONFIRM | AUTO_ON_RECEIPT) and `confirmedBy`
+
+### 2. Notification Contract
+**Decision:** Asynchronous, non-blocking event is authoritative.
+- Transport: Message queue/event bus topic `inventory.issue.completed.v1`
+- Event envelope with schema version 1, includes full payload with issueMode, lotId, sourceLocationId, and receivingLineId
+- Non-blocking from POS perspective
+- Optional synchronous REST call for UI feedback is best-effort only
+
+### 3. Mismatched Part Handling
+**Decision:** Strict block by default with controlled override.
+- Default: Block issuance with `PART_MISMATCH_WITH_WORKORDER` error
+- Override requires `OVERRIDE_PART_MATCH` permission
+- Override requires explicit reason code (e.g., `APPROVED_SUBSTITUTE`, `VENDOR_SUBSTITUTION`)
+- Overrides always require manual confirmation (never auto-issue)
+- Full audit trail required
+
+## Actions Taken
+
+- ✅ Updated origin story #33 with all clarification decisions
+- ✅ Incorporated decisions into Business Rules, Functional Behavior, Data Requirements, and Acceptance Criteria
+- ✅ Removed `blocked:clarification` label from origin story #33
+- ✅ Added `status:ready-for-dev` label to origin story #33
+- ✅ Posted handoff comment to origin story #33
+- ✅ Closing this clarification issue as resolved
+
+The story is now ready for implementation.
