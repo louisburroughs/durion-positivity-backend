@@ -14,6 +14,9 @@ public class Estimate {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(unique = true, nullable = false)
+    private String estimateNumber; // Human-readable unique identifier (e.g., EST-10021)
+
     private Long shopId; // Reference to Shop
     private Long vehicleId; // Reference to Vehicle
     private Long customerId; // Reference to Customer
@@ -22,10 +25,16 @@ public class Estimate {
     @Builder.Default
     private EstimateStatus status = EstimateStatus.DRAFT;
 
+    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+    
+    private LocalDateTime updatedAt;
     private LocalDateTime approvedAt;
     private LocalDateTime declinedAt;
     private LocalDateTime expiresAt;
+
+    @Column(nullable = false, updatable = false)
+    private Long createdById; // User who created the estimate
 
     // Configuration reference for approval method
     private Long approvalConfigurationId;
@@ -39,6 +48,12 @@ public class Estimate {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
     public enum EstimateStatus {

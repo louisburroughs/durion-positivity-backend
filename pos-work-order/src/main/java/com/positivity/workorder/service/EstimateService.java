@@ -1,9 +1,11 @@
 package com.positivity.workorder.service;
 
+import com.positivity.events.EmitEvent;
+import com.positivity.workorder.dto.CreateEstimateRequest;
 import com.positivity.workorder.entity.ApprovalConfiguration;
 import com.positivity.workorder.entity.Estimate;
-import com.positivity.workorder.repository.ApprovalConfigurationRepository;
-import com.positivity.workorder.repository.EstimateRepository;
+import com.positivity.workorder.entity.EstimateSequence;
+import com.positivity.workorder.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,9 @@ import java.util.Optional;
 public class EstimateService {
     private final EstimateRepository estimateRepository;
     private final ApprovalConfigurationRepository approvalConfigurationRepository;
+    private final EstimateSequenceRepository estimateSequenceRepository;
+    private final CustomerRepository customerRepository;
+    private final VehicleRepository vehicleRepository;
 
     public List<Estimate> getAllEstimates() {
         return estimateRepository.findAll();
@@ -34,6 +39,83 @@ public class EstimateService {
 
     public List<Estimate> getEstimatesByShop(Long shopId) {
         return estimateRepository.findByShopId(shopId);
+    }
+
+    /**
+     * Create a new draft estimate for a customer and vehicle.
+     * Validates that both customer and vehicle exist before creation.
+     * Generates a unique estimate number and emits an EstimateCreated event.
+     *
+     * @param request the request containing customer, vehicle, and shop IDs
+     * @param createdByUserId the ID of the user creating the estimate
+     * @return the newly created estimate
+     * @throws IllegalArgumentException if customer or vehicle is not found
+     */
+    @Transactional
+    @EmitEvent(id = "EstimateCreated")
+    public Estimate createDraftEstimate(CreateEstimateRequest request, Long createdByUserId) {
+        log.info("Creating draft estimate for customer {} and vehicle {} by user {}",
+                request.getCustomerId(), request.getVehicleId(), createdByUserId);
+
+        // Validate customer exists
+        if (!customerRepository.existsById(request.getCustomerId())) {
+            log.warn("Customer with ID {} not found", request.getCustomerId());
+            throw new IllegalArgumentException("Customer with ID " + request.getCustomerId() + " not found");
+        }
+
+        // Validate vehicle exists
+        if (!vehicleRepository.existsById(request.getVehicleId())) {
+            log.warn("Vehicle with ID {} not found", request.getVehicleId());
+            throw new IllegalArgumentException("Vehicle with ID " + request.getVehicleId() + " not found");
+        }
+
+        // Generate unique estimate number
+        String estimateNumber = generateEstimateNumber();
+
+        // Get approval configuration for this customer/location
+        ApprovalConfiguration config = getApprovalConfiguration(request.getShopId(), request.getCustomerId());
+
+        // Create the estimate
+        Estimate estimate = Estimate.builder()
+                .estimateNumber(estimateNumber)
+                .customerId(request.getCustomerId())
+                .vehicleId(request.getVehicleId())
+                .shopId(request.getShopId())
+                .status(Estimate.EstimateStatus.DRAFT)
+                .createdById(createdByUserId)
+                .approvalConfigurationId(config.getId())
+                .build();
+
+        Estimate savedEstimate = estimateRepository.save(estimate);
+        
+        log.info("Estimate {} created for Customer {} by User {}", 
+                savedEstimate.getEstimateNumber(), 
+                savedEstimate.getCustomerId(), 
+                savedEstimate.getCreatedById());
+
+        return savedEstimate;
+    }
+
+    /**
+     * Generate a unique estimate number in the format EST-XXXXX
+     * Uses a sequence table to ensure uniqueness across transactions
+     */
+    private synchronized String generateEstimateNumber() {
+        EstimateSequence sequence = estimateSequenceRepository.findAll()
+                .stream()
+                .findFirst()
+                .orElseGet(() -> {
+                    EstimateSequence newSeq = EstimateSequence.builder()
+                            .lastSequenceNumber(10000L)
+                            .build();
+                    return estimateSequenceRepository.save(newSeq);
+                });
+
+        Long nextNumber = sequence.getLastSequenceNumber() + 1;
+        sequence.setLastSequenceNumber(nextNumber);
+        estimateSequenceRepository.save(sequence);
+
+        return String.format("EST-%d", nextNumber);
     }
 
     @Transactional
