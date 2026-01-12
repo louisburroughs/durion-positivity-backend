@@ -1,8 +1,10 @@
 package com.positivity.workorder.service;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.WorkOrder;
 import com.positivity.workorder.entity.WorkOrderStatus;
+import com.positivity.workorder.event.WorkCompletedEvent;
 import com.positivity.workorder.repository.WorkOrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,8 +12,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.beans.factory.annotation.Value;
+
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -102,6 +109,53 @@ public class WorkOrderService {
 
     public List<com.positivity.workorder.entity.WorkOrderSnapshot> getSnapshotHistory(Long workOrderId) {
         return stateMachine.getSnapshotHistory(workOrderId);
+    }
+
+    @Transactional
+    @EmitEvent(id = "WorkCompleted")
+    public WorkCompletedEvent completeWorkOrder(Long workOrderId, Long userId, String completionNotes) {
+        // Perform the completion logic
+        stateMachine.completeWorkOrder(workOrderId, userId, completionNotes);
+
+        // Retrieve the updated work order
+        WorkOrder workOrder = workOrderRepository.findById(workOrderId)
+                .orElseThrow(() -> new IllegalArgumentException("WorkOrder not found after completion: " + workOrderId));
+
+        // Build the final billable scope
+        Map<String, Object> finalBillableScope = buildFinalBillableScope(workOrder);
+
+        // Create and return the event
+        String eventId = UUID.randomUUID().toString();
+        String idempotencyKey = String.format("%d:completion_%s", workOrderId, workOrder.getCompletedAt().toEpochMilli());
+
+        WorkCompletedEvent.WorkCompletedPayload payload = WorkCompletedEvent.WorkCompletedPayload.builder()
+                .workOrderId(workOrderId)
+                .completedAt(workOrder.getCompletedAt())
+                .completedBy(workOrder.getCompletedBy())
+                .finalBillableScope(finalBillableScope)
+                .build();
+
+        WorkCompletedEvent event = WorkCompletedEvent.builder()
+                .eventId(eventId)
+                .eventType("WorkCompleted")
+                .eventTimestamp(Instant.now())
+                .sourceDomain("workexec")
+                .idempotencyKey(idempotencyKey)
+                .payload(payload)
+                .build();
+
+        log.info("WorkCompleted event created with eventId={} for workOrderId={}", eventId, workOrderId);
+        return event;
+    }
+
+    private Map<String, Object> buildFinalBillableScope(WorkOrder workOrder) {
+        Map<String, Object> scope = new HashMap<>();
+        scope.put("workOrderId", workOrder.getId());
+        scope.put("services", workOrder.getServices() != null ? workOrder.getServices().size() : 0);
+        // Additional billable items (parts, labor, fees) can be added here
+        scope.put("status", workOrder.getStatus().toString());
+        scope.put("completedAt", workOrder.getCompletedAt());
+        return scope;
     }
 }
 
