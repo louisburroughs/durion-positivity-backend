@@ -1,12 +1,16 @@
 package com.positivity.workorder.controller;
 
+import com.positivity.workorder.dto.CreateEstimateRequest;
+import com.positivity.workorder.dto.CreateEstimateResponse;
 import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -51,6 +55,36 @@ public class EstimateController {
     public List<Estimate> getEstimatesByShop(
             @Parameter(description = "ID of the shop", example = "1") @PathVariable Long shopId) {
         return estimateService.getEstimatesByShop(shopId);
+    }
+
+    @Operation(
+        summary = "Create a new draft estimate", 
+        description = "Create a new estimate in DRAFT status for a specific customer and vehicle. " +
+                     "Validates that both customer and vehicle exist before creation. " +
+                     "Returns the newly created estimate with a unique estimate number."
+    )
+    @ApiResponse(responseCode = "201", description = "Estimate created successfully.")
+    @ApiResponse(responseCode = "400", description = "Invalid request - validation failed.")
+    @ApiResponse(responseCode = "403", description = "User does not have permission to create estimates.")
+    @ApiResponse(responseCode = "404", description = "Customer or Vehicle not found.")
+    @ApiResponse(responseCode = "500", description = "Internal server error.")
+    @PostMapping("/draft")
+    public ResponseEntity<CreateEstimateResponse> createDraftEstimate(
+            @Parameter(description = "Request containing customer and vehicle IDs") 
+            @Valid @RequestBody CreateEstimateRequest request,
+            @Parameter(description = "ID of the user creating the estimate", example = "789")
+            @RequestHeader(value = "X-User-Id", required = true) Long createdByUserId) {
+        try {
+            Estimate estimate = estimateService.createDraftEstimate(request, createdByUserId);
+            CreateEstimateResponse response = CreateEstimateResponse.fromEntity(estimate);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            // Customer or Vehicle not found
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            // Internal server error
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @Operation(summary = "Create a new estimate", description = "Add a new estimate to the system.")
