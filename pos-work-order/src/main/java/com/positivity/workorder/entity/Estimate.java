@@ -2,6 +2,7 @@ package com.positivity.workorder.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -49,6 +50,15 @@ public class Estimate {
 
     // Approved by (service advisor or system user ID)
     private Long approvedBy;
+    
+    // Financial tracking for approval invalidation
+    private BigDecimal subtotal;
+    private BigDecimal taxAmount;
+    private BigDecimal total;
+    
+    // Version tracking for estimate revisions
+    @Builder.Default
+    private Integer version = 1;
     
     // Legacy field for backward compatibility
     @Deprecated
