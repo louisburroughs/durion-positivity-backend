@@ -4,12 +4,17 @@ import com.positivity.workorder.dto.CreateEstimateRequest;
 import com.positivity.workorder.entity.ApprovalConfiguration;
 import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.EstimateSequence;
+import com.positivity.workorder.entity.WorkOrder;
+import com.positivity.workorder.event.EstimateRevisedEvent;
 import com.positivity.workorder.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.List;
@@ -21,6 +26,8 @@ import java.util.Optional;
 public class EstimateService {
     private final EstimateRepository estimateRepository;
     private final ApprovalConfigurationRepository approvalConfigurationRepository;
+    private final WorkOrderRepository workOrderRepository;
+    private final ApplicationEventPublisher eventPublisher;
     
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -250,5 +257,82 @@ public class EstimateService {
 
     public void deleteEstimate(Long id) {
         estimateRepository.deleteById(id);
+    }
+    
+    /**
+     * Update estimate financial details and publish revision event if total changes.
+     * This triggers the approval invalidation workflow for associated WorkOrders.
+     * 
+     * @param estimateId the ID of the estimate to update
+     * @param subtotal new subtotal amount
+     * @param taxAmount new tax amount
+     * @param total new total amount
+     * @param userId ID of user making the change
+     * @return the updated estimate
+     */
+    @Transactional
+    public Estimate updateEstimateFinancials(Long estimateId, BigDecimal subtotal, 
+                                             BigDecimal taxAmount, BigDecimal total, 
+                                             Long userId) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+        
+        // Capture old total for comparison
+        BigDecimal oldTotal = estimate.getTotal();
+        
+        // Update financial fields
+        estimate.setSubtotal(subtotal);
+        estimate.setTaxAmount(taxAmount);
+        estimate.setTotal(total);
+        
+        // Check if total changed (financially significant)
+        boolean totalChanged = (oldTotal == null && total != null) || 
+                               (oldTotal != null && !oldTotal.equals(total));
+        
+        if (totalChanged) {
+            // Increment version on financial changes
+            estimate.setVersion(estimate.getVersion() + 1);
+            
+            log.info("Estimate {} total changed from {} to {}", 
+                     estimateId, oldTotal, total);
+        }
+        
+        Estimate saved = estimateRepository.save(estimate);
+        
+        // Publish revision event if total changed
+        if (totalChanged) {
+            publishEstimateRevisedEvents(saved, oldTotal, total, userId);
+        }
+        
+        return saved;
+    }
+    
+    /**
+     * Publish EstimateRevisedEvent for all WorkOrders associated with this estimate.
+     * This enables event-driven invalidation of approvals.
+     */
+    private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal, 
+                                              BigDecimal newTotal, Long userId) {
+        List<WorkOrder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
+        
+        log.info("Publishing EstimateRevisedEvent for {} WorkOrders linked to estimate {}", 
+                 workOrders.size(), estimate.getId());
+        
+        for (WorkOrder workOrder : workOrders) {
+            EstimateRevisedEvent event = EstimateRevisedEvent.builder()
+                    .estimateId(estimate.getId())
+                    .workOrderId(workOrder.getId())
+                    .oldTotal(oldTotal != null ? oldTotal : BigDecimal.ZERO)
+                    .newTotal(newTotal != null ? newTotal : BigDecimal.ZERO)
+                    .changedBy(userId)
+                    .timestamp(Instant.now())
+                    .build();
+            
+            eventPublisher.publishEvent(event);
+            
+            log.info("Published EstimateRevisedEvent: estimateId={}, workOrderId={}, " +
+                     "oldTotal={}, newTotal={}", 
+                     estimate.getId(), workOrder.getId(), oldTotal, newTotal);
+        }
     }
 }
