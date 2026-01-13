@@ -1,13 +1,17 @@
 package com.positivity.workorder.service;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.workorder.entity.AuditEvent;
 import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.WorkOrder;
 import com.positivity.workorder.entity.WorkOrderStatus;
+import com.positivity.workorder.event.EstimateRevisedEvent;
 import com.positivity.workorder.event.WorkCompletedEvent;
+import com.positivity.workorder.repository.AuditEventRepository;
 import com.positivity.workorder.repository.WorkOrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -28,6 +32,7 @@ public class WorkOrderService {
     private final RestTemplate restTemplate;
     private final EstimateService estimateService;
     private final WorkOrderStateMachine stateMachine;
+    private final AuditEventRepository auditEventRepository;
 
     @Value("${customer.service.url:http://localhost:8080/api/customers}")
     private String customerServiceUrl;
@@ -157,5 +162,82 @@ public class WorkOrderService {
         scope.put("completedAt", workOrder.getCompletedAt());
         return scope;
     }
+    
+    /**
+     * Listen for EstimateRevisedEvent and invalidate WorkOrder approval if needed.
+     * This implements the automatic approval invalidation workflow when estimates
+     * are financially revised.
+     * 
+     * @param event the EstimateRevisedEvent containing revision details
+     */
+    @EventListener
+    @Transactional
+    public void onEstimateRevised(EstimateRevisedEvent event) {
+        log.info("Received EstimateRevisedEvent: estimateId={}, workOrderId={}, " +
+                 "oldTotal={}, newTotal={}", 
+                 event.getEstimateId(), event.getWorkOrderId(), 
+                 event.getOldTotal(), event.getNewTotal());
+        
+        Optional<WorkOrder> workOrderOpt = workOrderRepository.findById(event.getWorkOrderId());
+        
+        if (workOrderOpt.isEmpty()) {
+            log.warn("WorkOrder {} not found for EstimateRevisedEvent", event.getWorkOrderId());
+            return;
+        }
+        
+        WorkOrder workOrder = workOrderOpt.get();
+        
+        // Only invalidate approval if WorkOrder is currently in APPROVED status
+        if (workOrder.getStatus() != WorkOrderStatus.APPROVED) {
+            log.info("WorkOrder {} not in APPROVED status (current: {}), skipping invalidation", 
+                     workOrder.getId(), workOrder.getStatus());
+            return;
+        }
+        
+        // Capture old status for audit
+        WorkOrderStatus oldStatus = workOrder.getStatus();
+        
+        // Transition to AWAITING_APPROVAL (re-approval required)
+        workOrder.setStatus(WorkOrderStatus.AWAITING_APPROVAL);
+        workOrderRepository.save(workOrder);
+        
+        // Create audit event for traceability
+        createApprovalInvalidationAudit(workOrder, oldStatus, event);
+        
+        log.info("WorkOrder {} approval invalidated due to estimate revision. " +
+                 "Status changed from {} to {}. Old total: {}, New total: {}", 
+                 workOrder.getId(), oldStatus, WorkOrderStatus.AWAITING_APPROVAL,
+                 event.getOldTotal(), event.getNewTotal());
+    }
+    
+    /**
+     * Create audit event for approval invalidation.
+     * This provides traceability for compliance and debugging.
+     */
+    private void createApprovalInvalidationAudit(WorkOrder workOrder, 
+                                                 WorkOrderStatus oldStatus,
+                                                 EstimateRevisedEvent event) {
+        AuditEvent audit = AuditEvent.builder()
+                .entityType("WorkOrder")
+                .entityId(workOrder.getId())
+                .eventType("approval.invalidated")
+                .eventTimestamp(event.getTimestamp())
+                .userId(event.getChangedBy())
+                .details(String.format(
+                        "Approval invalidated due to estimate revision. " +
+                        "Previous status: %s, New status: %s, " +
+                        "EstimateId: %d, Old total: %s, New total: %s, Change: %s",
+                        oldStatus.name(),
+                        WorkOrderStatus.AWAITING_APPROVAL.name(),
+                        event.getEstimateId(), 
+                        event.getOldTotal(), 
+                        event.getNewTotal(),
+                        event.getChangeAmount()))
+                .build();
+        
+        auditEventRepository.save(audit);
+        
+        log.info("Created audit event for approval invalidation: workOrderId={}, " +
+                 "estimateId={}", workOrder.getId(), event.getEstimateId());
+    }
 }
-
