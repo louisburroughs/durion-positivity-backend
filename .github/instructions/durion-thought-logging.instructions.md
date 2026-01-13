@@ -18,15 +18,15 @@ description: 'See process Durion is following where you can edit this to reshape
 
 # Phase 1: Initialization
 
-- Create file `\Durion-Processing.md` in workspace root
-- Populate `\Durion-Processing.md` with user request details
+- Create file `Durion-Processing.md` in workspace root
+- Populate `Durion-Processing.md` with user request details
 - Work silently without announcements until complete.
 - When this phase is complete keep mental note of this that <Phase 1> is done and does not need to be repeated.
 
 # Phase 2: Planning
 
-- Generate an action plan into the `\Durion-Processing.md` file.
-- Generate detailed and granular task specific action items to be used for tracking each action plan item with todo/complete status in the file `\Durion-Processing.md`.
+- Generate an action plan into the `Durion-Processing.md` file.
+- Generate detailed and granular task specific action items to be used for tracking each action plan item with todo/complete status in the file `Durion-Processing.md`.
 - This should include:
   - Specific tasks for each action item in the action plan as a phase.
   - Clear descriptions of what needs to be done
@@ -39,16 +39,16 @@ description: 'See process Durion is following where you can edit this to reshape
 
 - Execute action items from the action plan in logical groupings/phases
 - Work silently without announcements until complete.
-- Update file `\Durion-Processing.md` and mark the action item(s) as complete in the tracking.
-- When a phase is complete keep mental note of this that the specific phase from `\Durion-Processing.md` is done and does not need to be repeated.
+- Update file `Durion-Processing.md` and mark the action item(s) as complete in the tracking.
+- When a phase is complete keep mental note of this that the specific phase from `Durion-Processing.md` is done and does not need to be repeated.
 - Repeat this pattern until all action items are complete
 
 # Phase 4: Summary
 
-- Add summary to `\Durion-Processing.md`
+- Add summary to `Durion-Processing.md`
 - Work silently without announcements until complete.
 - Execute only when ALL actions complete
-- Inform user: "Added final summary to `\Durion-Processing.md`."
+- Inform user: "Added final summary to `Durion-Processing.md`."
 - Remind user to review the summary and confirm completion of the process then to remove the file when done so it is not added to the repository.
 
 **ENFORCEMENT RULES:**
