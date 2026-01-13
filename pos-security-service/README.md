@@ -9,8 +9,10 @@ The POS Security Service implements the foundational security framework for the 
 - **Scoped RBAC** - Role-based access control with location scope support
 - **User Role Assignments** - Assign roles to users with effective dating
 - **Authorization API** - Check user permissions with scope validation
+- **Break-Glass Access** - Emergency elevated access with full audit trail
+- **Time-Bound Roles** - Automatic expiration of temporary role assignments
 
-This is the foundational implementation based on the clarification resolutions for Issue #42.
+This implementation is based on the **clarification resolutions for Issue #2 (Clarification #42)**, which established the authoritative RBAC policy for the system.
 
 ## Architecture Decisions
 
@@ -269,13 +271,40 @@ mvn verify
 
 ## Documentation
 
-See [PERMISSION_REGISTRY.md](docs/PERMISSION_REGISTRY.md) for comprehensive documentation including:
-- Detailed permission naming rules and examples
-- Complete registration process
-- Role management patterns
-- Authorization check examples
-- Integration patterns for domain services
-- API reference
+### Core Documentation
+
+- **[RBAC_POLICY.md](docs/RBAC_POLICY.md)** - **START HERE** - Authoritative access control policy
+  - Answers to clarification questions (Issue #2/Clarification #42)
+  - Permission registry decisions and baseline operations
+  - Flat role model (no inheritance)
+  - HR integration approach (identity vs authorization)
+  - Location-scoped permission model
+  - Time-bound roles and break-glass access
+  
+- **[PERMISSION_REGISTRY.md](docs/PERMISSION_REGISTRY.md)** - Technical permission management
+  - Permission naming rules and validation
+  - Registration process and API
+  - Role management patterns
+  - Authorization check examples
+  - Domain service integration patterns
+  
+- **[BASELINE_PERMISSIONS.md](docs/BASELINE_PERMISSIONS.md)** - Reference permission sets
+  - Core system permissions by domain
+  - Risk level classifications
+  - Usage guidelines for domain services
+  - Example `permissions.yaml` manifests
+  
+- **[POLICY_ENGINE_DESIGN.md](docs/POLICY_ENGINE_DESIGN.md)** - Threshold enforcement
+  - Policy-based authorization (beyond simple permissions)
+  - Threshold handling without permission explosion
+  - Policy versioning and audit trail
+  - Implementation roadmap
+  
+- **[BREAK_GLASS_PATTERN.md](docs/BREAK_GLASS_PATTERN.md)** - Emergency access
+  - Break-glass workflow and API
+  - Configuration and TTL management
+  - Audit events and monitoring
+  - Post-incident review process
 
 ## Next Steps
 
@@ -293,9 +322,24 @@ Example follow-up stories:
 
 ## Related Issues
 
-- **Origin Story:** Issue #42 - [BACKEND] [STORY] Security: Define Roles and Permission Matrix for Product/Pricing
-- **Clarification Issue:** Issue #43 - Resolved with definitive decisions
-- **Implementation PR:** This PR
+- **Origin Story:** Issue #2 - [BACKEND] [STORY] Permission Management: Define POS Roles and Permission Matrix
+- **Clarification Issue:** Issue #42 (Origin #2) - Resolved with definitive policy decisions
+- **Related Issues:**
+  - Issue #37 - Inventory adjustment permissions (implemented)
+  - Issue #30 - Cycle count permissions (implemented)
+
+## Clarification Decisions (Issue #42)
+
+This implementation reflects the following **authoritative decisions**:
+
+1. **Permission Granularity:** Operation-specific permissions with policy engine for thresholds (not separate permissions per threshold)
+2. **Role Model:** Flat roles with no inheritance; permissions are additive
+3. **HR Integration:** HR is authoritative for identity; POS owns authorization
+4. **Permission Scope:** Explicit location scoping; no implicit cross-location access
+5. **Time-Bound Roles:** All role assignments support effective dates and automatic expiration
+6. **Break-Glass:** First-class emergency access pattern with mandatory audit
+
+See [RBAC_POLICY.md](docs/RBAC_POLICY.md) for complete policy documentation.
 
 ## Architecture Compliance
 
