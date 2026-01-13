@@ -1,0 +1,11 @@
+name: My Copilot Action
+on: 
+  copilot_action:
+    
+steps:
+  - name: Use GH_TOKEN
+    env: 
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    run: |
+      # Your commands using the token
+      gh api user
