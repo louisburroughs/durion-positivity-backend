@@ -60,7 +60,7 @@ class WorkOrderCompletionTest {
                 .build();
 
         // Re-inject mocks for WorkOrderService since it has WorkOrderStateMachine as dependency
-        workOrderService = new WorkOrderService(workOrderRepository, null, null, stateMachine);
+        workOrderService = new WorkOrderService(workOrderRepository, null, null, stateMachine, auditEventRepository);
     }
 
     @Test
