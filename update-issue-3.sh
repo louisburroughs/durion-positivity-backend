@@ -6,7 +6,7 @@ set -e
 
 REPO="louisburroughs/durion-positivity-backend"
 ISSUE_NUMBER=3
-BODY_FILE="/tmp/issue-3-updated-body.md"
+BODY_FILE="ISSUE-3-UPDATED-BODY.md"
 
 # Check if GH_TOKEN is set
 if [ -z "$GH_TOKEN" ]; then
