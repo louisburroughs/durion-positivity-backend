@@ -94,6 +94,13 @@ public enum InventoryLedgerEventType {
      */
     COUNT_VARIANCE_OUT(EventDirection.OUTBOUND, true),
     
+    /**
+     * Cycle count adjustment posted after approval.
+     * Direction: Can be INBOUND (+) or OUTBOUND (-) depending on variance.
+     * Affects On-Hand: YES
+     */
+    ADJUST_CYCLE_COUNT(EventDirection.NEUTRAL, true),
+    
     // ============================================================================
     // ALLOCATION/RESERVATION EVENTS - Affect ATP but NOT On-Hand
     // ============================================================================
