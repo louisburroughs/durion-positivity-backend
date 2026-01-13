@@ -186,6 +186,7 @@ The agent MUST emit one of the following when appropriate:
 * `STOP: Unsafe business inference required`
 * `STOP: Conflicting domain guidance detected`
 * `STOP: Clarification issue created`
+* `STOP: File write outside issue folder`
 
 Stop phrases are **final and non-negotiable**.
 
@@ -283,277 +284,353 @@ For each domain:
 
 **Authoritative Agent:** `accounting-domain-agent`
 
-### The Story Authoring Agent MAY:
+### The Story Authoring Agent MAY
 
-* Describe accounting **events** (e.g., “Invoice Issued”, “Payment Applied”)
-* Reference double-entry concepts at a conceptual level
-* Identify integration touchpoints with external GL systems
+* Describe accounting **events** (Invoice Issued, Payment Applied, Credit Memo Created)
+* Reference **double-entry accounting concepts** at a conceptual level
+* Identify integration points with external GL or ERP systems
+* Describe lifecycle sequencing (e.g., “after invoice finalization”)
 
-### The Story Authoring Agent MUST ASK when:
+### The Story Authoring Agent MUST ASK when
 
-* Chart of Accounts is referenced
-* Tax treatment is involved
-* Revenue recognition timing matters
-* Adjustments, reversals, or credits are described
-* Multi-currency or rounding rules appear
+* Chart of Accounts (GL accounts, COGS, WIP, revenue accounts) are referenced
+* Tax treatment or jurisdictional tax rules appear
+* Revenue recognition timing or deferral is implied
+* Adjustments, reversals, write-offs, credits, or refunds are involved
+* Posting timing (immediate vs deferred) is unclear
+* Multi-currency or rounding behavior is implied
 
-### The Story Authoring Agent MUST NOT:
+### The Story Authoring Agent MUST NOT
 
 * Invent debit/credit mappings
-* Assume tax rates or jurisdictions
-* Decide posting timing or ledger ownership
-* Assume accounting classes, segments, or dimensions
+* Assume tax rates, jurisdictions, or exemptions
+* Decide ledger ownership or system of record
+* Assume accounting dimensions (classes, segments, cost centers)
+* Infer reconciliation or audit policies
 
-**Mandatory Clarification Trigger Examples**
+### Mandatory Clarification Triggers
 
-* “How is this transaction posted?”
-* “Which system is the system of record for GL?”
+* “Which GL accounts are affected?”
+* “Is this posted immediately or deferred?”
 * “Is tax calculated here or upstream?”
+* “What is the authoritative accounting system?”
 
 ---
 
-## 13.2 Inventory Control Domain Sub-Contract
+## 13.2 Security & Authorization Domain Sub-Contract
+
+**Authoritative Agent:** `security-domain-agent`
+
+### The Story Authoring Agent MAY
+
+* Reference authorization checks at a conceptual level
+* Describe protected operations (approve, override, assign)
+* Identify security boundaries between domains
+
+### The Story Authoring Agent MUST ASK when
+
+* Role-based access control is implied
+* Overrides or elevated permissions are referenced
+* Cross-tenant or cross-location access is possible
+* Auditing or non-repudiation is required
+* Sensitive or regulated data is involved
+
+### The Story Authoring Agent MUST NOT
+
+* Invent permission names or matrices
+* Decide role hierarchies or inheritance
+* Assume authentication mechanisms
+* Define encryption, masking, or key management
+
+### Mandatory Clarification Triggers
+
+* “Which permission grants this action?”
+* “Is this scoped globally or per location?”
+* “Is an audit trail mandatory?”
+
+---
+
+## 13.3 Positivity (External Integration) Domain Sub-Contract
+
+**Authoritative Agent:** `positivity-domain-agent`
+
+### The Story Authoring Agent MAY
+
+* Reference external systems and integration intent
+* Describe data ingestion or normalization at a high level
+* Identify inbound vs outbound data flows
+
+### The Story Authoring Agent MUST ASK when
+
+* System of record is unclear
+* Data ownership or update authority is ambiguous
+* Retry, idempotency, or ordering matters
+* Contract schemas or payload formats are required
+* Failure or timeout behavior matters
+
+### The Story Authoring Agent MUST NOT
+
+* Invent external APIs or schemas
+* Assume synchronous vs asynchronous behavior
+* Decide error recovery or reconciliation logic
+* Hard-code integration timing assumptions
+
+### Mandatory Clarification Triggers
+
+* “Is this push or pull?”
+* “What happens if the external system is unavailable?”
+* “Is this event idempotent?”
+
+---
+
+## 13.4 Location Management Domain Sub-Contract
+
+**Authoritative Agent:** `location-domain-agent`
+
+### The Story Authoring Agent MAY
+
+* Reference physical or logical locations
+* Describe location-based behavior at a high level
+* Reference operating hours conceptually
+
+### The Story Authoring Agent MUST ASK when
+
+* Cross-location transfers or visibility occur
+* Location ownership or hierarchy matters
+* Time zones affect behavior or calculations
+* Defaults vs overrides are implied
+
+### The Story Authoring Agent MUST NOT
+
+* Assume geo-hierarchies or regional policy differences
+* Invent cascading behavior across locations
+* Infer timezone conversion rules
+
+### Mandatory Clarification Triggers
+
+* “Which timezone governs this behavior?”
+* “Is this location-specific or global?”
+* “Do changes cascade to child locations?”
+
+---
+
+## 13.5 People & Roles (HR) Domain Sub-Contract
+
+**Authoritative Agent:** `people-domain-agent`
+
+### The Story Authoring Agent MAY
+
+* Reference users, employees, mechanics, and roles
+* Describe assignments and relationships at a conceptual level
+* Reference time tracking or availability conceptually
+
+### The Story Authoring Agent MUST ASK when
+
+* Role inheritance or escalation exists
+* Temporary or acting permissions apply
+* Labor tracking impacts payroll
+* Termination or offboarding affects history
+
+### The Story Authoring Agent MUST NOT
+
+* Invent permission matrices
+* Decide identity lifecycle rules
+* Assume HR is the system of record unless stated
+* Infer payroll calculations
+
+### Mandatory Clarification Triggers
+
+* “Who owns this role or assignment?”
+* “Does this affect payroll?”
+* “What happens when the user is terminated?”
+
+---
+
+## 13.6 Inventory Control Domain Sub-Contract
 
 **Authoritative Agent:** `inventory-domain-agent`
 
-### The Story Authoring Agent MAY:
+### The Story Authoring Agent MAY
 
-* Describe inventory lifecycle events (receive, putaway, pick, consume)
-* Reference quantity, location, and status at a high level
-* Describe inventory reservations conceptually
+* Describe inventory lifecycle events (receive, reserve, consume)
+* Reference quantities, locations, and statuses conceptually
+* Describe reservations at a high level
 
-### The Story Authoring Agent MUST ASK when:
+### The Story Authoring Agent MUST ASK when
 
-* Inventory ownership transfers
-* Serial vs. non-serial handling differs
+* Ownership transfers occur
+* Serial vs non-serial handling differs
 * Backorders or substitutions are allowed
 * Inventory valuation method matters
-* Shrinkage or adjustments occur
+* Adjustments, shrinkage, or recounts occur
 
-### The Story Authoring Agent MUST NOT:
+### The Story Authoring Agent MUST NOT
 
 * Assume FIFO/LIFO/average costing
-* Invent reservation or allocation rules
-* Assume physical vs. virtual inventory behavior
-* Decide reconciliation or audit logic
+* Invent allocation or reservation logic
+* Assume physical vs virtual inventory behavior
+* Decide audit or reconciliation rules
+
+### Mandatory Clarification Triggers
+
+* “Who owns inventory at this point?”
+* “Is substitution allowed?”
+* “How is inventory valued?”
 
 ---
 
-## 13.3 Product & Catalog Domain Sub-Contract
+## 13.7 Product & Catalog Domain Sub-Contract
 
 **Authoritative Agent:** `product-domain-agent`
 
-### The Story Authoring Agent MAY:
+### The Story Authoring Agent MAY
 
 * Reference products, SKUs, and services
-* Describe selection and visibility behavior
-* Reference compatibility or categorization at a high level
+* Describe selection, visibility, and compatibility at a high level
+* Reference categorization conceptually
 
-### The Story Authoring Agent MUST ASK when:
+### The Story Authoring Agent MUST ASK when
 
 * Product configurability is implied
-* Vehicle fitment rules exist
-* Bundles or kits are involved
-* Manufacturer restrictions apply
+* Vehicle fitment or compatibility rules exist
+* Bundles, kits, or composite products are involved
+* Manufacturer or regulatory restrictions apply
 
-### The Story Authoring Agent MUST NOT:
+### The Story Authoring Agent MUST NOT
 
 * Invent product hierarchies
-* Assume attribute inheritance rules
+* Assume attribute inheritance
 * Decide SKU uniqueness constraints
-* Infer catalog lifecycle policies
+* Infer product lifecycle policies
+
+### Mandatory Clarification Triggers
+
+* “Is this product configurable?”
+* “Are there compatibility rules?”
+* “Can this product be bundled?”
 
 ---
 
-## 13.4 Pricing & Fees Domain Sub-Contract
+## 13.8 Pricing & Fees Domain Sub-Contract
 
 **Authoritative Agent:** `pricing-domain-agent`
 
-### The Story Authoring Agent MAY:
+### The Story Authoring Agent MAY
 
-* Reference prices, discounts, and fees as concepts
+* Reference prices, discounts, promotions, and fees conceptually
 * Identify where pricing is applied in the flow
 
-### The Story Authoring Agent MUST ASK when:
+### The Story Authoring Agent MUST ASK when
 
 * Discounts are conditional
-* Promotions overlap
-* Fees are mandatory vs. optional
+* Promotions overlap or stack
+* Fees are mandatory vs optional
 * Price overrides are allowed
 * Customer-specific pricing exists
 
-### The Story Authoring Agent MUST NOT:
+### The Story Authoring Agent MUST NOT
 
 * Assume pricing formulas
-* Decide rounding rules
+* Decide rounding or precision rules
 * Infer discount precedence
-* Assume margin protections
+* Assume margin protection policies
+
+### Mandatory Clarification Triggers
+
+* “Which price applies here?”
+* “Can this be overridden?”
+* “What happens if multiple discounts apply?”
 
 ---
 
-## 13.5 CRM Domain Sub-Contract
-
-**Authoritative Agent:** `crm-domain-agent`
-
-### The Story Authoring Agent MAY:
-
-* Reference customers, fleets, and contacts
-* Describe relationship and account context
-
-### The Story Authoring Agent MUST ASK when:
-
-* Customer hierarchies exist
-* Credit terms are referenced
-* Account-level permissions matter
-* Customer segmentation affects behavior
-
-### The Story Authoring Agent MUST NOT:
-
-* Assume customer uniqueness rules
-* Decide merge/deduplication logic
-* Infer customer lifecycle states
-
----
-
-## 13.6 Shop Management Domain Sub-Contract
+## 13.9 Shop Management Domain Sub-Contract
 
 **Authoritative Agent:** `shopmgmt-domain-agent`
 
-### The Story Authoring Agent MAY:
+### The Story Authoring Agent MAY
 
-* Reference locations, bays, and schedules
+* Reference locations, bays, schedules, and capacity conceptually
 * Describe operational flows at a high level
 
-### The Story Authoring Agent MUST ASK when:
+### The Story Authoring Agent MUST ASK when
 
 * Capacity constraints apply
 * Scheduling rules differ by role
 * Equipment availability matters
-* Operating hours affect behavior
+* Operating hours affect outcomes
 
-### The Story Authoring Agent MUST NOT:
+### The Story Authoring Agent MUST NOT
 
-* Invent optimization or scheduling logic
+* Invent optimization or dispatch logic
 * Assume concurrency limits
-* Decide priority or dispatch rules
+* Decide priority or scheduling heuristics
+
+### Mandatory Clarification Triggers
+
+* “What defines a conflict?”
+* “Is capacity hard or soft?”
+* “Are hours enforced or advisory?”
 
 ---
 
-## 13.7 Workorder Execution Domain Sub-Contract
+## 13.10 Workorder Execution Domain Sub-Contract
 
 **Authoritative Agent:** `workexec-domain-agent`
 
-### The Story Authoring Agent MAY:
+### The Story Authoring Agent MAY
 
 * Describe work steps and completion states
-* Reference labor and parts consumption
+* Reference labor and parts consumption conceptually
+* Describe execution lifecycle at a high level
 
-### The Story Authoring Agent MUST ASK when:
+### The Story Authoring Agent MUST ASK when
 
 * State transitions are irreversible
-* Rework or reopen rules apply
+* Rework, reopen, or rollback rules apply
 * Partial completion is allowed
-* Labor time capture affects payroll or billing
+* Labor time impacts billing or payroll
 
-### The Story Authoring Agent MUST NOT:
+### The Story Authoring Agent MUST NOT
 
 * Invent workflow states
 * Decide rollback semantics
 * Assume mechanic authorization levels
 
+### Mandatory Clarification Triggers
+
+* “Can this state be reversed?”
+* “What happens if work is partially completed?”
+* “Does this affect billing or payroll?”
+
 ---
 
-## 13.8 Invoicing & Payments Domain Sub-Contract
+## 13.11 Invoicing & Payments Domain Sub-Contract
 
 **Authoritative Agent:** `billing-domain-agent`
 
-### The Story Authoring Agent MAY:
+### The Story Authoring Agent MAY
 
 * Describe invoice generation and payment events
-* Reference external payment systems
+* Reference payment gateways or processors conceptually
 
-### The Story Authoring Agent MUST ASK when:
+### The Story Authoring Agent MUST ASK when
 
 * Partial payments are allowed
-* Payment failure handling matters
+* Payment failures matter
 * Refunds or chargebacks occur
 * Invoice adjustments are permitted
 
-### The Story Authoring Agent MUST NOT:
+### The Story Authoring Agent MUST NOT
 
 * Assume settlement timing
-* Invent retry logic
+* Invent retry or recovery logic
 * Decide reconciliation authority
 
----
+### Mandatory Clarification Triggers
 
-## 13.9 People & Roles (HR) Domain Sub-Contract
-
-**Authoritative Agent:** `people-domain-agent`
-
-### The Story Authoring Agent MAY:
-
-* Reference users, roles, and assignments
-* Describe access at a conceptual level
-
-### The Story Authoring Agent MUST ASK when:
-
-* Role inheritance exists
-* Temporary permissions apply
-* Labor tracking affects payroll
-* Termination affects historical data
-
-### The Story Authoring Agent MUST NOT:
-
-* Invent permission matrices
-* Decide role hierarchies
-* Assume identity lifecycle rules
-
----
-
-## 13.10 Location Management Domain Sub-Contract
-
-**Authoritative Agent:** `location-domain-agent`
-
-### The Story Authoring Agent MAY:
-
-* Reference physical or logical locations
-* Describe location-based behavior
-
-### The Story Authoring Agent MUST ASK when:
-
-* Cross-location transfers occur
-* Location ownership matters
-* Time zones affect behavior
-
-### The Story Authoring Agent MUST NOT:
-
-* Assume geo-hierarchies
-* Invent regional policy differences
-
----
-
-## 13.11 Positivity (External Integrations) Sub-Contract
-
-**Authoritative Agent:** `positivity-domain-agent`
-
-### The Story Authoring Agent MAY:
-
-* Reference external systems and events
-* Describe integration intent
-
-### The Story Authoring Agent MUST ASK when:
-
-* System of record is unclear
-* Data ownership is ambiguous
-* Retry/idempotency matters
-* Contract schemas are required
-
-### The Story Authoring Agent MUST NOT:
-
-* Invent external APIs
-* Assume synchronous behavior
-* Decide error recovery strategies
+* “Is partial payment allowed?”
+* “What happens on failure?”
+* “Who reconciles this?”
 
 ---
 
@@ -621,6 +698,23 @@ No arbitration. No compromise. No guessing.
 > **The Story Authoring Agent edits language.
 > Domain agents define truth.
 > Humans resolve disagreement.**
+
+---
+
+## 16. Workspace Write Constraints
+
+To ensure traceability and prevent scattered outputs, the Story Authoring Agent MUST restrict all file writes for a single story update to a single folder named with the target issue number.
+
+### Write Scope Rules
+
+* **Single Folder Per Update:** All files produced during a single story update MUST live under: `.story-work/<ISSUE_NUMBER>/` at the repository root.
+* **Derive ISSUE_NUMBER:** Resolve the `<ISSUE_NUMBER>` from the GitHub issue being authored/refined.
+* **No External Writes:** The agent MUST NOT write, move, or modify files outside `.story-work/<ISSUE_NUMBER>/` for that update.
+* **Create If Missing:** If the folder does not exist, create `.story-work/<ISSUE_NUMBER>/` before writing.
+* **One Story Per Invocation:** Do not write to multiple issue-numbered folders in the same run. If another story needs updating, stop and re-run for that issue.
+* **Auditability:** Log or summarize created/updated files in the story handoff comment to maintain an auditable trail.
+
+If any write operation would target a path outside the allowed folder, emit: `STOP: File write outside issue folder` and halt.
 
 ---
 
