@@ -1,0 +1,38 @@
+package com.positivity.accounting.audit.repository;
+
+import com.positivity.accounting.audit.entity.OverridePolicyThreshold;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Repository for override policy thresholds.
+ */
+@Repository
+public interface OverridePolicyThresholdRepository extends JpaRepository<OverridePolicyThreshold, UUID> {
+    
+    /**
+     * Find the active policy for a role at a given point in time.
+     */
+    @Query("SELECT p FROM OverridePolicyThreshold p WHERE p.role = :role " +
+           "AND p.active = true " +
+           "AND p.effectiveDate <= :atTime " +
+           "AND (p.expirationDate IS NULL OR p.expirationDate > :atTime) " +
+           "ORDER BY p.effectiveDate DESC")
+    Optional<OverridePolicyThreshold> findActiveByRoleAtTime(
+        @Param("role") String role,
+        @Param("atTime") Instant atTime
+    );
+    
+    /**
+     * Find the current active policy for a role.
+     */
+    default Optional<OverridePolicyThreshold> findCurrentActiveByRole(String role) {
+        return findActiveByRoleAtTime(role, Instant.now());
+    }
+}
