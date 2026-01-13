@@ -1,11 +1,13 @@
 package com.positivity.catalog.controller;
 
 import com.positivity.catalog.dao.CatalogDao;
+import com.positivity.catalog.dto.ProductDetailView;
 import com.positivity.catalog.model.ProductEntity;
 import com.positivity.catalog.model.ServiceEntity;
 import com.positivity.catalog.model.NonInventoryProductEntity;
 import com.positivity.catalog.model.CatalogEntity;
 import com.positivity.catalog.CatalogItem;
+import com.positivity.catalog.service.ProductDetailService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -39,6 +41,7 @@ public class CatalogController {
     public static final String SERVICE = "service";
     public static final String NONINVENTORY = "noninventory";
     private final CatalogDao catalogDao;
+    private final ProductDetailService productDetailService;
 
     /**
      * Retrieves a product by its ID.
@@ -75,6 +78,62 @@ public class CatalogController {
     })
     public List<ProductEntity> getProductByName(@Parameter(description = "Name of the products to be obtained") @PathVariable String name) {
         return catalogDao.findProductByName(name);
+    }
+
+    /**
+     * Retrieves consolidated product detail view with pricing and availability.
+     * Implements Issue #16: Product Details with Price and Availability Signals.
+     * Implements graceful degradation with field-level status indicators.
+     * 
+     * @param productId The ID of the product
+     * @param locationId The location/store ID for location-specific pricing and availability
+     * @return ResponseEntity containing the ProductDetailView or appropriate error status
+     */
+    @EmitEvent(id = "Catalog-000001-0000000015")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @GetMapping("/v1/products/{productId}")
+    @Operation(
+        summary = "Get product details with pricing and availability",
+        description = "Retrieves a consolidated view of product information including catalog data, " +
+                     "location-specific pricing, and availability. Implements graceful degradation: " +
+                     "returns partial data with status indicators if non-critical services are unavailable."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                responseCode = "200", 
+                description = "Successfully retrieved product details (may be partial if some services unavailable)",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDetailView.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid location ID"),
+            @ApiResponse(responseCode = "404", description = "Product not found"),
+            @ApiResponse(responseCode = "503", description = "Required service unavailable (Product Catalog)")
+    })
+    public ResponseEntity<ProductDetailView> getProductDetailView(
+            @Parameter(description = "ID of the product", required = true) 
+            @PathVariable Long productId,
+            @Parameter(description = "Location/store ID for location-specific data", required = true)
+            @RequestParam(name = "location_id") String locationId) {
+        
+        log.info("Product detail view requested: productId={}, locationId={}", productId, locationId);
+        
+        // Validate location_id (basic validation)
+        if (locationId == null || locationId.trim().isEmpty()) {
+            log.warn("Invalid location_id provided: {}", locationId);
+            return ResponseEntity.badRequest().build();
+        }
+        
+        // Fetch product detail with graceful degradation
+        ProductDetailView productDetail = productDetailService.getProductDetail(productId, locationId);
+        
+        if (productDetail == null) {
+            log.warn("Product not found: productId={}", productId);
+            return ResponseEntity.notFound().build();
+        }
+        
+        // Log latency for monitoring
+        log.debug("Product detail view generated with confidence={}", productDetail.getConfidence());
+        
+        return ResponseEntity.ok(productDetail);
     }
 
     /**
