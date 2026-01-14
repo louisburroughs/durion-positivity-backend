@@ -1,7 +1,8 @@
 ---
 name: Story Authoring Agent
 description: This custom agent is responsible for authoring and refining implementation-ready user stories as GitHub issues, ensuring clarity, correctness, and domain alignment while coordinating with business-domain-specific agents.
-tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web', 'agent', 'github-copilot-app-modernization-deploy/*', 'github/*', 'github.vscode-pull-request-github/copilotCodingAgent', 'github.vscode-pull-request-github/issue_fetch', 'github.vscode-pull-request-github/suggest-fix', 'github.vscode-pull-request-github/searchSyntax', 'github.vscode-pull-request-github/doSearch', 'github.vscode-pull-request-github/renderIssues', 'github.vscode-pull-request-github/activePullRequest', 'github.vscode-pull-request-github/openPullRequest', 'vscjava.vscode-java-upgrade/generate_upgrade_plan', 'vscjava.vscode-java-upgrade/confirm_upgrade_plan', 'vscjava.vscode-java-upgrade/setup_upgrade_environment', 'vscjava.vscode-java-upgrade/build_java_project', 'vscjava.vscode-java-upgrade/validate_cves_for_java', 'vscjava.vscode-java-upgrade/validate_behavior_changes', 'vscjava.vscode-java-upgrade/run_tests_for_java', 'vscjava.vscode-java-upgrade/summarize_upgrade', 'vscjava.vscode-java-upgrade/generate_tests_for_java', 'vscjava.vscode-java-upgrade/list_jdks', 'vscjava.vscode-java-upgrade/list_mavens', 'vscjava.vscode-java-upgrade/install_jdk', 'vscjava.vscode-java-upgrade/install_maven', 'todo']
+tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web', 'github/*', 'agent', 'todo']
+model: GPT-5 mini (copilot)
 ---
 
 **Agent Type:** Workspace / Requirements
