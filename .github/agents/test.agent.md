@@ -398,11 +398,13 @@ When analyzing test results, include:
 - Time taken to run full test suite
 - Failed integration tests with container issues
 
-## Integration with Other Agents
+## Related Agents
 
-- **Validate code from `software-engineer-agent-v1`** - Run tests on all new implementations before approval
-- **Coordinate with `API Gateway & OpenAPI Architect`** for integration test patterns
-- **Work with `SRE/Observability Agent`** to test observability instrumentation and metrics emission
-- **Collaborate with `Database Administrator Agent`** for performance and query testing
-- **Report failures back to implementation agents** for resolution before completion
-- **Integration with `pos-agent-framework`** - Ensure all tests pass against latest agent configurations
+- [Principal Software Engineer Agent](./principal-software-engineer.agent.md)
+- [Universal Janitor Agent](./janitor.agent.md)
+- [Software Engineer Agent v1](./software-engineer.agent.md)
+- [Spring Boot 3.x Strategic Advisor](./springboot.agent.md)
+- [PostgreSQL Database Administrator](./postgresql-dba.agent.md)
+- [Database Administrator Agent](./dba.agent.md)
+- [API Gateway & OpenAPI Architect](./api-gateway.agent.md)
+- [Senior Software Engineer - REST API Agent](./api.agent.md)
