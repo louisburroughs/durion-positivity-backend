@@ -79,6 +79,8 @@
 		<maven.compiler.source>21</maven.compiler.source>
 		<maven.compiler.target>21</maven.compiler.target>
 		<spring-cloud.version>2024.0.0</spring-cloud.version>
+		<postgresql.version>42.7.7</postgresql.version>
+		<tomcat.version>10.1.47</tomcat.version>
 	</properties>
 
 	<build>
