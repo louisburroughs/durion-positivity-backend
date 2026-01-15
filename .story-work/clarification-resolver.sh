@@ -1,7 +1,7 @@
-#!/bin/zsh
+#!/bin/bash
 #
 # clarification-resolver.sh
-# Resolves blocked:clarification issues by querying ChatGPT to answer open questions.
+# Resolves blocked:domain-conflict issues by querying ChatGPT to answer open questions.
 # 
 # Usage:
 #   OPENAI_API_KEY=sk_... ./clarification-resolver.sh [--dry-run] [--verbose]
@@ -13,12 +13,18 @@
 
 set -euo pipefail
 
+# Bash 3.2+ compatibility
+if [[ -z "${BASH_VERSION:-}" ]]; then
+  echo "This script requires bash"
+  exit 1
+fi
+
 # ============================================================================
 # Configuration
 # ============================================================================
 
 readonly REPO="${REPO:-louisburroughs/durion-positivity-backend}"
-readonly LABEL="blocked:clarification"
+readonly LABEL="blocked:domain-conflict"
 readonly OPENAI_MODEL="${OPENAI_MODEL:-gpt-5.2}"
 readonly OPENAI_API_URL="https://api.openai.com/v1/responses"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -42,24 +48,25 @@ log() {
   local level="$1"
   shift
   local message="$*"
-  local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+  local timestamp
+  timestamp=$(date '+%Y-%m-%d %H:%M:%S')
   
   case "$level" in
     INFO)
-      echo -e "${color_blue}[INFO]${color_reset} ${message}" >&2
+      printf '%b\n' "${color_blue}[INFO]${color_reset} ${message}" >&2
       ;;
     SUCCESS)
-      echo -e "${color_green}[SUCCESS]${color_reset} ${message}" >&2
+      printf '%b\n' "${color_green}[SUCCESS]${color_reset} ${message}" >&2
       ;;
     WARN)
-      echo -e "${color_yellow}[WARN]${color_reset} ${message}" >&2
+      printf '%b\n' "${color_yellow}[WARN]${color_reset} ${message}" >&2
       ;;
     ERROR)
-      echo -e "${color_red}[ERROR]${color_reset} ${message}" >&2
+      printf '%b\n' "${color_red}[ERROR]${color_reset} ${message}" >&2
       ;;
   esac
   
-  echo "[${timestamp}] [${level}] ${message}" >> "$LOG_FILE"
+  printf '%s\n' "[${timestamp}] [${level}] ${message}" >> "$LOG_FILE"
 }
 
 # ============================================================================
@@ -69,15 +76,15 @@ log() {
 check_dependencies() {
   local missing=()
   
-  if ! command -v gh &>/dev/null; then
+  if ! command -v gh >/dev/null 2>&1; then
     missing+=("gh (GitHub CLI)")
   fi
   
-  if ! command -v curl &>/dev/null; then
+  if ! command -v curl >/dev/null 2>&1; then
     missing+=("curl")
   fi
   
-  if ! command -v jq &>/dev/null; then
+  if ! command -v jq >/dev/null 2>&1; then
     missing+=("jq")
   fi
   
@@ -91,7 +98,7 @@ check_dependencies() {
 }
 
 check_github_auth() {
-  if ! gh auth status &>/dev/null; then
+  if ! gh auth status >/dev/null 2>&1; then
     log ERROR "GitHub CLI not authenticated. Run: gh auth login"
     return 1
   fi
@@ -124,7 +131,8 @@ query_blocked_issues() {
   log INFO "Querying issues with label '${LABEL}'..."
   
   local issues_json
-  local temp_gh_output=$(mktemp)
+  local temp_gh_output
+  temp_gh_output=$(mktemp)
   
   # Get only number and title (not body which can be huge and contain problematic characters)
   if ! gh issue list --label "$LABEL" --state open --json number,title --repo "$REPO" > "$temp_gh_output" 2>/dev/null; then
@@ -191,9 +199,10 @@ query_chatgpt() {
   open_questions=$(extract_open_questions "$issue_body")
   
   # Create temp files for safe handling of multiline content
-  local temp_response=$(mktemp)
-  local temp_payload=$(mktemp)
-  local temp_prompt=$(mktemp)
+  local temp_response temp_payload temp_prompt
+  temp_response=$(mktemp)
+  temp_payload=$(mktemp)
+  temp_prompt=$(mktemp)
   
   # Write prompt to temp file to avoid shell expansion issues
   cat > "$temp_prompt" <<'PROMPT_EOF'
@@ -211,7 +220,7 @@ PROMPT_EOF
   
   if [[ "$VERBOSE" == true ]]; then
     log INFO "Prompt for issue #${issue_number}:"
-    cat "$temp_prompt" | sed 's/^/  /'
+    sed 's/^/  /' < "$temp_prompt"
   fi
   
   # Build JSON payload using jq with rawfile to safely read the prompt from file
@@ -241,7 +250,7 @@ PROMPT_EOF
   fi
   
   while [ $retry_count -lt $max_retries ]; do
-    http_code=$(curl ${ssl_flag} -s -w "%{http_code}" -o "$temp_response" \
+    http_code=$(curl $ssl_flag -s -w "%{http_code}" -o "$temp_response" \
       -X POST "$OPENAI_API_URL" \
       -H "Authorization: Bearer ${OPENAI_API_KEY}" \
       -H "Content-Type: application/json" \
@@ -421,7 +430,7 @@ Environment Variables:
   REPO            (optional) GitHub repo (default: louisburroughs/durion-positivity-backend)
 
 Examples:
-  # Resolve all blocked:clarification issues
+  # Resolve all blocked:domain-conflict issues
   export OPENAI_API_KEY=sk_...
   ./clarification-resolver.sh
 
