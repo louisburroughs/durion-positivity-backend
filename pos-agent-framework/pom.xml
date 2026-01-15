@@ -164,10 +164,14 @@
 					<systemPropertyVariables>
 						<!-- Expose GitHub token as system property for tests that read github.token -->
 						<github.token>${GITHUB_TOKEN}</github.token>
+						<!-- Provide JWT signing secret via system property when available -->
+						<agent.jwt.secret>${env.AGENT_JWT_SECRET}</agent.jwt.secret>
 					</systemPropertyVariables>
 					<environmentVariables>
 						<!-- Inject GitHub token into test environment without hardcoding secrets -->
 						<GITHUB_TOKEN>${settings.servers.github-token.password}</GITHUB_TOKEN>
+						<!-- Inject JWT signing secret into test environment (read from host env) -->
+						<AGENT_JWT_SECRET>${env.AGENT_JWT_SECRET}</AGENT_JWT_SECRET>
 					</environmentVariables>
 					<!-- Ensure tests run in a forked JVM (so env var injection applies) -->
 					<forkCount>1</forkCount>
