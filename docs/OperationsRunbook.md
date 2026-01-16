@@ -4,9 +4,16 @@
 
 This runbook documents operational procedures for the **durion-positivity-backend** project (Spring Boot 3.x, Java 21). It focuses on building, deploying, monitoring, and troubleshooting the POS microservices that underpin the Durion platform.
 
-This runbook is **service-local**. For cross-repository coordination (story orchestration, workspace-level agents, and SRE procedures that span frontend and backend), use the workspace-level runbook in the **durion/workspace-agents** project.
+This runbook is **service-local**.
+
+For platform-wide procedures that span frontend and backend, use:
+
+- Platform-level: `durion/docs/OPERATIONS_RUNBOOK.md`
+
+For cross-repository incident coordination (story orchestration, workspace-level agents, and SRE procedures that span multiple repos), use the workspace-level runbook in the **durion/workspace-agents** project.
 
 **Related runbooks and specs:**
+- Platform-level: `durion/docs/OPERATIONS_RUNBOOK.md`
 - Workspace-level: `durion/workspace-agents/docs/OperationsRunbook.md`
 - Workspace agent structure: `durion/.kiro/specs/workspace-agent-structure/tasks.md`
 - Backend agent structure plan: `.kiro/specs/agent-structure/tasks.md`
@@ -28,7 +35,7 @@ Use this runbook when you are operating, deploying, or debugging **durion-positi
 - For **common incidents** (build failures, startup issues, health failures), see section 4.
 - For **agent-structure / Kiro automation** for this repo, see section 5.
 
-When an issue spans frontend (Moqui/Vue) and backend services, start here to verify the backend is healthy, then switch to the workspace-level runbook and the frontend runbook.
+When an issue spans frontend (Moqui/Vue) and backend services, start here to verify the backend is healthy, then switch to the platform runbook, and escalate to the workspace-level runbook for coordinated response.
 
 ---
 
@@ -172,7 +179,7 @@ For incidents that involve cross-service behaviour (e.g., Moqui can’t reach a 
 - Listening on the correct URL/path
 - Accepting properly authenticated requests (JWT, API gateway rules)
 
-Then follow the workspace-level runbook for cross-repo diagnosis.
+Then follow the platform runbook, and use the workspace-level runbook for cross-repo incident coordination.
 
 ---
 
@@ -197,7 +204,7 @@ Use this when you want an agent (or automated process) to carry out one more ste
 
 ## 6. When to Escalate to Workspace-Level Runbook
 
-Use the workspace-level runbook in `durion/workspace-agents/docs/OperationsRunbook.md` when:
+Use the platform-level runbook in `durion/docs/OPERATIONS_RUNBOOK.md` and the workspace-level runbook in `durion/workspace-agents/docs/OperationsRunbook.md` when:
 
 - Issues involve both Moqui/frontend and backend services
 - Story orchestration documents (story-sequence, frontend-/backend-coordination) appear inconsistent with actual behaviour
