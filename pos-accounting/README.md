@@ -2,7 +2,12 @@
 
 ## Overview
 
-The POS Accounting module implements a comprehensive audit trail system for tracking financial exceptions including price overrides, refunds, and cancellations. This ensures full compliance with financial controls and provides evidence for exception reviews.
+The POS Accounting module implements:
+
+- An audit trail system for tracking financial exceptions (price overrides, refunds, cancellations)
+- Invoice payment status tracking with idempotent processing (payment-applied events → denormalized invoice status view)
+
+This supports financial controls, traceability, and downstream accounting posting workflows.
 
 ## Features
 
@@ -10,30 +15,39 @@ The POS Accounting module implements a comprehensive audit trail system for trac
 - **Authorization Validation**: Role-based thresholds for price discounts
 - **Forbidden Category Detection**: Blocks overrides below cost, stacking violations, etc.
 - **Immutable Audit Entries**: Records original/adjusted prices, actor, authorization level, policy version
-- **Event Emission**: `OverridePriceCreated` with accounting intent
+- **Event Publication**: Publishes `OverridePriceCreated` (Spring application event) with accounting intent/status
 
 ### 2. Refund Tracking
 - **Separate Authorization**: Independent from original sale authorization
 - **Automatic Method Selection**: 
-  - Unsettled payments → REVERSAL (void/chargeback)
-  - Settled payments → CREDIT_MEMO or REFUND_PAYMENT
+  - Unsettled payments → VOID/CHARGEBACK (based on refund type)
+  - Settled payments → CREDIT_MEMO/CASH_REFUND (based on refund type)
 - **Full Traceability**: Links to invoice, payment, settlement status
-- **Event Emission**: `RefundCreated` with refund type and accounting intent
+- **Event Publication**: Publishes `RefundCreated` (Spring application event) with refund type, method, and accounting intent/status
 
 ### 3. Cancellation Tracking
 - **Before/After Snapshots**: Captures pre and post-cancellation state
 - **Partial Payment Handling**: Records payments without netting
 - **GL Reversal Status**: Tracks pending reversals (Accounting owns posting)
-- **Event Emission**: `CancellationCreated` with snapshots
+- **Event Publication**: Publishes `CancellationCreated` (Spring application event) with snapshots and accounting intent/status
+
+### 4. Invoice Payment Status Tracking
+- **Idempotent Processing**: Uses an idempotency key to prevent duplicate application
+- **Retry for Transient Failures**: Retries payment application up to 3 times
+- **Denormalized Status View**: Stores current invoice payment status for fast reads
+- **Event Logging**: The `payment.applied` endpoint is annotated with `@EmitEvent(id = "payment.applied")` (logs event start/end/error)
 
 ## Architecture
 
 ### Core Components
 
 #### Entities
-- **AuditTrailEntry**: Main immutable audit log entry
-- **OverridePolicyThreshold**: Role-based authorization limits
-- **RefundPolicyConfig**: Refund handling configuration
+- **AuditTrailEntry** (`audit_trail_entry`): Main immutable audit log entry
+- **OverridePolicyThreshold** (`override_policy_threshold`): Role-based authorization limits
+- **RefundPolicyConfig** (`refund_policy_config`): Refund handling configuration
+- **PaymentAppliedEvent** (`payment_applied_events`): Payment application events per invoice
+- **InvoiceStatusView** (`invoice_status_views`): Denormalized view of current invoice payment status
+- **IdempotencyKey** (`idempotency_keys`): Prevents duplicate processing of payment-applied requests
 
 #### Services
 - **AuditTrailService**: Records price overrides, refunds, and cancellations
@@ -41,9 +55,12 @@ The POS Accounting module implements a comprehensive audit trail system for trac
 - **PriceOverrideAuthorizationService**: Validates override authorization
 - **RefundAuthorizationService**: Validates refund authorization
 - **DataInitializationService**: Seeds default policies on startup
+- **InvoicePaymentStatusService**: Applies payments and maintains invoice status view
+- **IdempotencyService**: Stores and checks idempotency keys (24h TTL)
 
 #### Controllers
 - **AuditTrailController**: REST API for recording and querying audit entries
+- **InvoicePaymentController**: REST API for payment-applied events and invoice status
 
 ### API Endpoints
 
@@ -96,14 +113,51 @@ Content-Type: application/json
 }
 ```
 
+  "invoiceId": "uuid",
 #### Query by Order
 ```http
 GET /api/audit/order/{orderId}
+  "partialPaymentInfo": "{\"payments\": []}",
+```
+
+#### Query by Invoice
+```http
+GET /api/audit/invoice/{invoiceId}
+```
+
+#### Query by Exception Type and Date Range
+```http
+GET /api/audit/type/{type}?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z
+```
+
+#### Query by Actor and Date Range
+```http
+GET /api/audit/actor/{actorId}?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z
 ```
 
 #### Query by Date Range
 ```http
 GET /api/audit/range?startDate=2024-01-01T00:00:00Z&endDate=2024-12-31T23:59:59Z
+```
+
+#### Apply Payment (Idempotent)
+```http
+POST /api/accounting/payment-applied
+Content-Type: application/json
+
+{
+  "invoiceId": "INV-123",
+  "transactionReference": "TXN-456",
+  "paymentAmount": 50.00,
+  "invoiceTotal": 100.00,
+  "idempotencyKey": "INV-123:TXN-456",
+  "paymentFailed": false
+}
+```
+
+#### Get Invoice Payment Status
+```http
+GET /api/accounting/invoice/{invoiceId}/status
 ```
 
 ## Configuration
@@ -131,6 +185,7 @@ Default refund policy:
 4. **Traceability**: All entries link back to originating order/invoice/payment
 5. **Accounting Intent**: All events include accounting intent and status
 6. **GL Posting Out of Scope**: Recording only; GL posting is Accounting's responsibility
+7. **Idempotency for Payments**: Duplicate `payment-applied` requests with the same idempotency key return the existing invoice status
 
 ## Database Schema
 
@@ -142,7 +197,7 @@ Default refund policy:
 - Price override fields: order_id, line_item_id, original_price, adjusted_price
 - Refund fields: invoice_id, payment_id, refund_type, refund_amount, refund_method
 - Cancellation fields: cancellation_type, before_snapshot, after_snapshot
-- Accounting fields: accounting_intent, accounting_status, expected_outcome
+- Accounting fields: accounting_intent, accounting_status, expected_accounting_outcome
 
 ### override_policy_threshold
 - policy_id (UUID, PK)
@@ -154,42 +209,67 @@ Default refund policy:
 - requires_separate_authorization, settled_payment_handling, unsettled_payment_handling
 - version, active
 
+### payment_applied_events
+- id (BIGINT, PK)
+- invoice_id, transaction_reference
+- payment_amount, invoice_total
+- status (PAID/PARTIALLY_PAID/UNPAID/FAILED)
+- timestamp
+- idempotency_key
+
+### invoice_status_views
+- id (BIGINT, PK)
+- invoice_id (unique)
+- current_status
+- total_paid, invoice_total
+- latest_transaction_reference
+- last_updated
+
+### idempotency_keys
+- id (BIGINT, PK)
+- key_value (unique, indexed)
+- invoice_id
+- created_at, expires_at
+
 ## Events
 
 ### OverridePriceCreated
-- Emitted when price override recorded
+- Published (Spring application event) when price override recorded
 - Includes accounting intent: REVENUE_ADJUSTMENT
 - Status: PENDING_POSTING
 
 ### RefundCreated
-- Emitted when refund recorded
+- Published (Spring application event) when refund recorded
 - Includes refund type and accounting intent
 - Status: PENDING_POSTING
 
 ### CancellationCreated
-- Emitted when cancellation recorded
+- Published (Spring application event) when cancellation recorded
 - Includes before/after snapshots
 - Status: PENDING_POSTING
 
 ### AuthorizationDenied
-- Emitted when authorization fails
+- Published (Spring application event) when authorization fails
 - Includes denial reason and policy version
+
+### payment.applied
+- Logged via `@EmitEvent(id = "payment.applied")` on the `POST /api/accounting/payment-applied` endpoint
 
 ## Running the Application
 
 ### Prerequisites
 - Java 21
-- Maven 3.9+
+- Maven 3.9+ (or use the included Maven wrapper)
 - H2 (embedded) or PostgreSQL
 
 ### Build
 ```bash
-mvn clean compile -pl pos-accounting -am
+./mvnw clean compile -pl pos-accounting -am
 ```
 
 ### Run
 ```bash
-mvn spring-boot:run -pl pos-accounting
+./mvnw spring-boot:run -pl pos-accounting
 ```
 
 ### Access
@@ -198,6 +278,12 @@ mvn spring-boot:run -pl pos-accounting
 - Health Check: http://localhost:8084/actuator/health
 
 ## Testing
+
+### Run unit tests
+
+```bash
+./mvnw test -pl pos-accounting
+```
 
 ### Manual Testing with curl
 
@@ -234,6 +320,20 @@ curl -X POST http://localhost:8084/api/audit/price-override \
 #### Query Audit Trail
 ```bash
 curl -X GET http://localhost:8084/api/audit/order/550e8400-e29b-41d4-a716-446655440000
+```
+
+#### Apply Payment
+```bash
+curl -X POST http://localhost:8084/api/accounting/payment-applied \
+  -H "Content-Type: application/json" \
+  -d '{
+    "invoiceId": "INV-123",
+    "transactionReference": "TXN-456",
+    "paymentAmount": 50.00,
+    "invoiceTotal": 100.00,
+    "idempotencyKey": "INV-123:TXN-456",
+    "paymentFailed": false
+  }'
 ```
 
 ## Security Considerations

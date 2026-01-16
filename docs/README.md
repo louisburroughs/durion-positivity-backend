@@ -5,13 +5,10 @@ This directory contains project-wide documentation, including operational guides
 ## Contents
 
 ### Architecture Decision Records (ADR)
-See [adr/README.md](adr/README.md) for information about ADRs and how to create them.
 
-- [ADR-0001: Inventory Ledger ATP Computation](adr/0001-inventory-ledger-atp-computation.md) - Defines On-Hand and Available-to-Promise calculation rules
+ADRs are now centralized in the main Durion docs repository. See `durion/docs/adr` for ADRs and how to create them.
 
-### Clarification Resolutions
-
-- [CLARIFICATION-233-RESOLUTION.md](CLARIFICATION-233-RESOLUTION.md) - Resolution of clarification issue #233 for story #36
+- [ADR-0001: Inventory Ledger ATP Computation](../../durion/docs/adr/0001-inventory-ledger-atp-computation.md) - Defines On-Hand and Available-to-Promise calculation rules
 
 ### Operations
 
@@ -27,7 +24,7 @@ Each module may have its own `docs/` directory with module-specific documentatio
 
 When adding new documentation:
 
-1. Place architecture decisions in `docs/adr/` following the ADR template
+1. Place architecture decisions in `durion/docs/adr/` following the ADR template
 2. Place module-specific documentation in `<module>/docs/`
 3. Update relevant README files to link to new documentation
 4. Use descriptive filenames (kebab-case)
