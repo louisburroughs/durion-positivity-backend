@@ -17,22 +17,28 @@ This implementation is based on the **clarification resolutions for Issue #2 (Cl
 ## Architecture Decisions
 
 ### Permission Naming Convention
+
 All permissions must follow: `domain:resource:action`
 
 **Examples:**
+
 - `pricing:price_book:edit`
 - `inventory:adjustment:approve`
 - `security:role:assign`
 
 ### Permission Registration
+
 Services declare permissions in a `permissions.yaml` manifest and register them via API during deployment.
 
 ### Scoped RBAC
+
 Role assignments support:
+
 - **GLOBAL** scope - Applies to all resources
 - **LOCATION** scope - Applies only to specified location IDs
 
 ### Story Split
+
 1. **Foundational Security (this service)** - Permission registry, role framework, authorization
 2. **Domain Integrations** - Each domain service declares its permissions and defines business roles
 
@@ -41,6 +47,7 @@ Role assignments support:
 ### Entities
 
 #### Permission
+
 ```java
 @Entity
 public class Permission {
@@ -55,6 +62,7 @@ public class Permission {
 ```
 
 #### Role
+
 ```java
 @Entity
 public class Role {
@@ -67,6 +75,7 @@ public class Role {
 ```
 
 #### RoleAssignment
+
 ```java
 @Entity
 public class RoleAssignment {
@@ -83,11 +92,13 @@ public class RoleAssignment {
 ### Services
 
 #### PermissionRegistryService
+
 - Validates and registers permissions from service manifests
 - Enforces naming convention with regex validation
 - Provides query methods for permissions
 
 #### RoleManagementService
+
 - Creates roles and assigns permissions
 - Creates and revokes role assignments
 - Checks user permissions with scope validation
@@ -96,6 +107,7 @@ public class RoleAssignment {
 ### REST API
 
 #### Permission Registry Endpoints
+
 - `POST /api/permissions/register` - Register service permissions
 - `GET /api/permissions` - Get all permissions (admin)
 - `GET /api/permissions/domain/{domain}` - Get permissions by domain
@@ -103,6 +115,7 @@ public class RoleAssignment {
 - `GET /api/permissions/exists/{name}` - Check if permission exists
 
 #### Role Management Endpoints
+
 - `POST /api/roles` - Create role (admin)
 - `GET /api/roles` - List all roles
 - `GET /api/roles/{name}` - Get role by name
@@ -241,6 +254,7 @@ curl -X POST https://security-service/api/roles/assignments \
 ## Database Schema
 
 ### Tables
+
 - `permissions` - Central registry of all permissions
 - `roles` - Role definitions
 - `role_permissions` - Many-to-many join table
@@ -273,7 +287,7 @@ mvn verify
 
 ### Core Documentation
 
-- **[RBAC_POLICY.md](docs/RBAC_POLICY.md)** - **START HERE** - Authoritative access control policy
+- **[RBAC_POLICY.md](../../durion/domains/security/docs/RBAC_POLICY.md)** - **START HERE** - Authoritative access control policy
   - Answers to clarification questions (Issue #2/Clarification #42)
   - Permission registry decisions and baseline operations
   - Flat role model (no inheritance)
@@ -281,26 +295,26 @@ mvn verify
   - Location-scoped permission model
   - Time-bound roles and break-glass access
   
-- **[PERMISSION_REGISTRY.md](docs/PERMISSION_REGISTRY.md)** - Technical permission management
+- **[PERMISSION_REGISTRY.md](../../durion/domains/security/docs/PERMISSION_REGISTRY.md)** - Technical permission management
   - Permission naming rules and validation
   - Registration process and API
   - Role management patterns
   - Authorization check examples
   - Domain service integration patterns
   
-- **[BASELINE_PERMISSIONS.md](docs/BASELINE_PERMISSIONS.md)** - Reference permission sets
+- **[BASELINE_PERMISSIONS.md](../../durion/domains/security/docs/BASELINE_PERMISSIONS.md)** - Reference permission sets
   - Core system permissions by domain
   - Risk level classifications
   - Usage guidelines for domain services
   - Example `permissions.yaml` manifests
   
-- **[POLICY_ENGINE_DESIGN.md](docs/POLICY_ENGINE_DESIGN.md)** - Threshold enforcement
+- **[POLICY_ENGINE_DESIGN.md](../../durion/domains/security/docs/POLICY_ENGINE_DESIGN.md)** - Threshold enforcement
   - Policy-based authorization (beyond simple permissions)
   - Threshold handling without permission explosion
   - Policy versioning and audit trail
   - Implementation roadmap
   
-- **[BREAK_GLASS_PATTERN.md](docs/BREAK_GLASS_PATTERN.md)** - Emergency access
+- **[BREAK_GLASS_PATTERN.md](../../durion/domains/security/docs/BREAK_GLASS_PATTERN.md)** - Emergency access
   - Break-glass workflow and API
   - Configuration and TTL management
   - Audit events and monitoring
@@ -316,6 +330,7 @@ This is the foundational framework. Domain services should now:
 4. Protect their endpoints with permission checks
 
 Example follow-up stories:
+
 - [domain:pricing] Define pricing permissions and roles
 - [domain:product] Define product/catalog permissions and roles
 - [domain:inventory] Define inventory permissions and roles
@@ -339,7 +354,7 @@ This implementation reflects the following **authoritative decisions**:
 5. **Time-Bound Roles:** All role assignments support effective dates and automatic expiration
 6. **Break-Glass:** First-class emergency access pattern with mandatory audit
 
-See [RBAC_POLICY.md](docs/RBAC_POLICY.md) for complete policy documentation.
+See [RBAC_POLICY.md](../../durion/domains/security/docs/RBAC_POLICY.md) for complete policy documentation.
 
 ## Architecture Compliance
 
