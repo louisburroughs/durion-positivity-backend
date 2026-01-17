@@ -1,0 +1,102 @@
+# Canonical Permission Registry — v1
+# Domain owner: domain:security
+# Model: Operation-specific permissions with optional threshold qualifiers
+# Version: v1
+
+version: v1
+domain: security
+model: operation-specific
+notes: "Threshold-based permissions are evaluated with configuration values; registry is code-backed and versioned."
+
+permissions:
+  payment:
+    - name: APPROVE_REFUND
+      description: "Approve a refund operation (base permission)"
+    - name: APPROVE_REFUND_UNDER_LIMIT
+      description: "Approve refunds up to configured threshold (requires APPROVE_REFUND)"
+    - name: APPROVE_REFUND_OVER_LIMIT
+      description: "Approve refunds above configured threshold (high-risk)"
+    - name: VOID_PAYMENT
+      description: "Void a completed or pending payment (high-risk)"
+    - name: ISSUE_MANUAL_REFUND
+      description: "Issue refund outside original payment flow (finance-only)"
+
+  pricing:
+    - name: OVERRIDE_PRICE
+      description: "Override system-calculated price (base permission)"
+    - name: OVERRIDE_PRICE_UNDER_LIMIT
+      description: "Price override within configured threshold (requires OVERRIDE_PRICE)"
+    - name: OVERRIDE_PRICE_OVER_LIMIT
+      description: "Price override above configured threshold (manager approval)"
+    - name: APPLY_DISCOUNT
+      description: "Apply standard discount codes"
+    - name: CREATE_DISCOUNT
+      description: "Create new discount definitions (admin-only)"
+
+  order:
+    - name: CANCEL_ORDER
+      description: "Cancel an open order (requires order not invoiced)"
+    - name: REOPEN_ORDER
+      description: "Reopen a closed order"
+    - name: FORCE_CLOSE_ORDER
+      description: "Close order bypassing validations (manager/admin)"
+    - name: MODIFY_FINALIZED_ORDER
+      description: "Modify order after finalization (extremely high-risk)"
+
+  inventory:
+    - name: ADJUST_INVENTORY
+      description: "Adjust inventory quantities (base)"
+    - name: ADJUST_INVENTORY_POSITIVE
+      description: "Increase stock via adjustment (requires reason)"
+    - name: ADJUST_INVENTORY_NEGATIVE
+      description: "Decrease stock via adjustment (shrink-sensitive)"
+    - name: TRANSFER_INVENTORY
+      description: "Transfer stock between locations (location-scoped)"
+    - name: WRITE_OFF_INVENTORY
+      description: "Write off damaged/lost inventory (finance-visible)"
+
+  security:
+    - name: MANAGE_ROLES
+      description: "Create, update, delete roles (security admin)"
+    - name: ASSIGN_ROLES
+      description: "Assign roles to users (security admin)"
+    - name: REVOKE_ROLES
+      description: "Revoke roles from users (immediate effect)"
+    - name: VIEW_AUDIT_LOG
+      description: "View security audit logs"
+    - name: EXPORT_AUDIT_LOG
+      description: "Export audit logs for compliance"
+    - name: MANAGE_PERMISSIONS
+      description: "Modify permission registry (forbidden at runtime)"
+
+  break_glass:
+    - name: BREAK_GLASS_ACCESS
+      description: "Emergency elevated access (time-bound, audited)"
+    - name: BYPASS_VALIDATIONS
+      description: "Bypass business rule enforcement (logged every use)"
+
+config_keys:
+  payment:
+    refund_limit_key: payment.refund.limit.amount
+  pricing:
+    override_limit_amount: pricing.override.limit.amount
+    override_limit_percent: pricing.override.limit.percent
+
+evaluation_rules:
+  - rule: "Base permission required first: threshold permissions require base permission."
+  - rule: "Effective permissions = union of all assigned roles within scope."
+  - rule: "Authorization check = permission + scope + target resource." 
+  - rule: "No implicit permissions; no runtime dynamic permission creation."
+
+governance:
+  - append_only: true
+  - deprecated_permissions: "Mark as DEPRECATED; continue enforcement until removed in a major version."
+  - new_permission_process: "Security-domain approval, code + migration, documented permissions.yml update."
+
+machine_readable_identifiers:
+  format: UPPER_SNAKE_CASE
+  usage: ["code","audit_logs","policy_definitions","authorization_checks"]
+
+status:
+  version: v1
+  stability: stable
