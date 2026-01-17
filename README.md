@@ -10,7 +10,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 
 ### Conceptual Diagram
 
-```
+```ascii
 +-------------------+      +-------------------+      +-------------------+
 |                   |      |                   |      |                   |
 |   Subscriber A    |      |   Subscriber B    |      |    Durion UI      |
