@@ -31,6 +31,7 @@ public class ShopController {
     public ResponseEntity<PersonDTO> getTechnicianPerson(
         @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId,
             @Parameter(description = "ID of the technician", example = "1") @PathVariable Long personId) {
+                //todo add locationId check in service layer
         PersonDTO person = shopService.getTechnicianPerson(personId);
         if (person == null) {
             return ResponseEntity.notFound().build();
