@@ -24,7 +24,7 @@ import java.util.Set;
  * Provides endpoints for creating roles, assigning permissions, and managing user role assignments.
  */
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping("/v1/roles")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Role Management", description = "Manage roles, permissions, and user assignments")

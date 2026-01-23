@@ -19,7 +19,7 @@ import java.util.List;
  * Provides endpoints for services to register their permissions.
  */
 @RestController
-@RequestMapping("/api/permissions")
+@RequestMapping("/v1/permissions")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Permission Registry", description = "Central permission registry for all services")
