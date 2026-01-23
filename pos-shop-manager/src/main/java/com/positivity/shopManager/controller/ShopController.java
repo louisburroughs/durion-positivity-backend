@@ -12,11 +12,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
 @Tag(name = "Shop API", description = "Endpoints for shop management, technicians, and services")
 @RestController
+@RequestMapping("/v1/shop-manager")
 @RequiredArgsConstructor
 public class ShopController {
 
@@ -25,10 +27,11 @@ public class ShopController {
     @Operation(summary = "Get technician's person details", description = "Retrieve the person details for a technician by technician ID.")
     @ApiResponse(responseCode = "200", description = "Person details returned successfully.")
     @ApiResponse(responseCode = "404", description = "Technician or person not found.")
-    @GetMapping("/technicians/{id}/person")
+    @GetMapping("/{locationId}/technicians/{personId}/person")
     public ResponseEntity<PersonDTO> getTechnicianPerson(
-            @Parameter(description = "ID of the technician", example = "1") @PathVariable Long id) {
-        PersonDTO person = shopService.getTechnicianPerson(id);
+        @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId,
+            @Parameter(description = "ID of the technician", example = "1") @PathVariable Long personId) {
+        PersonDTO person = shopService.getTechnicianPerson(personId);
         if (person == null) {
             return ResponseEntity.notFound().build();
         }
@@ -38,10 +41,12 @@ public class ShopController {
     @Operation(summary = "Get shop service details", description = "Retrieve the details of a shop service by service ID.")
     @ApiResponse(responseCode = "200", description = "Service details returned successfully.")
     @ApiResponse(responseCode = "404", description = "Service not found.")
-    @GetMapping("/services/{id}/details")
+    @GetMapping("/{locationId}/services/{serviceId}/details")
     public ResponseEntity<ServiceEntityDTO> getShopServiceDetails(
-            @Parameter(description = "ID of the service", example = "1") @PathVariable Long id) {
-        ServiceEntityDTO service = shopService.getShopServiceDetails(id);
+        @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId,
+            @Parameter(description = "ID of the service", example = "1") @PathVariable Long serviceId) {
+                //todo add locationId check in service layer
+        ServiceEntityDTO service = shopService.getShopServiceDetails(serviceId);
         if (service == null) {
             return ResponseEntity.notFound().build();
         }

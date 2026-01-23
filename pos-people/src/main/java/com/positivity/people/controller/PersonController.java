@@ -17,7 +17,7 @@ import java.util.List;
 @Slf4j
 @Tag(name = "People API", description = "Operations related to people records")
 @RestController
-@RequestMapping("/api/people")
+@RequestMapping("/v1/people")
 @RequiredArgsConstructor
 public class PersonController {
     private final PersonService personService;
@@ -34,11 +34,11 @@ public class PersonController {
             @ApiResponse(responseCode = "200", description = "Person found and returned."),
             @ApiResponse(responseCode = "404", description = "Person not found.")
     })
-    @GetMapping("/{id}")
+    @GetMapping("/{personId}")
     public ResponseEntity<Person> getPersonById(
             @Parameter(description = "ID of the person to retrieve", example = "1")
-            @PathVariable Long id) {
-        return personService.getPersonById(id)
+            @PathVariable Long personId) {
+        return personService.getPersonById(personId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -58,16 +58,16 @@ public class PersonController {
             @ApiResponse(responseCode = "200", description = "Person updated successfully."),
             @ApiResponse(responseCode = "404", description = "Person not found.")
     })
-    @PutMapping("/{id}")
+    @PutMapping("/{personId}")
     public ResponseEntity<Person> updatePerson(
             @Parameter(description = "ID of the person to update", example = "1")
-            @PathVariable Long id,
+            @PathVariable Long personId,
             @Parameter(description = "Updated person object")
             @RequestBody Person person) {
-        if (personService.getPersonById(id).isEmpty()) {
+        if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        person.setId(id);
+        person.setId(personId);
         Person updated = personService.savePerson(person);
         return ResponseEntity.ok(updated);
     }
@@ -77,14 +77,14 @@ public class PersonController {
             @ApiResponse(responseCode = "204", description = "Person deleted successfully."),
             @ApiResponse(responseCode = "404", description = "Person not found.")
     })
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{personId}")
     public ResponseEntity<Void> deletePerson(
             @Parameter(description = "ID of the person to delete", example = "1")
-            @PathVariable Long id) {
-        if (personService.getPersonById(id).isEmpty()) {
+            @PathVariable Long personId) {
+        if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        personService.deletePerson(id);
+        personService.deletePerson(personId);
         return ResponseEntity.noContent().build();
     }
 }
