@@ -20,7 +20,7 @@ import java.util.List;
 @Slf4j
 @Tag(name = "Location API", description = "Operations related to locations and their relationships")
 @RestController
-@RequestMapping("/api/locations")
+@RequestMapping("/v1/locations")
 @RequiredArgsConstructor
 public class LocationController {
     private final LocationService locationService;
@@ -37,11 +37,11 @@ public class LocationController {
             @ApiResponse(responseCode = "200", description = "Location found and returned."),
             @ApiResponse(responseCode = "404", description = "Location not found.")
     })
-    @GetMapping("/{id}")
+    @GetMapping("/{locationId}")
     public ResponseEntity<Location> getLocationById(
             @Parameter(description = "ID of the location to retrieve", example = "1")
-            @PathVariable Long id) {
-        return locationService.getLocationById(id)
+            @PathVariable Long locationId) {
+        return locationService.getLocationById(locationId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -61,16 +61,16 @@ public class LocationController {
             @ApiResponse(responseCode = "200", description = "Location updated successfully."),
             @ApiResponse(responseCode = "404", description = "Location not found.")
     })
-    @PutMapping("/{id}")
+    @PutMapping("/{locationId}")
     public ResponseEntity<Location> updateLocation(
             @Parameter(description = "ID of the location to update", example = "1")
-            @PathVariable Long id,
+            @PathVariable Long locationId,
             @Parameter(description = "Updated location object")
             @RequestBody Location location) {
-        if (!locationService.getLocationById(id).isPresent()) {
+        if (!locationService.getLocationById(locationId).isPresent()) {
             return ResponseEntity.notFound().build();
         }
-        location.setId(id);
+        location.setId(locationId);
         Location updated = locationService.saveLocation(location);
         return ResponseEntity.ok(updated);
     }
@@ -80,14 +80,14 @@ public class LocationController {
             @ApiResponse(responseCode = "204", description = "Location deleted successfully."),
             @ApiResponse(responseCode = "404", description = "Location not found.")
     })
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{locationId}")
     public ResponseEntity<Void> deleteLocation(
             @Parameter(description = "ID of the location to delete", example = "1")
-            @PathVariable Long id) {
-        if (!locationService.getLocationById(id).isPresent()) {
+            @PathVariable Long locationId) {
+        if (!locationService.getLocationById(locationId).isPresent()) {
             return ResponseEntity.notFound().build();
         }
-        locationService.deleteLocation(id);
+        locationService.deleteLocation(locationId);
         return ResponseEntity.noContent().build();
     }
 
@@ -117,11 +117,11 @@ public class LocationController {
             @ApiResponse(responseCode = "200", description = "Responsible person found and returned."),
             @ApiResponse(responseCode = "404", description = "Responsible person not found.")
     })
-    @GetMapping("/{id}/responsible-person")
+    @GetMapping("/{locationId}/responsible-person")
     public ResponseEntity<PersonDTO> getResponsiblePerson(
             @Parameter(description = "ID of the location", example = "1")
-            @PathVariable Long id) {
-        PersonDTO person = locationService.getResponsiblePerson(id);
+            @PathVariable Long locationId) {
+        PersonDTO person = locationService.getResponsiblePerson(locationId);
         if (person == null) {
             return ResponseEntity.notFound().build();
         }
