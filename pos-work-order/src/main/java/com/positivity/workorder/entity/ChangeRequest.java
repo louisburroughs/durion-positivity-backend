@@ -15,7 +15,7 @@ public class ChangeRequest {
     private Long id;
 
     @Column(nullable = false)
-    private Long workOrderId;
+    private Long workorderId;
 
     @Column(nullable = false)
     private Long requestedByUserId;

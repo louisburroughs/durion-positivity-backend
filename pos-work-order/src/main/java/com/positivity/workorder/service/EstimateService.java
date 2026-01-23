@@ -4,7 +4,7 @@ import com.positivity.workorder.dto.CreateEstimateRequest;
 import com.positivity.workorder.entity.ApprovalConfiguration;
 import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.EstimateSequence;
-import com.positivity.workorder.entity.WorkOrder;
+import com.positivity.workorder.entity.Workorder;
 import com.positivity.workorder.event.EstimateRevisedEvent;
 import com.positivity.workorder.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +26,9 @@ import java.util.Optional;
 public class EstimateService {
     private final EstimateRepository estimateRepository;
     private final ApprovalConfigurationRepository approvalConfigurationRepository;
-    private final WorkOrderRepository workOrderRepository;
+    private final WorkorderRepository workOrderRepository;
     private final ApplicationEventPublisher eventPublisher;
-    
+
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
     private static final Long DEFAULT_TAX_REGION_ID = 1L; // TODO: Get from configuration
@@ -46,27 +46,29 @@ public class EstimateService {
         return estimateRepository.findByCustomerId(customerId);
     }
 
-    @Deprecated
-    public List<Estimate> getEstimatesByShop(Long shopId) {
-        return getEstimatesByLocation(shopId);
-    }
-    
+    // @Deprecated
+    // public List<Estimate> getEstimatesByShop(Long shopId) {
+    // return getEstimatesByLocation(shopId);
+    // }
+
     public List<Estimate> getEstimatesByLocation(Long locationId) {
         return estimateRepository.findByLocationId(locationId);
     }
 
     /**
      * Create a new draft estimate with proper validation and defaulting
-     * @param request The create estimate request with customer and vehicle IDs
+     * 
+     * @param request         The create estimate request with customer and vehicle
+     *                        IDs
      * @param createdByUserId The user ID creating the estimate
      * @return The created estimate
      * @throws IllegalArgumentException if validation fails
      */
     @Transactional
     public Estimate createEstimate(CreateEstimateRequest request, Long createdByUserId) {
-        log.info("Creating new estimate for customer {} and vehicle {}", 
+        log.info("Creating new estimate for customer {} and vehicle {}",
                 request.getCustomerId(), request.getVehicleId());
-        
+
         // Validate required fields
         if (request.getCustomerId() == null) {
             log.warn("Attempt to create estimate without customerId");
@@ -76,24 +78,24 @@ public class EstimateService {
             log.warn("Attempt to create estimate without vehicleId");
             throw new IllegalArgumentException("vehicleId is required");
         }
-        
+
         // Apply defaults
-        Long locationId = request.getLocationId() != null 
-                ? request.getLocationId() 
+        Long locationId = request.getLocationId() != null
+                ? request.getLocationId()
                 : DEFAULT_LOCATION_ID;
-        String currencyUomId = request.getCurrencyUomId() != null 
-                ? request.getCurrencyUomId() 
+        String currencyUomId = request.getCurrencyUomId() != null
+                ? request.getCurrencyUomId()
                 : DEFAULT_CURRENCY;
-        Long taxRegionId = request.getTaxRegionId() != null 
-                ? request.getTaxRegionId() 
+        Long taxRegionId = request.getTaxRegionId() != null
+                ? request.getTaxRegionId()
                 : DEFAULT_TAX_REGION_ID;
-        
+
         // Generate unique estimate number
         String estimateNumber = generateEstimateNumber(locationId);
-        
+
         // Get approval configuration
         ApprovalConfiguration config = getApprovalConfiguration(locationId, request.getCustomerId());
-        
+
         // Build estimate entity
         Estimate estimate = Estimate.builder()
                 .estimateNumber(estimateNumber)
@@ -107,19 +109,20 @@ public class EstimateService {
                 .createdAt(LocalDateTime.now())
                 .approvalConfigurationId(config.getId())
                 .build();
-        
+
         Estimate saved = estimateRepository.save(estimate);
-        
-        log.info("Estimate created successfully: estimateId={}, estimateNumber={}", 
+
+        log.info("Estimate created successfully: estimateId={}, estimateNumber={}",
                 saved.getId(), saved.getEstimateNumber());
-        
+
         // TODO: Emit EstimateCreated audit event
-        
+
         return saved;
     }
 
     /**
      * Legacy method for backward compatibility
+     * 
      * @deprecated Use createEstimate(CreateEstimateRequest, Long) instead
      */
     @Deprecated
@@ -127,22 +130,22 @@ public class EstimateService {
     public Estimate createEstimate(Estimate estimate) {
         estimate.setStatus(Estimate.EstimateStatus.DRAFT);
         estimate.setCreatedAt(LocalDateTime.now());
-        
+
         // Get approval configuration for this customer/location
-        Long locationId = estimate.getLocationId() != null 
-                ? estimate.getLocationId() 
+        Long locationId = estimate.getLocationId() != null
+                ? estimate.getLocationId()
                 : estimate.getShopId();
         ApprovalConfiguration config = getApprovalConfiguration(locationId, estimate.getCustomerId());
         estimate.setApprovalConfigurationId(config.getId());
-        
+
         // Generate estimate number if not set
         if (estimate.getEstimateNumber() == null && locationId != null) {
             estimate.setEstimateNumber(generateEstimateNumber(locationId));
         }
-        
+
         return estimateRepository.save(estimate);
     }
-    
+
     /**
      * Generate a unique estimate number for a location
      * Format: EST-YYYY-NNNN where YYYY is the year and NNNN is a sequential number
@@ -150,7 +153,7 @@ public class EstimateService {
     private String generateEstimateNumber(Long locationId) {
         int year = Year.now().getValue();
         String prefix = String.format("EST-%d-", year);
-        
+
         // Find the next available number
         int sequence = 1000; // Start at 1000
         String estimateNumber;
@@ -158,7 +161,7 @@ public class EstimateService {
             estimateNumber = prefix + sequence;
             sequence++;
         } while (estimateRepository.existsByLocationIdAndEstimateNumber(locationId, estimateNumber));
-        
+
         return estimateNumber;
     }
 
@@ -174,8 +177,36 @@ public class EstimateService {
         estimate.setStatus(Estimate.EstimateStatus.APPROVED);
         estimate.setApprovedAt(LocalDateTime.now());
         estimate.setApprovedBy(approvedByUserId);
-        
+
         log.info("Estimate {} approved by user {}", estimateId, approvedByUserId);
+        return estimateRepository.save(estimate);
+    }
+
+    @Transactional
+    public Estimate approveEstimate(Long estimateId, Long customerId, String signatureData,
+            String signatureMimeType, String signerName, String notes) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+
+        // Validate customer matches estimate
+        if (!estimate.getCustomerId().equals(customerId)) {
+            throw new IllegalArgumentException("Customer ID mismatch: estimate belongs to customer "
+                    + estimate.getCustomerId() + ", but approval attempted for customer " + customerId);
+        }
+
+        if (!estimate.canApprove()) {
+            throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
+        }
+
+        estimate.setStatus(Estimate.EstimateStatus.APPROVED);
+        estimate.setApprovedAt(LocalDateTime.now());
+        estimate.setApprovedBy(customerId); // Using customerId as approver
+        estimate.setSignatureData(signatureData);
+        estimate.setSignatureMimeType(signatureMimeType);
+        estimate.setSignerName(signerName);
+        estimate.setApprovalNotes(notes);
+
+        log.info("Estimate {} approved by customer {} with signature capture", estimateId, customerId);
         return estimateRepository.save(estimate);
     }
 
@@ -191,11 +222,11 @@ public class EstimateService {
         estimate.setStatus(Estimate.EstimateStatus.DECLINED);
         estimate.setDeclinedAt(LocalDateTime.now());
         estimate.setDeclineReason(reason);
-        
+
         // Set expiry date based on configuration
         ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
         estimate.setExpiresAt(LocalDateTime.now().plusDays(config.getDeclineExpiryDays()));
-        
+
         log.info("Estimate {} declined with reason: {}", estimateId, reason);
         return estimateRepository.save(estimate);
     }
@@ -206,16 +237,17 @@ public class EstimateService {
                 .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
 
         ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
-        
+
         if (!estimate.canReopen(config.getDeclineExpiryDays())) {
-            throw new IllegalStateException("Estimate cannot be reopened - either not declined or expiry period has passed");
+            throw new IllegalStateException(
+                    "Estimate cannot be reopened - either not declined or expiry period has passed");
         }
 
         estimate.setStatus(Estimate.EstimateStatus.DRAFT);
         estimate.setDeclinedAt(null);
         estimate.setDeclineReason(null);
         estimate.setExpiresAt(null);
-        
+
         log.info("Estimate {} reopened from declined state", estimateId);
         return estimateRepository.save(estimate);
     }
@@ -227,7 +259,7 @@ public class EstimateService {
     public ApprovalConfiguration getApprovalConfiguration(Long locationId, Long customerId) {
         List<ApprovalConfiguration> configs = approvalConfigurationRepository
                 .findApplicableConfigurations(locationId, customerId);
-        
+
         if (configs.isEmpty()) {
             // Create and return default configuration
             return ApprovalConfiguration.builder()
@@ -237,7 +269,7 @@ public class EstimateService {
                     .priority(0)
                     .build();
         }
-        
+
         // Return highest priority configuration
         return configs.get(0);
     }
@@ -258,81 +290,83 @@ public class EstimateService {
     public void deleteEstimate(Long id) {
         estimateRepository.deleteById(id);
     }
-    
+
     /**
-     * Update estimate financial details and publish revision event if total changes.
-     * This triggers the approval invalidation workflow for associated WorkOrders.
+     * Update estimate financial details and publish revision event if total
+     * changes.
+     * This triggers the approval invalidation workflow for associated Workorders.
      * 
      * @param estimateId the ID of the estimate to update
-     * @param subtotal new subtotal amount
-     * @param taxAmount new tax amount
-     * @param total new total amount
-     * @param userId ID of user making the change
+     * @param subtotal   new subtotal amount
+     * @param taxAmount  new tax amount
+     * @param total      new total amount
+     * @param userId     ID of user making the change
      * @return the updated estimate
      */
     @Transactional
-    public Estimate updateEstimateFinancials(Long estimateId, BigDecimal subtotal, 
-                                             BigDecimal taxAmount, BigDecimal total, 
-                                             Long userId) {
+    public Estimate updateEstimateFinancials(Long estimateId, BigDecimal subtotal,
+            BigDecimal taxAmount, BigDecimal total,
+            Long userId) {
         Estimate estimate = estimateRepository.findById(estimateId)
                 .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
-        
+
         // Capture old total for comparison
         BigDecimal oldTotal = estimate.getTotal();
-        
+
         // Update financial fields
         estimate.setSubtotal(subtotal);
         estimate.setTaxAmount(taxAmount);
         estimate.setTotal(total);
-        
+
         // Check if total changed (financially significant)
-        boolean totalChanged = (oldTotal == null && total != null) || 
-                               (oldTotal != null && !oldTotal.equals(total));
-        
+        boolean totalChanged = (oldTotal == null && total != null) ||
+                (oldTotal != null && !oldTotal.equals(total));
+
         if (totalChanged) {
             // Increment version on financial changes
             estimate.setVersion(estimate.getVersion() + 1);
-            
-            log.info("Estimate {} total changed from {} to {}", 
-                     estimateId, oldTotal, total);
+
+            log.info("Estimate {} total changed from {} to {}",
+                    estimateId, oldTotal, total);
         }
-        
+
         Estimate saved = estimateRepository.save(estimate);
-        
+
         // Publish revision event if total changed
         if (totalChanged) {
             publishEstimateRevisedEvents(saved, oldTotal, total, userId);
         }
-        
+
         return saved;
     }
-    
+
     /**
-     * Publish EstimateRevisedEvent for all WorkOrders associated with this estimate.
+     * Publish EstimateRevisedEvent for all Workorders associated with this
+     * estimate.
      * This enables event-driven invalidation of approvals.
      */
-    private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal, 
-                                              BigDecimal newTotal, Long userId) {
-        List<WorkOrder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
-        
-        log.info("Publishing EstimateRevisedEvent for {} WorkOrders linked to estimate {}", 
-                 workOrders.size(), estimate.getId());
-        
-        for (WorkOrder workOrder : workOrders) {
+    private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal,
+            BigDecimal newTotal, Long userId) {
+        List<Workorder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
+
+        log.info("Publishing EstimateRevisedEvent for {} Workorders linked to estimate {}",
+                workOrders.size(), estimate.getId());
+
+        for (Workorder workOrder : workOrders) {
             EstimateRevisedEvent event = EstimateRevisedEvent.builder()
                     .estimateId(estimate.getId())
-                    .workOrderId(workOrder.getId())
+                    .workorderId(workOrder.getId())
                     .oldTotal(oldTotal != null ? oldTotal : BigDecimal.ZERO)
                     .newTotal(newTotal != null ? newTotal : BigDecimal.ZERO)
                     .changedBy(userId)
                     .timestamp(Instant.now())
                     .build();
-            
+
             eventPublisher.publishEvent(event);
-            
+
             log.info("Published EstimateRevisedEvent: estimateId={}, workOrderId={}, " +
-                     "oldTotal={}, newTotal={}", 
-                     estimate.getId(), workOrder.getId(), oldTotal, newTotal);
+                    "oldTotal={}, newTotal={}",
+                    estimate.getId(), workOrder.getId(), oldTotal, newTotal);
         }
     }
 }

@@ -1,7 +1,5 @@
 package com.positivity.inventory.dto.cyclecount;
 
-import com.positivity.inventory.model.cyclecount.AdjustmentStatus;
-import com.positivity.inventory.model.cyclecount.ApprovalTier;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -9,6 +7,9 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import com.positivity.inventory.model.cyclecount.AdjustmentStatus;
+import com.positivity.inventory.model.cyclecount.ApprovalTier;
 
 /**
  * Response DTO for cycle count adjustment operations.

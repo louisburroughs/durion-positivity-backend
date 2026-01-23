@@ -1,12 +1,13 @@
 package com.positivity.inventory.service;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
 import com.positivity.inventory.model.cyclecount.ApprovalThresholdConfig;
 import com.positivity.inventory.model.cyclecount.ApprovalTier;
 import com.positivity.inventory.model.cyclecount.CycleCountAdjustment;
 import com.positivity.inventory.repository.ApprovalThresholdConfigRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;

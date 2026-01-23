@@ -1,15 +1,5 @@
 package com.positivity.inventory.controller;
 
-import com.positivity.inventory.dto.cyclecount.CountResponse;
-import com.positivity.inventory.dto.cyclecount.SubmitCountRequest;
-import com.positivity.inventory.dto.cyclecount.SubmitRecountRequest;
-import com.positivity.inventory.entity.CountEntry;
-import com.positivity.inventory.entity.CycleCountTask;
-import com.positivity.inventory.exception.InsufficientPermissionException;
-import com.positivity.inventory.exception.InvalidCountQuantityException;
-import com.positivity.inventory.exception.RecountLimitExceededException;
-import com.positivity.inventory.exception.TaskNotFoundException;
-import com.positivity.inventory.service.CycleCountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -23,6 +13,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import com.positivity.inventory.dto.cyclecount.CountResponse;
+import com.positivity.inventory.dto.cyclecount.SubmitCountRequest;
+import com.positivity.inventory.dto.cyclecount.SubmitRecountRequest;
+import com.positivity.inventory.entity.CountEntry;
+import com.positivity.inventory.entity.CycleCountTask;
+import com.positivity.inventory.exception.InsufficientPermissionException;
+import com.positivity.inventory.exception.InvalidCountQuantityException;
+import com.positivity.inventory.exception.RecountLimitExceededException;
+import com.positivity.inventory.exception.TaskNotFoundException;
+import com.positivity.inventory.service.CycleCountService;
 
 import java.util.List;
 import java.util.Map;
@@ -41,7 +42,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 @RestController
-@RequestMapping("/api/inventory/cycle-count")
+@RequestMapping("/api/inventory/cycleCount")
 @Tag(name = "Cycle Count API", description = "API for cycle count operations and variance tracking")
 public class CycleCountController {
     

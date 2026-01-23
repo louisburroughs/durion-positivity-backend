@@ -18,7 +18,7 @@ import java.util.List;
 @Slf4j
 @Tag(name = "Customer API", description = "Operations related to customers")
 @RestController
-@RequestMapping("/api/customers")
+@RequestMapping("/v1/crm")
 @RequiredArgsConstructor
 public class CustomerController {
     

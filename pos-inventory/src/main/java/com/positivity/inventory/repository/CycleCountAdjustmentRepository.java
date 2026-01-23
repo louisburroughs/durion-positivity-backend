@@ -1,9 +1,10 @@
 package com.positivity.inventory.repository;
 
-import com.positivity.inventory.model.cyclecount.CycleCountAdjustment;
-import com.positivity.inventory.model.cyclecount.AdjustmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import com.positivity.inventory.model.cyclecount.AdjustmentStatus;
+import com.positivity.inventory.model.cyclecount.CycleCountAdjustment;
 
 import java.util.List;
 

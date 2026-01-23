@@ -13,7 +13,7 @@ import java.time.Instant;
  * potentially requiring re-approval of associated Work Orders.
  * 
  * This event enables event-driven communication between the
- * Pricing domain (Estimate) and WorkExec domain (WorkOrder).
+ * Pricing domain (Estimate) and WorkExec domain (Workorder).
  */
 @Data
 @Builder
@@ -26,9 +26,9 @@ public class EstimateRevisedEvent {
     private Long estimateId;
     
     /**
-     * ID of the WorkOrder associated with this Estimate (if any)
+     * ID of the Workorder associated with this Estimate (if any)
      */
-    private Long workOrderId;
+    private Long workorderId;
     
     /**
      * Previous total amount before revision
