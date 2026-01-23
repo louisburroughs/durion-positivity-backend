@@ -1,6 +1,5 @@
 package com.positivity.inventory.dto.cyclecount;
 
-import com.positivity.inventory.entity.TaskStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,6 +7,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import com.positivity.inventory.entity.TaskStatus;
 
 /**
  * Response after submitting a count or recount.

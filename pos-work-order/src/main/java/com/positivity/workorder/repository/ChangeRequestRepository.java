@@ -9,7 +9,7 @@ import java.util.List;
 
 @Repository
 public interface ChangeRequestRepository extends JpaRepository<ChangeRequest, Long> {
-    List<ChangeRequest> findByWorkOrderId(Long workOrderId);
-    List<ChangeRequest> findByWorkOrderIdAndStatus(Long workOrderId, ChangeRequestStatus status);
+    List<ChangeRequest> findByWorkorderId(Long workorderId);
+    List<ChangeRequest> findByWorkorderIdAndStatus(Long workorderId, ChangeRequestStatus status);
     List<ChangeRequest> findByStatus(ChangeRequestStatus status);
 }

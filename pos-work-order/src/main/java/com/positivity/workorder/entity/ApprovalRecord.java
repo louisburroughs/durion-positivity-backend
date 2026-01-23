@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "approval_record", indexes = {
     @Index(name = "idx_approval_change_request", columnList = "changeRequestId"),
-    @Index(name = "idx_approval_workorder", columnList = "workOrderId")
+    @Index(name = "idx_approval_workorder", columnList = "workorderId")
 })
 @Data
 @NoArgsConstructor
@@ -27,7 +27,7 @@ public class ApprovalRecord {
     private Long changeRequestId;
 
     @Column(nullable = false)
-    private Long workOrderId;
+    private Long workorderId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

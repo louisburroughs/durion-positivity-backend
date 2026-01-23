@@ -8,19 +8,19 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class CreateChangeRequestDTO {
-    private Long workOrderId;
+    private Long workorderId;
     private Long requestedByUserId;
     private String description;
     private Boolean isEmergencyException;
     private String exceptionReason;
-    private List<WorkOrderItemDTO> services;
-    private List<WorkOrderItemDTO> parts;
+    private List<WorkorderItemDTO> services;
+    private List<WorkorderItemDTO> parts;
 
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class WorkOrderItemDTO {
+    public static class WorkorderItemDTO {
         private Long serviceEntityId;
         private Long productEntityId;
         private Long nonInventoryProductEntityId;

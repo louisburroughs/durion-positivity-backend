@@ -1,8 +1,5 @@
 package com.positivity.inventory.controller;
 
-import com.positivity.inventory.dto.cyclecount.*;
-import com.positivity.inventory.model.cyclecount.AdjustmentStatus;
-import com.positivity.inventory.service.CycleCountAdjustmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,6 +10,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import com.positivity.inventory.dto.cyclecount.*;
+import com.positivity.inventory.model.cyclecount.AdjustmentStatus;
+import com.positivity.inventory.service.CycleCountAdjustmentService;
 
 import java.util.List;
 
@@ -27,7 +28,7 @@ import java.util.List;
  * </ul>
  */
 @RestController
-@RequestMapping("/api/v1/inventory/cycle-count-adjustments")
+@RequestMapping("/api/v1/inventory/cycleCountAdjustments")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Cycle Count Adjustments", description = "Manage inventory adjustments from cycle counts")

@@ -14,7 +14,7 @@ import java.util.List;
 
 @Tag(name = "Approval Configuration API", description = "Endpoints for managing approval configurations by location and customer")
 @RestController
-@RequestMapping("/api/approval-configurations")
+@RequestMapping("/v1/workexec")
 @RequiredArgsConstructor
 public class ApprovalConfigurationController {
     private final ApprovalConfigurationService approvalConfigurationService;
@@ -29,10 +29,10 @@ public class ApprovalConfigurationController {
     @Operation(summary = "Get configuration by ID", description = "Retrieve an approval configuration by its unique ID.")
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
-    @GetMapping("/{id}")
+    @GetMapping("/approvalConfigurations/{approvalId}")
     public ResponseEntity<ApprovalConfiguration> getConfigurationById(
-            @Parameter(description = "ID of the configuration to retrieve", example = "1") @PathVariable Long id) {
-        return approvalConfigurationService.getConfigurationById(id)
+            @Parameter(description = "ID of the configuration to retrieve", example = "1") @PathVariable Long approvalId) {
+        return approvalConfigurationService.getConfigurationById(approvalId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -41,7 +41,7 @@ public class ApprovalConfigurationController {
                description = "Get the most specific configuration for a location and customer.")
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "No configuration found (default will be used).")
-    @GetMapping("/applicable")
+    @GetMapping("/approvalConfigurations/applicable")
     public ResponseEntity<ApprovalConfiguration> getApplicableConfiguration(
             @Parameter(description = "Location ID") @RequestParam(required = false) Long locationId,
             @Parameter(description = "Customer ID") @RequestParam(required = false) Long customerId) {
@@ -52,7 +52,7 @@ public class ApprovalConfigurationController {
 
     @Operation(summary = "Create a new approval configuration", description = "Add a new approval configuration.")
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
-    @PostMapping
+    @PostMapping("/approvalConfigurations")
     public ResponseEntity<ApprovalConfiguration> createConfiguration(
             @Parameter(description = "Configuration object to be created") @RequestBody ApprovalConfiguration configuration) {
         ApprovalConfiguration created = approvalConfigurationService.createConfiguration(configuration);
@@ -62,12 +62,12 @@ public class ApprovalConfigurationController {
     @Operation(summary = "Update an approval configuration", description = "Update an existing approval configuration.")
     @ApiResponse(responseCode = "200", description = "Configuration updated successfully.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
-    @PutMapping("/{id}")
+    @PutMapping("/approvalConfigurations/{approvalId}")
     public ResponseEntity<ApprovalConfiguration> updateConfiguration(
-            @Parameter(description = "ID of the configuration to update", example = "1") @PathVariable Long id,
+            @Parameter(description = "ID of the configuration to update", example = "1") @PathVariable Long approvalId,
             @Parameter(description = "Updated configuration object") @RequestBody ApprovalConfiguration configuration) {
         try {
-            ApprovalConfiguration updated = approvalConfigurationService.updateConfiguration(id, configuration);
+            ApprovalConfiguration updated = approvalConfigurationService.updateConfiguration(approvalId, configuration);
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
@@ -77,10 +77,10 @@ public class ApprovalConfigurationController {
     @Operation(summary = "Delete an approval configuration", description = "Delete a configuration by its unique ID.")
     @ApiResponse(responseCode = "204", description = "Configuration deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/approvalConfigurations/{approvalId}")
     public ResponseEntity<Void> deleteConfiguration(
-            @Parameter(description = "ID of the configuration to delete", example = "1") @PathVariable Long id) {
-        approvalConfigurationService.deleteConfiguration(id);
+            @Parameter(description = "ID of the configuration to delete", example = "1") @PathVariable Long approvalId) {
+        approvalConfigurationService.deleteConfiguration(approvalId);
         return ResponseEntity.noContent().build();
     }
 }

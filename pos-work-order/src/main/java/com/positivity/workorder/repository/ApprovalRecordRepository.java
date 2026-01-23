@@ -9,5 +9,5 @@ import java.util.List;
 @Repository
 public interface ApprovalRecordRepository extends JpaRepository<ApprovalRecord, Long> {
     List<ApprovalRecord> findByChangeRequestId(Long changeRequestId);
-    List<ApprovalRecord> findByWorkOrderId(Long workOrderId);
+    List<ApprovalRecord> findByWorkorderId(Long workorderId);
 }

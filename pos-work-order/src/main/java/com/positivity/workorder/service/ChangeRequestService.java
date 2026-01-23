@@ -17,9 +17,9 @@ import java.util.List;
 @Slf4j
 public class ChangeRequestService {
     private final ChangeRequestRepository changeRequestRepository;
-    private final WorkOrderRepository workOrderRepository;
-    private final WorkOrderServiceRepository workOrderServiceRepository;
-    private final WorkOrderPartRepository workOrderPartRepository;
+    private final WorkorderRepository workOrderRepository;
+    private final WorkorderServiceRepository workOrderServiceRepository;
+    private final WorkorderPartRepository workOrderPartRepository;
     private final ApprovalRecordRepository approvalRecordRepository;
 
     /**
@@ -40,10 +40,10 @@ public class ChangeRequestService {
         }
 
         // Validate work order exists and is in progress
-        WorkOrder workOrder = workOrderRepository.findById(dto.getWorkOrderId())
-                .orElseThrow(() -> new IllegalArgumentException("Work order not found: " + dto.getWorkOrderId()));
+        Workorder workOrder = workOrderRepository.findById(dto.getWorkorderId())
+                .orElseThrow(() -> new IllegalArgumentException("Work order not found: " + dto.getWorkorderId()));
         
-        if (workOrder.getStatus() != WorkOrderStatus.WORK_IN_PROGRESS) {
+        if (workOrder.getStatus() != WorkorderStatus.WORK_IN_PROGRESS) {
             throw new IllegalStateException("Work order must be in WORK_IN_PROGRESS status to create change request. Current status: " + workOrder.getStatus());
         }
 
@@ -54,7 +54,7 @@ public class ChangeRequestService {
 
         // Create change request
         ChangeRequest changeRequest = ChangeRequest.builder()
-                .workOrderId(dto.getWorkOrderId())
+                .workorderId(dto.getWorkorderId())
                 .requestedByUserId(dto.getRequestedByUserId())
                 .description(dto.getDescription())
                 .isEmergencyException(Boolean.TRUE.equals(dto.getIsEmergencyException()))
@@ -64,20 +64,20 @@ public class ChangeRequestService {
                 .build();
 
         changeRequest = changeRequestRepository.save(changeRequest);
-        log.info("Created change request {} for work order {}", changeRequest.getId(), dto.getWorkOrderId());
+        log.info("Created change request {} for work order {}", changeRequest.getId(), dto.getWorkorderId());
 
         // Create associated work order services
         if (dto.getServices() != null) {
-            for (CreateChangeRequestDTO.WorkOrderItemDTO serviceDto : dto.getServices()) {
-                com.positivity.workorder.entity.WorkOrderService service = createWorkOrderServiceEntity(workOrder, changeRequest, serviceDto);
+            for (CreateChangeRequestDTO.WorkorderItemDTO serviceDto : dto.getServices()) {
+                com.positivity.workorder.entity.WorkorderService service = createWorkorderServiceEntity(workOrder, changeRequest, serviceDto);
                 workOrderServiceRepository.save(service);
             }
         }
 
         // Create associated work order parts
         if (dto.getParts() != null) {
-            for (CreateChangeRequestDTO.WorkOrderItemDTO partDto : dto.getParts()) {
-                WorkOrderPart part = createWorkOrderPart(changeRequest, partDto);
+            for (CreateChangeRequestDTO.WorkorderItemDTO partDto : dto.getParts()) {
+                WorkorderPart part = createWorkorderPart(changeRequest, partDto);
                 workOrderPartRepository.save(part);
             }
         }
@@ -116,7 +116,7 @@ public class ChangeRequestService {
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
                 .changeRequestId(changeRequestId)
-                .workOrderId(changeRequest.getWorkOrderId())
+                .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED)
                 .resolvedAt(LocalDateTime.now())
                 .resolvedBy(approvedBy)
@@ -125,7 +125,7 @@ public class ChangeRequestService {
         approvalRecordRepository.save(approvalRecord);
 
         // Move associated items from PENDING_APPROVAL to OPEN/READY_TO_EXECUTE
-        updateItemsStatus(changeRequest.getId(), WorkOrderItemStatus.READY_TO_EXECUTE);
+        updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.READY_TO_EXECUTE);
 
         log.info("Approved change request {} by user {}", changeRequestId, approvedBy);
         return changeRequest;
@@ -157,7 +157,7 @@ public class ChangeRequestService {
         // Create immutable ApprovalRecord for audit trail
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
                 .changeRequestId(changeRequestId)
-                .workOrderId(changeRequest.getWorkOrderId())
+                .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.REJECTED)
                 .resolvedAt(LocalDateTime.now())
                 .approvalNote(approvalNote)
@@ -165,7 +165,7 @@ public class ChangeRequestService {
         approvalRecordRepository.save(approvalRecord);
 
         // Move associated items from PENDING_APPROVAL to CANCELLED (not billable)
-        updateItemsStatus(changeRequest.getId(), WorkOrderItemStatus.CANCELLED);
+        updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.CANCELLED);
 
         log.info("Declined change request {}", changeRequestId);
         return changeRequest;
@@ -200,7 +200,7 @@ public class ChangeRequestService {
         // Create immutable ApprovalRecord for audit trail with exception flag
         ApprovalRecord approvalRecord = ApprovalRecord.builder()
                 .changeRequestId(changeRequestId)
-                .workOrderId(changeRequest.getWorkOrderId())
+                .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
                 .resolvedAt(LocalDateTime.now())
                 .resolvedBy(managerId)
@@ -209,7 +209,7 @@ public class ChangeRequestService {
         approvalRecordRepository.save(approvalRecord);
 
         // Move associated items from PENDING_APPROVAL to READY_TO_EXECUTE
-        updateItemsStatus(changeRequest.getId(), WorkOrderItemStatus.READY_TO_EXECUTE);
+        updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.READY_TO_EXECUTE);
 
         log.info("Applied emergency override to change request {} by manager {}", changeRequestId, managerId);
         return changeRequest;
@@ -232,16 +232,16 @@ public class ChangeRequestService {
         }
 
         // Mark all emergency items as acknowledged
-        List<com.positivity.workorder.entity.WorkOrderService> services = workOrderServiceRepository.findByChangeRequestId(changeRequestId);
-        for (com.positivity.workorder.entity.WorkOrderService service : services) {
+        List<com.positivity.workorder.entity.WorkorderService> services = workOrderServiceRepository.findByChangeRequestId(changeRequestId);
+        for (com.positivity.workorder.entity.WorkorderService service : services) {
             if (Boolean.TRUE.equals(service.getIsEmergencySafety())) {
                 service.setCustomerDenialAcknowledged(true);
                 workOrderServiceRepository.save(service);
             }
         }
 
-        List<WorkOrderPart> parts = workOrderPartRepository.findByChangeRequestId(changeRequestId);
-        for (WorkOrderPart part : parts) {
+        List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequestId(changeRequestId);
+        for (WorkorderPart part : parts) {
             if (Boolean.TRUE.equals(part.getIsEmergencySafety())) {
                 part.setCustomerDenialAcknowledged(true);
                 workOrderPartRepository.save(part);
@@ -254,23 +254,23 @@ public class ChangeRequestService {
     /**
      * Check if work order can be closed (all emergency items must be acknowledged if declined)
      */
-    public boolean canCloseWorkOrder(Long workOrderId) {
-        List<ChangeRequest> emergencyRequests = changeRequestRepository.findByWorkOrderIdAndStatus(
-                workOrderId, ChangeRequestStatus.DECLINED);
+    public boolean canCloseWorkorder(Long workorderId) {
+        List<ChangeRequest> emergencyRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+                workorderId, ChangeRequestStatus.DECLINED);
 
         for (ChangeRequest request : emergencyRequests) {
             if (Boolean.TRUE.equals(request.getIsEmergencyException())) {
                 // Check if all emergency items are acknowledged
-                List<com.positivity.workorder.entity.WorkOrderService> services = workOrderServiceRepository.findByChangeRequestId(request.getId());
-                for (com.positivity.workorder.entity.WorkOrderService service : services) {
+                List<com.positivity.workorder.entity.WorkorderService> services = workOrderServiceRepository.findByChangeRequestId(request.getId());
+                for (com.positivity.workorder.entity.WorkorderService service : services) {
                     if (Boolean.TRUE.equals(service.getIsEmergencySafety()) 
                             && !Boolean.TRUE.equals(service.getCustomerDenialAcknowledged())) {
                         return false;
                     }
                 }
 
-                List<WorkOrderPart> parts = workOrderPartRepository.findByChangeRequestId(request.getId());
-                for (WorkOrderPart part : parts) {
+                List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequestId(request.getId());
+                for (WorkorderPart part : parts) {
                     if (Boolean.TRUE.equals(part.getIsEmergencySafety()) 
                             && !Boolean.TRUE.equals(part.getCustomerDenialAcknowledged())) {
                         return false;
@@ -286,9 +286,9 @@ public class ChangeRequestService {
      * Check if work order has any pending approval-gated change requests.
      * Returns true if there are unresolved change requests blocking completion.
      */
-    public boolean hasPendingApprovalGatedRequests(Long workOrderId) {
-        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkOrderIdAndStatus(
-                workOrderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
+    public boolean hasPendingApprovalGatedRequests(Long workorderId) {
+        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+                workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
         
         // Filter for approval-gated requests (all are by default, but check field)
         return pendingRequests.stream()
@@ -298,9 +298,9 @@ public class ChangeRequestService {
     /**
      * Get all pending approval-gated change requests for a work order.
      */
-    public List<ChangeRequest> getPendingApprovalGatedRequests(Long workOrderId) {
-        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkOrderIdAndStatus(
-                workOrderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
+    public List<ChangeRequest> getPendingApprovalGatedRequests(Long workorderId) {
+        List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorderIdAndStatus(
+                workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
         
         // Filter for approval-gated requests
         return pendingRequests.stream()
@@ -308,8 +308,8 @@ public class ChangeRequestService {
                 .toList();
     }
 
-    public List<ChangeRequest> getChangeRequestsByWorkOrder(Long workOrderId) {
-        return changeRequestRepository.findByWorkOrderId(workOrderId);
+    public List<ChangeRequest> getChangeRequestsByWorkorder(Long workorderId) {
+        return changeRequestRepository.findByWorkorderId(workorderId);
     }
 
     public ChangeRequest getChangeRequestById(Long id) {
@@ -321,7 +321,7 @@ public class ChangeRequestService {
         boolean hasEmergencyItems = false;
 
         if (dto.getServices() != null) {
-            for (CreateChangeRequestDTO.WorkOrderItemDTO service : dto.getServices()) {
+            for (CreateChangeRequestDTO.WorkorderItemDTO service : dto.getServices()) {
                 if (Boolean.TRUE.equals(service.getIsEmergencySafety())) {
                     hasEmergencyItems = true;
                     validateEmergencyItem(service);
@@ -330,7 +330,7 @@ public class ChangeRequestService {
         }
 
         if (dto.getParts() != null) {
-            for (CreateChangeRequestDTO.WorkOrderItemDTO part : dto.getParts()) {
+            for (CreateChangeRequestDTO.WorkorderItemDTO part : dto.getParts()) {
                 if (Boolean.TRUE.equals(part.getIsEmergencySafety())) {
                     hasEmergencyItems = true;
                     validateEmergencyItem(part);
@@ -343,7 +343,7 @@ public class ChangeRequestService {
         }
     }
 
-    private void validateEmergencyItem(CreateChangeRequestDTO.WorkOrderItemDTO item) {
+    private void validateEmergencyItem(CreateChangeRequestDTO.WorkorderItemDTO item) {
         // Photo evidence OR explicit "photo not possible" + notes required
         boolean hasPhoto = item.getPhotoEvidenceUrl() != null && !item.getPhotoEvidenceUrl().trim().isEmpty();
         boolean photoNotPossible = Boolean.TRUE.equals(item.getPhotoNotPossible());
@@ -358,13 +358,13 @@ public class ChangeRequestService {
         }
     }
 
-    private com.positivity.workorder.entity.WorkOrderService createWorkOrderServiceEntity(
-            WorkOrder workOrder, ChangeRequest changeRequest, 
-            CreateChangeRequestDTO.WorkOrderItemDTO dto) {
-        return com.positivity.workorder.entity.WorkOrderService.builder()
+    private com.positivity.workorder.entity.WorkorderService createWorkorderServiceEntity(
+            Workorder workOrder, ChangeRequest changeRequest, 
+            CreateChangeRequestDTO.WorkorderItemDTO dto) {
+        return com.positivity.workorder.entity.WorkorderService.builder()
                 .workOrder(workOrder)
                 .serviceEntityId(dto.getServiceEntityId())
-                .status(WorkOrderItemStatus.PENDING_APPROVAL)
+                .status(WorkorderItemStatus.PENDING_APPROVAL)
                 .changeRequestId(changeRequest.getId())
                 .isEmergencySafety(Boolean.TRUE.equals(dto.getIsEmergencySafety()))
                 .photoEvidenceUrl(dto.getPhotoEvidenceUrl())
@@ -373,13 +373,13 @@ public class ChangeRequestService {
                 .build();
     }
 
-    private WorkOrderPart createWorkOrderPart(ChangeRequest changeRequest, 
-                                              CreateChangeRequestDTO.WorkOrderItemDTO dto) {
-        return WorkOrderPart.builder()
+    private WorkorderPart createWorkorderPart(ChangeRequest changeRequest, 
+                                              CreateChangeRequestDTO.WorkorderItemDTO dto) {
+        return WorkorderPart.builder()
                 .productEntityId(dto.getProductEntityId())
                 .nonInventoryProductEntityId(dto.getNonInventoryProductEntityId())
                 .quantity(dto.getQuantity())
-                .status(WorkOrderItemStatus.PENDING_APPROVAL)
+                .status(WorkorderItemStatus.PENDING_APPROVAL)
                 .changeRequestId(changeRequest.getId())
                 .isEmergencySafety(Boolean.TRUE.equals(dto.getIsEmergencySafety()))
                 .photoEvidenceUrl(dto.getPhotoEvidenceUrl())
@@ -388,17 +388,17 @@ public class ChangeRequestService {
                 .build();
     }
 
-    private void updateItemsStatus(Long changeRequestId, WorkOrderItemStatus newStatus) {
+    private void updateItemsStatus(Long changeRequestId, WorkorderItemStatus newStatus) {
         // Update services
-        List<com.positivity.workorder.entity.WorkOrderService> services = workOrderServiceRepository.findByChangeRequestId(changeRequestId);
-        for (com.positivity.workorder.entity.WorkOrderService service : services) {
+        List<com.positivity.workorder.entity.WorkorderService> services = workOrderServiceRepository.findByChangeRequestId(changeRequestId);
+        for (com.positivity.workorder.entity.WorkorderService service : services) {
             service.setStatus(newStatus);
             workOrderServiceRepository.save(service);
         }
 
         // Update parts
-        List<WorkOrderPart> parts = workOrderPartRepository.findByChangeRequestId(changeRequestId);
-        for (WorkOrderPart part : parts) {
+        List<WorkorderPart> parts = workOrderPartRepository.findByChangeRequestId(changeRequestId);
+        for (WorkorderPart part : parts) {
             part.setStatus(newStatus);
             workOrderPartRepository.save(part);
         }

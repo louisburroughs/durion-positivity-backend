@@ -2,11 +2,11 @@ package com.positivity.workorder.service;
 
 import com.positivity.workorder.entity.AuditEvent;
 import com.positivity.workorder.entity.Estimate;
-import com.positivity.workorder.entity.WorkOrder;
-import com.positivity.workorder.entity.WorkOrderStatus;
+import com.positivity.workorder.entity.Workorder;
+import com.positivity.workorder.entity.WorkorderStatus;
 import com.positivity.workorder.repository.AuditEventRepository;
 import com.positivity.workorder.repository.EstimateRepository;
-import com.positivity.workorder.repository.WorkOrderRepository;
+import com.positivity.workorder.repository.WorkorderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for the Estimate Revision and Approval Invalidation workflow.
  * 
  * These tests verify that when an Estimate's financial total changes,
- * associated WorkOrders in APPROVED status are automatically transitioned
+ * associated Workorders in APPROVED status are automatically transitioned
  * to AWAITING_APPROVAL status, requiring re-approval.
  * 
  * Covers Issue #203: Approval: Invalidate Approval on Estimate Revision
@@ -37,35 +37,35 @@ class EstimateRevisionWorkflowTest {
     private EstimateService estimateService;
     
     @Autowired
-    private WorkOrderService workOrderService;
+    private WorkorderService workorderService;
     
     @Autowired
     private EstimateRepository estimateRepository;
     
     @Autowired
-    private WorkOrderRepository workOrderRepository;
+    private WorkorderRepository workorderRepository;
     
     @Autowired
     private AuditEventRepository auditEventRepository;
     
     private Estimate testEstimate;
-    private WorkOrder testWorkOrder;
+    private Workorder testWorkorder;
     private static final Long TEST_USER_ID = 999L;
     
     @BeforeEach
     void setUp() {
         // Clean up any existing test data
         auditEventRepository.deleteAll();
-        workOrderRepository.deleteAll();
+        workorderRepository.deleteAll();
         estimateRepository.deleteAll();
     }
     
     /**
      * Test Scenario 1: Estimate total increases due to adding a line item
      * 
-     * Given: A WorkOrder in APPROVED status linked to an Estimate totaling $500.00
+     * Given: A Workorder in APPROVED status linked to an Estimate totaling $500.00
      * When: The estimate total is increased to $650.00
-     * Then: WorkOrder status must automatically transition to AWAITING_APPROVAL
+     * Then: Workorder status must automatically transition to AWAITING_APPROVAL
      * And: An audit event must be created capturing the change
      */
     @Test
@@ -78,7 +78,7 @@ class EstimateRevisionWorkflowTest {
         );
         
         // Create work order in APPROVED status
-        testWorkOrder = createApprovedWorkOrder(testEstimate.getId());
+        testWorkorder = createApprovedWorkorder(testEstimate.getId());
         
         // When: Update estimate with higher total (simulating adding a line item)
         estimateService.updateEstimateFinancials(
@@ -89,12 +89,12 @@ class EstimateRevisionWorkflowTest {
             TEST_USER_ID
         );
         
-        // Then: WorkOrder status should be AWAITING_APPROVAL
-        WorkOrder updatedWorkOrder = workOrderRepository.findById(testWorkOrder.getId())
+        // Then: Workorder status should be AWAITING_APPROVAL
+        Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
             .orElseThrow();
-        assertThat(updatedWorkOrder.getStatus())
-            .as("WorkOrder should transition to AWAITING_APPROVAL after estimate increase")
-            .isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+        assertThat(updatedWorkorder.getStatus())
+            .as("Workorder should transition to AWAITING_APPROVAL after estimate increase")
+            .isEqualTo(WorkorderStatus.AWAITING_APPROVAL);
         
         // And: Audit event should be created
         List<AuditEvent> auditEvents = auditEventRepository.findAll();
@@ -103,8 +103,8 @@ class EstimateRevisionWorkflowTest {
             .hasSize(1);
         
         AuditEvent audit = auditEvents.get(0);
-        assertThat(audit.getEntityType()).isEqualTo("WorkOrder");
-        assertThat(audit.getEntityId()).isEqualTo(testWorkOrder.getId());
+        assertThat(audit.getEntityType()).isEqualTo("Workorder");
+        assertThat(audit.getEntityId()).isEqualTo(testWorkorder.getId());
         assertThat(audit.getEventType()).isEqualTo("approval.invalidated");
         assertThat(audit.getUserId()).isEqualTo(TEST_USER_ID);
         assertThat(audit.getDetails())
@@ -117,9 +117,9 @@ class EstimateRevisionWorkflowTest {
     /**
      * Test Scenario 2: Estimate total decreases due to changing a part price
      * 
-     * Given: A WorkOrder in APPROVED status linked to an Estimate totaling $500.00
+     * Given: A Workorder in APPROVED status linked to an Estimate totaling $500.00
      * When: The estimate total is decreased to $450.00
-     * Then: WorkOrder status must still transition to AWAITING_APPROVAL
+     * Then: Workorder status must still transition to AWAITING_APPROVAL
      * (Any change requires re-approval, regardless of direction)
      */
     @Test
@@ -130,7 +130,7 @@ class EstimateRevisionWorkflowTest {
             new BigDecimal("25.00"),
             new BigDecimal("500.00")
         );
-        testWorkOrder = createApprovedWorkOrder(testEstimate.getId());
+        testWorkorder = createApprovedWorkorder(testEstimate.getId());
         
         // When: Decrease total
         estimateService.updateEstimateFinancials(
@@ -142,19 +142,19 @@ class EstimateRevisionWorkflowTest {
         );
         
         // Then
-        WorkOrder updatedWorkOrder = workOrderRepository.findById(testWorkOrder.getId())
+        Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
             .orElseThrow();
-        assertThat(updatedWorkOrder.getStatus())
-            .as("WorkOrder should transition to AWAITING_APPROVAL even when estimate decreases")
-            .isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+        assertThat(updatedWorkorder.getStatus())
+            .as("Workorder should transition to AWAITING_APPROVAL even when estimate decreases")
+            .isEqualTo(WorkorderStatus.AWAITING_APPROVAL);
     }
     
     /**
      * Test Scenario 3: Non-financial change to estimate
      * 
-     * Given: A WorkOrder in APPROVED status
+     * Given: A Workorder in APPROVED status
      * When: The estimate is updated but total remains unchanged
-     * Then: WorkOrder status must remain APPROVED
+     * Then: Workorder status must remain APPROVED
      */
     @Test
     void testApprovalNotInvalidatedWhenEstimateTotalUnchanged() {
@@ -164,7 +164,7 @@ class EstimateRevisionWorkflowTest {
             new BigDecimal("25.00"),
             new BigDecimal("500.00")
         );
-        testWorkOrder = createApprovedWorkOrder(testEstimate.getId());
+        testWorkorder = createApprovedWorkorder(testEstimate.getId());
         
         // When: Update with different breakdown but same total
         estimateService.updateEstimateFinancials(
@@ -176,11 +176,11 @@ class EstimateRevisionWorkflowTest {
         );
         
         // Then: Status should remain APPROVED
-        WorkOrder updatedWorkOrder = workOrderRepository.findById(testWorkOrder.getId())
+        Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
             .orElseThrow();
-        assertThat(updatedWorkOrder.getStatus())
-            .as("WorkOrder should remain APPROVED when estimate total is unchanged")
-            .isEqualTo(WorkOrderStatus.APPROVED);
+        assertThat(updatedWorkorder.getStatus())
+            .as("Workorder should remain APPROVED when estimate total is unchanged")
+            .isEqualTo(WorkorderStatus.APPROVED);
         
         // And: No audit events should be created
         List<AuditEvent> auditEvents = auditEventRepository.findAll();
@@ -190,24 +190,24 @@ class EstimateRevisionWorkflowTest {
     }
     
     /**
-     * Test Scenario 4: Approval invalidation only affects APPROVED WorkOrders
+     * Test Scenario 4: Approval invalidation only affects APPROVED Workorders
      * 
-     * Given: A WorkOrder in WORK_IN_PROGRESS status
+     * Given: A Workorder in WORK_IN_PROGRESS status
      * When: The linked estimate total changes
-     * Then: WorkOrder status should remain WORK_IN_PROGRESS (not invalidated)
+     * Then: Workorder status should remain WORK_IN_PROGRESS (not invalidated)
      */
     @Test
-    void testApprovalInvalidationOnlyAffectsApprovedWorkOrders() {
-        // Given: WorkOrder in different status
+    void testApprovalInvalidationOnlyAffectsApprovedWorkorders() {
+        // Given: Workorder in different status
         testEstimate = createTestEstimate(
             new BigDecimal("475.00"),
             new BigDecimal("25.00"),
             new BigDecimal("500.00")
         );
         
-        testWorkOrder = createTestWorkOrder(testEstimate.getId());
-        testWorkOrder.setStatus(WorkOrderStatus.WORK_IN_PROGRESS);
-        testWorkOrder = workOrderRepository.save(testWorkOrder);
+        testWorkorder = createTestWorkorder(testEstimate.getId());
+        testWorkorder.setStatus(WorkorderStatus.WORK_IN_PROGRESS);
+        testWorkorder = workorderRepository.save(testWorkorder);
         
         // When: Update estimate total
         estimateService.updateEstimateFinancials(
@@ -219,11 +219,11 @@ class EstimateRevisionWorkflowTest {
         );
         
         // Then: Status should remain unchanged
-        WorkOrder updatedWorkOrder = workOrderRepository.findById(testWorkOrder.getId())
+        Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
             .orElseThrow();
-        assertThat(updatedWorkOrder.getStatus())
-            .as("WorkOrder not in APPROVED status should not be affected")
-            .isEqualTo(WorkOrderStatus.WORK_IN_PROGRESS);
+        assertThat(updatedWorkorder.getStatus())
+            .as("Workorder not in APPROVED status should not be affected")
+            .isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
         
         // And: No audit events for approval invalidation
         List<AuditEvent> auditEvents = auditEventRepository.findAll();
@@ -233,14 +233,14 @@ class EstimateRevisionWorkflowTest {
     }
     
     /**
-     * Test: Multiple WorkOrders linked to same estimate
+     * Test: Multiple Workorders linked to same estimate
      * 
-     * Given: Two WorkOrders both in APPROVED status, linked to same Estimate
+     * Given: Two Workorders both in APPROVED status, linked to same Estimate
      * When: The estimate total changes
-     * Then: Both WorkOrders should transition to AWAITING_APPROVAL
+     * Then: Both Workorders should transition to AWAITING_APPROVAL
      */
     @Test
-    void testMultipleWorkOrdersInvalidatedForSameEstimate() {
+    void testMultipleWorkordersInvalidatedForSameEstimate() {
         // Given: Two work orders for same estimate
         testEstimate = createTestEstimate(
             new BigDecimal("475.00"),
@@ -248,8 +248,8 @@ class EstimateRevisionWorkflowTest {
             new BigDecimal("500.00")
         );
         
-        WorkOrder workOrder1 = createApprovedWorkOrder(testEstimate.getId());
-        WorkOrder workOrder2 = createApprovedWorkOrder(testEstimate.getId());
+        Workorder workorder1 = createApprovedWorkorder(testEstimate.getId());
+        Workorder workorder2 = createApprovedWorkorder(testEstimate.getId());
         
         // When: Update estimate
         estimateService.updateEstimateFinancials(
@@ -261,11 +261,11 @@ class EstimateRevisionWorkflowTest {
         );
         
         // Then: Both should be invalidated
-        WorkOrder updated1 = workOrderRepository.findById(workOrder1.getId()).orElseThrow();
-        WorkOrder updated2 = workOrderRepository.findById(workOrder2.getId()).orElseThrow();
+        Workorder updated1 = workorderRepository.findById(workorder1.getId()).orElseThrow();
+        Workorder updated2 = workorderRepository.findById(workorder2.getId()).orElseThrow();
         
-        assertThat(updated1.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
-        assertThat(updated2.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+        assertThat(updated1.getStatus()).isEqualTo(WorkorderStatus.AWAITING_APPROVAL);
+        assertThat(updated2.getStatus()).isEqualTo(WorkorderStatus.AWAITING_APPROVAL);
         
         // And: Two audit events should be created
         List<AuditEvent> auditEvents = auditEventRepository.findAll();
@@ -355,21 +355,21 @@ class EstimateRevisionWorkflowTest {
         return estimateRepository.save(estimate);
     }
     
-    private WorkOrder createTestWorkOrder(Long estimateId) {
-        WorkOrder workOrder = WorkOrder.builder()
+    private Workorder createTestWorkorder(Long estimateId) {
+        Workorder workorder = Workorder.builder()
                 .shopId(1L)
                 .customerId(100L)
                 .vehicleId(200L)
                 .estimateId(estimateId)
-                .status(WorkOrderStatus.DRAFT)
+                .status(WorkorderStatus.DRAFT)
                 .build();
         
-        return workOrderRepository.save(workOrder);
+        return workorderRepository.save(workorder);
     }
     
-    private WorkOrder createApprovedWorkOrder(Long estimateId) {
-        WorkOrder workOrder = createTestWorkOrder(estimateId);
-        workOrder.setStatus(WorkOrderStatus.APPROVED);
-        return workOrderRepository.save(workOrder);
+    private Workorder createApprovedWorkorder(Long estimateId) {
+        Workorder workorder = createTestWorkorder(estimateId);
+        workorder.setStatus(WorkorderStatus.APPROVED);
+        return workorderRepository.save(workorder);
     }
 }

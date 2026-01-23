@@ -1,9 +1,10 @@
 package com.positivity.inventory.repository;
 
-import com.positivity.inventory.entity.CycleCountTask;
-import com.positivity.inventory.entity.TaskStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import com.positivity.inventory.entity.CycleCountTask;
+import com.positivity.inventory.entity.TaskStatus;
 
 import java.util.List;
 import java.util.UUID;

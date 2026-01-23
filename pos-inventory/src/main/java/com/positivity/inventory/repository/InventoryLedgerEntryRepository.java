@@ -1,10 +1,11 @@
 package com.positivity.inventory.repository;
 
-import com.positivity.inventory.model.InventoryLedgerEntry;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import com.positivity.inventory.model.InventoryLedgerEntry;
 
 import java.util.List;
 import java.util.Optional;

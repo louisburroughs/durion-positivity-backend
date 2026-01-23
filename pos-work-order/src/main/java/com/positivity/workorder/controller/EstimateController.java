@@ -1,5 +1,6 @@
 package com.positivity.workorder.controller;
 
+import com.positivity.workorder.dto.ApproveEstimateRequest;
 import com.positivity.workorder.dto.CreateEstimateRequest;
 import com.positivity.workorder.dto.CreateEstimateResponse;
 import com.positivity.workorder.entity.Estimate;
@@ -20,7 +21,7 @@ import java.util.Map;
 
 @Tag(name = "Estimate API", description = "Endpoints for estimate management and approval workflow")
 @RestController
-@RequestMapping("/api/estimates")
+@RequestMapping("/v1/workorders/estimates")
 @RequiredArgsConstructor
 @Slf4j
 public class EstimateController {
@@ -36,10 +37,10 @@ public class EstimateController {
     @Operation(summary = "Get estimate by ID", description = "Retrieve an estimate by its unique ID.")
     @ApiResponse(responseCode = "200", description = "Estimate found and returned.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
-    @GetMapping("/{id}")
+    @GetMapping("/{estimateId}")
     public ResponseEntity<Estimate> getEstimateById(
-            @Parameter(description = "ID of the estimate to retrieve", example = "1") @PathVariable Long id) {
-        return estimateService.getEstimateById(id)
+            @Parameter(description = "ID of the estimate to retrieve", example = "1") @PathVariable Long estimateId) {
+        return estimateService.getEstimateById(estimateId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -54,10 +55,10 @@ public class EstimateController {
 
     @Operation(summary = "Get estimates by shop", description = "Retrieve all estimates for a specific shop.")
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
-    @GetMapping("/shop/{shopId}")
+    @GetMapping("/shop/{locationId}")
     public List<Estimate> getEstimatesByShop(
-            @Parameter(description = "ID of the shop", example = "1") @PathVariable Long shopId) {
-        return estimateService.getEstimatesByShop(shopId);
+            @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId) {
+        return estimateService.getEstimatesByLocation(locationId);
     }
     
     @Operation(summary = "Get estimates by location", description = "Retrieve all estimates for a specific location.")
@@ -78,7 +79,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "400", description = "Invalid request - missing required fields.")
     @ApiResponse(responseCode = "403", description = "Forbidden - user does not have ESTIMATE_CREATE permission.")
     @ApiResponse(responseCode = "500", description = "Internal server error - estimate creation failed.")
-    @PostMapping("/create")
+    @PostMapping()
     public ResponseEntity<?> createEstimate(
             @Parameter(description = "Estimate creation request with customer and vehicle IDs")
             @Valid @RequestBody CreateEstimateRequest request,
@@ -120,44 +121,18 @@ public class EstimateController {
         }
     }
 
-    @Operation(summary = "Create a new estimate (legacy)", description = "Add a new estimate to the system. Use /create endpoint instead.")
-    @ApiResponse(responseCode = "200", description = "Estimate created successfully.")
-    @Deprecated
-    @PostMapping
-    public ResponseEntity<Estimate> createEstimateLegacy(
-            @Parameter(description = "Estimate object to be created") @RequestBody Estimate estimate) {
-        Estimate created = estimateService.createEstimate(estimate);
-        return ResponseEntity.ok(created);
-    }
-
-    @Operation(summary = "Approve an estimate", 
-               description = "Transition estimate to approved state. Estimate must be in DRAFT status.")
-    @ApiResponse(responseCode = "200", description = "Estimate approved successfully.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be approved in current state.")
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
-    @PostMapping("/{id}/approve")
-    public ResponseEntity<Estimate> approveEstimate(
-            @Parameter(description = "ID of the estimate to approve", example = "1") @PathVariable Long id,
-            @Parameter(description = "ID of the user approving", example = "1") @RequestParam Long approvedBy) {
-        try {
-            Estimate approved = estimateService.approveEstimate(id, approvedBy);
-            return ResponseEntity.ok(approved);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
+   
     @Operation(summary = "Decline an estimate", 
                description = "Transition estimate to declined state. Estimate can be declined from DRAFT or APPROVED status.")
     @ApiResponse(responseCode = "200", description = "Estimate declined successfully.")
     @ApiResponse(responseCode = "400", description = "Estimate cannot be declined in current state.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
-    @PostMapping("/{id}/decline")
+    @PostMapping("/{estimateId}/decline")
     public ResponseEntity<Estimate> declineEstimate(
-            @Parameter(description = "ID of the estimate to decline", example = "1") @PathVariable Long id,
+            @Parameter(description = "ID of the estimate to decline", example = "1") @PathVariable Long estimateId,
             @Parameter(description = "Reason for decline") @RequestParam(required = false) String reason) {
         try {
-            Estimate declined = estimateService.declineEstimate(id, reason);
+            Estimate declined = estimateService.declineEstimate(estimateId, reason);
             return ResponseEntity.ok(declined);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
@@ -169,13 +144,41 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "Estimate reopened successfully.")
     @ApiResponse(responseCode = "400", description = "Estimate cannot be reopened (not declined or expired).")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
-    @PostMapping("/{id}/reopen")
+    @PostMapping("/{estimateId}/reopen")
     public ResponseEntity<Estimate> reopenEstimate(
-            @Parameter(description = "ID of the estimate to reopen", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID of the estimate to reopen", example = "1") @PathVariable Long estimateId) {
         try {
-            Estimate reopened = estimateService.reopenEstimate(id);
+            Estimate reopened = estimateService.reopenEstimate(estimateId);
             return ResponseEntity.ok(reopened);
         } catch (IllegalStateException | IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(summary = "Approve an estimate with customer signature", 
+               description = "Transition estimate to approved state with customer signature capture. " +
+                           "Estimate can be approved from DRAFT status. Requires customer ID validation " +
+                           "and signature data (base64-encoded image).")
+    @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
+    @ApiResponse(responseCode = "400", description = "Estimate cannot be approved in current state or customer ID mismatch.")
+    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @PostMapping("/{estimateId}/approval")
+    public ResponseEntity<Estimate> approveEstimate(
+            @Parameter(description = "ID of the estimate to approve", example = "1") @PathVariable Long estimateId,
+            @Parameter(description = "Approval request with customer ID and signature capture")
+            @Valid @RequestBody ApproveEstimateRequest request) {
+        try {
+            Estimate approved = estimateService.approveEstimate(
+                estimateId, 
+                request.getCustomerId(),
+                request.getSignatureData(),
+                request.getSignatureMimeType(),
+                request.getSignerName(),
+                request.getNotes()
+            );
+            return ResponseEntity.ok(approved);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -183,10 +186,10 @@ public class EstimateController {
     @Operation(summary = "Delete an estimate", description = "Delete an estimate by its unique ID.")
     @ApiResponse(responseCode = "204", description = "Estimate deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{estimateId}")
     public ResponseEntity<Void> deleteEstimate(
-            @Parameter(description = "ID of the estimate to delete", example = "1") @PathVariable Long id) {
-        estimateService.deleteEstimate(id);
+            @Parameter(description = "ID of the estimate to delete", example = "1") @PathVariable Long estimateId) {
+        estimateService.deleteEstimate(estimateId);
         return ResponseEntity.noContent().build();
     }
 }

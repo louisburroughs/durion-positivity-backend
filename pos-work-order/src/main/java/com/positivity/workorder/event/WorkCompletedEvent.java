@@ -25,7 +25,7 @@ public class WorkCompletedEvent {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class WorkCompletedPayload {
-        private Long workOrderId;
+        private Long workorderId;
         private Instant completedAt;
         private Long completedBy;
         private Map<String, Object> finalBillableScope;

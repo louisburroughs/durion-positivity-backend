@@ -1,6 +1,5 @@
 package com.positivity.inventory.model;
 
-import com.positivity.inventory.model.InventoryLedgerEventType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,6 +8,8 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import com.positivity.inventory.model.InventoryLedgerEventType;
 
 /**
  * Immutable ledger entry representing a single inventory transaction.
