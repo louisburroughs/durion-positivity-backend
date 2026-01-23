@@ -1,7 +1,10 @@
-package  com.positivity.shopManager.repository;
+package com.positivity.shopManager.repository;
 
 import com.positivity.shopManager.entity.ShopService;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface ShopServiceRepository extends JpaRepository<ShopService, Long> {
+    Optional<ShopService> findByIdAndShopId(Long id, Long shopId);
 }

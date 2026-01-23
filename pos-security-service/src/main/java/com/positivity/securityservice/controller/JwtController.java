@@ -15,7 +15,7 @@ import java.util.Set;
 @Slf4j
 @Tag(name = "JWT API", description = "Endpoints for JWT authentication and token management")
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/v1/auth")
 @RequiredArgsConstructor
 public class JwtController {
     private final JwtService jwtService;

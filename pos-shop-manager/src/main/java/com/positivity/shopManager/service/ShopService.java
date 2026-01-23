@@ -21,15 +21,18 @@ public class ShopService {
     private final ServiceEntityClient serviceEntityClient;
     private final ShopServiceRepository shopServiceRepository;
 
-    public PersonDTO getTechnicianPerson(Long technicianId) {
-        Technician tech = technicianRepository.findById(technicianId).orElseThrow();
-        if (tech.getPersonId() == null) return null;
+    public PersonDTO getTechnicianPerson(Long locationId, Long technicianId) {
+        Technician tech = technicianRepository.findByIdAndShopId(technicianId, locationId).orElseThrow();
+        if (tech.getPersonId() == null)
+            return null;
         return personClient.getPersonById(tech.getPersonId());
     }
 
-    public ServiceEntityDTO getShopServiceDetails(Long shopServiceId) {
-        com.positivity.shopManager.entity.ShopService shopService = shopServiceRepository.findById(shopServiceId).orElseThrow();
-        if (shopService.getServiceEntityId() == null) return null;
+    public ServiceEntityDTO getShopServiceDetails(Long locationId, Long shopServiceId) {
+        com.positivity.shopManager.entity.ShopService shopService = shopServiceRepository
+                .findByIdAndShopId(shopServiceId, locationId).orElseThrow();
+        if (shopService.getServiceEntityId() == null)
+            return null;
         return serviceEntityClient.getServiceById(shopService.getServiceEntityId());
     }
 }

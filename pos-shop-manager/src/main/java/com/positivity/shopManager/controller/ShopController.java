@@ -29,10 +29,9 @@ public class ShopController {
     @ApiResponse(responseCode = "404", description = "Technician or person not found.")
     @GetMapping("/{locationId}/technicians/{personId}/person")
     public ResponseEntity<PersonDTO> getTechnicianPerson(
-        @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId,
+            @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId,
             @Parameter(description = "ID of the technician", example = "1") @PathVariable Long personId) {
-                //todo add locationId check in service layer
-        PersonDTO person = shopService.getTechnicianPerson(personId);
+        PersonDTO person = shopService.getTechnicianPerson(locationId, personId);
         if (person == null) {
             return ResponseEntity.notFound().build();
         }
@@ -44,10 +43,9 @@ public class ShopController {
     @ApiResponse(responseCode = "404", description = "Service not found.")
     @GetMapping("/{locationId}/services/{serviceId}/details")
     public ResponseEntity<ServiceEntityDTO> getShopServiceDetails(
-        @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId,
+            @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId,
             @Parameter(description = "ID of the service", example = "1") @PathVariable Long serviceId) {
-                //todo add locationId check in service layer
-        ServiceEntityDTO service = shopService.getShopServiceDetails(serviceId);
+        ServiceEntityDTO service = shopService.getShopServiceDetails(locationId, serviceId);
         if (service == null) {
             return ResponseEntity.notFound().build();
         }
