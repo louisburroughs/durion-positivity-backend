@@ -62,11 +62,11 @@ public class WorkorderService {
 
             if (estimate.getStatus() != Estimate.EstimateStatus.APPROVED) {
                 throw new IllegalArgumentException(
-                        "Work order can only be created from an approved estimate. Current status: "
+                        "Workorder can only be created from an approved estimate. Current status: "
                                 + estimate.getStatus());
             }
 
-            log.info("Creating work order from approved estimate {}", workorder.getEstimateId());
+            log.info("Creating workorder from approved estimate {}", workorder.getEstimateId());
         }
 
         // Check customer approval from pos-customer-approval (legacy)
@@ -114,16 +114,16 @@ public class WorkorderService {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
-        // Validate customer matches work order
+        // Validate customer matches workorder
         if (!workorder.getCustomerId().equals(customerId)) {
-            throw new IllegalArgumentException("Customer ID mismatch: work order belongs to customer "
+            throw new IllegalArgumentException("Customer ID mismatch: workorder belongs to customer "
                     + workorder.getCustomerId() + ", but approval attempted for customer " + customerId);
         }
 
-        // Validate work order can be approved (must be in DRAFT status)
+        // Validate workorder can be approved (must be in DRAFT status)
         if (workorder.getStatus() != WorkorderStatus.DRAFT) {
-            throw new IllegalStateException("Work order cannot be approved in current state: " + workorder.getStatus()
-                    + ". Work orders can only be approved from DRAFT status.");
+            throw new IllegalStateException("Workorder cannot be approved in current state: " + workorder.getStatus()
+                    + ". Workorders can only be approved from DRAFT status.");
         }
 
         // Transition to APPROVED status
