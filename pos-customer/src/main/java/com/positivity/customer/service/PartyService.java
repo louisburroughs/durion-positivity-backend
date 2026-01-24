@@ -1,8 +1,6 @@
 package com.positivity.customer.service;
 
-import com.positivity.customer.model.*;
-import com.positivity.customer.model.Contact;
-import com.positivity.customer.model.Party;
+import com.positivity.customer.entity.*;
 import com.positivity.customer.repository.ContactRepository;
 import com.positivity.customer.repository.PartyRepository;
 import lombok.RequiredArgsConstructor;

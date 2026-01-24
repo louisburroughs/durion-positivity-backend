@@ -1,6 +1,6 @@
 package com.positivity.customer.controller;
 
-import com.positivity.customer.model.*;
+import com.positivity.customer.entity.*;
 import com.positivity.customer.security.CrmPermissionRegistry;
 import com.positivity.customer.service.PartyService;
 import org.slf4j.Logger;
