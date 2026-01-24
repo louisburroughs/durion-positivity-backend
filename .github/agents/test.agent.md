@@ -400,9 +400,8 @@ When analyzing test results, include:
 
 ## Related Agents
 
-- [Principal Software Engineer Agent](./principal-software-engineer.agent.md)
+- [Primary Software Engineer Agent](./primary-software-engineer.agent.md)
 - [Universal Janitor Agent](./janitor.agent.md)
-- [Software Engineer Agent v1](./software-engineer.agent.md)
 - [Spring Boot 3.x Strategic Advisor](./springboot.agent.md)
 - [PostgreSQL Database Administrator](./postgresql-dba.agent.md)
 - [Database Administrator Agent](./dba.agent.md)
