@@ -9,7 +9,7 @@
     </parent>
     <artifactId>pos-work-order</artifactId>
     <name>pos-work-order</name>
-    <description>Module to manage work orders for a shop</description>
+    <description>Module to manage workorders for a shop</description>
     <packaging>jar</packaging>
     <dependencies>
         <!-- Spring Boot Starter Web (for REST controllers) -->

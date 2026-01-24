@@ -37,7 +37,7 @@ Does this event represent physical inventory movement?
 | ADJUSTMENT_IN | INBOUND | ✅ Yes | ✅ Yes | +1 | Positive adjustment (found inventory) |
 | COUNT_VARIANCE_IN | INBOUND | ✅ Yes | ✅ Yes | +1 | Cycle count found more than expected |
 | **OUTBOUND EVENTS** | | | | | |
-| GOODS_ISSUE | OUTBOUND | ✅ Yes | ✅ Yes | -1 | Issued to work order/production |
+| GOODS_ISSUE | OUTBOUND | ✅ Yes | ✅ Yes | -1 | Issued to workorder/production |
 | TRANSFER_OUT | OUTBOUND | ✅ Yes | ✅ Yes | -1 | Transfer shipped to another location |
 | SCRAP_OUT | OUTBOUND | ✅ Yes | ✅ Yes | -1 | Write-off (damage/obsolete/shrink) |
 | ADJUSTMENT_OUT | OUTBOUND | ✅ Yes | ✅ Yes | -1 | Negative adjustment (lost/damaged) |
