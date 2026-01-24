@@ -1,4 +1,4 @@
-package com.positivity.customer.model;
+package com.positivity.customer.entity;
 
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
@@ -14,4 +14,3 @@ import lombok.NoArgsConstructor;
 public class PrivateCustomer extends AbstractCustomer {
     // Additional fields or methods specific to private customers can be added here
 }
-

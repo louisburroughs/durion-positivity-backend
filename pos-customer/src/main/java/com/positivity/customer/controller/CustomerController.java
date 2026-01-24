@@ -1,6 +1,6 @@
 package com.positivity.customer.controller;
 
-import com.positivity.customer.model.AbstractCustomer;
+import com.positivity.customer.entity.AbstractCustomer;
 import com.positivity.customer.repository.CustomerRepository;
 import com.positivity.customer.security.CrmPermissionRegistry;
 import io.swagger.v3.oas.annotations.Operation;

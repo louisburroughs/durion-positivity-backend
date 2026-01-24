@@ -1,4 +1,4 @@
-package com.positivity.customer.model;
+package com.positivity.customer.entity;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.DiscriminatorValue;
@@ -11,10 +11,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @Entity
-@DiscriminatorValue("COMMERCIAL")
+@DiscriminatorValue("GOVERNMENT")
 @Deprecated
-@Schema(description = "Deprecated commercial customer subtype. Use Party to model organizations.")
-public class CommercialCustomer extends AbstractCustomer {
-    // Additional fields or methods specific to commercial customers can be added
+@Schema(description = "Deprecated government customer subtype. Use Party to model organizations.")
+public class GovernmentCustomer extends AbstractCustomer {
+    // Additional fields or methods specific to government customers can be added
     // here
 }

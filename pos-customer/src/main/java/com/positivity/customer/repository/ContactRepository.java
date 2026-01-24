@@ -1,8 +1,9 @@
 package com.positivity.customer.repository;
 
-import com.positivity.customer.model.Contact;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import com.positivity.customer.entity.Contact;
 
 import java.util.List;
 

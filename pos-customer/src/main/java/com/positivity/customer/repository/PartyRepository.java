@@ -1,8 +1,9 @@
 package com.positivity.customer.repository;
 
-import com.positivity.customer.model.Party;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import com.positivity.customer.entity.Party;
 
 import java.util.Optional;
 

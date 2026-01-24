@@ -1,4 +1,4 @@
-package com.positivity.customer.model;
+package com.positivity.customer.entity;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * Response DTO for retrieving communication preferences for a party.
+ * Request DTO for upserting communication preferences for a party.
  * Issue #171: Contacts: Manage Communication Preferences & Consent Flags
  */
 @Data
@@ -17,15 +17,11 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class GetCommunicationPreferencesResponse {
-
-    /**
-     * Party ID queried
-     */
-    private String partyId;
+public class UpsertCommunicationPreferencesRequest {
 
     /**
      * Optimistic locking version field (name TBD: version|lastUpdatedStamp|ETag)
+     * Required for updates, omitted for creates.
      */
     private String version;
 
@@ -61,12 +57,8 @@ public class GetCommunicationPreferencesResponse {
     private String preferencesNote;
 
     /**
-     * Last update timestamp (ISO 8601)
-     */
-    private String updatedAt;
-
-    /**
-     * Source of last update (APP|API|ADMIN|IMPORT)
+     * Source of update (frontend sends constant or backend infers from context).
+     * TBD: frontend sends (APP|API|ADMIN) or backend always sets to APP if client.
      */
     private String updateSource;
 }
