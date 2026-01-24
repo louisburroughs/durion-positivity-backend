@@ -1,9 +1,11 @@
 package com.positivity.customer.controller;
 
+import com.positivity.customer.security.CrmPermissionRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -18,6 +20,7 @@ public class CrmVehiclesController {
     private static final Logger log = LoggerFactory.getLogger(CrmVehiclesController.class);
 
     @PostMapping("/{customerId}/vehicles")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_CREATE + "')")
     public ResponseEntity<Void> createVehicles(
             @PathVariable String customerId,
             @RequestBody(required = false) Object body) {
@@ -26,6 +29,7 @@ public class CrmVehiclesController {
     }
 
     @PutMapping("/{customerId}/vehicles")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_EDIT + "')")
     public ResponseEntity<Void> updateVehicles(
             @PathVariable String customerId,
             @RequestBody(required = false) Object body) {
@@ -34,6 +38,7 @@ public class CrmVehiclesController {
     }
 
     @DeleteMapping("/{customerId}/vehicles/{vehicleId}")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_DEACTIVATE + "')")
     public ResponseEntity<Void> deleteVehicle(
             @PathVariable String customerId,
             @PathVariable String vehicleId) {
@@ -42,6 +47,7 @@ public class CrmVehiclesController {
     }
 
     @PutMapping("/{customerId}/vehicles/{vehicleId}/transfer")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_PARTY_ASSOC_EDIT + "')")
     public ResponseEntity<Void> transferVehicles(
             @PathVariable String customerId,
             @PathVariable String vehicleId,
@@ -51,18 +57,21 @@ public class CrmVehiclesController {
     }
 
     @GetMapping("/vehicles/{vehicleId}")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_VIEW + "')")
     public ResponseEntity<Void> getVehicle(@PathVariable String vehicleId) {
         log.info("Stub getVehicle vehicleId={}", vehicleId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @GetMapping("/vehicles")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_SEARCH + "')")
     public ResponseEntity<Void> getAllVehiclesFiltered() {
         log.info("Stub getAllVehiclesFiltered");
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @GetMapping("/{customerId}/vehicles/{vehicleId}")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_VIEW + "')")
     public ResponseEntity<Void> getVehiclesForCustomer(
             @PathVariable String customerId,
             @PathVariable String vehicleId) {
