@@ -272,6 +272,11 @@ This implementation enforces the 27 CRM permissions defined in:
 5. **Stateless Sessions:** JWT-based authentication scales horizontally without session replication
 6. **Method-Level Security:** Fine-grained control over who can access what operations
 
+### Centralized 403 Handling
+- **AccessDeniedException → 403:** `CrmExceptionHandler` (`@ControllerAdvice`) standardizes responses for permission-denied cases.
+- **Response shape:** `{ errorCode: "PERMISSION_DENIED", message, path, timestamp }`
+- **Audit-friendly:** Logs a warning including request path; consistent payload for UI handling.
+
 ---
 
 Generated: 2024
