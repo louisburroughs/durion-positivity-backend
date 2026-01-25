@@ -36,6 +36,11 @@ public class ErrorResponse {
     private Long timestamp;
 
     /**
+     * Correlation id for tracing (populated by gateway if missing)
+     */
+    private String correlationId;
+
+    /**
      * Field-level validation errors (field name -> error message)
      */
     private Map<String, String> fieldErrors;

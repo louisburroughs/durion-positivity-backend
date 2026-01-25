@@ -15,6 +15,8 @@ public class ErrorResponse {
 
     private String errorCode;
     private String message;
+    private String correlationId;
+    private Long timestamp;
     private Map<String, String> fieldErrors;
 
     // Constructors
@@ -30,6 +32,15 @@ public class ErrorResponse {
         this.errorCode = errorCode;
         this.message = message;
         this.fieldErrors = fieldErrors;
+    }
+
+    public ErrorResponse(String errorCode, String message, Map<String, String> fieldErrors, String correlationId,
+            Long timestamp) {
+        this.errorCode = errorCode;
+        this.message = message;
+        this.fieldErrors = fieldErrors;
+        this.correlationId = correlationId;
+        this.timestamp = timestamp;
     }
 
     // Getters and Setters
@@ -55,5 +66,21 @@ public class ErrorResponse {
 
     public void setFieldErrors(Map<String, String> fieldErrors) {
         this.fieldErrors = fieldErrors;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(Long timestamp) {
+        this.timestamp = timestamp;
     }
 }
