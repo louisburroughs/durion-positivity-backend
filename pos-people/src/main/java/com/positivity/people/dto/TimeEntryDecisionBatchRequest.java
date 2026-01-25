@@ -7,6 +7,7 @@ public class TimeEntryDecisionBatchRequest {
 
     public static class Decision {
         private String timeEntryId;
+        private String rejectionReason;
 
         public Decision() {
         }
@@ -21,6 +22,14 @@ public class TimeEntryDecisionBatchRequest {
 
         public void setTimeEntryId(String timeEntryId) {
             this.timeEntryId = timeEntryId;
+        }
+
+        public String getRejectionReason() {
+            return rejectionReason;
+        }
+
+        public void setRejectionReason(String rejectionReason) {
+            this.rejectionReason = rejectionReason;
         }
     }
 

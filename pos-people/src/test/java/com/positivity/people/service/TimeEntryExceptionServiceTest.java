@@ -69,4 +69,60 @@ public class TimeEntryExceptionServiceTest {
         verify(exceptionRepository, never()).save(any());
         verify(auditRepository).save(any(TimeEntryAudit.class));
     }
+
+    @Test
+    public void actionException_acknowledge_succeeds() {
+        UUID id = UUID.randomUUID();
+        TimeEntryException ex = new TimeEntryException();
+        ex.setExceptionId(id);
+        ex.setTimeEntryId("TE-5");
+        ex.setStatus(com.positivity.people.model.ExceptionStatus.OPEN);
+
+        when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
+        when(exceptionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        boolean ok = service.actionException(id, com.positivity.people.model.ExceptionStatus.ACKNOWLEDGED, "user1",
+                null, "cid-5");
+        assertTrue(ok);
+
+        ArgumentCaptor<TimeEntryException> captor = ArgumentCaptor.forClass(TimeEntryException.class);
+        verify(exceptionRepository).save(captor.capture());
+        assertEquals(com.positivity.people.model.ExceptionStatus.ACKNOWLEDGED, captor.getValue().getStatus());
+    }
+
+    @Test
+    public void actionException_waive_withReason_succeeds() {
+        UUID id = UUID.randomUUID();
+        TimeEntryException ex = new TimeEntryException();
+        ex.setExceptionId(id);
+        ex.setTimeEntryId("TE-6");
+        ex.setStatus(com.positivity.people.model.ExceptionStatus.ACKNOWLEDGED);
+
+        when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
+        when(exceptionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        boolean ok = service.actionException(id, com.positivity.people.model.ExceptionStatus.WAIVED, "user2",
+                "not applicable", "cid-6");
+        assertTrue(ok);
+
+        ArgumentCaptor<TimeEntryException> captor = ArgumentCaptor.forClass(TimeEntryException.class);
+        verify(exceptionRepository).save(captor.capture());
+        assertEquals(com.positivity.people.model.ExceptionStatus.WAIVED, captor.getValue().getStatus());
+        assertEquals("not applicable", captor.getValue().getResolutionNotes());
+    }
+
+    @Test
+    public void actionException_fromResolvedStatus_fails() {
+        UUID id = UUID.randomUUID();
+        TimeEntryException ex = new TimeEntryException();
+        ex.setExceptionId(id);
+        ex.setStatus(com.positivity.people.model.ExceptionStatus.RESOLVED);
+
+        when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
+
+        boolean ok = service.actionException(id, com.positivity.people.model.ExceptionStatus.WAIVED, "user3", null,
+                "cid-7");
+        assertFalse(ok);
+        verify(exceptionRepository, never()).save(any());
+    }
 }
