@@ -3,6 +3,7 @@ package com.positivity.workorder.service;
 import com.positivity.workorder.dto.CreateEstimateRequest;
 import com.positivity.workorder.entity.ApprovalConfiguration;
 import com.positivity.workorder.entity.Estimate;
+import com.positivity.workorder.entity.EstimateStatus;
 import com.positivity.workorder.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.repository.EstimateRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,185 +28,183 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class EstimateServiceTest {
 
-    @Mock
-    private EstimateRepository estimateRepository;
+        @Mock
+        private EstimateRepository estimateRepository;
 
-    @Mock
-    private ApprovalConfigurationRepository approvalConfigurationRepository;
+        @Mock
+        private ApprovalConfigurationRepository approvalConfigurationRepository;
 
-    @InjectMocks
-    private EstimateService estimateService;
+        @InjectMocks
+        private EstimateService estimateService;
 
-    private CreateEstimateRequest validRequest;
-    private ApprovalConfiguration defaultConfig;
-    private Long testUserId;
+        private CreateEstimateRequest validRequest;
+        private ApprovalConfiguration defaultConfig;
+        private Long testUserId;
 
-    @BeforeEach
-    void setUp() {
-        testUserId = 100L;
-        
-        validRequest = CreateEstimateRequest.builder()
-                .customerId(1L)
-                .vehicleId(2L)
-                .build();
+        @BeforeEach
+        void setUp() {
+                testUserId = 100L;
 
-        defaultConfig = ApprovalConfiguration.builder()
-                .id(1L)
-                .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
-                .declineExpiryDays(30)
-                .requireSignature(false)
-                .priority(0)
-                .build();
+                validRequest = CreateEstimateRequest.builder()
+                                .customerId(1L)
+                                .vehicleId(2L)
+                                .build();
 
-        // Setup default mocks
-        when(approvalConfigurationRepository.findApplicableConfigurations(anyLong(), anyLong()))
-                .thenReturn(List.of(defaultConfig));
-        
-        when(estimateRepository.existsByLocationIdAndEstimateNumber(anyLong(), anyString()))
-                .thenReturn(false);
-    }
+                defaultConfig = ApprovalConfiguration.builder()
+                                .id(1L)
+                                .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
+                                .declineExpiryDays(30)
+                                .requireSignature(false)
+                                .priority(0)
+                                .build();
 
-    @Test
-    void testCreateEstimate_Success() {
-        // Given
-        Estimate savedEstimate = Estimate.builder()
-                .id(1L)
-                .estimateNumber("EST-2024-1000")
-                .customerId(1L)
-                .vehicleId(2L)
-                .locationId(1L)
-                .currencyUomId("USD")
-                .taxRegionId(1L)
-                .status(Estimate.EstimateStatus.DRAFT)
-                .createdByUserId(testUserId)
-                .build();
+                // Setup default mocks
+                when(approvalConfigurationRepository.findApplicableConfigurations(anyLong(), anyLong()))
+                                .thenReturn(List.of(defaultConfig));
 
-        when(estimateRepository.save(any(Estimate.class)))
-                .thenReturn(savedEstimate);
+                when(estimateRepository.existsByLocationIdAndEstimateNumber(anyLong(), anyString()))
+                                .thenReturn(false);
+        }
 
-        // When
-        Estimate result = estimateService.createEstimate(validRequest, testUserId);
+        @Test
+        void testCreateEstimate_Success() {
+                // Given
+                Estimate savedEstimate = Estimate.builder()
+                                .id(1L)
+                                .estimateNumber("EST-2024-1000")
+                                .customerId(1L)
+                                .vehicleId(2L)
+                                .locationId(1L)
+                                .currencyUomId("USD")
+                                .taxRegionId(1L)
+                                .status(EstimateStatus.DRAFT)
+                                .createdByUserId(testUserId)
+                                .build();
 
-        // Then
-        assertNotNull(result);
-        assertEquals(Estimate.EstimateStatus.DRAFT, result.getStatus());
-        assertEquals(1L, result.getCustomerId());
-        assertEquals(2L, result.getVehicleId());
-        assertNotNull(result.getEstimateNumber());
-        assertEquals(testUserId, result.getCreatedByUserId());
+                when(estimateRepository.save(any(Estimate.class)))
+                                .thenReturn(savedEstimate);
 
-        // Verify repository was called
-        verify(estimateRepository, times(1)).save(any(Estimate.class));
-        
-        // Verify the estimate saved has correct structure
-        ArgumentCaptor<Estimate> estimateCaptor = ArgumentCaptor.forClass(Estimate.class);
-        verify(estimateRepository).save(estimateCaptor.capture());
-        Estimate capturedEstimate = estimateCaptor.getValue();
-        
-        assertEquals(Estimate.EstimateStatus.DRAFT, capturedEstimate.getStatus());
-        assertNotNull(capturedEstimate.getCreatedAt());
-        assertNotNull(capturedEstimate.getEstimateNumber());
-    }
+                // When
+                Estimate result = estimateService.createEstimate(validRequest, testUserId);
 
-    @Test
-    void testCreateEstimate_MissingCustomerId_ThrowsException() {
-        // Given
-        CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
-                .vehicleId(2L)
-                .build();
+                // Then
+                assertNotNull(result);
+                assertEquals(EstimateStatus.DRAFT, result.getStatus());
+                assertEquals(1L, result.getCustomerId());
+                assertEquals(2L, result.getVehicleId());
+                assertNotNull(result.getEstimateNumber());
+                assertEquals(testUserId, result.getCreatedByUserId());
 
-        // When & Then
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> estimateService.createEstimate(invalidRequest, testUserId)
-        );
+                // Verify repository was called
+                verify(estimateRepository, times(1)).save(any(Estimate.class));
 
-        assertEquals("customerId is required", exception.getMessage());
-        verify(estimateRepository, never()).save(any(Estimate.class));
-    }
+                // Verify the estimate saved has correct structure
+                ArgumentCaptor<Estimate> estimateCaptor = ArgumentCaptor.forClass(Estimate.class);
+                verify(estimateRepository).save(estimateCaptor.capture());
+                Estimate capturedEstimate = estimateCaptor.getValue();
 
-    @Test
-    void testCreateEstimate_MissingVehicleId_ThrowsException() {
-        // Given
-        CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
-                .customerId(1L)
-                .build();
+                assertEquals(EstimateStatus.DRAFT, capturedEstimate.getStatus());
+                assertNotNull(capturedEstimate.getCreatedAt());
+                assertNotNull(capturedEstimate.getEstimateNumber());
+        }
 
-        // When & Then
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> estimateService.createEstimate(invalidRequest, testUserId)
-        );
+        @Test
+        void testCreateEstimate_MissingCustomerId_ThrowsException() {
+                // Given
+                CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
+                                .vehicleId(2L)
+                                .build();
 
-        assertEquals("vehicleId is required", exception.getMessage());
-        verify(estimateRepository, never()).save(any(Estimate.class));
-    }
+                // When & Then
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> estimateService.createEstimate(invalidRequest, testUserId));
 
-    @Test
-    void testCreateEstimate_AppliesDefaultValues() {
-        // Given
-        when(estimateRepository.save(any(Estimate.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                assertEquals("customerId is required", exception.getMessage());
+                verify(estimateRepository, never()).save(any(Estimate.class));
+        }
 
-        // When
-        Estimate result = estimateService.createEstimate(validRequest, testUserId);
+        @Test
+        void testCreateEstimate_MissingVehicleId_ThrowsException() {
+                // Given
+                CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
+                                .customerId(1L)
+                                .build();
 
-        // Then
-        assertNotNull(result);
-        assertEquals("USD", result.getCurrencyUomId(), "Should use default currency");
-        assertNotNull(result.getLocationId(), "Should have default location");
-        assertNotNull(result.getTaxRegionId(), "Should have default tax region");
-    }
+                // When & Then
+                IllegalArgumentException exception = assertThrows(
+                                IllegalArgumentException.class,
+                                () -> estimateService.createEstimate(invalidRequest, testUserId));
 
-    @Test
-    void testCreateEstimate_WithProvidedLocation() {
-        // Given
-        CreateEstimateRequest requestWithLocation = CreateEstimateRequest.builder()
-                .customerId(1L)
-                .vehicleId(2L)
-                .locationId(5L)
-                .build();
+                assertEquals("vehicleId is required", exception.getMessage());
+                verify(estimateRepository, never()).save(any(Estimate.class));
+        }
 
-        when(estimateRepository.save(any(Estimate.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        @Test
+        void testCreateEstimate_AppliesDefaultValues() {
+                // Given
+                when(estimateRepository.save(any(Estimate.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // When
-        Estimate result = estimateService.createEstimate(requestWithLocation, testUserId);
+                // When
+                Estimate result = estimateService.createEstimate(validRequest, testUserId);
 
-        // Then
-        assertEquals(5L, result.getLocationId(), "Should use provided location");
-    }
+                // Then
+                assertNotNull(result);
+                assertEquals("USD", result.getCurrencyUomId(), "Should use default currency");
+                assertNotNull(result.getLocationId(), "Should have default location");
+                assertNotNull(result.getTaxRegionId(), "Should have default tax region");
+        }
 
-    @Test
-    void testCreateEstimate_GeneratesUniqueEstimateNumber() {
-        // Given
-        when(estimateRepository.save(any(Estimate.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        @Test
+        void testCreateEstimate_WithProvidedLocation() {
+                // Given
+                CreateEstimateRequest requestWithLocation = CreateEstimateRequest.builder()
+                                .customerId(1L)
+                                .vehicleId(2L)
+                                .locationId(5L)
+                                .build();
 
-        // When
-        Estimate result = estimateService.createEstimate(validRequest, testUserId);
+                when(estimateRepository.save(any(Estimate.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // Then
-        assertNotNull(result.getEstimateNumber());
-        assertTrue(result.getEstimateNumber().startsWith("EST-"),
-                "Estimate number should start with EST-");
-        assertTrue(result.getEstimateNumber().matches("EST-\\d{4}-\\d+"),
-                "Estimate number should match pattern EST-YYYY-NNNN");
-    }
+                // When
+                Estimate result = estimateService.createEstimate(requestWithLocation, testUserId);
 
-    @Test
-    void testCreateEstimate_SetsApprovalConfiguration() {
-        // Given
-        when(estimateRepository.save(any(Estimate.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                // Then
+                assertEquals(5L, result.getLocationId(), "Should use provided location");
+        }
 
-        // When
-        Estimate result = estimateService.createEstimate(validRequest, testUserId);
+        @Test
+        void testCreateEstimate_GeneratesUniqueEstimateNumber() {
+                // Given
+                when(estimateRepository.save(any(Estimate.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // Then
-        assertNotNull(result.getApprovalConfigurationId());
-        assertEquals(defaultConfig.getId(), result.getApprovalConfigurationId());
-        verify(approvalConfigurationRepository, times(1))
-                .findApplicableConfigurations(anyLong(), anyLong());
-    }
+                // When
+                Estimate result = estimateService.createEstimate(validRequest, testUserId);
+
+                // Then
+                assertNotNull(result.getEstimateNumber());
+                assertTrue(result.getEstimateNumber().startsWith("EST-"),
+                                "Estimate number should start with EST-");
+                assertTrue(result.getEstimateNumber().matches("EST-\\d{4}-\\d+"),
+                                "Estimate number should match pattern EST-YYYY-NNNN");
+        }
+
+        @Test
+        void testCreateEstimate_SetsApprovalConfiguration() {
+                // Given
+                when(estimateRepository.save(any(Estimate.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                // When
+                Estimate result = estimateService.createEstimate(validRequest, testUserId);
+
+                // Then
+                assertNotNull(result.getApprovalConfigurationId());
+                assertEquals(defaultConfig.getId(), result.getApprovalConfigurationId());
+                verify(approvalConfigurationRepository, times(1))
+                                .findApplicableConfigurations(anyLong(), anyLong());
+        }
 }
