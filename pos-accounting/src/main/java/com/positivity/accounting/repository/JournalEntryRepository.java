@@ -25,6 +25,11 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Stri
     List<JournalEntry> findByStatus(JournalEntryStatus status);
 
     /**
+     * Find journal entries by status with pagination.
+     */
+    Page<JournalEntry> findByStatus(JournalEntryStatus status, Pageable pageable);
+
+    /**
      * Find journal entries for a transaction date range.
      */
     @Query("SELECT je FROM JournalEntry je WHERE je.transactionDate >= :startDate AND je.transactionDate <= :endDate ORDER BY je.transactionDate DESC")

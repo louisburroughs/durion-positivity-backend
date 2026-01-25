@@ -3,6 +3,7 @@ package com.positivity.accounting.service;
 import com.positivity.accounting.entity.GLAccount;
 import com.positivity.accounting.entity.JournalEntry;
 import com.positivity.accounting.entity.JournalEntryLine;
+import com.positivity.accounting.enums.JournalEntryStatus;
 import com.positivity.accounting.repository.JournalEntryRepository;
 import com.positivity.accounting.repository.JournalEntryLineRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -56,8 +58,8 @@ public class JournalEntryService {
      */
     public JournalEntry createJournalEntry(JournalEntry entry) {
         // Generate ID if not present
-        if (entry.getId() == null || entry.getId().isBlank()) {
-            entry.setId(UUID.randomUUID().toString());
+        if (entry.getJournalEntryId() == null || entry.getJournalEntryId().isBlank()) {
+            entry.setJournalEntryId(UUID.randomUUID().toString());
         }
 
         // Validate balance
@@ -70,13 +72,13 @@ public class JournalEntryService {
         }
 
         // Set entry metadata
-        entry.setStatus("DRAFT");
-        entry.setCreatedAt(LocalDateTime.now());
-        entry.setModifiedAt(LocalDateTime.now());
+        entry.setStatus(JournalEntryStatus.DRAFT);
+        entry.setCreatedAt(Instant.now());
+        entry.setModifiedAt(Instant.now());
 
         JournalEntry saved = journalEntryRepository.save(entry);
         log.info("Created journal entry {} in DRAFT status with {} lines",
-                saved.getId(), saved.getLines().size());
+                saved.getJournalEntryId(), saved.getLines().size());
         return saved;
     }
 
@@ -100,7 +102,7 @@ public class JournalEntryService {
     public JournalEntry updateJournalEntry(String journalEntryId, JournalEntry updates) {
         JournalEntry entry = getJournalEntry(journalEntryId);
 
-        if (!"DRAFT".equals(entry.getStatus())) {
+        if (entry.getStatus() != JournalEntryStatus.DRAFT) {
             String msg = "Cannot update " + entry.getStatus() + " journal entry " + journalEntryId;
             log.warn(msg);
             throw new IllegalStateException(msg);
@@ -109,10 +111,9 @@ public class JournalEntryService {
         // Validate updated entry is balanced
         validateBalance(updates);
 
-        // Allow description/memo updates only
+        // Allow description updates only
         entry.setDescription(updates.getDescription());
-        entry.setMemo(updates.getMemo());
-        entry.setModifiedAt(LocalDateTime.now());
+        entry.setModifiedAt(Instant.now());
 
         // Lines can be updated (add/remove as long as entry remains balanced)
         // For now, disallow line updates; require delete + recreate for complex changes
@@ -135,7 +136,7 @@ public class JournalEntryService {
     public JournalEntry postJournalEntry(String journalEntryId) {
         JournalEntry entry = getJournalEntry(journalEntryId);
 
-        if (!"DRAFT".equals(entry.getStatus())) {
+        if (entry.getStatus() != JournalEntryStatus.DRAFT) {
             String msg = "Cannot post " + entry.getStatus() + " journal entry " + journalEntryId;
             log.warn(msg);
             throw new IllegalStateException(msg);
@@ -148,13 +149,13 @@ public class JournalEntryService {
                     line.getGlAccountId(), entry.getTransactionDate());
         }
 
-        entry.setStatus("POSTED");
-        entry.setPostedAt(LocalDateTime.now());
-        entry.setModifiedAt(LocalDateTime.now());
+        entry.setStatus(JournalEntryStatus.POSTED);
+        entry.setPostedAt(Instant.now());
+        entry.setModifiedAt(Instant.now());
 
         JournalEntry saved = journalEntryRepository.save(entry);
         log.info("Posted journal entry {} with total debits/credits: {}",
-                saved.getId(), saved.getLines().size());
+                saved.getJournalEntryId(), saved.getLines().size());
         return saved;
     }
 
@@ -171,7 +172,7 @@ public class JournalEntryService {
     public JournalEntry reverseJournalEntry(String originalEntryId, String reversalReason) {
         JournalEntry original = getJournalEntry(originalEntryId);
 
-        if (!"POSTED".equals(original.getStatus())) {
+        if (original.getStatus() != JournalEntryStatus.POSTED) {
             String msg = "Cannot reverse " + original.getStatus() + " entry; only POSTED entries can be reversed";
             log.warn(msg);
             throw new IllegalArgumentException(msg);
@@ -179,56 +180,54 @@ public class JournalEntryService {
 
         // Create reversal entry with inverted debits/credits
         JournalEntry reversal = new JournalEntry();
-        reversal.setId(UUID.randomUUID().toString());
-        reversal.setOrganizationId(original.getOrganizationId());
-        reversal.setTransactionDate(LocalDateTime.now());
-        reversal.setDescription("Reversal of " + original.getId());
-        reversal.setMemo("Reason: " + reversalReason);
+        reversal.setJournalEntryId(UUID.randomUUID().toString());
+        reversal.setTransactionDate(LocalDate.now());
+        reversal.setDescription("Reversal of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
         reversal.setSourceEventId(original.getSourceEventId());
-        reversal.setStatus("POSTED"); // Reversals post immediately
-        reversal.setPostedAt(LocalDateTime.now());
-        reversal.setCreatedAt(LocalDateTime.now());
-        reversal.setModifiedAt(LocalDateTime.now());
+        reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
+        reversal.setPostedAt(Instant.now());
+        reversal.setCreatedAt(Instant.now());
+        reversal.setModifiedAt(Instant.now());
 
         // Invert all lines: debits become credits and vice versa
         List<JournalEntryLine> reversalLines = new java.util.ArrayList<>();
         for (JournalEntryLine line : original.getLines()) {
             JournalEntryLine reversalLine = new JournalEntryLine();
-            reversalLine.setId(UUID.randomUUID().toString());
-            reversalLine.setJournalEntryId(reversal.getId());
+            reversalLine.setJournalEntryLineId(UUID.randomUUID().toString());
+            reversalLine.setJournalEntryId(reversal.getJournalEntryId());
             reversalLine.setGlAccountId(line.getGlAccountId());
             reversalLine.setDebitAmount(line.getCreditAmount()); // Swap
             reversalLine.setCreditAmount(line.getDebitAmount()); // Swap
-            reversalLine.setDescription("Reversal of line " + line.getId());
-            reversalLine.setCreatedAt(LocalDateTime.now());
+            reversalLine.setDescription("Reversal of line " + line.getJournalEntryLineId());
+            reversalLine.setCreatedAt(Instant.now());
             reversalLines.add(reversalLine);
         }
         reversal.setLines(reversalLines);
 
         JournalEntry saved = journalEntryRepository.save(reversal);
-        log.info("Created reversal entry {} for original entry {}", saved.getId(), originalEntryId);
+        log.info("Created reversal entry {} for original entry {}", saved.getJournalEntryId(), originalEntryId);
         return saved;
     }
 
     /**
      * Lists journal entries with pagination and filtering.
      */
-    public Page<JournalEntry> listJournalEntries(String organizationId, Pageable pageable) {
-        return journalEntryRepository.findByOrganizationId(organizationId, pageable);
+    public Page<JournalEntry> listJournalEntries(Pageable pageable) {
+        return journalEntryRepository.findAll(pageable);
     }
 
     /**
      * Find all posted entries for audit or reconciliation.
      */
-    public Page<JournalEntry> listPostedEntries(String organizationId, Pageable pageable) {
-        return journalEntryRepository.findByOrganizationIdAndStatus(organizationId, "POSTED", pageable);
+    public Page<JournalEntry> listPostedEntries(Pageable pageable) {
+        return journalEntryRepository.findByStatus(JournalEntryStatus.POSTED, pageable);
     }
 
     /**
      * Find entries by status (DRAFT, POSTED, REVERSED).
      */
-    public List<JournalEntry> findByStatus(String organizationId, String status) {
-        return journalEntryRepository.findByOrganizationIdAndStatus(organizationId, status);
+    public List<JournalEntry> findByStatus(JournalEntryStatus status) {
+        return journalEntryRepository.findByStatus(status);
     }
 
     // ===== VALIDATION =====

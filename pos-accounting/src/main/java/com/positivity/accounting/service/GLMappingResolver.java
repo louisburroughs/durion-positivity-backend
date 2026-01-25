@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Optional;
 
@@ -38,56 +38,60 @@ public class GLMappingResolver {
     private final GLMappingRepository mappingRepository;
 
     /**
-     * Resolves an external source code to a GL account.
-     * Returns the most specific mapping based on dimensional context.
+     * Resolves a posting category and mapping key to a GL account.
+     * Returns the most specific mapping based on dimensional context and effective
+     * date.
      *
      * Resolution Priority (first match wins):
-     * 1. Exact match: source system + code + dimensions + transaction date
-     * 2. Dimensional fallback: source system + code + partial dimensions + date
-     * 3. Source default: source system + code + no dimensions + date
+     * 1. Exact match: postingCategoryId + mappingKeyId + dimensions + transaction
+     * date
+     * 2. Dimensional fallback: postingCategoryId + mappingKeyId + partial
+     * dimensions + date
+     * 3. Category default: postingCategoryId + mappingKeyId + no dimensions + date
      *
-     * @param sourceSystem     source system identifier (e.g., "MYOB", "QUICKBOOKS")
-     * @param externalCode     external code to resolve
-     * @param transactionDate  effective date for resolution
-     * @param dimensionContext dimensional context (cost_center, location, etc.)
+     * @param postingCategoryId posting category identifier
+     * @param mappingKeyId      mapping key to resolve
+     * @param transactionDate   effective date for resolution (LocalDate)
+     * @param dimensionContext  dimensional context (businessUnitId, locationId,
+     *                          etc.)
      * @return GL account ID for posting
      * @throws IllegalArgumentException if no valid mapping found
      */
-    public String resolveGLAccount(String sourceSystem, String externalCode,
-            LocalDateTime transactionDate,
+    public String resolveGLAccount(String postingCategoryId, String mappingKeyId,
+            LocalDate transactionDate,
             Map<String, String> dimensionContext) {
 
         // Attempt resolution in order of specificity
         // 1. Try exact dimensional match
         Optional<String> exactMatch = resolveWithDimensions(
-                sourceSystem, externalCode, transactionDate, dimensionContext);
+                postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
         if (exactMatch.isPresent()) {
-            log.debug("GL mapping resolved: {} -> {} [exact dimensional match]",
-                    externalCode, exactMatch.get());
+            log.debug("GL mapping resolved: {}/{} -> {} [exact dimensional match]",
+                    postingCategoryId, mappingKeyId, exactMatch.get());
             return exactMatch.get();
         }
 
         // 2. Try progressive dimensional fallback (remove least specific dimensions)
         Optional<String> partialMatch = resolveFallback(
-                sourceSystem, externalCode, transactionDate, dimensionContext);
+                postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
         if (partialMatch.isPresent()) {
-            log.debug("GL mapping resolved: {} -> {} [partial dimensional match]",
-                    externalCode, partialMatch.get());
+            log.debug("GL mapping resolved: {}/{} -> {} [partial dimensional match]",
+                    postingCategoryId, mappingKeyId, partialMatch.get());
             return partialMatch.get();
         }
 
-        // 3. Try source-level default (no dimensions)
+        // 3. Try category default (no dimensions)
         Optional<GLMapping> defaultMapping = mappingRepository
-                .findEffectiveMapping(sourceSystem, externalCode, transactionDate);
+                .findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate);
         if (defaultMapping.isPresent()) {
-            log.debug("GL mapping resolved: {} -> {} [source default]",
-                    externalCode, defaultMapping.get().getGlAccountId());
+            log.debug("GL mapping resolved: {}/{} -> {} [category default]",
+                    postingCategoryId, mappingKeyId, defaultMapping.get().getGlAccountId());
             return defaultMapping.get().getGlAccountId();
         }
 
         // No mapping found
         String msg = String.format(
-                "No GL mapping found for %s:%s on %s", sourceSystem, externalCode, transactionDate);
+                "No GL mapping found for %s:%s on %s", postingCategoryId, mappingKeyId, transactionDate);
         log.warn(msg);
         throw new IllegalArgumentException(msg);
     }
@@ -96,16 +100,17 @@ public class GLMappingResolver {
      * Attempt resolution with exact dimensional matching.
      * All dimensions in context must match dimensions in mapping.
      */
-    private Optional<String> resolveWithDimensions(String sourceSystem, String externalCode,
-            LocalDateTime transactionDate,
+    private Optional<String> resolveWithDimensions(String postingCategoryId, String mappingKeyId,
+            LocalDate transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
             return Optional.empty();
         }
 
         // TODO: Implement exact dimensional matching
-        // Would query mappings by source+code+dimensions and match transaction date
-        // range
+        // Would query mappings by postingCategoryId+mappingKeyId+dimensions
+        // and match transaction date range (effectiveFrom <= transactionDate <
+        // effectiveTo)
         return Optional.empty();
     }
 
@@ -113,16 +118,17 @@ public class GLMappingResolver {
      * Attempt resolution with dimensional fallback.
      * Try progressively less specific dimensional combinations until match found.
      */
-    private Optional<String> resolveFallback(String sourceSystem, String externalCode,
-            LocalDateTime transactionDate,
+    private Optional<String> resolveFallback(String postingCategoryId, String mappingKeyId,
+            LocalDate transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
             return Optional.empty();
         }
 
         // TODO: Implement dimensional fallback strategy
-        // Start with all dimensions, progressively remove least-specific (location,
-        // then cost center, etc.)
+        // Start with all dimensions, progressively remove least-specific
+        // (businessUnitId, then locationId, then departmentId, then costCenterId)
+        // until finding a match within the effective date range
         return Optional.empty();
     }
 
@@ -140,31 +146,39 @@ public class GLMappingResolver {
      * @throws IllegalArgumentException if mapping is invalid
      */
     public boolean validateMapping(GLMapping mapping) {
-        if (mapping.getSourceSystem() == null || mapping.getSourceSystem().isBlank()) {
-            throw new IllegalArgumentException("Source system is required");
+        if (mapping.getPostingCategoryId() == null || mapping.getPostingCategoryId().isBlank()) {
+            throw new IllegalArgumentException("Posting category ID is required");
         }
-        if (mapping.getExternalCode() == null || mapping.getExternalCode().isBlank()) {
-            throw new IllegalArgumentException("External code is required");
+        if (mapping.getMappingKeyId() == null || mapping.getMappingKeyId().isBlank()) {
+            throw new IllegalArgumentException("Mapping key ID is required");
         }
         if (mapping.getGlAccountId() == null || mapping.getGlAccountId().isBlank()) {
             throw new IllegalArgumentException("GL account ID is required");
         }
-        if (mapping.getEffectiveStartDate() == null) {
-            throw new IllegalArgumentException("Effective start date is required");
+        if (mapping.getEffectiveFrom() == null) {
+            throw new IllegalArgumentException("Effective from date is required");
+        }
+        if (mapping.getEffectiveTo() != null && mapping.getEffectiveFrom().isAfter(mapping.getEffectiveTo())) {
+            throw new IllegalArgumentException(
+                    "Effective from date must be on or before effective to date");
         }
 
-        // Check for overlaps with existing mappings
+        // Check for overlaps with existing mappings (same category + key combination)
+        // Overlapping if: (existing.effectiveFrom <= mapping.effectiveTo OR
+        // mapping.effectiveTo is null)
+        // AND (existing.effectiveTo >= mapping.effectiveFrom OR existing.effectiveTo is
+        // null)
         var overlaps = mappingRepository.findOverlappingMappings(
-                mapping.getSourceSystem(),
-                mapping.getExternalCode(),
-                mapping.getEffectiveStartDate(),
-                mapping.getEffectiveEndDate() != null ? mapping.getEffectiveEndDate() : LocalDateTime.MAX,
-                mapping.getId() != null ? mapping.getId() : "");
+                mapping.getPostingCategoryId(),
+                mapping.getMappingKeyId(),
+                mapping.getEffectiveFrom(),
+                mapping.getEffectiveTo(),
+                mapping.getGlMappingId() != null ? mapping.getGlMappingId() : "");
 
         if (!overlaps.isEmpty()) {
             String msg = String.format(
-                    "Mapping has overlapping effective dates with existing mapping(s) for %s:%s",
-                    mapping.getSourceSystem(), mapping.getExternalCode());
+                    "Mapping has overlapping effective dates with existing mapping(s) for category=%s, key=%s",
+                    mapping.getPostingCategoryId(), mapping.getMappingKeyId());
             log.warn(msg);
             throw new IllegalArgumentException(msg);
         }
@@ -185,29 +199,37 @@ public class GLMappingResolver {
     }
 
     /**
-     * Get the effective GL account for a source code at a specific point in time.
+     * Get the effective GL account for a posting category and mapping key at a
+     * specific date.
      * Useful for audit and debugging.
      *
-     * @param sourceSystem    source system
-     * @param externalCode    external code
-     * @param transactionDate effective date
+     * @param postingCategoryId posting category ID
+     * @param mappingKeyId      mapping key ID
+     * @param transactionDate   effective date (LocalDate)
      * @return effective GL account ID
      */
-    public String getEffectiveAccount(String sourceSystem, String externalCode,
-            LocalDateTime transactionDate) {
-        return mappingRepository.findEffectiveMapping(sourceSystem, externalCode, transactionDate)
+    public String getEffectiveAccount(String postingCategoryId, String mappingKeyId,
+            LocalDate transactionDate) {
+        return mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
                 .map(GLMapping::getGlAccountId)
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "No effective mapping for " + sourceSystem + ":" + externalCode + " on " + transactionDate));
+                        "No effective mapping for " + postingCategoryId + ":" + mappingKeyId + " on "
+                                + transactionDate));
     }
 
     /**
      * Get mapping history for audit trail.
+     * Returns all versions (past and present) of a mapping key within a category.
+     *
+     * @param postingCategoryId posting category ID
+     * @param mappingKeyId      mapping key ID
+     * @return list of all historical mappings sorted by effective date
      */
-    public java.util.List<GLMapping> getMappingHistory(String sourceSystem, String externalCode) {
-        return mappingRepository.findBySourceSystem(sourceSystem)
+    public java.util.List<GLMapping> getMappingHistory(String postingCategoryId, String mappingKeyId) {
+        return mappingRepository.findByPostingCategoryId(postingCategoryId)
                 .stream()
-                .filter(m -> externalCode.equals(m.getExternalCode()))
+                .filter(m -> mappingKeyId.equals(m.getMappingKeyId()))
+                .sorted((a, b) -> a.getEffectiveFrom().compareTo(b.getEffectiveFrom()))
                 .toList();
     }
 }
