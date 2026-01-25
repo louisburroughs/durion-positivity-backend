@@ -1,6 +1,8 @@
 package com.positivity.accounting.entity;
 
 import com.positivity.accounting.enums.JournalEntryStatus;
+import com.positivity.accounting.enums.JournalEntryType;
+import com.positivity.accounting.enums.ManualJEReasonCode;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,6 +24,7 @@ import java.util.List;
 @Entity
 @Table(name = "journal_entry", indexes = {
         @Index(name = "idx_journal_entry_status", columnList = "status"),
+        @Index(name = "idx_journal_entry_entry_type", columnList = "entry_type"),
         @Index(name = "idx_journal_entry_transaction_date", columnList = "transaction_date"),
         @Index(name = "idx_journal_entry_source_event", columnList = "source_event_id"),
         @Index(name = "idx_journal_entry_posted_at", columnList = "posted_at")
@@ -35,6 +38,10 @@ public class JournalEntry {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
     private JournalEntryStatus status = JournalEntryStatus.DRAFT;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entry_type", length = 20, nullable = false)
+    private JournalEntryType entryType = JournalEntryType.EVENT_DRIVEN;
 
     @Column(name = "transaction_date", nullable = false)
     private LocalDate transactionDate;
@@ -53,6 +60,14 @@ public class JournalEntry {
 
     @Column(name = "posting_rule_version_id", length = 50)
     private String postingRuleVersionId;
+
+    // Manual JE fields (required when entryType = MANUAL)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason_code", length = 50)
+    private ManualJEReasonCode reasonCode;
+
+    @Column(name = "justification", length = 1000)
+    private String justification;
 
     @Column(name = "reversal_journal_entry_id", length = 50)
     private String reversalJournalEntryId;
@@ -116,6 +131,14 @@ public class JournalEntry {
         this.status = status;
     }
 
+    public JournalEntryType getEntryType() {
+        return entryType;
+    }
+
+    public void setEntryType(JournalEntryType entryType) {
+        this.entryType = entryType;
+    }
+
     public LocalDate getTransactionDate() {
         return transactionDate;
     }
@@ -162,6 +185,22 @@ public class JournalEntry {
 
     public void setPostingRuleVersionId(String postingRuleVersionId) {
         this.postingRuleVersionId = postingRuleVersionId;
+    }
+
+    public ManualJEReasonCode getReasonCode() {
+        return reasonCode;
+    }
+
+    public void setReasonCode(ManualJEReasonCode reasonCode) {
+        this.reasonCode = reasonCode;
+    }
+
+    public String getJustification() {
+        return justification;
+    }
+
+    public void setJustification(String justification) {
+        this.justification = justification;
     }
 
     public String getReversalJournalEntryId() {

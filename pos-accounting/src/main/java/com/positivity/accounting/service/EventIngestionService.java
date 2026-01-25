@@ -102,7 +102,7 @@ public class EventIngestionService {
 
         // Create entry in DRAFT status
         JournalEntry created = journalEntryService.createJournalEntry(entry);
-        log.info("Created journal entry {} from event {}", created.getId(), event.get("eventId"));
+        log.info("Created journal entry {} from event {}", created.getJournalEntryId(), event.get("eventId"));
 
         return created;
     }
@@ -191,30 +191,5 @@ public class EventIngestionService {
         }
 
         return errors;
-    }}*
-
-    Lists events
-    with pagination
-    and filtering
-    by type, status, date range.*/
-
-    public void listEvents(int page, int size, String eventType, String status) {
-        log.info("Stub: listEvents page={}, size={}, eventType={}, status={}", page, size, eventType, status);
-    }
-
-    /**
-     * Processes an event through active posting rules to generate journal entries.
-     * Called internally after event submission and rule matching.
-     * Returns list of generated journal entry IDs.
-     */
-    public void processEventThroughRules(String eventId) {
-        log.info("Stub: processEventThroughRules eventId={}", eventId);
-    }
-
-    /**
-     * Validates event payload against event schema and type constraints.
-     */
-    public void validateEvent(Object eventPayload) {
-        log.info("Stub: validateEvent");
     }
 }
