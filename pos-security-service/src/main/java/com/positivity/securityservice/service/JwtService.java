@@ -14,21 +14,26 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Service for handling JWT token operations such as generation, validation, extraction, and deletion.
+ * Service for handling JWT token operations such as generation, validation,
+ * extraction, and deletion.
  */
 @Service
 @RequiredArgsConstructor
 public class JwtService {
     /** Claim key for roles in the JWT. */
     public static final String ROLES = "roles";
+    /** Claim key for expanded authorities in the JWT. */
+    public static final String AUTHORITIES = "authorities";
     private final JwtTokenRepository jwtTokenRepository;
+    private final RoleAuthorityService roleAuthorityService;
     private final SecretKey secretKey = Jwts.SIG.HS256.key().build();
 
     /**
-     * Generates a JWT token for the given username and roles, stores it in the repository, and returns the token string.
+     * Generates a JWT token for the given username and roles, stores it in the
+     * repository, and returns the token string.
      *
      * @param username the subject for the token
-     * @param roles the set of roles to include in the token
+     * @param roles    the set of roles to include in the token
      * @return the generated JWT token string
      */
     public String generateToken(String username, Set<String> roles) {
@@ -36,9 +41,11 @@ public class JwtService {
         // 1 hour
         long expirationMillis = 900_000;
         Instant expiry = now.plusMillis(expirationMillis);
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
         String token = Jwts.builder()
                 .subject(username)
                 .claim(ROLES, roles)
+                .claim(AUTHORITIES, authorities)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
                 .signWith(secretKey)
@@ -53,7 +60,8 @@ public class JwtService {
     }
 
     /**
-     * Validates the given JWT token by checking its signature, expiration, and presence in the repository.
+     * Validates the given JWT token by checking its signature, expiration, and
+     * presence in the repository.
      *
      * @param token the JWT token string to validate
      * @return true if the token is valid and not expired, false otherwise
@@ -111,6 +119,28 @@ public class JwtService {
     }
 
     /**
+     * Extracts the set of authorities from the given JWT token.
+     */
+    public Set<String> getAuthoritiesFromToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token).getPayload();
+        Object authObj = claims.get(AUTHORITIES);
+        if (authObj instanceof List<?> list) {
+            Set<String> authorities = new java.util.HashSet<>();
+            for (Object a : list) {
+                if (a instanceof String str) {
+                    authorities.add(str);
+                }
+            }
+            return authorities;
+        }
+        // Fallback: expand from roles if authorities claim missing
+        return roleAuthorityService.expandRolesToAuthorities(getRolesFromToken(token));
+    }
+
+    /**
      * Deletes the given JWT token from the repository.
      *
      * @param token the JWT token string to delete
@@ -122,16 +152,18 @@ public class JwtService {
     /**
      * Record representing a pair of access and refresh tokens.
      *
-     * @param accessToken the access token
+     * @param accessToken  the access token
      * @param refreshToken the refresh token
      */
-    public record TokenPair(String accessToken, String refreshToken) {}
+    public record TokenPair(String accessToken, String refreshToken) {
+    }
 
     /**
-     * Generates a pair of access and refresh tokens for the given username and roles, stores them, and returns the pair.
+     * Generates a pair of access and refresh tokens for the given username and
+     * roles, stores them, and returns the pair.
      *
      * @param username the subject for the tokens
-     * @param roles the set of roles to include in the access token
+     * @param roles    the set of roles to include in the access token
      * @return a TokenPair containing the access and refresh tokens
      */
     public TokenPair generateTokenPair(String username, Set<String> roles) {
@@ -140,9 +172,11 @@ public class JwtService {
         long refreshExpirationMillis = 7 * 24 * 60 * 60 * 1000L; // 7 days
         Instant accessExpiry = now.plusMillis(accessExpirationMillis);
         Instant refreshExpiry = now.plusMillis(refreshExpirationMillis);
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(roles);
         String accessToken = Jwts.builder()
                 .subject(username)
                 .claim(ROLES, roles)
+                .claim(AUTHORITIES, authorities)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(accessExpiry))
                 .signWith(secretKey)
@@ -166,7 +200,8 @@ public class JwtService {
     }
 
     /**
-     * Validates the given refresh token by checking its signature, expiration, and presence in the repository.
+     * Validates the given refresh token by checking its signature, expiration, and
+     * presence in the repository.
      *
      * @param refreshToken the refresh token string to validate
      * @return true if the refresh token is valid and not expired, false otherwise
@@ -185,7 +220,8 @@ public class JwtService {
     }
 
     /**
-     * Refreshes the access token using the given refresh token, invalidates the old tokens, and returns a new token pair.
+     * Refreshes the access token using the given refresh token, invalidates the old
+     * tokens, and returns a new token pair.
      *
      * @param refreshToken the refresh token string
      * @return a new TokenPair with fresh access and refresh tokens

@@ -107,6 +107,19 @@ These constants are defined in:
    - Success: 200 OK with resource
    - Denied: 403 Forbidden
 
+### Role → Permission Mapping
+
+To simplify authorization, business roles are expanded to fine-grained CRM permission authorities. The mapping is defined in:
+
+- **File:** `pos-customer/src/main/java/com/positivity/customer/security/CrmRolePermissionMapping.java`
+- **Roles:** CSR, FLEET_MANAGER, ADMIN
+- **Behavior:**
+   - CSR: party view/search; contact view/create/edit; contact role view/assign; communication preference view/edit; vehicle view/search; vehicle-party association view; processing log/suspense view
+   - FLEET_MANAGER: CSR set plus party edit; vehicle create/edit; vehicle-party association create/edit; vehicle preferences view/edit
+   - ADMIN: all CRM permissions including high-risk operations (deactivate, merge)
+
+Authorities derived from roles must be present in the JWT or injected by the security gateway. Endpoint-level checks continue to use `hasAuthority('crm:...')` semantics.
+
 ### Permission Registration
 
 Permissions are automatically registered when `pos-customer` service starts:

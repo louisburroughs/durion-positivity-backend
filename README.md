@@ -125,3 +125,16 @@ This repository participates in the workspace-wide agent ecosystem.
     - [Developer / Deploy](../durion/.github/agents/dev-deploy.agent.md)
 
 Refer to the root [Durion](../durion/README.md) repository for governance, ADRs, and shared architectural standards.
+
+## Gateway Authentication & Headers
+
+See pos-api-gateway security blurb for how the gateway validates tokens and enriches requests with authorities and subject headers.
+
+- Gateway doc: [pos-api-gateway/README.md](pos-api-gateway/README.md)
+- Injected headers:
+  - X-Authorities: comma-separated `crm:*:*` authorities
+  - X-User: token subject
+- Security service endpoints leveraged:
+  - GET /v1/auth/validate?token=...
+  - GET /v1/auth/authorities?token=...
+  - GET /v1/auth/subject?token=...

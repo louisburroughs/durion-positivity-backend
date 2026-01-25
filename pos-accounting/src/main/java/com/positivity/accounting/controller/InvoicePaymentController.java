@@ -1,7 +1,7 @@
 package com.positivity.accounting.controller;
 
-import com.positivity.accounting.dto.InvoiceStatusResponse;
-import com.positivity.accounting.dto.PaymentAppliedRequest;
+import com.positivity.accounting.entity.InvoiceStatusResponse;
+import com.positivity.accounting.entity.PaymentAppliedRequest;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
 import com.positivity.events.EmitEvent;
 import jakarta.validation.Valid;
@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -33,6 +34,7 @@ public class InvoicePaymentController {
      * @return Updated invoice status
      */
     @PostMapping("/v1/accounting/payments/{paymentId}/applications")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
     @EmitEvent(id = "payment.applied")
     public ResponseEntity<InvoiceStatusResponse> applyPayment(
             @PathVariable String paymentId,
@@ -68,6 +70,7 @@ public class InvoicePaymentController {
      * @return Current invoice status
      */
     @GetMapping("/v1/accounting/invoice/{invoiceId}/status")
+    @PreAuthorize("hasAuthority('accounting:ap:view')")
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
             @PathVariable String invoiceId) {
 
@@ -89,12 +92,14 @@ public class InvoicePaymentController {
     }
 
     @PostMapping("/v1/invoice/invoices")
+    @PreAuthorize("hasAuthority('accounting:ap:view')")
     public ResponseEntity<Void> regenerateInvoiceFromWorkorder(@RequestBody(required = false) Object body) {
         log.info("Stub regenerateInvoiceFromWorkorder");
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @GetMapping("/v1/invoice/rules/{customerId}")
+    @PreAuthorize("hasAuthority('accounting:ap:view')")
     public ResponseEntity<Void> getBillingRules(@PathVariable String customerId) {
         log.info("Stub getBillingRules customerId={}", customerId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();

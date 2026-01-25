@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -18,18 +19,21 @@ public class AccountingController {
     private static final Logger log = LoggerFactory.getLogger(AccountingController.class);
 
     @GetMapping("/traceability/{journalEntryId}")
+    @PreAuthorize("hasAuthority('accounting:je:view')")
     public ResponseEntity<Void> getJournalTraceability(@PathVariable String journalEntryId) {
         log.info("Stub getJournalTraceability journalEntryId={}", journalEntryId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @GetMapping("/payments/{paymentId}/status")
+    @PreAuthorize("hasAuthority('accounting:ap:view')")
     public ResponseEntity<Void> getPaymentStatus(@PathVariable String paymentId) {
         log.info("Stub getPaymentStatus paymentId={}", paymentId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @PostMapping("/payments/{paymentId}/void")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public ResponseEntity<Void> voidPayment(
             @PathVariable String paymentId,
             @RequestBody(required = false) Object body) {
@@ -38,6 +42,7 @@ public class AccountingController {
     }
 
     @PostMapping("/payments/{paymentId}/reverse")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public ResponseEntity<Void> reversePayment(
             @PathVariable String paymentId,
             @RequestBody(required = false) Object body) {
@@ -46,18 +51,21 @@ public class AccountingController {
     }
 
     @PostMapping("/glAccounts")
+    @PreAuthorize("hasAuthority('accounting:coa:create')")
     public ResponseEntity<Void> createGlAccount(@RequestBody(required = false) Object request) {
         log.info("Stub createGlAccount");
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @GetMapping("/glAccounts/{accountId}")
+    @PreAuthorize("hasAuthority('accounting:coa:view')")
     public ResponseEntity<Void> getGlAccount(@PathVariable String accountId) {
         log.info("Stub getGlAccount accountId={}", accountId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
     @PutMapping("/glAccounts/{accountId}")
+    @PreAuthorize("hasAuthority('accounting:coa:edit')")
     public ResponseEntity<Void> manageGlAccount(
             @PathVariable String accountId,
             @RequestBody(required = false) Object request) {

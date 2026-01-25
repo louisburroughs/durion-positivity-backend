@@ -82,38 +82,6 @@ public class Estimate {
         updatedAt = LocalDateTime.now();
     }
 
-    public enum EstimateStatus {
-        DRAFT,
-        APPROVED,
-        DECLINED,
-        EXPIRED
-    }
-
-    /**
-     * Check if estimate can be transitioned to approved state
-     */
-    public boolean canApprove() {
-        return status == EstimateStatus.DRAFT;
-    }
-
-    /**
-     * Check if estimate can be transitioned to declined state
-     */
-    public boolean canDecline() {
-        return status == EstimateStatus.DRAFT || status == EstimateStatus.APPROVED;
-    }
-
-    /**
-     * Check if estimate can be reopened (transitioned from declined to draft)
-     */
-    public boolean canReopen(int configuredExpiryDays) {
-        if (status != EstimateStatus.DECLINED || declinedAt == null) {
-            return false;
-        }
-        LocalDateTime expiryDate = declinedAt.plusDays(configuredExpiryDays);
-        return LocalDateTime.now().isBefore(expiryDate);
-    }
-
     /**
      * Backward compatibility - shopId is now locationId
      */
@@ -128,5 +96,30 @@ public class Estimate {
     @Deprecated
     public void setShopId(Long shopId) {
         this.locationId = shopId;
+    }
+
+    /**
+     * Check if estimate can be transitioned to approved state.
+     */
+    public boolean canApprove() {
+        return status == EstimateStatus.PENDING_APPROVAL;
+    }
+
+    /**
+     * Check if estimate can be transitioned to declined state.
+     */
+    public boolean canDecline() {
+        return status == EstimateStatus.PENDING_APPROVAL || status == EstimateStatus.APPROVED;
+    }
+
+    /**
+     * Check if estimate can be reopened (transitioned from declined to draft).
+     */
+    public boolean canReopen(int configuredExpiryDays) {
+        if (status != EstimateStatus.DECLINED || declinedAt == null) {
+            return false;
+        }
+        LocalDateTime expiryDate = declinedAt.plusDays(configuredExpiryDays);
+        return LocalDateTime.now().isBefore(expiryDate);
     }
 }
