@@ -3,6 +3,7 @@ package com.positivity.workorder.service;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.entity.AuditEvent;
 import com.positivity.workorder.entity.Estimate;
+import com.positivity.workorder.entity.EstimateStatus;
 import com.positivity.workorder.entity.Workorder;
 import com.positivity.workorder.entity.WorkorderStatus;
 import com.positivity.workorder.event.EstimateRevisedEvent;
@@ -60,7 +61,7 @@ public class WorkorderService {
                     .orElseThrow(
                             () -> new IllegalArgumentException("Estimate not found: " + workorder.getEstimateId()));
 
-            if (estimate.getStatus() != Estimate.EstimateStatus.APPROVED) {
+            if (estimate.getStatus() != EstimateStatus.APPROVED) {
                 throw new IllegalArgumentException(
                         "Workorder can only be created from an approved estimate. Current status: "
                                 + estimate.getStatus());

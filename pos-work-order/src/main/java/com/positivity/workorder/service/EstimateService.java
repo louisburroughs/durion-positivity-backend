@@ -4,6 +4,7 @@ import com.positivity.workorder.dto.CreateEstimateRequest;
 import com.positivity.workorder.entity.ApprovalConfiguration;
 import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.EstimateSequence;
+import com.positivity.workorder.entity.EstimateStatus;
 import com.positivity.workorder.entity.Workorder;
 import com.positivity.workorder.event.EstimateRevisedEvent;
 import com.positivity.workorder.repository.*;
@@ -104,7 +105,7 @@ public class EstimateService {
                 .locationId(locationId)
                 .currencyUomId(currencyUomId)
                 .taxRegionId(taxRegionId)
-                .status(Estimate.EstimateStatus.DRAFT)
+                .status(EstimateStatus.DRAFT)
                 .createdByUserId(createdByUserId)
                 .createdAt(LocalDateTime.now())
                 .approvalConfigurationId(config.getId())
@@ -128,7 +129,7 @@ public class EstimateService {
     @Deprecated
     @Transactional
     public Estimate createEstimate(Estimate estimate) {
-        estimate.setStatus(Estimate.EstimateStatus.DRAFT);
+        estimate.setStatus(EstimateStatus.DRAFT);
         estimate.setCreatedAt(LocalDateTime.now());
 
         // Get approval configuration for this customer/location
@@ -174,7 +175,7 @@ public class EstimateService {
             throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
         }
 
-        estimate.setStatus(Estimate.EstimateStatus.APPROVED);
+        estimate.setStatus(EstimateStatus.APPROVED);
         estimate.setApprovedAt(LocalDateTime.now());
         estimate.setApprovedBy(approvedByUserId);
 
@@ -198,7 +199,7 @@ public class EstimateService {
             throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
         }
 
-        estimate.setStatus(Estimate.EstimateStatus.APPROVED);
+        estimate.setStatus(EstimateStatus.APPROVED);
         estimate.setApprovedAt(LocalDateTime.now());
         estimate.setApprovedBy(customerId); // Using customerId as approver
         estimate.setSignatureData(signatureData);
@@ -219,7 +220,7 @@ public class EstimateService {
             throw new IllegalStateException("Estimate cannot be declined in current state: " + estimate.getStatus());
         }
 
-        estimate.setStatus(Estimate.EstimateStatus.DECLINED);
+        estimate.setStatus(EstimateStatus.DECLINED);
         estimate.setDeclinedAt(LocalDateTime.now());
         estimate.setDeclineReason(reason);
 
@@ -243,7 +244,7 @@ public class EstimateService {
                     "Estimate cannot be reopened - either not declined or expiry period has passed");
         }
 
-        estimate.setStatus(Estimate.EstimateStatus.DRAFT);
+        estimate.setStatus(EstimateStatus.DRAFT);
         estimate.setDeclinedAt(null);
         estimate.setDeclineReason(null);
         estimate.setExpiresAt(null);
