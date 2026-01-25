@@ -3,8 +3,8 @@ package com.positivity.accounting.service;
 import com.positivity.accounting.domain.InvoiceStatusView;
 import com.positivity.accounting.domain.PaymentAppliedEvent;
 import com.positivity.accounting.domain.PaymentStatus;
-import com.positivity.accounting.dto.InvoiceStatusResponse;
-import com.positivity.accounting.dto.PaymentAppliedRequest;
+import com.positivity.accounting.entity.InvoiceStatusResponse;
+import com.positivity.accounting.entity.PaymentAppliedRequest;
 import com.positivity.accounting.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.repository.PaymentAppliedEventRepository;
 import org.slf4j.Logger;
@@ -23,13 +23,13 @@ import java.time.Instant;
  */
 @Service
 public class InvoicePaymentStatusService {
-    
+
     private static final Logger log = LoggerFactory.getLogger(InvoicePaymentStatusService.class);
-    
+
     private final PaymentAppliedEventRepository paymentEventRepository;
     private final InvoiceStatusViewRepository statusViewRepository;
     private final IdempotencyService idempotencyService;
-    
+
     public InvoicePaymentStatusService(
             PaymentAppliedEventRepository paymentEventRepository,
             InvoiceStatusViewRepository statusViewRepository,
@@ -38,88 +38,81 @@ public class InvoicePaymentStatusService {
         this.statusViewRepository = statusViewRepository;
         this.idempotencyService = idempotencyService;
     }
-    
+
     /**
      * Process a payment applied event and update invoice status.
      * Implements retry logic for transient failures.
      */
     @Transactional
-    @Retryable(
-        maxAttempts = 3,
-        backoff = @Backoff(delay = 1000, multiplier = 2),
-        retryFor = {Exception.class}
-    )
+    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2), retryFor = { Exception.class })
     public InvoiceStatusResponse processPaymentApplied(PaymentAppliedRequest request) {
-        log.info("Processing payment for invoice {} with idempotency key {}", 
-                 request.getInvoiceId(), request.getIdempotencyKey());
-        
+        log.info("Processing payment for invoice {} with idempotency key {}",
+                request.getInvoiceId(), request.getIdempotencyKey());
+
         // Check idempotency
         if (idempotencyService.isKeyProcessed(request.getIdempotencyKey())) {
             log.info("Payment already processed - returning existing status");
             return getInvoiceStatus(request.getInvoiceId());
         }
-        
+
         // Determine payment status
         PaymentStatus paymentStatus = determinePaymentStatus(
-            request.getPaymentAmount(),
-            request.getInvoiceTotal(),
-            request.isPaymentFailed()
-        );
-        
+                request.getPaymentAmount(),
+                request.getInvoiceTotal(),
+                request.isPaymentFailed());
+
         // Create and save payment event
         PaymentAppliedEvent event = new PaymentAppliedEvent(
-            request.getInvoiceId(),
-            request.getTransactionReference(),
-            request.getPaymentAmount(),
-            request.getInvoiceTotal(),
-            paymentStatus,
-            request.getIdempotencyKey()
-        );
+                request.getInvoiceId(),
+                request.getTransactionReference(),
+                request.getPaymentAmount(),
+                request.getInvoiceTotal(),
+                paymentStatus,
+                request.getIdempotencyKey());
         paymentEventRepository.save(event);
-        log.info("Saved payment event for invoice {} with status {}", 
-                 request.getInvoiceId(), paymentStatus);
-        
+        log.info("Saved payment event for invoice {} with status {}",
+                request.getInvoiceId(), paymentStatus);
+
         // Update invoice status view
         updateInvoiceStatusView(request.getInvoiceId(), request.getTransactionReference());
-        
+
         // Register idempotency key
         idempotencyService.registerKey(request.getIdempotencyKey(), request.getInvoiceId());
-        
+
         return getInvoiceStatus(request.getInvoiceId());
     }
-    
+
     /**
      * Get current status of an invoice.
      */
     @Transactional(readOnly = true)
     public InvoiceStatusResponse getInvoiceStatus(String invoiceId) {
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
-            .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
-        
+                .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
+
         return new InvoiceStatusResponse(
-            statusView.getInvoiceId(),
-            statusView.getCurrentStatus(),
-            statusView.getTotalPaid(),
-            statusView.getInvoiceTotal(),
-            statusView.getLatestTransactionReference(),
-            statusView.getLastUpdated()
-        );
+                statusView.getInvoiceId(),
+                statusView.getCurrentStatus(),
+                statusView.getTotalPaid(),
+                statusView.getInvoiceTotal(),
+                statusView.getLatestTransactionReference(),
+                statusView.getLastUpdated());
     }
-    
+
     /**
      * Determine payment status based on amounts.
      */
     private PaymentStatus determinePaymentStatus(
-            BigDecimal paymentAmount, 
+            BigDecimal paymentAmount,
             BigDecimal invoiceTotal,
             boolean paymentFailed) {
-        
+
         if (paymentFailed) {
             return PaymentStatus.FAILED;
         }
-        
+
         int comparison = paymentAmount.compareTo(invoiceTotal);
-        
+
         if (comparison >= 0) {
             return PaymentStatus.PAID;
         } else if (paymentAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -128,41 +121,41 @@ public class InvoicePaymentStatusService {
             return PaymentStatus.UNPAID;
         }
     }
-    
+
     /**
      * Update the invoice status view based on all payment events.
      */
     private void updateInvoiceStatusView(String invoiceId, String latestTransactionRef) {
         // Calculate total paid (excluding failed payments)
         BigDecimal totalPaid = paymentEventRepository.calculateTotalPaid(invoiceId);
-        
+
         // Get invoice total from latest event
         PaymentAppliedEvent latestEvent = paymentEventRepository
-            .findByInvoiceIdOrderByTimestampDesc(invoiceId)
-            .stream()
-            .findFirst()
-            .orElseThrow(() -> new RuntimeException("No payment events found for invoice: " + invoiceId));
-        
+                .findByInvoiceIdOrderByTimestampDesc(invoiceId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No payment events found for invoice: " + invoiceId));
+
         BigDecimal invoiceTotal = latestEvent.getInvoiceTotal();
-        
+
         // Determine overall status
         PaymentStatus overallStatus = determineOverallStatus(totalPaid, invoiceTotal);
-        
+
         // Update or create status view
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
-            .orElse(new InvoiceStatusView(invoiceId, overallStatus, totalPaid, invoiceTotal));
-        
+                .orElse(new InvoiceStatusView(invoiceId, overallStatus, totalPaid, invoiceTotal));
+
         statusView.setCurrentStatus(overallStatus);
         statusView.setTotalPaid(totalPaid);
         statusView.setInvoiceTotal(invoiceTotal);
         statusView.setLatestTransactionReference(latestTransactionRef);
         statusView.setLastUpdated(Instant.now());
-        
+
         statusViewRepository.save(statusView);
         log.info("Updated invoice status view for {} - status: {}, totalPaid: {}, total: {}",
-                 invoiceId, overallStatus, totalPaid, invoiceTotal);
+                invoiceId, overallStatus, totalPaid, invoiceTotal);
     }
-    
+
     /**
      * Determine overall payment status based on cumulative payments.
      */

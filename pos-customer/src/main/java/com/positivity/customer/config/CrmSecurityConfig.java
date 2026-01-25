@@ -13,7 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * CRM Service Security Configuration
- * 
+ *
  * Enables method-level security (via @PreAuthorize) for permission-based access
  * control.
  * All CRM endpoints are protected and require appropriate permissions from the

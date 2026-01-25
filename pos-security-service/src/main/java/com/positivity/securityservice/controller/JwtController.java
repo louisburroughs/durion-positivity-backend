@@ -73,6 +73,15 @@ public class JwtController {
         return ResponseEntity.ok(roles);
     }
 
+    @GetMapping("/authorities")
+    public ResponseEntity<Set<String>> getAuthorities(@RequestParam String token) {
+        if (!jwtService.validateToken(token)) {
+            return ResponseEntity.status(401).build();
+        }
+        Set<String> authorities = jwtService.getAuthoritiesFromToken(token);
+        return ResponseEntity.ok(authorities);
+    }
+
     @GetMapping("/subject")
     public ResponseEntity<String> getSubject(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {

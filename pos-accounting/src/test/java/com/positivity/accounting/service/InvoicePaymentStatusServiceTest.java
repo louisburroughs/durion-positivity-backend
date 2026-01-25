@@ -3,8 +3,8 @@ package com.positivity.accounting.service;
 import com.positivity.accounting.domain.InvoiceStatusView;
 import com.positivity.accounting.domain.PaymentAppliedEvent;
 import com.positivity.accounting.domain.PaymentStatus;
-import com.positivity.accounting.dto.InvoiceStatusResponse;
-import com.positivity.accounting.dto.PaymentAppliedRequest;
+import com.positivity.accounting.entity.InvoiceStatusResponse;
+import com.positivity.accounting.entity.PaymentAppliedRequest;
 import com.positivity.accounting.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.repository.PaymentAppliedEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,25 +25,25 @@ import static org.junit.jupiter.api.Assertions.*;
 @ActiveProfiles("test")
 @Transactional
 class InvoicePaymentStatusServiceTest {
-    
+
     @Autowired
     private InvoicePaymentStatusService paymentStatusService;
-    
+
     @Autowired
     private PaymentAppliedEventRepository paymentEventRepository;
-    
+
     @Autowired
     private InvoiceStatusViewRepository statusViewRepository;
-    
+
     @Autowired
     private IdempotencyService idempotencyService;
-    
+
     @BeforeEach
     void setUp() {
         paymentEventRepository.deleteAll();
         statusViewRepository.deleteAll();
     }
-    
+
     @Test
     void testFullPayment() {
         // Arrange
@@ -54,10 +54,10 @@ class InvoicePaymentStatusServiceTest {
         request.setInvoiceTotal(new BigDecimal("100.00"));
         request.setIdempotencyKey("key-001");
         request.setPaymentFailed(false);
-        
+
         // Act
         InvoiceStatusResponse response = paymentStatusService.processPaymentApplied(request);
-        
+
         // Assert
         assertNotNull(response);
         assertEquals("INV-001", response.getInvoiceId());
@@ -65,7 +65,7 @@ class InvoicePaymentStatusServiceTest {
         assertEquals(0, response.getTotalPaid().compareTo(new BigDecimal("100.00")));
         assertEquals(0, response.getRemainingBalance().compareTo(BigDecimal.ZERO));
     }
-    
+
     @Test
     void testPartialPayment() {
         // Arrange
@@ -76,17 +76,17 @@ class InvoicePaymentStatusServiceTest {
         request.setInvoiceTotal(new BigDecimal("100.00"));
         request.setIdempotencyKey("key-002");
         request.setPaymentFailed(false);
-        
+
         // Act
         InvoiceStatusResponse response = paymentStatusService.processPaymentApplied(request);
-        
+
         // Assert
         assertNotNull(response);
         assertEquals(PaymentStatus.PARTIALLY_PAID, response.getStatus());
         assertEquals(0, response.getTotalPaid().compareTo(new BigDecimal("50.00")));
         assertEquals(0, response.getRemainingBalance().compareTo(new BigDecimal("50.00")));
     }
-    
+
     @Test
     void testMultiplePartialPayments() {
         // Arrange - First payment
@@ -96,11 +96,11 @@ class InvoicePaymentStatusServiceTest {
         request1.setPaymentAmount(new BigDecimal("30.00"));
         request1.setInvoiceTotal(new BigDecimal("100.00"));
         request1.setIdempotencyKey("key-003-1");
-        
+
         // Act - First payment
         InvoiceStatusResponse response1 = paymentStatusService.processPaymentApplied(request1);
         assertEquals(PaymentStatus.PARTIALLY_PAID, response1.getStatus());
-        
+
         // Arrange - Second payment
         PaymentAppliedRequest request2 = new PaymentAppliedRequest();
         request2.setInvoiceId("INV-003");
@@ -108,15 +108,15 @@ class InvoicePaymentStatusServiceTest {
         request2.setPaymentAmount(new BigDecimal("70.00"));
         request2.setInvoiceTotal(new BigDecimal("100.00"));
         request2.setIdempotencyKey("key-003-2");
-        
+
         // Act - Second payment
         InvoiceStatusResponse response2 = paymentStatusService.processPaymentApplied(request2);
-        
+
         // Assert
         assertEquals(PaymentStatus.PAID, response2.getStatus());
         assertEquals(0, response2.getTotalPaid().compareTo(new BigDecimal("100.00")));
     }
-    
+
     @Test
     void testFailedPayment() {
         // Arrange
@@ -127,16 +127,16 @@ class InvoicePaymentStatusServiceTest {
         request.setInvoiceTotal(new BigDecimal("100.00"));
         request.setIdempotencyKey("key-004");
         request.setPaymentFailed(true);
-        
+
         // Act
         InvoiceStatusResponse response = paymentStatusService.processPaymentApplied(request);
-        
+
         // Assert - Failed payments don't count toward total
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId("INV-004").orElseThrow();
         assertEquals(PaymentStatus.UNPAID, statusView.getCurrentStatus());
         assertEquals(0, statusView.getTotalPaid().compareTo(BigDecimal.ZERO));
     }
-    
+
     @Test
     void testIdempotency() {
         // Arrange
@@ -146,20 +146,20 @@ class InvoicePaymentStatusServiceTest {
         request.setPaymentAmount(new BigDecimal("100.00"));
         request.setInvoiceTotal(new BigDecimal("100.00"));
         request.setIdempotencyKey("key-005");
-        
+
         // Act - Process same payment twice
         InvoiceStatusResponse response1 = paymentStatusService.processPaymentApplied(request);
         InvoiceStatusResponse response2 = paymentStatusService.processPaymentApplied(request);
-        
+
         // Assert - Only one payment event should be created
         long eventCount = paymentEventRepository.findByInvoiceIdOrderByTimestampDesc("INV-005").size();
         assertEquals(1, eventCount);
-        
+
         // Both responses should be identical
         assertEquals(response1.getStatus(), response2.getStatus());
         assertEquals(response1.getTotalPaid(), response2.getTotalPaid());
     }
-    
+
     @Test
     void testGetInvoiceStatus() {
         // Arrange - Create an invoice with payment
@@ -169,12 +169,12 @@ class InvoicePaymentStatusServiceTest {
         request.setPaymentAmount(new BigDecimal("75.00"));
         request.setInvoiceTotal(new BigDecimal("100.00"));
         request.setIdempotencyKey("key-006");
-        
+
         paymentStatusService.processPaymentApplied(request);
-        
+
         // Act
         InvoiceStatusResponse response = paymentStatusService.getInvoiceStatus("INV-006");
-        
+
         // Assert
         assertNotNull(response);
         assertEquals("INV-006", response.getInvoiceId());
