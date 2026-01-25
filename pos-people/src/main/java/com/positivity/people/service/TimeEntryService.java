@@ -111,4 +111,94 @@ public class TimeEntryService {
 
         return results;
     }
+
+    @Transactional
+    public List<TimeEntryDecisionResult> rejectEntries(List<String> timeEntryIds, String rejectorUserId,
+            Map<String, String> rejectionReasons, java.util.Set<String> permissions, String correlationId) {
+        List<TimeEntryDecisionResult> results = new ArrayList<>();
+        if (timeEntryIds == null || timeEntryIds.isEmpty())
+            return results;
+
+        List<TimeEntry> entries = repository.findByTimeEntryIdIn(timeEntryIds);
+        Map<String, TimeEntry> byId = entries.stream().collect(Collectors.toMap(TimeEntry::getTimeEntryId, e -> e));
+
+        for (String id : timeEntryIds) {
+            TimeEntry e = byId.get(id);
+            if (e == null) {
+                results.add(new TimeEntryDecisionResult(id, false, "NOT_FOUND", "Time entry not found"));
+                try {
+                    TimeEntryAudit audit = new TimeEntryAudit();
+                    audit.setTimeEntryId(id);
+                    audit.setAction("REJECT_ATTEMPT_NOT_FOUND");
+                    audit.setActorId(rejectorUserId);
+                    audit.setCorrelationId(correlationId);
+                    audit.setDetails("Time entry not found during reject attempt");
+                    auditRepository.save(audit);
+                } catch (Exception ignore) {
+                }
+                continue;
+            }
+
+            com.positivity.people.model.TimeEntryStatus status = e.getStatus();
+            if (status == null) {
+                results.add(new TimeEntryDecisionResult(id, false, "ENTRY_NOT_PENDING",
+                        "Time entry not in pending/submitted state"));
+                continue;
+            }
+            // Accept submitted or pending approval states
+            if (status != com.positivity.people.model.TimeEntryStatus.SUBMITTED
+                    && status != com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL) {
+                results.add(new TimeEntryDecisionResult(id, false, "ENTRY_NOT_PENDING",
+                        "Time entry not in pending/submitted state"));
+                continue;
+            }
+
+            // permission check
+            boolean allowed = false;
+            if (permissions != null) {
+                if (permissions.contains("people:timeEntry:reject") || permissions.contains("admin")) {
+                    allowed = true;
+                }
+            }
+            if (!allowed) {
+                results.add(new TimeEntryDecisionResult(id, false, "FORBIDDEN", "Rejector lacks reject permission"));
+                try {
+                    TimeEntryAudit audit = new TimeEntryAudit();
+                    audit.setTimeEntryId(id);
+                    audit.setAction("REJECT_FORBIDDEN");
+                    audit.setActorId(rejectorUserId);
+                    audit.setCorrelationId(correlationId);
+                    audit.setDetails("Permission denied");
+                    auditRepository.save(audit);
+                } catch (Exception ignore) {
+                }
+                continue;
+            }
+
+            // perform rejection
+            e.setStatus(com.positivity.people.model.TimeEntryStatus.REJECTED);
+            e.setRejectedBy(rejectorUserId);
+            e.setRejectedAt(Instant.now());
+            String rejectionReason = rejectionReasons.get(id);
+            e.setRejectionReason(rejectionReason != null ? rejectionReason : "");
+            repository.save(e);
+
+            // record audit success
+            try {
+                TimeEntryAudit audit = new TimeEntryAudit();
+                audit.setTimeEntryId(id);
+                audit.setAction("REJECTED");
+                audit.setActorId(rejectorUserId);
+                audit.setCorrelationId(correlationId);
+                audit.setDetails(
+                        "Rejected via batch API. Reason: " + (rejectionReason != null ? rejectionReason : "N/A"));
+                auditRepository.save(audit);
+            } catch (Exception ignore) {
+            }
+
+            results.add(new TimeEntryDecisionResult(id, true, null, null));
+        }
+
+        return results;
+    }
 }

@@ -33,6 +33,15 @@ public class TimeEntry {
     @Column(name = "approved_at")
     private Instant approvedAt;
 
+    @Column(name = "rejected_by")
+    private String rejectedBy;
+
+    @Column(name = "rejected_at")
+    private Instant rejectedAt;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
     public String getTimeEntryId() {
         return timeEntryId;
     }
@@ -79,5 +88,29 @@ public class TimeEntry {
 
     public void setApprovedAt(Instant approvedAt) {
         this.approvedAt = approvedAt;
+    }
+
+    public String getRejectedBy() {
+        return rejectedBy;
+    }
+
+    public void setRejectedBy(String rejectedBy) {
+        this.rejectedBy = rejectedBy;
+    }
+
+    public Instant getRejectedAt() {
+        return rejectedAt;
+    }
+
+    public void setRejectedAt(Instant rejectedAt) {
+        this.rejectedAt = rejectedAt;
+    }
+
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+
+    public void setRejectionReason(String rejectionReason) {
+        this.rejectionReason = rejectionReason;
     }
 }

@@ -20,12 +20,14 @@ public class TimeEntryAdjustmentControllerTest {
     private TimeEntryAdjustmentRepository repo;
     private TimeEntryAdjustmentService service;
     private TimeEntryAdjustmentController controller;
+    private com.positivity.people.repository.TimeEntryRepository timeEntryRepo;
 
     @BeforeEach
     public void setup() {
         repo = mock(TimeEntryAdjustmentRepository.class);
         service = mock(TimeEntryAdjustmentService.class);
-        controller = new TimeEntryAdjustmentController(repo, service);
+        timeEntryRepo = mock(com.positivity.people.repository.TimeEntryRepository.class);
+        controller = new TimeEntryAdjustmentController(repo, service, timeEntryRepo);
     }
 
     @Test
@@ -43,6 +45,12 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void createAdjustment_withMinutesDelta_succeeds() {
+        // Mock time entry lookup
+        com.positivity.people.entity.TimeEntry te = new com.positivity.people.entity.TimeEntry();
+        te.setTimeEntryId("T1");
+        te.setStatus(com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL);
+        when(timeEntryRepo.findById("T1")).thenReturn(java.util.Optional.of(te));
+
         when(repo.save(any())).thenAnswer(inv -> {
             TimeEntryAdjustment in = inv.getArgument(0);
             in.setAdjustmentId(UUID.randomUUID());
@@ -64,6 +72,12 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void createAdjustment_withProposedTimes_succeeds() {
+        // Mock time entry lookup
+        com.positivity.people.entity.TimeEntry te = new com.positivity.people.entity.TimeEntry();
+        te.setTimeEntryId("T2");
+        te.setStatus(com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL);
+        when(timeEntryRepo.findById("T2")).thenReturn(java.util.Optional.of(te));
+
         when(repo.save(any())).thenAnswer(inv -> {
             TimeEntryAdjustment in = inv.getArgument(0);
             in.setAdjustmentId(UUID.randomUUID());
@@ -85,6 +99,12 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void createAdjustment_withBothMinutesAndTimes_returnsBadRequest() {
+        // Mock time entry lookup
+        com.positivity.people.entity.TimeEntry te = new com.positivity.people.entity.TimeEntry();
+        te.setTimeEntryId("T3");
+        te.setStatus(com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL);
+        when(timeEntryRepo.findById("T3")).thenReturn(java.util.Optional.of(te));
+
         com.positivity.people.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.dto.TimeEntryAdjustmentRequest();
         req.setTimeEntryId("T3");
         req.setReasonCode("RC3");
@@ -100,9 +120,74 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void createAdjustment_withNeitherMinutesNorTimes_returnsBadRequest() {
+        // Mock time entry lookup
+        com.positivity.people.entity.TimeEntry te = new com.positivity.people.entity.TimeEntry();
+        te.setTimeEntryId("T4");
+        te.setStatus(com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL);
+        when(timeEntryRepo.findById("T4")).thenReturn(java.util.Optional.of(te));
+
         com.positivity.people.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.dto.TimeEntryAdjustmentRequest();
         req.setTimeEntryId("T4");
         req.setReasonCode("RC4");
+
+        ResponseEntity<com.positivity.people.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        assertEquals(400, resp.getStatusCodeValue());
+        assertNotNull(resp.getBody());
+        assertFalse(resp.getBody().isSuccess());
+    }
+
+    @Test
+    public void createAdjustment_withNonexistentTimeEntry_returnsNotFound() {
+        when(timeEntryRepo.findById("NONEXISTENT")).thenReturn(java.util.Optional.empty());
+
+        com.positivity.people.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.dto.TimeEntryAdjustmentRequest();
+        req.setTimeEntryId("NONEXISTENT");
+        req.setReasonCode("RC5");
+        req.setMinutesDelta(10);
+
+        ResponseEntity<com.positivity.people.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        assertEquals(404, resp.getStatusCodeValue());
+    }
+
+    @Test
+    public void createAdjustment_withNonPendingApprovalStatus_returnsInvalidState() {
+        // Mock time entry with APPROVED status (not PENDING_APPROVAL)
+        com.positivity.people.entity.TimeEntry te = new com.positivity.people.entity.TimeEntry();
+        te.setTimeEntryId("T5");
+        te.setStatus(com.positivity.people.model.TimeEntryStatus.APPROVED);
+        when(timeEntryRepo.findById("T5")).thenReturn(java.util.Optional.of(te));
+
+        com.positivity.people.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.dto.TimeEntryAdjustmentRequest();
+        req.setTimeEntryId("T5");
+        req.setReasonCode("RC6");
+        req.setMinutesDelta(10);
+
+        ResponseEntity<com.positivity.people.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        assertEquals(422, resp.getStatusCodeValue());
+        assertNotNull(resp.getBody());
+        assertFalse(resp.getBody().isSuccess());
+    }
+
+    @Test
+    public void createAdjustment_withoutReasonCode_returnsBadRequest() {
+        com.positivity.people.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.dto.TimeEntryAdjustmentRequest();
+        req.setTimeEntryId("T5");
+        req.setMinutesDelta(10);
+        req.setCreatedBy("tester");
+
+        ResponseEntity<com.positivity.people.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        assertEquals(400, resp.getStatusCodeValue());
+        assertNotNull(resp.getBody());
+        assertFalse(resp.getBody().isSuccess());
+    }
+
+    @Test
+    public void createAdjustment_withBlankReasonCode_returnsBadRequest() {
+        com.positivity.people.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.dto.TimeEntryAdjustmentRequest();
+        req.setTimeEntryId("T6");
+        req.setReasonCode("   ");
+        req.setMinutesDelta(10);
+        req.setCreatedBy("tester");
 
         ResponseEntity<com.positivity.people.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
         assertEquals(400, resp.getStatusCodeValue());
