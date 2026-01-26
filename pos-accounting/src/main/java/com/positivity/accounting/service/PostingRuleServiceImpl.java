@@ -35,7 +35,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class PostingRuleService {
+public class PostingRuleServiceImpl {
 
     private final PostingRuleSetRepository ruleSetRepository;
 
@@ -61,7 +61,7 @@ public class PostingRuleService {
             ruleSet.setVersionNumber(1);
         }
 
-        ruleSet.setId(UUID.randomUUID().toString());
+        ruleSet.setPostingRuleSetId(UUID.randomUUID().toString());
         ruleSet.setStatus("DRAFT");
         ruleSet.setCreatedAt(LocalDateTime.now());
         ruleSet.setModifiedAt(LocalDateTime.now());

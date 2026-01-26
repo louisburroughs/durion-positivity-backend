@@ -1,5 +1,7 @@
 package com.positivity.accounting.service;
 
+import java.time.LocalDateTime;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -83,5 +85,10 @@ public class GLAccountService {
      */
     public void validateGLAccount(Object request) {
         log.info("Stub: validateGLAccount");
+    }
+
+    public void validateAccountForPosting(String glAccountId, LocalDateTime transactionDate) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'validateAccountForPosting'");
     }
 }

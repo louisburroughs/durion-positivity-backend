@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -142,5 +143,10 @@ public class JournalEntryLine {
 
     public void setDimensions(Map<String, String> dimensions) {
         this.dimensions = dimensions;
+    }
+
+    public void setCreatedAt(Instant now) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setCreatedAt'");
     }
 }

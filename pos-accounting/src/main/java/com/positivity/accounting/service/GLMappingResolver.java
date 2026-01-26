@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 
@@ -58,7 +59,7 @@ public class GLMappingResolver {
      * @throws IllegalArgumentException if no valid mapping found
      */
     public String resolveGLAccount(String postingCategoryId, String mappingKeyId,
-            LocalDate transactionDate,
+            LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
 
         // Attempt resolution in order of specificity
@@ -101,7 +102,7 @@ public class GLMappingResolver {
      * All dimensions in context must match dimensions in mapping.
      */
     private Optional<String> resolveWithDimensions(String postingCategoryId, String mappingKeyId,
-            LocalDate transactionDate,
+            LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
             return Optional.empty();
@@ -119,7 +120,7 @@ public class GLMappingResolver {
      * Try progressively less specific dimensional combinations until match found.
      */
     private Optional<String> resolveFallback(String postingCategoryId, String mappingKeyId,
-            LocalDate transactionDate,
+            LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
             return Optional.empty();
@@ -209,7 +210,7 @@ public class GLMappingResolver {
      * @return effective GL account ID
      */
     public String getEffectiveAccount(String postingCategoryId, String mappingKeyId,
-            LocalDate transactionDate) {
+            LocalDateTime transactionDate) {
         return mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
                 .map(GLMapping::getGlAccountId)
                 .orElseThrow(() -> new IllegalArgumentException(

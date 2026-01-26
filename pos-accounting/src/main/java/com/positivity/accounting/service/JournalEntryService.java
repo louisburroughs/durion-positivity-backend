@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -181,7 +182,7 @@ public class JournalEntryService {
         // Create reversal entry with inverted debits/credits
         JournalEntry reversal = new JournalEntry();
         reversal.setJournalEntryId(UUID.randomUUID().toString());
-        reversal.setTransactionDate(LocalDate.now());
+        reversal.setTransactionDate(LocalDateTime.now());
         reversal.setDescription("Reversal of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
         reversal.setSourceEventId(original.getSourceEventId());
         reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
@@ -193,12 +194,12 @@ public class JournalEntryService {
         List<JournalEntryLine> reversalLines = new java.util.ArrayList<>();
         for (JournalEntryLine line : original.getLines()) {
             JournalEntryLine reversalLine = new JournalEntryLine();
-            reversalLine.setJournalEntryLineId(UUID.randomUUID().toString());
+            reversalLine.setLineId(UUID.randomUUID().toString());
             reversalLine.setJournalEntryId(reversal.getJournalEntryId());
             reversalLine.setGlAccountId(line.getGlAccountId());
             reversalLine.setDebitAmount(line.getCreditAmount()); // Swap
             reversalLine.setCreditAmount(line.getDebitAmount()); // Swap
-            reversalLine.setDescription("Reversal of line " + line.getJournalEntryLineId());
+            reversalLine.setDescription("Reversal of line " + line.getLineId());
             reversalLine.setCreatedAt(Instant.now());
             reversalLines.add(reversalLine);
         }
