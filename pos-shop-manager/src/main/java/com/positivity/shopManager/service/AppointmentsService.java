@@ -11,15 +11,20 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AppointmentsService {
 
-    public AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey) {
-        log.info("[AppointmentsService] create idempotencyKey={}, request={}", idempotencyKey, request);
+    public AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey, String correlationId) {
+        log.info("[AppointmentsService] create idempotencyKey={}, correlationId={}, request={}", idempotencyKey,
+                correlationId, request);
         // TODO: Implement appointment creation orchestration (ShopMgmt domain)
+        // correlationId should be propagated to downstream services and included in
+        // error responses
         return null; // Placeholder, controller will return 501
     }
 
-    public AppointmentResponse getById(String appointmentId) {
-        log.info("[AppointmentsService] getById appointmentId={}", appointmentId);
+    public AppointmentResponse getById(String appointmentId, String correlationId) {
+        log.info("[AppointmentsService] getById appointmentId={}, correlationId={}", appointmentId, correlationId);
         // TODO: Implement appointment retrieval orchestration
+        // correlationId should be propagated to downstream services and included in
+        // error responses
         return null; // Placeholder, controller will return 501
     }
 }
