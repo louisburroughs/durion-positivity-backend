@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
@@ -45,10 +45,10 @@ public class GLMapping {
     private String glAccountId;
 
     @Column(name = "effective_from", nullable = false)
-    private LocalDate effectiveFrom;
+    private LocalDateTime effectiveFrom;
 
     @Column(name = "effective_to")
-    private LocalDate effectiveTo;
+    private LocalDateTime effectiveTo;
 
     /**
      * Dimensions for GL posting (businessUnitId, locationId, departmentId,
@@ -103,19 +103,19 @@ public class GLMapping {
         this.glAccountId = glAccountId;
     }
 
-    public LocalDate getEffectiveFrom() {
+    public LocalDateTime getEffectiveFrom() {
         return effectiveFrom;
     }
 
-    public void setEffectiveFrom(LocalDate effectiveFrom) {
+    public void setEffectiveFrom(LocalDateTime effectiveFrom) {
         this.effectiveFrom = effectiveFrom;
     }
 
-    public LocalDate getEffectiveTo() {
+    public LocalDateTime getEffectiveTo() {
         return effectiveTo;
     }
 
-    public void setEffectiveTo(LocalDate effectiveTo) {
+    public void setEffectiveTo(LocalDateTime effectiveTo) {
         this.effectiveTo = effectiveTo;
     }
 
@@ -156,7 +156,7 @@ public class GLMapping {
      *         effectiveTo is null)
      */
     @Transient
-    public boolean isEffectiveOn(LocalDate transactionDate) {
+    public boolean isEffectiveOn(LocalDateTime transactionDate) {
         if (transactionDate == null) {
             return false;
         }
