@@ -1,4 +1,7 @@
-FROM docker.artifactory.michelin.com/michelin/hub/eclipse-temurin21-jdk-alpine-maven:1.2
-ARG JAR_FILE=target/*.jar
-COPY ${JAR_FILE} app.jar
-ENTRYPOINT ["java","-jar","/app.jar"]
+FROM openjdk:21-jdk-alpine
+VOLUME /tmp
+ARG JAVA_OPTS
+ENV JAVA_OPTS=$JAVA_OPTS
+COPY target/pos-event-receiver-*.jar pos-event-receiver.jar
+EXPOSE 9002
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar pos-event-receiver.jar"]
