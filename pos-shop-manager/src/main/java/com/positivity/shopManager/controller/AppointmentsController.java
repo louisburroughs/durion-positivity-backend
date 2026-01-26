@@ -31,9 +31,11 @@ public class AppointmentsController {
     @PostMapping("/appointments")
     public ResponseEntity<Object> createAppointment(
             @Parameter(description = "Idempotency key for safe retries") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "Correlation ID for request tracing") @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId,
             @Parameter(description = "Appointment creation request body") @RequestBody(required = false) AppointmentCreateRequest request) {
-        log.info("Create appointment requested. Idempotency-Key={}, payload={}", idempotencyKey, request);
-        AppointmentResponse response = appointmentsService.create(request, idempotencyKey);
+        log.info("Create appointment requested. Idempotency-Key={}, X-Correlation-Id={}, payload={}", idempotencyKey,
+                correlationId, request);
+        AppointmentResponse response = appointmentsService.create(request, idempotencyKey, correlationId);
         if (response == null) {
             return ResponseEntity.status(501).build();
         }
@@ -48,9 +50,10 @@ public class AppointmentsController {
     })
     @GetMapping("/appointments/{appointmentId}")
     public ResponseEntity<Object> getAppointment(
-            @Parameter(description = "Appointment ID", example = "appt-123") @PathVariable String appointmentId) {
-        log.info("Load appointment requested. appointmentId={}", appointmentId);
-        AppointmentResponse response = appointmentsService.getById(appointmentId);
+            @Parameter(description = "Appointment ID", example = "appt-123") @PathVariable String appointmentId,
+            @Parameter(description = "Correlation ID for request tracing") @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+        log.info("Load appointment requested. appointmentId={}, X-Correlation-Id={}", appointmentId, correlationId);
+        AppointmentResponse response = appointmentsService.getById(appointmentId, correlationId);
         if (response == null) {
             return ResponseEntity.status(501).build();
         }
