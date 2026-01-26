@@ -246,6 +246,9 @@ jobs:
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
+    env:
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${{ secrets.GRAFANA_TOKEN }}"
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

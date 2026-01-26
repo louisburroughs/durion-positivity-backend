@@ -11,6 +11,10 @@
     <name>pos-accounting</name>
     <description>POS Accounting module</description>
     <packaging>jar</packaging>
+
+    <properties>
+        <opentelemetry.version>1.40.0</opentelemetry.version>
+    </properties>
     
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -37,6 +41,28 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+            <version>${opentelemetry.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
+            <version>${opentelemetry.version}</version>
         </dependency>
         
         <!-- Spring Retry -->
