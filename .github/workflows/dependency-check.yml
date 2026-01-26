@@ -1,0 +1,44 @@
+name: Dependency Update Check
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Monday at midnight
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'temurin'
+
+jobs:
+  check-dependencies:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+      
+      - name: Check for dependency updates
+        run: ./mvnw versions:display-dependency-updates -B
+      
+      - name: Check for plugin updates
+        run: ./mvnw versions:display-plugin-updates -B
+      
+      - name: Generate dependency tree
+        run: ./mvnw dependency:tree -B > dependency-tree.txt
+      
+      - name: Upload dependency reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-reports
+          path: |
+            dependency-tree.txt
+            **/target/versions-maven-plugin.txt
+          retention-days: 30
