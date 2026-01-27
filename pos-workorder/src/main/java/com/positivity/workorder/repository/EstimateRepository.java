@@ -4,6 +4,7 @@ import com.positivity.workorder.entity.Estimate;
 import com.positivity.workorder.entity.EstimateStatus;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -13,7 +14,8 @@ public interface EstimateRepository extends JpaRepository<Estimate, Long> {
     List<Estimate> findByCustomerId(Long customerId);
 
     @Deprecated
-    List<Estimate> findByShopId(Long shopId);
+    @Query("SELECT e FROM Estimate e WHERE e.locationId = ?1")
+    List<Estimate> findByShopId(Long locationId);
 
     List<Estimate> findByLocationId(Long locationId);
 
