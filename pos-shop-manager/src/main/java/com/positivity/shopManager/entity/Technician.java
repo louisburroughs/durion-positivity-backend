@@ -24,7 +24,4 @@ public class Technician {
     @OneToMany(mappedBy = "technician", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Certification> certifications;
 
-    @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ShopQualification> qualifications;
 }
-

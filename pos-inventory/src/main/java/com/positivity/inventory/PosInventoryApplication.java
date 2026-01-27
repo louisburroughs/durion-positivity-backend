@@ -1,14 +1,14 @@
-package com.positivity.price;
+package com.positivity.inventory;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.info.Info;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@OpenAPIDefinition(info = @Info(title = "Price API", version = "1.0", description = "API for managing pricing and price restrictions in the POS system"))
+@OpenAPIDefinition(info = @Info(title = "Inventory API", version = "1.0", description = "API for managing inventory in the POS system"))
 @SpringBootApplication
-public class PosPriceApplication {
+public class PosInventoryApplication {
     public static void main(String[] args) {
-        SpringApplication.run(PosPriceApplication.class, args);
+        SpringApplication.run(PosInventoryApplication.class, args);
     }
 }
