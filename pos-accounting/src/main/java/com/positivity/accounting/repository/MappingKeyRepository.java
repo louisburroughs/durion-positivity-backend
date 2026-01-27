@@ -9,29 +9,28 @@ import java.util.Optional;
 
 /**
  * Repository for Mapping Key entity.
- * Supports querying mapping keys by dimension and organization.
+ * Supports querying mapping keys by posting category and name.
  */
 @Repository
 public interface MappingKeyRepository extends JpaRepository<MappingKey, String> {
 
     /**
-     * Find a mapping key by organization and external code.
+     * Find a mapping key by posting category and key name.
      */
-    Optional<MappingKey> findByOrganizationIdAndExternalCode(String organizationId, String externalCode);
+    Optional<MappingKey> findByPostingCategoryIdAndKeyName(String postingCategoryId, String keyName);
 
     /**
-     * Find all mapping keys for a dimension.
+     * Find all mapping keys for a posting category.
      */
-    @Deprecated(forRemoval = true, since = "1.1")
-    List<MappingKey> findByDimension(String dimension);
+    List<MappingKey> findByPostingCategoryId(String postingCategoryId);
 
     /**
-     * Find mapping keys by organization and dimension.
+     * Find all active mapping keys.
      */
-    List<MappingKey> findByOrganizationIdAndDimension(String organizationId, String dimension);
+    List<MappingKey> findByIsActive(Boolean isActive);
 
     /**
-     * Check if a mapping key code already exists.
+     * Check if a mapping key name already exists within a category.
      */
-    boolean existsByOrganizationIdAndExternalCode(String organizationId, String externalCode);
+    boolean existsByPostingCategoryIdAndKeyName(String postingCategoryId, String keyName);
 }

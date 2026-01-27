@@ -54,10 +54,10 @@ public class JournalEntryLine {
     /**
      * Dimensions for this line (businessUnitId, locationId, departmentId,
      * costCenterId).
-     * Stored as JSONB/JSON for flexibility.
+     * Stored as JSON (H2) or JSONB (PostgreSQL) based on dialect.
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "dimensions", columnDefinition = "jsonb")
+    @Column(name = "dimensions")
     private Map<String, String> dimensions;
 
     // Constructors

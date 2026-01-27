@@ -67,15 +67,15 @@ public class Reconciliation {
     private ReconciliationStatus status;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "statement_lines", columnDefinition = "jsonb")
+    @Column(name = "statement_lines")
     private List<StatementLine> statementLines = new ArrayList<>();
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "gl_transactions", columnDefinition = "jsonb")
+    @Column(name = "gl_transactions")
     private List<GLTransaction> glTransactions = new ArrayList<>();
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "adjustments", columnDefinition = "jsonb")
+    @Column(name = "adjustments")
     private List<Adjustment> adjustments = new ArrayList<>();
 
     // Audit fields

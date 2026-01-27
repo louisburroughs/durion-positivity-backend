@@ -25,15 +25,22 @@ import java.util.Map;
 @Entity
 @Table(name = "gl_mapping", indexes = {
         @Index(name = "idx_gl_mapping_category_key", columnList = "posting_category_id, mapping_key_id"),
-        @Index(name = "idx_gl_mapping_effective_from", columnList = "effective_from"),
-        @Index(name = "idx_gl_mapping_effective_to", columnList = "effective_to"),
-        @Index(name = "idx_gl_mapping_gl_account", columnList = "gl_account_id")
+        @Index(name = "idx_gl_mapping_effective_from", columnList = "effective_start_date"),
+        @Index(name = "idx_gl_mapping_effective_to", columnList = "effective_end_date"),
+        @Index(name = "idx_gl_mapping_gl_account", columnList = "gl_account_id"),
+        @Index(name = "idx_gl_mapping_source_code", columnList = "source_system, external_code")
 })
 public class GLMapping {
 
     @Id
     @Column(name = "gl_mapping_id", length = 50, nullable = false)
     private String glMappingId;
+
+    @Column(name = "source_system", length = 50, nullable = false)
+    private String sourceSystem;
+
+    @Column(name = "external_code", length = 100, nullable = false)
+    private String externalCode;
 
     @Column(name = "posting_category_id", length = 50, nullable = false)
     private String postingCategoryId;
@@ -44,19 +51,19 @@ public class GLMapping {
     @Column(name = "gl_account_id", length = 50, nullable = false)
     private String glAccountId;
 
-    @Column(name = "effective_from", nullable = false)
-    private LocalDateTime effectiveFrom;
+    @Column(name = "effective_start_date", nullable = false)
+    private LocalDateTime effectiveStartDate;
 
-    @Column(name = "effective_to")
-    private LocalDateTime effectiveTo;
+    @Column(name = "effective_end_date")
+    private LocalDateTime effectiveEndDate;
 
     /**
      * Dimensions for GL posting (businessUnitId, locationId, departmentId,
      * costCenterId).
-     * Stored as JSONB/JSON for flexibility.
+     * Stored as JSON (H2) or JSONB (PostgreSQL) based on dialect.
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "dimensions", columnDefinition = "jsonb")
+    @Column(name = "dimensions")
     private Map<String, String> dimensions;
 
     // Audit fields (immutable after creation)
@@ -95,6 +102,22 @@ public class GLMapping {
         this.mappingKeyId = mappingKeyId;
     }
 
+    public String getSourceSystem() {
+        return sourceSystem;
+    }
+
+    public void setSourceSystem(String sourceSystem) {
+        this.sourceSystem = sourceSystem;
+    }
+
+    public String getExternalCode() {
+        return externalCode;
+    }
+
+    public void setExternalCode(String externalCode) {
+        this.externalCode = externalCode;
+    }
+
     public String getGlAccountId() {
         return glAccountId;
     }
@@ -103,20 +126,20 @@ public class GLMapping {
         this.glAccountId = glAccountId;
     }
 
-    public LocalDateTime getEffectiveFrom() {
-        return effectiveFrom;
+    public LocalDateTime getEffectiveStartDate() {
+        return effectiveStartDate;
     }
 
-    public void setEffectiveFrom(LocalDateTime effectiveFrom) {
-        this.effectiveFrom = effectiveFrom;
+    public void setEffectiveStartDate(LocalDateTime effectiveStartDate) {
+        this.effectiveStartDate = effectiveStartDate;
     }
 
-    public LocalDateTime getEffectiveTo() {
-        return effectiveTo;
+    public LocalDateTime getEffectiveEndDate() {
+        return effectiveEndDate;
     }
 
-    public void setEffectiveTo(LocalDateTime effectiveTo) {
-        this.effectiveTo = effectiveTo;
+    public void setEffectiveEndDate(LocalDateTime effectiveEndDate) {
+        this.effectiveEndDate = effectiveEndDate;
     }
 
     public Map<String, String> getDimensions() {
@@ -152,8 +175,8 @@ public class GLMapping {
      * Check if this mapping is effective for a given transaction date.
      * 
      * @param transactionDate The date to check
-     * @return true if effectiveFrom <= transactionDate < effectiveTo (or
-     *         effectiveTo is null)
+     * @return true if effectiveStartDate <= transactionDate < effectiveEndDate (or
+     *         effectiveEndDate is null)
      */
     @Transient
     public boolean isEffectiveOn(LocalDateTime transactionDate) {
@@ -161,8 +184,8 @@ public class GLMapping {
             return false;
         }
 
-        boolean afterStart = !transactionDate.isBefore(effectiveFrom);
-        boolean beforeEnd = effectiveTo == null || transactionDate.isBefore(effectiveTo);
+        boolean afterStart = !transactionDate.isBefore(effectiveStartDate);
+        boolean beforeEnd = effectiveEndDate == null || transactionDate.isBefore(effectiveEndDate);
 
         return afterStart && beforeEnd;
     }

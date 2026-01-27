@@ -1,6 +1,12 @@
 package com.positivity.customer.controller;
 
 import com.positivity.customer.security.CrmPermissionRegistry;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -16,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
  * 
  * Issue #171: Contacts: Store Communication Preferences and Consent Flags
  */
+@Tag(name = "CRM Communication Preferences", description = "Communication preferences and consent flag management (stub endpoints)")
 @RestController
 @RequestMapping("/v1/crm/parties")
 public class CrmCommunicationPreferencesController {
@@ -32,10 +39,15 @@ public class CrmCommunicationPreferencesController {
      * Preference persistence will be implemented when CommunicationPreference
      * entity is added.
      */
+    @Operation(summary = "Get communication preferences", description = "Retrieve communication preferences and consent flags for a party (stub endpoint)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+    })
     @GetMapping("/{partyId}/communicationPreferences")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
     public ResponseEntity<Void> getCommunicationPreferences(
-            @PathVariable String partyId) {
+            @Parameter(description = "Party ID", required = true) @PathVariable String partyId) {
         log.info("Stub getCommunicationPreferences partyId={}", partyId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
@@ -51,11 +63,16 @@ public class CrmCommunicationPreferencesController {
      * Preference persistence will be implemented when CommunicationPreference
      * entity is added.
      */
+    @Operation(summary = "Create or update communication preferences", description = "Set or update communication preferences and consent flags for a party (stub endpoint)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+    })
     @PostMapping("/{partyId}/communicationPreferences")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
     public ResponseEntity<Void> upsertCommunicationPreferences(
-            @PathVariable String partyId,
-            @RequestBody(required = false) Object body) {
+            @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
+            @Parameter(description = "Communication preferences to set", required = false) @RequestBody(required = false) Object body) {
         log.info("Stub upsertCommunicationPreferences partyId={}", partyId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }

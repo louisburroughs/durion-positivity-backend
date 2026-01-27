@@ -41,9 +41,10 @@ public class AccountingEvent {
     /**
      * Event payload as JSON object.
      * Contains domain-specific event data for JE generation.
+     * Stored as JSON (H2) or JSONB (PostgreSQL) based on dialect.
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "payload", columnDefinition = "jsonb", nullable = false)
+    @Column(name = "payload", nullable = false)
     private Map<String, Object> payload;
 
     @Enumerated(EnumType.STRING)
