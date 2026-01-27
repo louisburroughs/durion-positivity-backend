@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -156,10 +155,11 @@ public class GLMappingResolver {
         if (mapping.getGlAccountId() == null || mapping.getGlAccountId().isBlank()) {
             throw new IllegalArgumentException("GL account ID is required");
         }
-        if (mapping.getEffectiveFrom() == null) {
+        if (mapping.getEffectiveStartDate() == null) {
             throw new IllegalArgumentException("Effective from date is required");
         }
-        if (mapping.getEffectiveTo() != null && mapping.getEffectiveFrom().isAfter(mapping.getEffectiveTo())) {
+        if (mapping.getEffectiveEndDate() != null
+                && mapping.getEffectiveStartDate().isAfter(mapping.getEffectiveEndDate())) {
             throw new IllegalArgumentException(
                     "Effective from date must be on or before effective to date");
         }
@@ -170,10 +170,10 @@ public class GLMappingResolver {
         // AND (existing.effectiveTo >= mapping.effectiveFrom OR existing.effectiveTo is
         // null)
         var overlaps = mappingRepository.findOverlappingMappings(
-                mapping.getPostingCategoryId(),
-                mapping.getMappingKeyId(),
-                mapping.getEffectiveFrom(),
-                mapping.getEffectiveTo(),
+                mapping.getSourceSystem(),
+                mapping.getExternalCode(),
+                mapping.getEffectiveStartDate(),
+                mapping.getEffectiveEndDate(),
                 mapping.getGlMappingId() != null ? mapping.getGlMappingId() : "");
 
         if (!overlaps.isEmpty()) {
@@ -194,6 +194,7 @@ public class GLMappingResolver {
      * @return saved mapping
      * @throws IllegalArgumentException if mapping validation fails
      */
+    @SuppressWarnings("null")
     public GLMapping saveMapping(GLMapping mapping) {
         validateMapping(mapping);
         return mappingRepository.save(mapping);
@@ -230,7 +231,7 @@ public class GLMappingResolver {
         return mappingRepository.findByPostingCategoryId(postingCategoryId)
                 .stream()
                 .filter(m -> mappingKeyId.equals(m.getMappingKeyId()))
-                .sorted((a, b) -> a.getEffectiveFrom().compareTo(b.getEffectiveFrom()))
+                .sorted((a, b) -> a.getEffectiveStartDate().compareTo(b.getEffectiveStartDate()))
                 .toList();
     }
 }

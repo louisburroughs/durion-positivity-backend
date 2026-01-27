@@ -9,23 +9,28 @@ import java.util.Optional;
 
 /**
  * Repository for Posting Category entity.
- * Supports looking up categories by code and organization.
+ * Supports looking up categories by name.
  */
 @Repository
 public interface PostingCategoryRepository extends JpaRepository<PostingCategory, String> {
 
     /**
-     * Find a category by code within an organization.
+     * Find a category by name.
      */
-    Optional<PostingCategory> findByOrganizationIdAndCategoryCode(String organizationId, String categoryCode);
+    Optional<PostingCategory> findByCategoryName(String categoryName);
 
     /**
-     * Find all categories for an organization.
+     * Find all active categories.
      */
-    List<PostingCategory> findByOrganizationId(String organizationId);
+    List<PostingCategory> findByIsActive(Boolean isActive);
 
     /**
-     * Check if a category code is already in use.
+     * Find categories by name containing search term.
      */
-    boolean existsByOrganizationIdAndCategoryCode(String organizationId, String categoryCode);
+    List<PostingCategory> findByCategoryNameContainingIgnoreCase(String searchTerm);
+
+    /**
+     * Check if a category name is already in use.
+     */
+    boolean existsByCategoryName(String categoryName);
 }

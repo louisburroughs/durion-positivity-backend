@@ -1,6 +1,12 @@
 package com.positivity.customer.controller;
 
 import com.positivity.customer.security.CrmPermissionRegistry;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -16,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
  * 
  * Issue #172: Contacts: Maintain Contact Roles and Primary Flags
  */
+@Tag(name = "CRM Contacts", description = "Contact point and role management for parties (stub endpoints)")
 @RestController
 @RequestMapping("/v1/crm/parties")
 public class CrmContactsController {
@@ -28,10 +35,15 @@ public class CrmContactsController {
      * GET /v1/crm/parties/{partyId}/contacts
      * Requires: CONTACT_VIEW permission
      */
+    @Operation(summary = "Get contacts with roles", description = "Retrieve all contact points for a party with their role assignments (stub endpoint)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+    })
     @GetMapping("/{partyId}/contacts")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
     public ResponseEntity<Void> getContactsWithRoles(
-            @PathVariable String partyId) {
+            @Parameter(description = "Party ID", required = true) @PathVariable String partyId) {
         log.info("Stub getContactsWithRoles partyId={}", partyId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
@@ -45,12 +57,17 @@ public class CrmContactsController {
      * Note: Current implementation returns success but does not persist roles.
      * Role persistence will be implemented when ContactRole entity is added.
      */
+    @Operation(summary = "Update contact roles", description = "Assign or update role assignments for a specific contact within a party (stub endpoint)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+    })
     @PutMapping("/{partyId}/contacts/{contactId}/roles")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
     public ResponseEntity<Void> updateContactRoles(
-            @PathVariable String partyId,
-            @PathVariable String contactId,
-            @RequestBody(required = false) Object body) {
+            @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
+            @Parameter(description = "Contact ID", required = true) @PathVariable String contactId,
+            @Parameter(description = "Role assignment request", required = false) @RequestBody(required = false) Object body) {
         log.info("Stub updateContactRoles partyId={} contactId={}", partyId, contactId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }

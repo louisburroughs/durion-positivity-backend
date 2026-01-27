@@ -1,7 +1,6 @@
 package com.positivity.accounting.service;
 
 import com.positivity.accounting.entity.JournalEntry;
-import com.positivity.accounting.repository.PostingRuleSetRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -41,9 +40,7 @@ import java.util.Map;
 @Transactional
 public class EventIngestionService {
 
-    private final PostingRuleSetRepository ruleSetRepository;
     private final JournalEntryService journalEntryService;
-    private final GLMappingResolver mappingResolver;
 
     /**
      * Submits a business event for accounting processing.

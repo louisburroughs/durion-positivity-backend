@@ -1,6 +1,7 @@
 package com.positivity.accounting.repository;
 
 import com.positivity.accounting.entity.GLAccount;
+import com.positivity.accounting.enums.AccountType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -11,44 +12,48 @@ import java.util.Optional;
 
 /**
  * Repository for GL Account entity.
- * Supports CRUD operations and queries for account lookup by number, status,
- * and effective dates.
+ * Supports CRUD operations and queries for account lookup by code, type,
+ * and activation status.
+ * 
+ * Note: Entity does not have organizationId field. Multi-tenancy not supported
+ * at entity level.
  */
 @Repository
 public interface GLAccountRepository extends JpaRepository<GLAccount, String> {
 
     /**
-     * Find an active GL account by account number and organization.
+     * Find a GL account by account code.
      */
-    @Query("SELECT g FROM GLAccount g WHERE g.accountNumber = :accountNumber AND g.organizationId = :organizationId")
-    Optional<GLAccount> findByAccountNumber(String organizationId, String accountNumber);
+    Optional<GLAccount> findByAccountCode(String accountCode);
 
     /**
-     * Find all GL accounts for an organization.
+     * Find all GL accounts ordered by account code.
      */
-    @Query("SELECT g FROM GLAccount g WHERE g.organizationId = :organizationId ORDER BY g.accountNumber")
-    List<GLAccount> findAllByOrganization(String organizationId);
+    @Query("SELECT g FROM GLAccount g ORDER BY g.accountCode")
+    List<GLAccount> findAllOrderedByCode();
 
     /**
-     * Find all active GL accounts effective on a given date.
-     * Active: activatedAt <= date AND (deactivatedAt IS NULL OR deactivatedAt >
-     * date) AND archivedAt IS NULL
+     * Find all active GL accounts on a given date.
+     * Active: activationDate <= date AND (deactivationDate IS NULL OR
+     * deactivationDate > date)
      */
-    @Query("SELECT g FROM GLAccount g WHERE g.organizationId = :organizationId " +
-            "AND g.activatedAt <= :transactionDate " +
-            "AND (g.deactivatedAt IS NULL OR g.deactivatedAt > :transactionDate) " +
-            "AND g.archivedAt IS NULL " +
-            "ORDER BY g.accountNumber")
-    List<GLAccount> findActiveAccountsOn(String organizationId, LocalDate transactionDate);
+    @Query("SELECT g FROM GLAccount g WHERE g.activationDate <= :transactionDate " +
+            "AND (g.deactivationDate IS NULL OR g.deactivationDate > :transactionDate) " +
+            "ORDER BY g.accountCode")
+    List<GLAccount> findActiveAccountsOn(LocalDate transactionDate);
 
     /**
-     * Check if an account number already exists for an organization.
+     * Check if an account code already exists.
      */
-    boolean existsByAccountNumberAndOrganizationId(String accountNumber, String organizationId);
+    boolean existsByAccountCode(String accountCode);
 
     /**
      * Find accounts by type (ASSET, LIABILITY, EXPENSE, etc.).
      */
-    @Query("SELECT g FROM GLAccount g WHERE g.organizationId = :organizationId AND g.accountType = :accountType")
-    List<GLAccount> findByAccountType(String organizationId, String accountType);
+    List<GLAccount> findByAccountType(AccountType accountType);
+
+    /**
+     * Find accounts by name (case-insensitive partial match).
+     */
+    List<GLAccount> findByAccountNameContainingIgnoreCase(String accountName);
 }

@@ -1,0 +1,132 @@
+# .github/workflows/contract-sync.yml
+#
+# Purpose:
+# - Fail backend PRs that change API/contract-relevant code unless the PR body links to:
+#   (a) the canonical durion contract guide entry, and
+#   (b) a durion contract PR.
+#
+# Notes:
+# - Tune the "Contract-relevant file patterns" to match your repo layout.
+# - This workflow is intentionally conservative; it only enforces the link requirement
+#   when contract-relevant files change.
+
+name: contract-sync
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - main
+      - master
+      - "cap/**"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  contract-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (for file context if needed)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Detect contract-relevant file changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          # If any of these match, we require contract links in the PR body.
+          filters: |
+            contract_relevant:
+              # --- REST/OpenAPI surface ---
+              - '**/openapi/**'
+              - '**/swagger/**'
+              - '**/*openapi*.yml'
+              - '**/*openapi*.yaml'
+              - '**/*openapi*.json'
+              - '**/*swagger*.yml'
+              - '**/*swagger*.yaml'
+              - '**/*swagger*.json'
+
+              # --- Typical controller / API entrypoints ---
+              - '**/*Controller.java'
+              - '**/*Resource.java'
+              - '**/*Endpoint.java'
+              - '**/*Routes.*'
+              - '**/controller/**'
+              - '**/resource/**'
+              - '**/endpoint/**'
+              - '**/routes/**'
+
+              # --- DTOs / API models ---
+              - '**/dto/**'
+              - '**/api/**/model/**'
+              - '**/*Request.java'
+              - '**/*Response.java'
+              - '**/*Dto.java'
+
+              # --- Events / contracts (adjust to your naming) ---
+              - '**/events/**'
+              - '**/event/**'
+              - '**/*Event.java'
+              - '**/*Schema.json'
+              - '**/*schema.json'
+              - '**/*.avsc'
+              - '**/*.proto'
+
+              # --- Validation / error model changes often affect contract semantics ---
+              - '**/validation/**'
+              - '**/*Exception.java'
+              - '**/*Error*.java'
+              - '**/*Problem*.java'
+
+      - name: Enforce contract links in PR body (when contract-relevant files changed)
+        if: steps.changes.outputs.contract_relevant == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PR_BODY:-}" ]; then
+            echo "::error::PR description is empty. It must include contract links when contract-relevant files change."
+            exit 1
+          fi
+
+          # Require a link to the canonical contract guide entry in durion:
+          # Example:
+          #   https://github.com/louisburroughs/durion/blob/<branch-or-sha>/domains/<domain>/.business-rules/BACKEND_CONTRACT_GUIDE.md#...
+          GUIDE_REGEX='https://github\.com/louisburroughs/durion/(blob|tree)/[^ ]+/domains/[^ ]+?/\.business-rules/BACKEND_CONTRACT_GUIDE\.md(#[^ )\n]+)?'
+
+          # Require a link to a durion PR (the contract PR):
+          # Example:
+          #   https://github.com/louisburroughs/durion/pull/123
+          DURION_PR_REGEX='https://github\.com/louisburroughs/durion/pull/[0-9]+'
+
+          # Optionally, also require a Parent STORY link (durion issue). Uncomment to enforce.
+          # PARENT_STORY_REGEX='https://github\.com/louisburroughs/durion/issues/[0-9]+'
+
+          echo "${PR_BODY}" | grep -Eqi "${GUIDE_REGEX}" || {
+            echo "::error::Missing contract guide link. Add a link to durion/domains/{domain}/.business-rules/BACKEND_CONTRACT_GUIDE.md (preferably anchored to the relevant entry)."
+            echo "::notice::Expected pattern like: https://github.com/louisburroughs/durion/blob/<ref>/domains/<domain>/.business-rules/BACKEND_CONTRACT_GUIDE.md#<anchor>"
+            exit 1
+          }
+
+          echo "${PR_BODY}" | grep -Eqi "${DURION_PR_REGEX}" || {
+            echo "::error::Missing durion contract PR link. Backend PRs that change contract-relevant files must link the corresponding contract PR in louisburroughs/durion."
+            echo "::notice::Expected pattern like: https://github.com/louisburroughs/durion/pull/<number>"
+            exit 1
+          }
+
+          # Uncomment to require a Parent STORY link as well.
+          # echo "${PR_BODY}" | grep -Eqi "${PARENT_STORY_REGEX}" || {
+          #   echo "::error::Missing Parent STORY link. Add the coordinating parent issue link in louisburroughs/durion."
+          #   exit 1
+          # }
+
+          echo "Contract links present."
+
+      - name: No contract-relevant changes detected
+        if: steps.changes.outputs.contract_relevant != 'true'
+        run: echo "No contract-relevant file changes; skipping contract link enforcement."

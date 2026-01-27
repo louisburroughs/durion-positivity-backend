@@ -1,11 +1,9 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.entity.GLAccount;
 import com.positivity.accounting.entity.JournalEntry;
 import com.positivity.accounting.entity.JournalEntryLine;
 import com.positivity.accounting.enums.JournalEntryStatus;
 import com.positivity.accounting.repository.JournalEntryRepository;
-import com.positivity.accounting.repository.JournalEntryLineRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -15,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -41,7 +38,6 @@ import java.util.UUID;
 public class JournalEntryService {
 
     private final JournalEntryRepository journalEntryRepository;
-    private final JournalEntryLineRepository jeLinesRepository;
     private final GLAccountService glAccountService;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
@@ -86,6 +82,8 @@ public class JournalEntryService {
     /**
      * Retrieves an existing journal entry by ID.
      */
+    @Transactional(readOnly = true)
+    @SuppressWarnings("null")
     public JournalEntry getJournalEntry(String journalEntryId) {
         return journalEntryRepository.findById(journalEntryId)
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
@@ -213,6 +211,8 @@ public class JournalEntryService {
     /**
      * Lists journal entries with pagination and filtering.
      */
+    @Transactional(readOnly = true)
+    @SuppressWarnings("null")
     public Page<JournalEntry> listJournalEntries(Pageable pageable) {
         return journalEntryRepository.findAll(pageable);
     }

@@ -12,8 +12,21 @@
     <description>POS Accounting module</description>
     <packaging>jar</packaging>
 
+    <pluginRepositories>
+        <pluginRepository>
+            <id>central</id>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </pluginRepository>
+        <pluginRepository>
+            <id>springdoc-repo</id>
+            <url>https://repo.springdoc.org</url>
+        </pluginRepository>
+    </pluginRepositories>
+
     <properties>
         <opentelemetry.version>1.40.0</opentelemetry.version>
+        <springdoc.version>2.7.0</springdoc.version>
+        <springdoc.maven.plugin.version>1.5</springdoc.maven.plugin.version>
     </properties>
     
     <dependencies>
@@ -94,6 +107,13 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+
+        <!-- OpenAPI / Swagger UI -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
         
         <!-- Lombok -->
         <dependency>
@@ -141,4 +161,59 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>openapi</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>start-for-openapi</id>
+                                <phase>pre-integration-test</phase>
+                                <goals>
+                                    <goal>start</goal>
+                                </goals>
+                                <configuration>
+                                    <arguments>
+                                        <argument>--server.port=8080</argument>
+                                        <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
+                                        <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
+                                        <argument>--spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>--logging.level.root=WARN</argument>
+                                        <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
+                                    </arguments>
+                                    <wait>8000</wait>
+                                    <maxAttempts>180</maxAttempts>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>stop-after-openapi</id>
+                                <phase>post-integration-test</phase>
+                                <goals>
+                                    <goal>stop</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springdoc</groupId>
+                        <artifactId>springdoc-openapi-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>generate-openapi-profile</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
