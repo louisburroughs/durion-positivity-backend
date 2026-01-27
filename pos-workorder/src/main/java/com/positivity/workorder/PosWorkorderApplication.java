@@ -10,22 +10,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
 
-@OpenAPIDefinition(
-    info = @Info(
-        title = "Work Order API",
-        version = "1.0",
-        description = "API for managing work orders in the POS system"
-    )
-)
+@OpenAPIDefinition(info = @Info(title = "Work Order API", version = "1.0", description = "API for managing work orders in the POS system"))
 @SpringBootApplication
 public class PosWorkorderApplication {
     public static void main(String[] args) {
         SpringApplication.run(PosWorkorderApplication.class, args);
-    }
-
-    @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
     }
 
     @Bean

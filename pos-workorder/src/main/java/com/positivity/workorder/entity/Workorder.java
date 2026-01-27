@@ -25,7 +25,7 @@ public class Workorder {
     @Builder.Default
     private WorkorderStatus status = WorkorderStatus.DRAFT;
 
-    @OneToMany(mappedBy = "workorder", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkorderService> services;
 
     // Approval-related fields

@@ -32,7 +32,7 @@
 		<module>pos-catalog</module>
 		<module>pos-customer</module>
 		<module>pos-invoice</module>
-		<module>pos-work-order</module>
+		<module>pos-workorder</module>
 		<module>pos-price</module>
 		<module>pos-shop-manager</module>
 		<module>pos-inquiry</module>
@@ -98,7 +98,7 @@
 						<configuration>
 							<rules>
 								<requireJavaVersion>
-									<version>[21,)</version>
+									<version>21</version>
 									<message>Java 21 or later is required to build this project</message>
 								</requireJavaVersion>
 							</rules>
