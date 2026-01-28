@@ -3,11 +3,11 @@ package com.positivity.inventory.config;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.servers.Server;
+import io.swagger.v3.oas.models.tags.Tag;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.List;
+import java.util.Arrays;
 
 @Configuration
 public class OpenApiConfig {
@@ -22,8 +22,11 @@ public class OpenApiConfig {
                                                 .contact(new Contact()
                                                                 .email("louis.burroughs@gmail.com")
                                                                 .name("Durion Team")))
-                                .servers(List.of(
-                                                new Server().url("http://api-gateway.local/api/inventory")
-                                                                .description("API Gateway")));
+                                .tags(Arrays.asList(
+                                                new Tag().name("Cycle Count Operations").description(
+                                                                "Cycle count submission and recount operations"),
+                                                new Tag().name("Cycle Count Query").description(
+                                                                "Query endpoints for cycle count tasks and history")));
+
         }
 }

@@ -9,7 +9,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,7 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 @RestController
 @RequestMapping("/v1/people/timeEntries")
-@Tag(name = "People - TimeEntries", description = "Time entry adjustments and related APIs")
+@Tag(name = "People TimeEntries", description = "Time entry adjustments and related APIs")
 public class TimeEntryAdjustmentController {
 
     private final TimeEntryAdjustmentRepository adjustmentRepository;
@@ -33,7 +32,7 @@ public class TimeEntryAdjustmentController {
         this.timeEntryRepository = timeEntryRepository;
     }
 
-    @Operation(summary = "Create a time entry adjustment")
+    @Operation(summary = "Create a time entry adjustment", description = "Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Adjustment created"),
             @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -112,7 +111,7 @@ public class TimeEntryAdjustmentController {
         return ResponseEntity.ok(resp);
     }
 
-    @Operation(summary = "List adjustments for a time entry")
+    @Operation(summary = "List adjustments for a time entry", description = "Retrieve all adjustments associated with a specific time entry.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "List returned")
     })
@@ -122,6 +121,12 @@ public class TimeEntryAdjustmentController {
         return ResponseEntity.ok(list);
     }
 
+    @Operation(summary = "Approve a time entry adjustment", description = "Approve a pending time entry adjustment. Requires approval permissions.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Adjustment approved successfully"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions"),
+            @ApiResponse(responseCode = "404", description = "Adjustment not found")
+    })
     @PostMapping(value = "/adjustments/{adjustmentId}/approve", produces = "application/json")
     public ResponseEntity<?> approveAdjustment(@PathVariable java.util.UUID adjustmentId,
             @RequestHeader(value = "X-Permissions", required = false) String permissionsHeader,
