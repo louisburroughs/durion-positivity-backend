@@ -10,10 +10,11 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
   h2:
     console:
       enabled: true
+      path: /h2-console
   application:
     name: PRICE_SERVICE
 logging:
@@ -21,13 +22,8 @@ logging:
     org:
       springframework: INFO
 server:
-  port: 8085
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-    fetch-registry: true
-    register-with-eureka: true
+  port: 8095
+
 management:
   endpoints:
     web:

@@ -21,7 +21,7 @@ spring:
     open-in-view: false
 
 server:
-  port: 8084
+  port: 8093
 
 eureka:
   client:
@@ -41,9 +41,14 @@ management:
 
 logging:
   level:
-    '[com.positivity.inventory]': DEBUG
-    '[org.springframework.web]': INFO
-    '[org.hibernate.SQL]': DEBUG
+    com:
+      positivity:
+        inventory: DEBUG
+    org:
+      springframework:
+        web: INFO
+      hibernate:
+        SQL: DEBUG
 springdoc:
   api-docs:
     enabled: true

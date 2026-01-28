@@ -27,7 +27,7 @@ spring:
       password: admin
       roles: ADMIN
 server:
-  port: 8084
+  port: 8094
 management:
   endpoints:
     web:

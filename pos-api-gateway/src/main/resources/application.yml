@@ -20,7 +20,7 @@ spring:
         - id: customer_route
           uri: lb://CUSTOMER_SERVICE #http://localhost:8082
           predicates:
-            - Path=/customer/**
+            - Path=/crm/**
           filters:
             - StripPrefix=1
         - id: image_route
@@ -42,7 +42,7 @@ spring:
           filters:
             - StripPrefix=1
         - id: security_service_route
-          uri: lb://SECURITY_SERVICE #http://localhost:8086
+          uri: lb://SECURITY_SERVICE #https://localhost:8443
           predicates:
             - Path=/security-service/**
           filters:
@@ -87,6 +87,24 @@ spring:
           uri: lb://INVENTORY_SERVICE #http://localhost:8093
           predicates:
             - Path=/v1/inventory/**
+          filters:
+            - StripPrefix=1
+        - id: order_route
+          uri: lb://ORDER_SERVICE #http://localhost:8094
+          predicates:
+            - Path=/v1/order/**
+          filters:
+            - StripPrefix=1
+        - id: price_route
+          uri: lb://PRICE_SERVICE #http://localhost:8095
+          predicates:
+            - Path=/v1/price/**
+          filters:
+            - StripPrefix=1
+        - id: accounting_route
+          uri: lb://ACCOUNTING_SERVICE #http://localhost:8096
+          predicates:
+            - Path=/v1/accounting/**
           filters:
             - StripPrefix=1
 management:

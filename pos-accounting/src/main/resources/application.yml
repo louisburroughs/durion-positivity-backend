@@ -20,7 +20,7 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
 
 server:
-  port: 8084
+  port: 8096
 
 management:
   endpoints:
@@ -36,9 +36,14 @@ management:
 
 logging:
   level:
-    '[com.positivity.accounting]': DEBUG
-    '[org.springframework.web]': INFO
-    '[org.hibernate.SQL]': DEBUG
+    com:
+      positivity:
+        accounting: DEBUG
+    org:
+      springframework:
+        web: INFO
+      hibernate:
+        SQL: DEBUG
 springdoc:
   api-docs:
     enabled: true
