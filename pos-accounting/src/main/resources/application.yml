@@ -36,6 +36,13 @@ management:
 
 logging:
   level:
-    com.positivity.accounting: DEBUG
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
+    '[com.positivity.accounting]': DEBUG
+    '[org.springframework.web]': INFO
+    '[org.hibernate.SQL]': DEBUG
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html

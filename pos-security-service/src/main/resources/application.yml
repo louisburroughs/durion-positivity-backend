@@ -1,9 +1,12 @@
+# Conversion to YAML from Properties formar report
+# Warnings:
+# - The yaml file had comments which are lost in the refactoring!
 spring:
   datasource:
-    url: jdbc:h2:mem:shop_db;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:mem:securitydb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driverClassName: org.h2.Driver
     username: sa
-    password: ""
+    password: ''
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
@@ -12,20 +15,19 @@ spring:
     console:
       enabled: true
   application:
-    name: SHOP_SERVICE
-  cloud:
-    discovery:
-      enabled: true
-  boot:
-    admin:
-      client:
-        enabled: true
+    name: SECURITY_SERVICE
 logging:
   level:
     org:
       springframework: INFO
 server:
-  port: 8087
+  ssl:
+    enabled: true
+    key-store: classpath:keystore.p12
+    key-store-password: changeit
+    key-store-type: PKCS12
+    key-alias: pos-security-service
+  port: 8443
 eureka:
   client:
     service-url:
