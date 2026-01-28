@@ -1,4 +1,4 @@
-package com.positivity.inventory.api.dto;
+package com.positivity.inventory.dto;
 
 import java.util.UUID;
 

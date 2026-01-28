@@ -1,4 +1,4 @@
-package com.positivity.inventory.api;
+package com.positivity.inventory.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.positivity.inventory.api.dto.DeactivateLocationRequest;
-import com.positivity.inventory.api.dto.DeactivateLocationResponse;
+import com.positivity.inventory.dto.DeactivateLocationRequest;
+import com.positivity.inventory.dto.DeactivateLocationResponse;
 import com.positivity.inventory.service.InventoryLocationService;
 
 import java.util.UUID;
@@ -27,8 +27,7 @@ public class InventoryLocationDeactivationController {
     @PostMapping("/{locationId}/deactivate")
     public ResponseEntity<DeactivateLocationResponse> deactivate(
             @PathVariable("locationId") UUID locationId,
-            @RequestBody(required = false) DeactivateLocationRequest body
-    ) {
+            @RequestBody(required = false) DeactivateLocationRequest body) {
         DeactivateLocationResponse resp = service.deactivateLocation(locationId,
                 body != null ? body.getDestinationLocationId() : null);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(resp);
