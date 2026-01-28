@@ -1,4 +1,4 @@
-package com.positivity.inventory.config;
+package com.positivity.order.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
@@ -16,14 +16,14 @@ public class OpenApiConfig {
         public OpenAPI customOpenAPI() {
                 return new OpenAPI()
                                 .info(new Info()
-                                                .title("Positivity Inventory API")
-                                                .description("API documentation for the Inventory service, accessible via the API Gateway.")
+                                                .title("Positivity Order API")
+                                                .description("API documentation for the Order service, accessible via the API Gateway.")
                                                 .version("v1")
                                                 .contact(new Contact()
                                                                 .email("louis.burroughs@gmail.com")
                                                                 .name("Durion Team")))
                                 .servers(List.of(
-                                                new Server().url("http://api-gateway.local/api/inventory")
+                                                new Server().url("http://api-gateway.local/api/order")
                                                                 .description("API Gateway")));
         }
 }

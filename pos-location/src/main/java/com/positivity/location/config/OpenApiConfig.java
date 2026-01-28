@@ -1,4 +1,4 @@
-package com.positivity.inventory.config;
+package com.positivity.location.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
@@ -16,14 +16,14 @@ public class OpenApiConfig {
         public OpenAPI customOpenAPI() {
                 return new OpenAPI()
                                 .info(new Info()
-                                                .title("Positivity Inventory API")
-                                                .description("API documentation for the Inventory service, accessible via the API Gateway.")
+                                                .title("Positivity Location API")
+                                                .description("API documentation for the Shop Location service, accessible via the API Gateway. Shop locations are Maintenance Bays and Mobile Shops.")
                                                 .version("v1")
                                                 .contact(new Contact()
                                                                 .email("louis.burroughs@gmail.com")
                                                                 .name("Durion Team")))
                                 .servers(List.of(
-                                                new Server().url("http://api-gateway.local/api/inventory")
+                                                new Server().url("http://api-gateway.local/api/location")
                                                                 .description("API Gateway")));
         }
 }
