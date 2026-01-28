@@ -101,3 +101,23 @@ eureka:
   client:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka # Address of your Eureka Server
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+
+  swagger-ui:
+    enabled: true
+    # springdoc default is /swagger-ui.html; keep or customize as you wish
+    path: /swagger-ui.html
+
+    # important when behind proxies; springdoc documents config-url usage
+    config-url: /v3/api-docs/swagger-config
+
+    urls:
+      - name: gateway
+        url: /v3/api-docs
+      - name: inventory
+        url: /inventory/v3/api-docs
+      - name: billing
+        url: /billing/v3/api-docs

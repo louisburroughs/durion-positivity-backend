@@ -1,9 +1,12 @@
+# Conversion to YAML from Properties formar report
+# Warnings:
+# - The yaml file had comments which are lost in the refactoring!
 spring:
   datasource:
-    url: jdbc:h2:mem:shop_db;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:mem:price_db;DB_CLOSE_DELAY=-1
     driverClassName: org.h2.Driver
     username: sa
-    password: ""
+    password: ''
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
@@ -12,20 +15,13 @@ spring:
     console:
       enabled: true
   application:
-    name: SHOP_SERVICE
-  cloud:
-    discovery:
-      enabled: true
-  boot:
-    admin:
-      client:
-        enabled: true
+    name: PRICE_SERVICE
 logging:
   level:
     org:
       springframework: INFO
 server:
-  port: 8087
+  port: 8085
 eureka:
   client:
     service-url:
