@@ -3,11 +3,16 @@ info:
   title: API Gateway - Inventory Location Deactivation (DRAFT)
   version: 0.1.0
   description: Gateway contract stub for deactivating a storage location (Option B). Proxies to Inventory service. See story #39.
+  contact: {email: louis.burroughs@gmail.com}
 servers:
   - url: http://api-gateway.local
+tags:
+  - name: Inventory
+    description: Operations related to inventory management
 paths:
   /inventory/locations/{locationId}/deactivate:
     post:
+      description: Deactivate a storage location with optional stock transfer to another location.
       tags: [Inventory]
       summary: Deactivate a storage location (gateway)
       operationId: gatewayDeactivateLocation
