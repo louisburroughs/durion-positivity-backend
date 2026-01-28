@@ -173,7 +173,7 @@
                                 </goals>
                                 <configuration>
                                     <arguments>
-                                        <argument>--server.port=8081</argument>
+                                        <argument>--server.port=8090</argument>
                                         <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
                                         <argument>--spring.datasource.driverClassName=org.h2.Driver</argument>
                                         <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
@@ -183,6 +183,8 @@
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
                                         <argument>--server.ssl.enabled=false</argument>
                                     </arguments>
+                                    <wait>8000</wait>
+                                    <maxAttempts>180</maxAttempts>
                                 </configuration>
                             </execution>
                             <execution>
@@ -198,17 +200,15 @@
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc.maven.plugin.version}</version>
+                         <configuration>
+                            <apiDocsUrl>http://localhost:8090/v3/api-docs</apiDocsUrl>
+                        </configuration>
                         <executions>
                             <execution>
                                 <phase>integration-test</phase>
                                 <goals>
                                     <goal>generate</goal>
                                 </goals>
-                                <configuration>
-                                    <apiDocsUrl>http://localhost:8081/v3/api-docs</apiDocsUrl>
-                                    <outputFileName>openapi.json</outputFileName>
-                                    <outputDir>${project.build.directory}</outputDir>
-                                </configuration>
                             </execution>
                         </executions>
                     </plugin>

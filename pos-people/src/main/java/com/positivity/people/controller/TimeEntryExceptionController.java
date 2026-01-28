@@ -29,7 +29,7 @@ public class TimeEntryExceptionController {
         this.exceptionService = exceptionService;
     }
 
-    @Operation(summary = "Create a time entry exception")
+    @Operation(summary = "Create a time entry exception", description = "Create a new time entry exception record with validation of required fields.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Exception created"),
             @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -60,7 +60,7 @@ public class TimeEntryExceptionController {
         return ResponseEntity.ok(resp);
     }
 
-    @Operation(summary = "List exceptions, optional filter by employeeId")
+    @Operation(summary = "List exceptions, optional filter by employeeId", description = "Retrieve all exceptions or filter by a specific employee ID.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "List returned")
     })
@@ -75,7 +75,7 @@ public class TimeEntryExceptionController {
         return ResponseEntity.ok(list);
     }
 
-    @Operation(summary = "Acknowledge an exception")
+    @Operation(summary = "Acknowledge an exception", description = "Mark an exception as acknowledged by the specified actor.")
     @PostMapping(value = "/{exceptionId}/acknowledge", produces = "application/json")
     public ResponseEntity<?> acknowledgeException(@PathVariable java.util.UUID exceptionId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -90,7 +90,11 @@ public class TimeEntryExceptionController {
         return ResponseEntity.status(404).body(err);
     }
 
-    @Operation(summary = "Resolve an exception")
+    @Operation(summary = "Resolve an exception", description = "Mark an exception as resolved with optional resolution notes.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Exception resolved successfully"),
+            @ApiResponse(responseCode = "404", description = "Exception not found")
+    })
     @PostMapping(value = "/{exceptionId}/resolve", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> resolveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody(required = false) java.util.Map<String, String> body,
@@ -110,7 +114,12 @@ public class TimeEntryExceptionController {
         return ResponseEntity.status(404).body(err);
     }
 
-    @Operation(summary = "Waive an exception")
+    @Operation(summary = "Waive an exception", description = "Waive an exception with a reason. waiveReason is required.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Exception waived successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request - waiveReason is required"),
+            @ApiResponse(responseCode = "404", description = "Exception not found")
+    })
     @PostMapping(value = "/{exceptionId}/waive", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> waiveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody java.util.Map<String, String> body,

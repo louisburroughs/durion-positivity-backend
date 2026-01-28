@@ -4,6 +4,13 @@ import com.positivity.accounting.audit.dto.*;
 import com.positivity.accounting.audit.entity.ExceptionType;
 import com.positivity.accounting.audit.service.AuditTrailQueryService;
 import com.positivity.accounting.audit.service.AuditTrailService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,17 +27,26 @@ import java.util.UUID;
  * REST controller for audit trail operations.
  */
 @RestController
-@RequestMapping("/api/audit")
+@RequestMapping("/v1/accounting/audit")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Audit Trail", description = "Audit trail operations for tracking accounting exceptions and overrides")
 public class AuditTrailController {
-    
+
     private final AuditTrailService auditService;
     private final AuditTrailQueryService queryService;
-    
+
     /**
      * Record a price override.
      */
+    @Operation(summary = "Record a price override", description = "Creates an audit trail entry for a price override exception with policy validation")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Price override recorded successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+            @ApiResponse(responseCode = "403", description = "Authorization denied - insufficient privileges for override amount"),
+            @ApiResponse(responseCode = "422", description = "Policy validation failed"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @PostMapping("/price-override")
     public ResponseEntity<?> recordPriceOverride(@Valid @RequestBody PriceOverrideRequest request) {
         try {
@@ -39,17 +55,25 @@ public class AuditTrailController {
         } catch (AuditTrailService.AuthorizationException e) {
             log.warn("Price override authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(Map.of("error", e.getMessage()));
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error recording price override", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to record price override"));
+                    .body(Map.of("error", "Failed to record price override"));
         }
     }
-    
+
     /**
      * Record a refund.
      */
+    @Operation(summary = "Record a refund", description = "Creates an audit trail entry for a refund exception with policy validation and settlement handling")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Refund recorded successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+            @ApiResponse(responseCode = "403", description = "Authorization denied - separate authorization required"),
+            @ApiResponse(responseCode = "422", description = "Refund policy validation failed"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @PostMapping("/refund")
     public ResponseEntity<?> recordRefund(@Valid @RequestBody RefundRequest request) {
         try {
@@ -58,17 +82,24 @@ public class AuditTrailController {
         } catch (AuditTrailService.AuthorizationException e) {
             log.warn("Refund authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(Map.of("error", e.getMessage()));
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error recording refund", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to record refund"));
+                    .body(Map.of("error", "Failed to record refund"));
         }
     }
-    
+
     /**
      * Record a cancellation.
      */
+    @Operation(summary = "Record a cancellation", description = "Creates an audit trail entry for an order or invoice cancellation")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Cancellation recorded successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+            @ApiResponse(responseCode = "404", description = "Source document not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @PostMapping("/cancellation")
     public ResponseEntity<?> recordCancellation(@Valid @RequestBody CancellationRequest request) {
         try {
@@ -77,63 +108,96 @@ public class AuditTrailController {
         } catch (Exception e) {
             log.error("Error recording cancellation", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to record cancellation"));
+                    .body(Map.of("error", "Failed to record cancellation"));
         }
     }
-    
+
     /**
      * Get audit entries for an order.
      */
+    @Operation(summary = "Get audit trail for order", description = "Retrieves all audit trail entries associated with a specific order")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Order not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @GetMapping("/order/{orderId}")
-    public ResponseEntity<List<AuditTrailResponse>> getByOrderId(@PathVariable UUID orderId) {
+    public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
+            @Parameter(description = "Order ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID orderId) {
         List<AuditTrailResponse> entries = queryService.getByOrderId(orderId);
         return ResponseEntity.ok(entries);
     }
-    
+
     /**
      * Get audit entries for an invoice.
      */
+    @Operation(summary = "Get audit trail for invoice", description = "Retrieves all audit trail entries associated with a specific invoice")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Invoice not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @GetMapping("/invoice/{invoiceId}")
-    public ResponseEntity<List<AuditTrailResponse>> getByInvoiceId(@PathVariable UUID invoiceId) {
+    public ResponseEntity<List<AuditTrailResponse>> getByInvoiceId(
+            @Parameter(description = "Invoice ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID invoiceId) {
         List<AuditTrailResponse> entries = queryService.getByInvoiceId(invoiceId);
         return ResponseEntity.ok(entries);
     }
-    
+
     /**
      * Get audit entries by exception type and date range.
      */
+    @Operation(summary = "Get audit trail by exception type", description = "Retrieves audit trail entries filtered by exception type and date range")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid date range or exception type"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @GetMapping("/type/{type}")
     public ResponseEntity<List<AuditTrailResponse>> getByType(
-            @PathVariable ExceptionType type,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+            @Parameter(description = "Exception type", required = true) @PathVariable ExceptionType type,
+            @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         List<AuditTrailResponse> entries = queryService.getByTypeAndDateRange(type, startDate, endDate);
         return ResponseEntity.ok(entries);
     }
-    
+
     /**
      * Get audit entries by actor and date range.
      */
+    @Operation(summary = "Get audit trail by actor", description = "Retrieves audit trail entries for a specific actor (user) within a date range")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid date range or actor ID"),
+            @ApiResponse(responseCode = "404", description = "Actor not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @GetMapping("/actor/{actorId}")
     public ResponseEntity<List<AuditTrailResponse>> getByActor(
-            @PathVariable UUID actorId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+            @Parameter(description = "Actor (User) ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID actorId,
+            @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         List<AuditTrailResponse> entries = queryService.getByActorAndDateRange(actorId, startDate, endDate);
         return ResponseEntity.ok(entries);
     }
-    
+
     /**
      * Get audit entries by date range.
      */
+    @Operation(summary = "Get audit trail by date range", description = "Retrieves all audit trail entries within a specified date range")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid date range"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
     @GetMapping("/range")
     public ResponseEntity<List<AuditTrailResponse>> getByDateRange(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+            @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         List<AuditTrailResponse> entries = queryService.getByDateRange(startDate, endDate);
         return ResponseEntity.ok(entries);
     }
-    
+
     private static class Map {
         public static java.util.Map<String, String> of(String key, String value) {
             return java.util.Collections.singletonMap(key, value);

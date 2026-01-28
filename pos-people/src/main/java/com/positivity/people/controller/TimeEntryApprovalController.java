@@ -33,6 +33,10 @@ public class TimeEntryApprovalController {
     }
 
     @Operation(summary = "Batch approve time entries", description = "Approve multiple time entries. pos-people is authoritative for approval execution.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Time entries approved successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request - decisions required")
+    })
     @PostMapping("/approve")
     public ResponseEntity<Object> approveTimeEntries(@RequestBody TimeEntryDecisionBatchRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -77,6 +81,10 @@ public class TimeEntryApprovalController {
     }
 
     @Operation(summary = "Batch reject time entries", description = "Reject multiple time entries. rejectionReason is required for each decision.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Time entries rejected successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request - rejectionReason required for all decisions")
+    })
     @PostMapping("/reject")
     public ResponseEntity<Object> rejectTimeEntries(@RequestBody TimeEntryDecisionBatchRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
