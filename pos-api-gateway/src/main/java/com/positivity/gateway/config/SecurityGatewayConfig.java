@@ -23,6 +23,7 @@ public class SecurityGatewayConfig {
     @Value("${security.service.url:http://pos-security-service:8086}")
     private String securityServiceUrl;
 
+    @SuppressWarnings("null")
     @Bean
     public WebClient securityWebClient() {
         return WebClient.builder()
@@ -37,6 +38,7 @@ public class SecurityGatewayConfig {
      * - Optionally injects subject as `X-User`
      * - Bypasses public endpoints (actuator, swagger)
      */
+    @SuppressWarnings("null")
     @Bean
     public GlobalFilter authFilter(WebClient securityWebClient) {
         return (exchange, chain) -> {

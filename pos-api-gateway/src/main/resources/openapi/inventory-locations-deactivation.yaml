@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: Gateway contract stub for deactivating a storage location (Option B). Proxies to Inventory service. See story #39.
 servers:
-  - url: /api
+  - url: http://api-gateway.local
 paths:
   /inventory/locations/{locationId}/deactivate:
     post:

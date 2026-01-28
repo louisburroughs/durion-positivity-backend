@@ -23,6 +23,8 @@ public class SwaggerConfig {
                                                                 .description("Catalog module"),
                                                 new Server().url("http://api-gateway.local/customer")
                                                                 .description("Customer module"),
+                                                new Server().url("http://api-gateway.local/inventory")
+                                                                .description("Inventory module"),
                                                 new Server().url("http://api-gateway.local/image")
                                                                 .description("Image module"),
                                                 new Server().url("http://api-gateway.local/location")

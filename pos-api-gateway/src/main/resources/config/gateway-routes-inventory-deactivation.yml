@@ -5,7 +5,7 @@ spring:
         - id: inventory-deactivate-location
           uri: lb://pos-inventory
           predicates:
-            - Path=/api/inventory/locations/*/deactivate
+            - Path=/v1/inventory/locations/*/deactivate
             - Method=POST
           filters:
             - RemoveRequestHeader=Cookie

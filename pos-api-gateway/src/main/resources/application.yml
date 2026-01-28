@@ -83,6 +83,12 @@ spring:
             - Path=/vehicle-reference-nhtsa/**
           filters:
             - StripPrefix=1
+        - id: inventory_route
+          uri: lb://INVENTORY_SERVICE #http://localhost:8093
+          predicates:
+            - Path=/v1/inventory/**
+          filters:
+            - StripPrefix=1
 management:
   endpoints:
     web:
