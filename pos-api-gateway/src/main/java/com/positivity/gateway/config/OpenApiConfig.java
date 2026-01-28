@@ -18,7 +18,8 @@ public class OpenApiConfig {
                                 .info(new Info()
                                                 .title("Positivity API Gateway")
                                                 .description("Unified API documentation for all POS modules.")
-                                                .version("v1").contact(new Contact()
+                                                .version("v1")
+                                                .contact(new Contact()
                                                                 .email("louis.burroughs@gmail.com")
                                                                 .name("Durion Team")))
                                 .servers(List.of(

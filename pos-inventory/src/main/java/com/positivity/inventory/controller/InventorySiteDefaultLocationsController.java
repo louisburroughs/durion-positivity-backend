@@ -19,7 +19,7 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/v1/inventory/sites")
-@Tag(name = "Inventory Sites", description = "Site inventory configuration endpoints")
+@Tag(name = "Inventory Sites", description = "Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory.")
 public class InventorySiteDefaultLocationsController {
 
     @GetMapping("/{siteId}/defaultLocations")
