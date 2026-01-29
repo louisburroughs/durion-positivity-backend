@@ -1,0 +1,21 @@
+# Spring Modulith Configuration
+spring.application.name=POSITIVITY_MODULITH
+
+# Server Configuration
+server.port=8888
+server.servlet.context-path=/
+
+# Module Detection
+spring.modulith.detection-strategy=classpath
+
+# Enable Event Publishing
+spring.modulith.events.async-mode=async
+
+# Logging
+logging.level.root=INFO
+logging.level.org.springframework.modulith=DEBUG
+logging.level.com.positivity=DEBUG
+
+# Actuator
+management.endpoints.web.exposure.include=health,info,metrics,modulith
+management.endpoint.health.show-details=always
