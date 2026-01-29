@@ -13,9 +13,9 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.accounting.entity.GLAccount;
-import com.positivity.accounting.enums.AccountType;
-import com.positivity.accounting.repository.GLAccountRepository;
+import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 
 import java.time.LocalDate;
 import java.util.UUID;

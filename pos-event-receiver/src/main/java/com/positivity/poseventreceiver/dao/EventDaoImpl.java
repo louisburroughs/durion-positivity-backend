@@ -6,15 +6,27 @@ import com.positivity.poseventreceiver.entity.PreregisteredEvent;
 import com.positivity.poseventreceiver.repository.EmittedEventRepository;
 import com.positivity.poseventreceiver.repository.EventTypeRepository;
 import com.positivity.poseventreceiver.repository.PreregisteredEventRepository;
-import org.springframework.stereotype.Repository;
+import org.springframework.lang.NonNull;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
-@Repository
+@Slf4j
+@Service
 public class EventDaoImpl implements EventDao {
     private final PreregisteredEventRepository preregRepo;
     private final EmittedEventRepository emittedRepo;
     private final EventTypeRepository eventTypeRepo;
+
+    /** Thread-safe queue for batching emitted events */
+    private final ConcurrentLinkedQueue<EmittedEvent> eventBatch = new ConcurrentLinkedQueue<>();
 
     public EventDaoImpl(PreregisteredEventRepository preregRepo, EmittedEventRepository emittedRepo,
             EventTypeRepository eventTypeRepo) {
@@ -24,32 +36,71 @@ public class EventDaoImpl implements EventDao {
     }
 
     @Override
-    public boolean isPreregistered(String id) {
+    public boolean isPreregistered(@NonNull String id) {
         return preregRepo.existsById(id);
     }
 
     @Override
-    public EmittedEvent saveEmittedEvent(EmittedEvent event) {
-        return emittedRepo.save(event);
+    public EmittedEvent saveEmittedEvent(@NonNull EmittedEvent event) {
+        eventBatch.offer(event);
+        log.debug("Event queued for batch save: {} (queue size: {})", event.getId(), eventBatch.size());
+        return event;
+    }
+
+    /**
+     * Flushes batched events to the database every 5 seconds.
+     * Uses bulk insert for improved performance.
+     */
+    @Scheduled(fixedRate = 5000)
+    public void flushEventBatch() {
+        if (eventBatch.isEmpty()) {
+            return;
+        }
+
+        List<EmittedEvent> eventsToSave = new ArrayList<>();
+        EmittedEvent event;
+        while ((event = eventBatch.poll()) != null) {
+            eventsToSave.add(event);
+        }
+
+        if (!eventsToSave.isEmpty()) {
+            try {
+                List<EmittedEvent> savedEvents = emittedRepo.saveAll(eventsToSave);
+                log.info("Flushed batch of {} events to database", savedEvents.size());
+            } catch (Exception e) {
+                log.error("Failed to flush event batch of size {}: {}", eventsToSave.size(), e.getMessage(), e);
+                // Re-queue failed events for retry
+                eventBatch.addAll(eventsToSave);
+            }
+        }
+    }
+
+    /**
+     * Ensures any remaining events are flushed on shutdown.
+     */
+    @PreDestroy
+    public void shutdown() {
+        log.info("Shutting down EventDaoImpl, flushing remaining events...");
+        flushEventBatch();
     }
 
     @Override
-    public Optional<PreregisteredEvent> getPreregisteredEvent(String id) {
+    public Optional<PreregisteredEvent> getPreregisteredEvent(@NonNull String id) {
         return preregRepo.findById(id);
     }
 
     @Override
-    public EventType saveEventType(EventType eventType) {
+    public EventType saveEventType(@NonNull EventType eventType) {
         return eventTypeRepo.save(eventType);
     }
 
     @Override
-    public Optional<EventType> getEventType(Long id) {
+    public Optional<EventType> getEventType(@NonNull Long id) {
         return eventTypeRepo.findById(id);
     }
 
     @Override
-    public Optional<EventType> getEventTypeByCode(String typeCode) {
+    public Optional<EventType> getEventTypeByCode(@NonNull String typeCode) {
         return eventTypeRepo.findByTypeCode(typeCode);
     }
 
@@ -64,12 +115,12 @@ public class EventDaoImpl implements EventDao {
     }
 
     @Override
-    public void deleteEventType(Long id) {
+    public void deleteEventType(@NonNull Long id) {
         eventTypeRepo.deleteById(id);
     }
 
     @Override
-    public boolean eventTypeExists(Long id) {
+    public boolean eventTypeExists(@NonNull Long id) {
         return eventTypeRepo.existsById(id);
     }
 }

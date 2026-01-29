@@ -6,18 +6,62 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
-import org.springframework.modulith.events.DomainEventPublisher;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import java.lang.reflect.Method;
 import java.time.Instant;
 
+/**
+ * Aspect for intercepting and publishing domain events from methods annotated
+ * with @EmitEvent.
+ * 
+ * This aspect uses Spring AOP to intercept methods marked with the
+ * {@link EmitEvent} annotation,
+ * providing automatic event publication and observability for event-driven
+ * operations across
+ * the backend microservices.
+ * 
+ * When an @EmitEvent annotated method executes, this aspect:
+ * 1. Logs the event start timestamp
+ * 2. Executes the target method
+ * 3. Publishes an {@link EventEmitted} domain event via Spring's
+ * ApplicationEventPublisher
+ * 4. Logs the event completion timestamp
+ * 5. Logs any errors that occur during method execution
+ * 
+ * The published EventEmitted events are consumed by the Event Receiver module
+ * via
+ * Spring Modulith's {@code @ApplicationModuleListener}, enabling decoupled,
+ * asynchronous
+ * communication between modules while maintaining audit trails and
+ * observability.
+ * 
+ * This aspect is the primary mechanism for event-driven intermodule
+ * communication,
+ * enforcing the architectural constraint that all cross-module interactions
+ * must use
+ * Spring Modulith events rather than direct repository access or REST calls.
+ * 
+ * @see EmitEvent
+ * @see EventEmitted
+ * @see org.springframework.modulith.events.ApplicationModuleListener
+ */
 @Slf4j
 @Aspect
 @Component
 @RequiredArgsConstructor
 public class EmitEventAspect {
-    private final DomainEventPublisher publisher;
+    /** Application event publisher for publishing domain events */
+    private final ApplicationEventPublisher publisher;
 
+    /**
+     * Aspect method that intercepts methods annotated with @EmitEvent.
+     * 
+     * @param joinPoint
+     * @return
+     * @throws Throwable
+     */
+    @SuppressWarnings("null")
     @Around("@annotation(com.positivity.events.EmitEvent)")
     public Object emitEvent(ProceedingJoinPoint joinPoint) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();

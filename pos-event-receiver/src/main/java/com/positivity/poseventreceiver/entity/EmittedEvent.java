@@ -1,41 +1,25 @@
 package com.positivity.poseventreceiver.entity;
 
+import java.time.Instant;
+
 import jakarta.persistence.*;
+import lombok.Data;
 
 @Entity
+@Data
 @Table(name = "emitted_event")
 public class EmittedEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long eventId;
-    private String id;
-    private long timestamp;
+    private final String id;
+    private final long timestamp;
+    private final Instant publishedAt;
 
-    public EmittedEvent() {
-    }
-
-    public EmittedEvent(String id, long timestamp) {
+    public EmittedEvent(String id, long timestamp, Instant publishedAt) {
         this.id = id;
         this.timestamp = timestamp;
+        this.publishedAt = publishedAt;
     }
 
-    public Long getEventId() {
-        return eventId;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-    }
 }

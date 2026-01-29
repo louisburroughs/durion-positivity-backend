@@ -22,11 +22,10 @@ public class EmitEventController {
 
     @PostMapping
     public ResponseEntity<String> receiveEvent(@RequestBody EmitEventRequest request) {
-        if (!eventDao.isPreregistered(request.getId())) {
+        if (!eventDao.isPreregistered(request.id())) {
             return ResponseEntity.badRequest().body("ID not preregistered");
         }
-        EmittedEvent event = new EmittedEvent(request.getId(), request.getTimestamp());
-        eventDao.saveEmittedEvent(event);
+        storeEvent(request);
         return ResponseEntity.ok("Event stored");
     }
 
@@ -34,19 +33,26 @@ public class EmitEventController {
      * Listen to EventEmitted events published by the Events module
      * and store them in the Event Receiver persistence layer.
      *
-     * @param event The domain event from pos-events
+     * @param request The event request containing id and timestamp
      */
     @ApplicationModuleListener
-    public void onEventEmitted(EventEmitted event) {
-        log.info("Received EventEmitted event: id={}, timestamp={}", event.eventId(), event.timestamp());
-
-        try {
-            // Store the event in the Event Receiver API
-            EmittedEvent emittedEvent = new EmittedEvent(event.eventId(), event.timestamp());
-            eventDao.saveEmittedEvent(emittedEvent);
-            log.info("Successfully stored emitted event: id={}", event.eventId());
-        } catch (Exception e) {
-            log.error("Error storing emitted event: id={}, error={}", event.eventId(), e.getMessage(), e);
+    public void onEventEmitted(EmitEventRequest request) {
+        log.info("Received EventEmitted event: id={}, timestamp={}", request.id(), request.timestamp());
+        if (!eventDao.isPreregistered(request.id())) {
+            log.error("ID not preregistered : id={}", request.id());
         }
+        storeEvent(request);
+        log.info("Successfully stored emitted event: id={}", request.id());
+
+    }
+
+    /**
+     * Common method to store an event in the persistence layer.
+     *
+     * @param request The event request containing id and timestamp
+     */
+    private void storeEvent(EmitEventRequest request) {
+        EmittedEvent event = new EmittedEvent(request.id(), request.timestamp(), request.publishedAt());
+        eventDao.saveEmittedEvent(event);
     }
 }

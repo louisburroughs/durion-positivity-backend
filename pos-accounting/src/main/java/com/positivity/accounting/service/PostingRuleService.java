@@ -1,7 +1,7 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.entity.PostingRuleSet;
-import com.positivity.accounting.entity.PostingRuleVersion;
+import com.positivity.accounting.internal.entity.PostingRuleSet;
+import com.positivity.accounting.internal.entity.PostingRuleVersion;
 
 import java.util.List;
 

@@ -1,9 +1,9 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.entity.JournalEntry;
-import com.positivity.accounting.entity.JournalEntryLine;
-import com.positivity.accounting.enums.JournalEntryStatus;
-import com.positivity.accounting.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

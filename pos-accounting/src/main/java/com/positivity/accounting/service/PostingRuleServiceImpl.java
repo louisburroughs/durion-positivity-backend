@@ -1,10 +1,10 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.entity.PostingRuleSet;
-import com.positivity.accounting.entity.PostingRuleVersion;
-import com.positivity.accounting.enums.PostingRuleSetState;
-import com.positivity.accounting.repository.PostingRuleSetRepository;
-import com.positivity.accounting.repository.PostingRuleVersionRepository;
+import com.positivity.accounting.internal.entity.PostingRuleSet;
+import com.positivity.accounting.internal.entity.PostingRuleVersion;
+import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
+import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
