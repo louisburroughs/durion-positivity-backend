@@ -1,9 +1,9 @@
 package com.positivity.people.service;
 
-import com.positivity.people.entity.TimeEntryAdjustment;
-import com.positivity.people.entity.TimeEntryAudit;
-import com.positivity.people.repository.TimeEntryAdjustmentRepository;
-import com.positivity.people.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.entity.TimeEntryAdjustment;
+import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
+import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -35,7 +35,7 @@ public class TimeEntryAdjustmentServiceTest {
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
         adj.setTimeEntryId("TE-1");
-        adj.setStatus(com.positivity.people.model.AdjustmentStatus.PENDING);
+        adj.setStatus(com.positivity.people.internal.model.AdjustmentStatus.PENDING);
 
         when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
         when(adjustmentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -46,7 +46,7 @@ public class TimeEntryAdjustmentServiceTest {
         ArgumentCaptor<TimeEntryAdjustment> captor = ArgumentCaptor.forClass(TimeEntryAdjustment.class);
         verify(adjustmentRepository).save(captor.capture());
         TimeEntryAdjustment saved = captor.getValue();
-        assertEquals(com.positivity.people.model.AdjustmentStatus.APPROVED, saved.getStatus());
+        assertEquals(com.positivity.people.internal.model.AdjustmentStatus.APPROVED, saved.getStatus());
         assertEquals("manager1", saved.getDecidedBy());
 
         verify(auditRepository).save(any(TimeEntryAudit.class));
@@ -58,7 +58,7 @@ public class TimeEntryAdjustmentServiceTest {
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
         adj.setTimeEntryId("TE-2");
-        adj.setStatus(com.positivity.people.model.AdjustmentStatus.PENDING);
+        adj.setStatus(com.positivity.people.internal.model.AdjustmentStatus.PENDING);
 
         when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
 

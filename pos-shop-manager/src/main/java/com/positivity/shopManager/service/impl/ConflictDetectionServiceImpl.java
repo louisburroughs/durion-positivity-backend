@@ -1,8 +1,8 @@
 package com.positivity.shopManager.service.impl;
 
-import com.positivity.shopManager.dto.AppointmentCreateRequest;
-import com.positivity.shopManager.dto.ConflictResponse;
-import com.positivity.shopManager.exception.SchedulingConflictException;
+import com.positivity.shopManager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopManager.internal.dto.ConflictResponse;
+import com.positivity.shopManager.internal.exception.SchedulingConflictException;
 import com.positivity.shopManager.service.ConflictDetectionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

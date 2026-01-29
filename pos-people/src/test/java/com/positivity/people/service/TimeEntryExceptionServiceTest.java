@@ -1,9 +1,9 @@
 package com.positivity.people.service;
 
-import com.positivity.people.entity.TimeEntryException;
-import com.positivity.people.entity.TimeEntryAudit;
-import com.positivity.people.repository.TimeEntryExceptionRepository;
-import com.positivity.people.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.entity.TimeEntryException;
+import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
+import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -35,7 +35,7 @@ public class TimeEntryExceptionServiceTest {
         TimeEntryException ex = new TimeEntryException();
         ex.setExceptionId(id);
         ex.setTimeEntryId("TE-3");
-        ex.setStatus(com.positivity.people.model.ExceptionStatus.OPEN);
+        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.OPEN);
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
         when(exceptionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -47,7 +47,7 @@ public class TimeEntryExceptionServiceTest {
         ArgumentCaptor<TimeEntryException> captor = ArgumentCaptor.forClass(TimeEntryException.class);
         verify(exceptionRepository).save(captor.capture());
         TimeEntryException saved = captor.getValue();
-        assertEquals(com.positivity.people.model.ExceptionStatus.RESOLVED, saved.getStatus());
+        assertEquals(com.positivity.people.internal.model.ExceptionStatus.RESOLVED, saved.getStatus());
         assertEquals("resolver1", saved.getResolvedBy());
 
         verify(auditRepository).save(any(TimeEntryAudit.class));
@@ -59,7 +59,7 @@ public class TimeEntryExceptionServiceTest {
         TimeEntryException ex = new TimeEntryException();
         ex.setExceptionId(id);
         ex.setTimeEntryId("TE-4");
-        ex.setStatus(com.positivity.people.model.ExceptionStatus.OPEN);
+        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.OPEN);
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
 
@@ -76,18 +76,18 @@ public class TimeEntryExceptionServiceTest {
         TimeEntryException ex = new TimeEntryException();
         ex.setExceptionId(id);
         ex.setTimeEntryId("TE-5");
-        ex.setStatus(com.positivity.people.model.ExceptionStatus.OPEN);
+        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.OPEN);
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
         when(exceptionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        boolean ok = service.actionException(id, com.positivity.people.model.ExceptionStatus.ACKNOWLEDGED, "user1",
+        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED, "user1",
                 null, "cid-5");
         assertTrue(ok);
 
         ArgumentCaptor<TimeEntryException> captor = ArgumentCaptor.forClass(TimeEntryException.class);
         verify(exceptionRepository).save(captor.capture());
-        assertEquals(com.positivity.people.model.ExceptionStatus.ACKNOWLEDGED, captor.getValue().getStatus());
+        assertEquals(com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED, captor.getValue().getStatus());
     }
 
     @Test
@@ -96,18 +96,18 @@ public class TimeEntryExceptionServiceTest {
         TimeEntryException ex = new TimeEntryException();
         ex.setExceptionId(id);
         ex.setTimeEntryId("TE-6");
-        ex.setStatus(com.positivity.people.model.ExceptionStatus.ACKNOWLEDGED);
+        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED);
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
         when(exceptionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        boolean ok = service.actionException(id, com.positivity.people.model.ExceptionStatus.WAIVED, "user2",
+        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.WAIVED, "user2",
                 "not applicable", "cid-6");
         assertTrue(ok);
 
         ArgumentCaptor<TimeEntryException> captor = ArgumentCaptor.forClass(TimeEntryException.class);
         verify(exceptionRepository).save(captor.capture());
-        assertEquals(com.positivity.people.model.ExceptionStatus.WAIVED, captor.getValue().getStatus());
+        assertEquals(com.positivity.people.internal.model.ExceptionStatus.WAIVED, captor.getValue().getStatus());
         assertEquals("not applicable", captor.getValue().getResolutionNotes());
     }
 
@@ -116,11 +116,11 @@ public class TimeEntryExceptionServiceTest {
         UUID id = UUID.randomUUID();
         TimeEntryException ex = new TimeEntryException();
         ex.setExceptionId(id);
-        ex.setStatus(com.positivity.people.model.ExceptionStatus.RESOLVED);
+        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.RESOLVED);
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
 
-        boolean ok = service.actionException(id, com.positivity.people.model.ExceptionStatus.WAIVED, "user3", null,
+        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.WAIVED, "user3", null,
                 "cid-7");
         assertFalse(ok);
         verify(exceptionRepository, never()).save(any());

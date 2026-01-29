@@ -5,14 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.inventory.dto.cyclecount.*;
-import com.positivity.inventory.model.InventoryLedgerEntry;
-import com.positivity.inventory.model.InventoryLedgerEventType;
-import com.positivity.inventory.model.cyclecount.AdjustmentStatus;
-import com.positivity.inventory.model.cyclecount.ApprovalTier;
-import com.positivity.inventory.model.cyclecount.CycleCountAdjustment;
-import com.positivity.inventory.repository.CycleCountAdjustmentRepository;
-import com.positivity.inventory.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.dto.cyclecount.*;
+import com.positivity.inventory.internal.model.InventoryLedgerEntry;
+import com.positivity.inventory.internal.model.InventoryLedgerEventType;
+import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
+import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
+import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
+import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 
 import java.time.Instant;
 import java.util.List;

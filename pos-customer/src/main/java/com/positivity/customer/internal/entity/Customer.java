@@ -1,0 +1,21 @@
+package com.positivity.customer.internal.entity;
+
+import java.util.List;
+
+public interface Customer {
+    Long getId();
+
+    String getCustomerNumber();
+
+    String getLastName();
+
+    String getFirstName();
+
+    String getPhoneNumber();
+
+    String getEmail();
+
+    String getPrimaryAddress();
+
+    List<String> getVehicleVins();
+}

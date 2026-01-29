@@ -1,10 +1,10 @@
 package com.positivity.vehiclereferencecarapi.service;
 
-import com.positivity.vehiclereferencecarapi.entity.CarApiMake;
-import com.positivity.vehiclereferencecarapi.entity.CarApiModel;
-import com.positivity.vehiclereferencecarapi.exception.CarApiException;
-import com.positivity.vehiclereferencecarapi.repository.CarApiMakeRepository;
-import com.positivity.vehiclereferencecarapi.repository.CarApiModelRepository;
+import com.positivity.vehiclereferencecarapi.internal.entity.CarApiMake;
+import com.positivity.vehiclereferencecarapi.internal.entity.CarApiModel;
+import com.positivity.vehiclereferencecarapi.internal.exception.CarApiException;
+import com.positivity.vehiclereferencecarapi.internal.repository.CarApiMakeRepository;
+import com.positivity.vehiclereferencecarapi.internal.repository.CarApiModelRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

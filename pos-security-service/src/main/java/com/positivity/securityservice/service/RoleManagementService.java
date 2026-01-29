@@ -1,15 +1,15 @@
 package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.dto.RoleAssignmentRequest;
-import com.positivity.securityservice.dto.RolePermissionsRequest;
-import com.positivity.securityservice.model.Permission;
-import com.positivity.securityservice.model.Role;
-import com.positivity.securityservice.model.RoleAssignment;
-import com.positivity.securityservice.model.User;
-import com.positivity.securityservice.repository.PermissionRepository;
-import com.positivity.securityservice.repository.RoleAssignmentRepository;
-import com.positivity.securityservice.repository.RoleRepository;
-import com.positivity.securityservice.repository.UserRepository;
+import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
+import com.positivity.securityservice.internal.model.Permission;
+import com.positivity.securityservice.internal.model.Role;
+import com.positivity.securityservice.internal.model.RoleAssignment;
+import com.positivity.securityservice.internal.model.User;
+import com.positivity.securityservice.internal.repository.PermissionRepository;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
+import com.positivity.securityservice.internal.repository.RoleRepository;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;

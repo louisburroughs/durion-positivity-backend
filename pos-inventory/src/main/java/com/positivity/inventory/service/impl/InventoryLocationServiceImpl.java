@@ -2,7 +2,7 @@ package com.positivity.inventory.service.impl;
 
 import org.springframework.stereotype.Service;
 
-import com.positivity.inventory.dto.DeactivateLocationResponse;
+import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
 import com.positivity.inventory.service.InventoryLocationService;
 
 import java.util.UUID;

@@ -1,9 +1,9 @@
 package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.dto.PermissionRegistrationRequest;
-import com.positivity.securityservice.dto.PermissionRegistrationResponse;
-import com.positivity.securityservice.model.Permission;
-import com.positivity.securityservice.repository.PermissionRepository;
+import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
+import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
+import com.positivity.securityservice.internal.model.Permission;
+import com.positivity.securityservice.internal.repository.PermissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

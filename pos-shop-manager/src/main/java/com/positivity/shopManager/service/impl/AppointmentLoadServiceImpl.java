@@ -1,6 +1,6 @@
 package com.positivity.shopManager.service.impl;
 
-import com.positivity.shopManager.dto.AppointmentCreateModel;
+import com.positivity.shopManager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopManager.service.AppointmentLoadService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

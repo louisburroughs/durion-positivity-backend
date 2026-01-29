@@ -1,9 +1,9 @@
 package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.model.Role;
-import com.positivity.securityservice.model.User;
-import com.positivity.securityservice.repository.RoleRepository;
-import com.positivity.securityservice.repository.UserRepository;
+import com.positivity.securityservice.internal.model.Role;
+import com.positivity.securityservice.internal.model.User;
+import com.positivity.securityservice.internal.repository.RoleRepository;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

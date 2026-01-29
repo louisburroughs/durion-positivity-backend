@@ -1,8 +1,8 @@
 package com.positivity.order.service;
 
-import com.positivity.order.dto.*;
-import com.positivity.order.model.OverrideStatus;
-import com.positivity.order.model.PriceOverride;
+import com.positivity.order.internal.dto.*;
+import com.positivity.order.internal.model.OverrideStatus;
+import com.positivity.order.internal.model.PriceOverride;
 
 import java.time.Instant;
 import java.util.List;

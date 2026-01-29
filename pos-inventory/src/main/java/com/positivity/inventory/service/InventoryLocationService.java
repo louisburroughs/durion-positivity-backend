@@ -2,7 +2,7 @@ package com.positivity.inventory.service;
 
 import java.util.UUID;
 
-import com.positivity.inventory.dto.DeactivateLocationResponse;
+import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
 
 public interface InventoryLocationService {
     /**

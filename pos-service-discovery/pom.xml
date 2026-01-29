@@ -29,6 +29,7 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-logging</artifactId>
+            <version>${project.parent.version}</version>
         </dependency>
     </dependencies>
     <dependencyManagement>

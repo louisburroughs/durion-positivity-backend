@@ -1,8 +1,8 @@
 package com.positivity.vehiclefitment.service;
 
-import com.positivity.vehiclefitment.entity.*;
-import com.positivity.vehiclefitment.repository.*;
-import com.positivity.vehiclefitment.exception.VehicleFitmentException;
+import com.positivity.vehiclefitment.internal.entity.*;
+import com.positivity.vehiclefitment.internal.repository.*;
+import com.positivity.vehiclefitment.internal.exception.VehicleFitmentException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

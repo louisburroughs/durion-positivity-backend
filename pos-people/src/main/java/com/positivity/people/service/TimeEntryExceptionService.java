@@ -1,9 +1,9 @@
 package com.positivity.people.service;
 
-import com.positivity.people.entity.TimeEntryException;
-import com.positivity.people.entity.TimeEntryAudit;
-import com.positivity.people.repository.TimeEntryExceptionRepository;
-import com.positivity.people.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.entity.TimeEntryException;
+import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
+import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +24,7 @@ public class TimeEntryExceptionService {
     }
 
     @Transactional
-    public boolean actionException(java.util.UUID exceptionId, com.positivity.people.model.ExceptionStatus targetStatus,
+    public boolean actionException(java.util.UUID exceptionId, com.positivity.people.internal.model.ExceptionStatus targetStatus,
             String actionUserId, String actionNotes, String correlationId) {
         Optional<TimeEntryException> opt = exceptionRepository.findById(exceptionId);
         if (opt.isEmpty()) {
@@ -33,8 +33,8 @@ public class TimeEntryExceptionService {
         TimeEntryException ex = opt.get();
 
         // Validate transition is allowed
-        if (ex.getStatus() == com.positivity.people.model.ExceptionStatus.RESOLVED ||
-                ex.getStatus() == com.positivity.people.model.ExceptionStatus.WAIVED) {
+        if (ex.getStatus() == com.positivity.people.internal.model.ExceptionStatus.RESOLVED ||
+                ex.getStatus() == com.positivity.people.internal.model.ExceptionStatus.WAIVED) {
             // Cannot transition from RESOLVED or WAIVED states
             return false;
         }
@@ -90,12 +90,12 @@ public class TimeEntryExceptionService {
 
         try {
             if (resolutionAction != null) {
-                ex.setStatus(com.positivity.people.model.ExceptionStatus.valueOf(resolutionAction));
+                ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.valueOf(resolutionAction));
             } else {
-                ex.setStatus(com.positivity.people.model.ExceptionStatus.RESOLVED);
+                ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.RESOLVED);
             }
         } catch (IllegalArgumentException iae) {
-            ex.setStatus(com.positivity.people.model.ExceptionStatus.RESOLVED);
+            ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.RESOLVED);
         }
         ex.setResolvedBy(resolverUserId);
         ex.setResolvedAt(Instant.now());

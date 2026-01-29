@@ -1,6 +1,6 @@
 package com.positivity.shopManager.service;
 
-import com.positivity.shopManager.dto.AppointmentCreateModel;
+import com.positivity.shopManager.internal.dto.AppointmentCreateModel;
 
 /**
  * Service for loading appointment creation form data.
@@ -20,7 +20,7 @@ public interface AppointmentLoadService {
      * @param correlationId The request correlation ID
      * @return AppointmentCreateModel with facility context, timezone, and operating
      *         hours
-     * @throws com.positivity.shopManager.exception.SourceNotEligibleException if
+     * @throws com.positivity.shopManager.internal.exception.SourceNotEligibleException if
      *                                                                         source
      *                                                                         is
      *                                                                         not

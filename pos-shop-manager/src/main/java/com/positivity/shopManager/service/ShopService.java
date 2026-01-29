@@ -1,12 +1,12 @@
 package com.positivity.shopManager.service;
 
-import com.positivity.shopManager.client.PersonClient;
-import com.positivity.shopManager.client.ServiceEntityClient;
-import com.positivity.shopManager.dto.PersonDTO;
-import com.positivity.shopManager.dto.ServiceEntityDTO;
-import com.positivity.shopManager.entity.Technician;
-import com.positivity.shopManager.repository.TechnicianRepository;
-import com.positivity.shopManager.repository.ShopServiceRepository;
+import com.positivity.shopManager.internal.client.PersonClient;
+import com.positivity.shopManager.internal.client.ServiceEntityClient;
+import com.positivity.shopManager.internal.dto.PersonDTO;
+import com.positivity.shopManager.internal.dto.ServiceEntityDTO;
+import com.positivity.shopManager.internal.entity.Technician;
+import com.positivity.shopManager.internal.repository.TechnicianRepository;
+import com.positivity.shopManager.internal.repository.ShopServiceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ public class ShopService {
     }
 
     public ServiceEntityDTO getShopServiceDetails(Long locationId, Long shopServiceId) {
-        com.positivity.shopManager.entity.ShopService shopService = shopServiceRepository
+        com.positivity.shopManager.internal.entity.ShopService shopService = shopServiceRepository
                 .findByIdAndShopId(shopServiceId, locationId).orElseThrow();
         if (shopService.getServiceEntityId() == null)
             return null;

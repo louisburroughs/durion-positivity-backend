@@ -1,12 +1,12 @@
 package com.positivity.location.service;
 
-import com.positivity.location.client.PersonClient;
-import com.positivity.location.entity.Location;
-import com.positivity.location.entity.LocationParent;
-import com.positivity.location.entity.ParentType;
-import com.positivity.location.repository.LocationParentRepository;
-import com.positivity.location.repository.LocationRepository;
-import com.positivity.location.dto.PersonDTO;
+import com.positivity.location.internal.client.PersonClient;
+import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.entity.LocationParent;
+import com.positivity.location.internal.entity.ParentType;
+import com.positivity.location.internal.repository.LocationParentRepository;
+import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.dto.PersonDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
