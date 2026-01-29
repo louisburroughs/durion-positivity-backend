@@ -1,6 +1,6 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

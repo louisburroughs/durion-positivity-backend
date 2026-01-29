@@ -1,7 +1,7 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.entity.GLMapping;
-import com.positivity.accounting.repository.GLMappingRepository;
+import com.positivity.accounting.internal.entity.GLMapping;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

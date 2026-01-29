@@ -1,8 +1,8 @@
 package com.positivity.accounting;
 
-import com.positivity.accounting.dto.GLAccountCreateRequest;
-import com.positivity.accounting.dto.JournalEntryCreateRequest;
-import com.positivity.accounting.enums.AccountType;
+import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.enums.AccountType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

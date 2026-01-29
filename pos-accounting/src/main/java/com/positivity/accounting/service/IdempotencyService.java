@@ -1,7 +1,7 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.domain.IdempotencyKey;
-import com.positivity.accounting.repository.IdempotencyKeyRepository;
+import com.positivity.accounting.internal.domain.IdempotencyKey;
+import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

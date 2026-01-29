@@ -16,7 +16,7 @@ import org.springframework.modulith.Modulith;
  * 
  * Responsibilities:
  * - Enforce modularity constraints via ApplicationModuleDetection
- * - Coordinate inter-module communication via events (pos-events/pos-event-receiver)
+ * - Coordinate inter-module functional logging via events (pos-events/pos-event-receiver)
  * - Enable centralized cross-cutting concerns (security, logging, tracing)
  * - Support integration testing of module contracts
  * 

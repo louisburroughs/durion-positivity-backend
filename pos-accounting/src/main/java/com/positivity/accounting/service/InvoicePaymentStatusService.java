@@ -1,12 +1,12 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.domain.InvoiceStatusView;
-import com.positivity.accounting.domain.PaymentAppliedEvent;
-import com.positivity.accounting.domain.PaymentStatus;
-import com.positivity.accounting.entity.InvoiceStatusResponse;
-import com.positivity.accounting.entity.PaymentAppliedRequest;
-import com.positivity.accounting.repository.InvoiceStatusViewRepository;
-import com.positivity.accounting.repository.PaymentAppliedEventRepository;
+import com.positivity.accounting.internal.domain.InvoiceStatusView;
+import com.positivity.accounting.internal.domain.PaymentAppliedEvent;
+import com.positivity.accounting.internal.domain.PaymentStatus;
+import com.positivity.accounting.internal.entity.InvoiceStatusResponse;
+import com.positivity.accounting.internal.entity.PaymentAppliedRequest;
+import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
+import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.retry.annotation.Backoff;

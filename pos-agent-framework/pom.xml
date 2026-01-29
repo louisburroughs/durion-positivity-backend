@@ -115,6 +115,11 @@
 			<artifactId>logback-classic</artifactId>
 			<version>1.4.14</version>
 		</dependency>
+        <!-- Spring Boot Logging (includes SLF4J + Logback) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-logging</artifactId>
+        </dependency>
 	</dependencies>
 
 	<build>
