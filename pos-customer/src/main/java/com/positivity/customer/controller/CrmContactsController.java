@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.modulith.NamedInterface;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "CRM Contacts", description = "Contact point and role management for parties (stub endpoints)")
 @RestController
 @RequestMapping("/v1/crm/parties")
+@NamedInterface(name = "CRM Contacts API")
 public class CrmContactsController {
 
     private static final Logger log = LoggerFactory.getLogger(CrmContactsController.class);
