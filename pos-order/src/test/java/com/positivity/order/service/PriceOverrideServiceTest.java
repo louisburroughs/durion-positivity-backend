@@ -1,16 +1,16 @@
 package com.positivity.order.service;
 
-import com.positivity.order.dto.ApplyPriceOverrideRequest;
-import com.positivity.order.dto.ApplyPriceOverrideResponse;
-import com.positivity.order.dto.ApprovePriceOverrideRequest;
-import com.positivity.order.dto.RejectPriceOverrideRequest;
-import com.positivity.order.exception.InvalidPriceOverrideException;
-import com.positivity.order.exception.PriceOverrideNotFoundException;
-import com.positivity.order.model.OverrideStatus;
-import com.positivity.order.model.PriceOverride;
-import com.positivity.order.model.PriceOverrideReasonCode;
-import com.positivity.order.repository.ApprovalRecordRepository;
-import com.positivity.order.repository.PriceOverrideRepository;
+import com.positivity.order.internal.dto.ApplyPriceOverrideRequest;
+import com.positivity.order.internal.dto.ApplyPriceOverrideResponse;
+import com.positivity.order.internal.dto.ApprovePriceOverrideRequest;
+import com.positivity.order.internal.dto.RejectPriceOverrideRequest;
+import com.positivity.order.internal.exception.InvalidPriceOverrideException;
+import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
+import com.positivity.order.internal.model.OverrideStatus;
+import com.positivity.order.internal.model.PriceOverride;
+import com.positivity.order.internal.model.PriceOverrideReasonCode;
+import com.positivity.order.internal.repository.ApprovalRecordRepository;
+import com.positivity.order.internal.repository.PriceOverrideRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

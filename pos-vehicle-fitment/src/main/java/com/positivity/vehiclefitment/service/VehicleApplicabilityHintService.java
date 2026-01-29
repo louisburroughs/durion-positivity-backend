@@ -1,11 +1,11 @@
 package com.positivity.vehiclefitment.service;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.vehiclefitment.dto.*;
-import com.positivity.vehiclefitment.entity.FitmentTag;
-import com.positivity.vehiclefitment.entity.TagType;
-import com.positivity.vehiclefitment.entity.VehicleApplicabilityHint;
-import com.positivity.vehiclefitment.repository.VehicleApplicabilityHintRepository;
+import com.positivity.vehiclefitment.internal.dto.*;
+import com.positivity.vehiclefitment.internal.entity.FitmentTag;
+import com.positivity.vehiclefitment.internal.entity.TagType;
+import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
+import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

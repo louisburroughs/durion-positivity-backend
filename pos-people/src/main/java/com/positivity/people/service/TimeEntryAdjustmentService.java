@@ -1,9 +1,9 @@
 package com.positivity.people.service;
 
-import com.positivity.people.entity.TimeEntryAdjustment;
-import com.positivity.people.entity.TimeEntryAudit;
-import com.positivity.people.repository.TimeEntryAdjustmentRepository;
-import com.positivity.people.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.entity.TimeEntryAdjustment;
+import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
+import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,7 +48,7 @@ public class TimeEntryAdjustmentService {
             return false;
         }
 
-        adj.setStatus(com.positivity.people.model.AdjustmentStatus.APPROVED);
+        adj.setStatus(com.positivity.people.internal.model.AdjustmentStatus.APPROVED);
         adj.setDecidedBy(approverUserId);
         adj.setDecidedAt(Instant.now());
         adjustmentRepository.save(adj);

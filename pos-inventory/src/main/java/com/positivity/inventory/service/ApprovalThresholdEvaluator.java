@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import com.positivity.inventory.model.cyclecount.ApprovalThresholdConfig;
-import com.positivity.inventory.model.cyclecount.ApprovalTier;
-import com.positivity.inventory.model.cyclecount.CycleCountAdjustment;
-import com.positivity.inventory.repository.ApprovalThresholdConfigRepository;
+import com.positivity.inventory.internal.model.cyclecount.ApprovalThresholdConfig;
+import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
+import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
+import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 
 import java.math.BigDecimal;
 import java.util.List;

@@ -1,8 +1,8 @@
 package com.positivity.nhtsa.service;
 
-import com.positivity.nhtsa.entity.*;
-import com.positivity.nhtsa.exception.CarApiException;
-import com.positivity.nhtsa.repository.*;
+import com.positivity.nhtsa.internal.entity.*;
+import com.positivity.nhtsa.internal.exception.CarApiException;
+import com.positivity.nhtsa.internal.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

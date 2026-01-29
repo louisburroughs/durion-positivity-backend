@@ -1,6 +1,6 @@
 package com.positivity.shopManager.service.impl;
 
-import com.positivity.shopManager.exception.SourceNotEligibleException;
+import com.positivity.shopManager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopManager.service.SourceEligibilityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

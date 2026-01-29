@@ -1,8 +1,8 @@
 package com.positivity.shopManager.service;
 
-import com.positivity.shopManager.dto.AppointmentCreateRequest;
-import com.positivity.shopManager.dto.AppointmentCreateModel;
-import com.positivity.shopManager.dto.AppointmentResponse;
+import com.positivity.shopManager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopManager.internal.dto.AppointmentCreateModel;
+import com.positivity.shopManager.internal.dto.AppointmentResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,11 +37,11 @@ public class AppointmentsService {
      * @param correlationId  Optional request correlation ID (X-Correlation-Id
      *                       header)
      * @return AppointmentResponse with appointmentId and facility timezone
-     * @throws com.positivity.shopManager.exception.SourceNotEligibleException  on
+     * @throws com.positivity.shopManager.internal.exception.SourceNotEligibleException  on
      *                                                                          eligibility
      *                                                                          failure
      *                                                                          (422)
-     * @throws com.positivity.shopManager.exception.SchedulingConflictException on
+     * @throws com.positivity.shopManager.internal.exception.SchedulingConflictException on
      *                                                                          conflict
      *                                                                          detection
      *                                                                          (409)

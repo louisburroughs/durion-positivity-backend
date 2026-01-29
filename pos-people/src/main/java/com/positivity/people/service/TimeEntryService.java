@@ -1,10 +1,10 @@
 package com.positivity.people.service;
 
-import com.positivity.people.dto.TimeEntryDecisionResult;
-import com.positivity.people.entity.TimeEntry;
-import com.positivity.people.entity.TimeEntryAudit;
-import com.positivity.people.repository.TimeEntryRepository;
-import com.positivity.people.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.dto.TimeEntryDecisionResult;
+import com.positivity.people.internal.entity.TimeEntry;
+import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,15 +52,15 @@ public class TimeEntryService {
                 continue;
             }
 
-            com.positivity.people.model.TimeEntryStatus status = e.getStatus();
+            com.positivity.people.internal.model.TimeEntryStatus status = e.getStatus();
             if (status == null) {
                 results.add(new TimeEntryDecisionResult(id, false, "ENTRY_NOT_PENDING",
                         "Time entry not in pending/submitted state"));
                 continue;
             }
             // Accept submitted or pending approval states
-            if (status != com.positivity.people.model.TimeEntryStatus.SUBMITTED
-                    && status != com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL) {
+            if (status != com.positivity.people.internal.model.TimeEntryStatus.SUBMITTED
+                    && status != com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL) {
                 results.add(new TimeEntryDecisionResult(id, false, "ENTRY_NOT_PENDING",
                         "Time entry not in pending/submitted state"));
                 continue;
@@ -89,7 +89,7 @@ public class TimeEntryService {
             }
 
             // perform approval
-            e.setStatus(com.positivity.people.model.TimeEntryStatus.APPROVED);
+            e.setStatus(com.positivity.people.internal.model.TimeEntryStatus.APPROVED);
             e.setApprovedBy(approverUserId);
             e.setApprovedAt(Instant.now());
             repository.save(e);
@@ -139,15 +139,15 @@ public class TimeEntryService {
                 continue;
             }
 
-            com.positivity.people.model.TimeEntryStatus status = e.getStatus();
+            com.positivity.people.internal.model.TimeEntryStatus status = e.getStatus();
             if (status == null) {
                 results.add(new TimeEntryDecisionResult(id, false, "ENTRY_NOT_PENDING",
                         "Time entry not in pending/submitted state"));
                 continue;
             }
             // Accept submitted or pending approval states
-            if (status != com.positivity.people.model.TimeEntryStatus.SUBMITTED
-                    && status != com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL) {
+            if (status != com.positivity.people.internal.model.TimeEntryStatus.SUBMITTED
+                    && status != com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL) {
                 results.add(new TimeEntryDecisionResult(id, false, "ENTRY_NOT_PENDING",
                         "Time entry not in pending/submitted state"));
                 continue;
@@ -176,7 +176,7 @@ public class TimeEntryService {
             }
 
             // perform rejection
-            e.setStatus(com.positivity.people.model.TimeEntryStatus.REJECTED);
+            e.setStatus(com.positivity.people.internal.model.TimeEntryStatus.REJECTED);
             e.setRejectedBy(rejectorUserId);
             e.setRejectedAt(Instant.now());
             String rejectionReason = rejectionReasons.get(id);

@@ -1,7 +1,7 @@
 package com.positivity.people.service;
 
-import com.positivity.people.entity.Person;
-import com.positivity.people.repository.PersonRepository;
+import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.repository.PersonRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

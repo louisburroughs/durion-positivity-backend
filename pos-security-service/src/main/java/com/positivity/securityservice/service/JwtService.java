@@ -1,7 +1,7 @@
 package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.model.JwtToken;
-import com.positivity.securityservice.repository.JwtTokenRepository;
+import com.positivity.securityservice.internal.model.JwtToken;
+import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import io.jsonwebtoken.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

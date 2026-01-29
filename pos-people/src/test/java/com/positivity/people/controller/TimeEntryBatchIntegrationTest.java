@@ -1,9 +1,9 @@
 package com.positivity.people.controller;
 
-import com.positivity.people.dto.TimeEntryDecisionBatchRequest;
-import com.positivity.people.entity.TimeEntry;
-import com.positivity.people.repository.TimeEntryRepository;
-import com.positivity.people.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
+import com.positivity.people.internal.entity.TimeEntry;
+import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.service.TimeEntryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,11 +38,11 @@ public class TimeEntryBatchIntegrationTest {
 
         TimeEntry entry1 = new TimeEntry();
         entry1.setTimeEntryId(entryId1);
-        entry1.setStatus(com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL);
+        entry1.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
 
         TimeEntry entry2 = new TimeEntry();
         entry2.setTimeEntryId(entryId2);
-        entry2.setStatus(com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL);
+        entry2.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
 
         when(entryRepository.findById(entryId1)).thenReturn(Optional.of(entry1));
         when(entryRepository.findById(entryId2)).thenReturn(Optional.of(entry2));
@@ -76,7 +76,7 @@ public class TimeEntryBatchIntegrationTest {
         String entryId = "T3";
         TimeEntry entry = new TimeEntry();
         entry.setTimeEntryId(entryId);
-        entry.setStatus(com.positivity.people.model.TimeEntryStatus.PENDING_APPROVAL);
+        entry.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
 
         when(entryRepository.findById(entryId)).thenReturn(Optional.of(entry));
         when(entryRepository.save(any())).thenAnswer(i -> i.getArgument(0));

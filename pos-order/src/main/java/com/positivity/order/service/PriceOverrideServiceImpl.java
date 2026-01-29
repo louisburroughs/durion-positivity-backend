@@ -1,13 +1,13 @@
 package com.positivity.order.service;
 
-import com.positivity.order.dto.*;
-import com.positivity.order.exception.InvalidPriceOverrideException;
-import com.positivity.order.exception.PriceOverrideNotFoundException;
-import com.positivity.order.model.ApprovalRecord;
-import com.positivity.order.model.OverrideStatus;
-import com.positivity.order.model.PriceOverride;
-import com.positivity.order.repository.ApprovalRecordRepository;
-import com.positivity.order.repository.PriceOverrideRepository;
+import com.positivity.order.internal.dto.*;
+import com.positivity.order.internal.exception.InvalidPriceOverrideException;
+import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
+import com.positivity.order.internal.model.ApprovalRecord;
+import com.positivity.order.internal.model.OverrideStatus;
+import com.positivity.order.internal.model.PriceOverride;
+import com.positivity.order.internal.repository.ApprovalRecordRepository;
+import com.positivity.order.internal.repository.PriceOverrideRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

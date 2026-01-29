@@ -1,9 +1,9 @@
 package com.positivity.vehiclefitment.service;
 
-import com.positivity.vehiclefitment.dto.*;
-import com.positivity.vehiclefitment.entity.TagType;
-import com.positivity.vehiclefitment.entity.VehicleApplicabilityHint;
-import com.positivity.vehiclefitment.repository.VehicleApplicabilityHintRepository;
+import com.positivity.vehiclefitment.internal.dto.*;
+import com.positivity.vehiclefitment.internal.entity.TagType;
+import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
+import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

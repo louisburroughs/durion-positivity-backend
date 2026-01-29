@@ -1,8 +1,8 @@
 package com.positivity.customer.service;
 
-import com.positivity.customer.entity.*;
-import com.positivity.customer.repository.ContactRepository;
-import com.positivity.customer.repository.PartyRepository;
+import com.positivity.customer.internal.entity.*;
+import com.positivity.customer.internal.repository.ContactRepository;
+import com.positivity.customer.internal.repository.PartyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

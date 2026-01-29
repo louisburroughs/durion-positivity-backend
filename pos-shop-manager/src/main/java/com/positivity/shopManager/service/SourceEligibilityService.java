@@ -1,6 +1,6 @@
 package com.positivity.shopManager.service;
 
-import com.positivity.shopManager.exception.SourceNotEligibleException;
+import com.positivity.shopManager.internal.exception.SourceNotEligibleException;
 
 /**
  * Service for validating source document eligibility before appointment
