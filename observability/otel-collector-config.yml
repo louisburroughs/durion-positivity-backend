@@ -1,0 +1,122 @@
+# OpenTelemetry Collector Configuration for Durion POS Backend
+receivers:
+  # OTLP Receiver - Primary receiver for OpenTelemetry Protocol
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "*"
+
+  # Prometheus Receiver - Scrape metrics from services
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['localhost:8888']
+
+processors:
+  # Batch Processor - Batch telemetry data for better performance
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Memory Limiter - Prevent OOM by limiting memory usage
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Resource Processor - Add resource attributes to all telemetry
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: development
+        action: upsert
+      - key: service.namespace
+        value: durion-group
+        action: upsert
+      - key: cluster.name
+        value: local-docker
+        action: upsert
+
+  # Attributes Processor - Add, update, or delete attributes
+  attributes:
+    actions:
+      - key: environment
+        value: local
+        action: insert
+
+exporters:
+  # Jaeger Exporter - Send traces to Jaeger
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  # Prometheus Exporter - Expose metrics for Prometheus scraping
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: pos
+    const_labels:
+      environment: development
+
+  # Logging Exporter - Output telemetry to collector logs (for debugging)
+  logging:
+    loglevel: debug
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # Debug Exporter - Detailed output for troubleshooting
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  # Health Check Extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance Profiler
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # zPages Extension - Diagnostic pages
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+  
+  pipelines:
+    # Traces Pipeline
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource, attributes]
+      exporters: [otlp/jaeger, logging]
+    
+    # Metrics Pipeline
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, batch, resource, attributes]
+      exporters: [prometheus, logging]
+    
+    # Logs Pipeline
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource, attributes]
+      exporters: [logging]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888

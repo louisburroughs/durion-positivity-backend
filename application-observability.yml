@@ -1,0 +1,152 @@
+# Shared OpenTelemetry and Observability Configuration
+# This file can be imported by individual service application.yml files
+# Usage: spring.config.import=optional:file:../application-observability.yml
+
+# OpenTelemetry Configuration
+otel:
+  # SDK Configuration
+  sdk:
+    disabled: false
+  
+  # Resource Attributes (can be overridden by environment variables)
+  resource:
+    attributes:
+      service.name: ${spring.application.name}
+      service.namespace: durion-group
+      service.version: ${project.version:0.0.1-SNAPSHOT}
+      deployment.environment: ${DEPLOYMENT_ENVIRONMENT:development}
+  
+  # Exporter Configuration
+  exporter:
+    otlp:
+      # Endpoint for OTLP exporter (Grafana Cloud)
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:https://otlp-gateway-prod-us-east-3.grafana.net/otlp}
+      protocol: ${OTEL_EXPORTER_OTLP_PROTOCOL:http/protobuf}
+      # Headers must be set at runtime with your Grafana Cloud API key
+      # Example: OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-instance-id:api-key>"
+      headers: ${OTEL_EXPORTER_OTLP_HEADERS:}
+      compression: gzip
+      timeout: 10s
+  
+  # Trace Configuration
+  traces:
+    exporter: otlp
+    sampler:
+      # Sample all traces in development, adjust for production
+      probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
+  
+  # Metrics Configuration
+  metrics:
+    exporter: otlp
+    export:
+      interval: 60s
+  
+  # Logs Configuration
+  logs:
+    exporter: otlp
+
+# Spring Boot Actuator - Observability Endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,httptrace
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  
+  # Metrics Configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${DEPLOYMENT_ENVIRONMENT:development}
+    
+    # Micrometer-based metrics
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 100ms,200ms,400ms,800ms,1600ms
+  
+  # Tracing Configuration (Spring Boot 3.x native support)
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
+    propagation:
+      type: w3c,b3
+
+# Logging Configuration for Observability
+logging:
+  pattern:
+    # Include trace and span IDs in log output for correlation
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+  level:
+    # OpenTelemetry logging levels
+    io.opentelemetry: INFO
+    io.micrometer: INFO
+    
+    # Spring Cloud logging
+    org.springframework.cloud: INFO
+    
+    # HTTP client logging for debugging
+    org.springframework.web.client: DEBUG
+
+# Additional observability features
+spring:
+  sleuth:
+    # Legacy Sleuth support (if needed for older Spring Cloud versions)
+    enabled: false
+
+---
+# Development Profile - Enhanced observability for local development
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    io.opentelemetry: DEBUG
+    io.micrometer: DEBUG
+    org.springframework.web: DEBUG
+
+otel:
+  traces:
+    sampler:
+      probability: 1.0  # Sample all traces in development
+
+---
+# Production Profile - Optimized for production workloads
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    io.opentelemetry: WARN
+    io.micrometer: WARN
+
+otel:
+  traces:
+    sampler:
+      probability: 0.1  # Sample 10% of traces in production
+  
+  metrics:
+    export:
+      interval: 60s
+
+management:
+  endpoint:
+    health:
+      show-details: when-authorized  # Restrict health details in production

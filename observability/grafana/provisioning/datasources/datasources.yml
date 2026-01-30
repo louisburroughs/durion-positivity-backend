@@ -1,0 +1,50 @@
+# Grafana Datasources Provisioning Configuration
+apiVersion: 1
+
+datasources:
+  # Prometheus Datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+    version: 1
+
+  # Jaeger Datasource for Distributed Tracing
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: true
+    jsonData:
+      tracesToLogs:
+        datasourceUid: 'loki'
+        tags: ['job', 'instance', 'pod', 'namespace']
+        mappedTags: [{ key: 'service.name', value: 'service' }]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+    version: 1
+
+  # Tempo Datasource (if using Tempo instead of Jaeger)
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: true
+    jsonData:
+      httpMethod: GET
+      tracesToLogs:
+        datasourceUid: 'loki'
+    version: 1
+
+  # TestData Datasource for testing and demos
+  - name: TestData
+    type: testdata
+    access: proxy
+    editable: true
+    version: 1

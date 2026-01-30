@@ -1,0 +1,26 @@
+# Grafana Dashboard Provisioning Configuration
+apiVersion: 1
+
+providers:
+  # Dashboards from file system
+  - name: 'POS System Dashboards'
+    orgId: 1
+    folder: 'Durion POS'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: true
+
+  # Pre-built dashboards
+  - name: 'Default Dashboards'
+    orgId: 1
+    folder: 'General'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/default
