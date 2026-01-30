@@ -1,13 +1,13 @@
 package com.positivity.workorder.service;
 
-import com.positivity.workorder.entity.AuditEvent;
-import com.positivity.workorder.entity.Estimate;
-import com.positivity.workorder.entity.EstimateStatus;
-import com.positivity.workorder.entity.Workorder;
-import com.positivity.workorder.entity.WorkorderStatus;
-import com.positivity.workorder.repository.AuditEventRepository;
-import com.positivity.workorder.repository.EstimateRepository;
-import com.positivity.workorder.repository.WorkorderRepository;
+import com.positivity.workorder.internal.entity.AuditEvent;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

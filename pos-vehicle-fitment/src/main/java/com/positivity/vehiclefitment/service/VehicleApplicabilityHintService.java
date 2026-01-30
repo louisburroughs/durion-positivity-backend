@@ -28,7 +28,6 @@ public class VehicleApplicabilityHintService {
      * Create a new vehicle applicability hint for a product.
      */
     @Transactional
-    @EmitEvent(id = "VEHICLE_HINT_CREATED")
     public HintResponse createHint(CreateHintRequest request) {
         log.info("Creating vehicle applicability hint for product {}", request.getProductId());
         
@@ -54,7 +53,6 @@ public class VehicleApplicabilityHintService {
      * Update an existing vehicle applicability hint.
      */
     @Transactional
-    @EmitEvent(id = "VEHICLE_HINT_UPDATED")
     public HintResponse updateHint(Long hintId, UpdateHintRequest request) {
         log.info("Updating vehicle applicability hint {}", hintId);
         
@@ -82,7 +80,6 @@ public class VehicleApplicabilityHintService {
      * Delete a vehicle applicability hint.
      */
     @Transactional
-    @EmitEvent(id = "VEHICLE_HINT_DELETED")
     public void deleteHint(Long hintId) {
         log.info("Deleting vehicle applicability hint {}", hintId);
         

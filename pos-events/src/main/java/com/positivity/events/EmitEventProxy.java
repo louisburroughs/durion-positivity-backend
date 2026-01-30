@@ -11,11 +11,9 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Dynamic proxy factory for intercepting methods annotated with @EmitEvent.
  * 
  * This class creates JDK dynamic proxies that wrap target objects and intercept
  * method calls to track event execution timing and lifecycle. When a method
- * annotated with @EmitEvent is invoked, the proxy logs the event start,
  * execution duration, and completion status (success or error), and publishes
  * an {@link EventEmitted} domain event.
  * 
@@ -51,14 +49,12 @@ import lombok.extern.slf4j.Slf4j;
 public class EmitEventProxy {
 
     /**
-     * Creates a dynamic proxy that intercepts @EmitEvent annotated methods.
      * 
      * @param <T>           the interface type
      * @param target        the target object to proxy
      * @param interfaceType the interface class
      * @param publisher     the Spring ApplicationEventPublisher for publishing
      *                      events
-     * @return a proxy instance that intercepts @EmitEvent methods
      */
     @SuppressWarnings("unchecked")
     public static <T> T createProxy(T target, Class<T> interfaceType, ApplicationEventPublisher publisher) {

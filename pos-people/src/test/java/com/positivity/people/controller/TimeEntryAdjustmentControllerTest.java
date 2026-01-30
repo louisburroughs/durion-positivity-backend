@@ -1,11 +1,11 @@
 package com.positivity.people.controller;
 
+import com.positivity.people.internal.controller.TimeEntryAdjustmentController;
 import com.positivity.people.internal.entity.TimeEntryAdjustment;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.service.TimeEntryAdjustmentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import java.time.OffsetDateTime;
@@ -63,7 +63,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setMinutesDelta(15);
         req.setCreatedBy("tester");
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(200, resp.getStatusCodeValue());
         assertNotNull(resp.getBody());
         assertTrue(resp.getBody().isSuccess());
@@ -91,7 +92,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setProposedEndAt(OffsetDateTime.now().plusMinutes(30));
         req.setCreatedBy("tester");
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(200, resp.getStatusCodeValue());
         assertNotNull(resp.getBody());
         assertTrue(resp.getBody().isSuccess());
@@ -112,7 +114,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setProposedStartAt(OffsetDateTime.now());
         req.setProposedEndAt(OffsetDateTime.now().plusMinutes(10));
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(400, resp.getStatusCodeValue());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
@@ -130,7 +133,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setTimeEntryId("T4");
         req.setReasonCode("RC4");
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(400, resp.getStatusCodeValue());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
@@ -145,7 +149,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setReasonCode("RC5");
         req.setMinutesDelta(10);
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(404, resp.getStatusCodeValue());
     }
 
@@ -162,7 +167,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setReasonCode("RC6");
         req.setMinutesDelta(10);
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(422, resp.getStatusCodeValue());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
@@ -175,7 +181,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setMinutesDelta(10);
         req.setCreatedBy("tester");
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(400, resp.getStatusCodeValue());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
@@ -189,7 +196,8 @@ public class TimeEntryAdjustmentControllerTest {
         req.setMinutesDelta(10);
         req.setCreatedBy("tester");
 
-        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
+        ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
+                .createAdjustment(req);
         assertEquals(400, resp.getStatusCodeValue());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());

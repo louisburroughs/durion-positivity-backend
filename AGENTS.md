@@ -51,7 +51,7 @@ cd durion-positivity-backend
 
 Treat each `pos-*` directory as a standard Spring Boot service using existing module patterns:
 
-- `service/` – business logic orchestration (public API for Modulith)
+- `service/` – business logic orchestration (public API for cross-module calls)
 - `internal/controller/` – REST endpoints (keep controllers thin)
 - `internal/repository/` – Spring Data JPA data access
 - `internal/entity/` – JPA entities and domain types
@@ -64,11 +64,11 @@ Treat each `pos-*` directory as a standard Spring Boot service using existing mo
 
 **All code MUST reside in `com.positivity.{domain}.internal` packages EXCEPT service layer.** This is strictly enforced:
 
-- **ONLY `service/` packages** (e.g., `com.positivity.accounting.service`) are exposed as the public API for other modules via Modulith
+- **ONLY `service/` packages** (e.g., `com.positivity.accounting.service`) are exposed as the public API for other modules
 - **The `@SpringBootApplication` class** (e.g., `PosAccountingApplication.java`) MUST remain in the root `com.positivity.{domain}` package for proper component scanning
 - **ALL other packages MUST be under `internal/`**: `internal/controller`, `internal/repository`, `internal/entity`, `internal/dto`, `internal/config`, `internal/domain`, `internal/enums`, etc.
 - **Controllers, repositories, entities, DTOs, configs** are implementation details and MUST NOT be accessed directly by other modules
-- **Cross-module access** happens ONLY through service interfaces and Modulith events
+- **Cross-module access** happens via REST APIs through the API gateway or via message-based events
 - This encapsulation prevents tight coupling and ensures modules remain independently deployable and maintainable
 
 **Package structure example:**
@@ -88,16 +88,35 @@ com.positivity.accounting/
     └── enums/
 ```
 
-### ⚠️ MANDATORY: Modulith for Intermodule Communications
+### ⚠️ MANDATORY: Architecture Testing with ArchUnit
 
-**All cross-module communication within this backend MUST use Spring Modulith.** This is non-negotiable:
+**Architecture boundaries are enforced with ArchUnit tests.** This is non-negotiable:
 
-- **Do NOT use direct Spring Data JPA repository access** across module boundaries.
-- **Do NOT use REST calls** between internal modules (only for external services).
-- **Use Modulith events and module API exports** for decoupled, reliable intermodule interactions.
-- **Use the same DTOs for Modulith calls as for REST API calls** to ensure consistency between internal and external interfaces.
-- Reference the Modulith documentation and module structure for proper event publishing and listener patterns.
-- Violating this constraint risks tight coupling, circular dependencies, and maintainability debt.
+- **Each module MUST have ArchUnit tests** in `src/test/java/{package}/ArchitectureTest.java`
+- **Tests verify internal package encapsulation** - internal packages should not be accessed from other modules
+- **Tests verify layering** - controllers must not directly access repositories or entities
+- **Tests verify service layer exposure** - only service packages are public APIs
+- **Architecture tests run automatically** as part of Maven test phase
+- Reference the `pos-modulith/ArchitectureTests.java` for cross-module validation patterns
+- Violating architecture rules will fail builds and prevent deployment
+
+**Inter-service Communication Patterns:**
+
+- **REST APIs** - Use for synchronous cross-service calls via API gateway
+- **Events/Messages** - Use for asynchronous cross-service communication via message broker
+- **Shared DTOs** - Service interfaces may share DTO classes for API contracts
+- **NO direct database access** across service boundaries
+- **NO direct repository calls** from external services
+
+Example ArchUnit test pattern:
+```java
+@ArchTest
+static final ArchRule controllers_should_not_access_repositories_directly = 
+    noClasses()
+        .that().resideInAPackage("..internal.controller..")
+        .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
+        .because("controllers must go through service layer");
+```
 
 ## Events & Cross-Cutting Concerns
 

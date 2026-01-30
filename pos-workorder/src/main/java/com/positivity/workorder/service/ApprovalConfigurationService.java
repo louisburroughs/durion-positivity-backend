@@ -1,7 +1,7 @@
 package com.positivity.workorder.service;
 
-import com.positivity.workorder.entity.ApprovalConfiguration;
-import com.positivity.workorder.repository.ApprovalConfigurationRepository;
+import com.positivity.workorder.internal.entity.ApprovalConfiguration;
+import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
