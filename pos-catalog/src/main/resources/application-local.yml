@@ -1,0 +1,27 @@
+# Local development profile — dynamic ports
+
+server:
+  port: 0  # OS assigns available ephemeral port
+
+management:
+  server:
+    port: 0  # OS assigns available ephemeral port (internal-only)
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.uuid}
+
+logging:
+  level:
+    org.springframework.boot.web.embedded.tomcat.TomcatWebServer: INFO

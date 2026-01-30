@@ -1,6 +1,8 @@
 spring:
   application:
     name: pos-accounting
+  profiles:
+    active: local
   datasource:
     url: jdbc:h2:mem:accounting
     driver-class-name: org.h2.Driver
@@ -18,9 +20,6 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.H2Dialect
-
-server:
-  port: 8096
 
 management:
   endpoints:

@@ -21,7 +21,11 @@ spring:
     open-in-view: false
 
 server:
-  port: 8093
+  port: 0
+
+management:
+  server:
+    port: 0
 
 eureka:
   client:

@@ -21,7 +21,11 @@ logging:
     org:
       springframework: INFO
 server:
-  port: 8085
+  port: 0
+
+management:
+  server:
+    port: 0
 eureka:
   client:
     service-url:

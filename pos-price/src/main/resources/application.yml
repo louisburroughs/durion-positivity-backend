@@ -22,7 +22,11 @@ logging:
     org:
       springframework: INFO
 server:
-  port: 8095
+  port: 0
+
+management:
+  server:
+    port: 0
 
 management:
   endpoints:
