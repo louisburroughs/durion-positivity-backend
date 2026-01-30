@@ -38,7 +38,7 @@ public class TimeEntryAdjustmentControllerTest {
         when(repo.findByTimeEntryId("T1")).thenReturn(List.of(a));
 
         ResponseEntity<List<TimeEntryAdjustment>> resp = controller.listForTimeEntry("T1");
-        assertEquals(200, resp.getStatusCodeValue());
+        assertEquals(200, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertEquals(1, resp.getBody().size());
     }
@@ -65,7 +65,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(200, resp.getStatusCodeValue());
+        assertEquals(200, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertTrue(resp.getBody().isSuccess());
         assertNotNull(resp.getBody().getAdjustmentId());
@@ -94,7 +94,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(200, resp.getStatusCodeValue());
+        assertEquals(200, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertTrue(resp.getBody().isSuccess());
     }
@@ -116,7 +116,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(400, resp.getStatusCodeValue());
+        assertEquals(400, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
     }
@@ -135,7 +135,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(400, resp.getStatusCodeValue());
+        assertEquals(400, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
     }
@@ -151,7 +151,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(404, resp.getStatusCodeValue());
+        assertEquals(404, resp.getStatusCode().value());
     }
 
     @Test
@@ -169,7 +169,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(422, resp.getStatusCodeValue());
+        assertEquals(422, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
     }
@@ -183,7 +183,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(400, resp.getStatusCodeValue());
+        assertEquals(400, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
     }
@@ -198,7 +198,7 @@ public class TimeEntryAdjustmentControllerTest {
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
                 .createAdjustment(req);
-        assertEquals(400, resp.getStatusCodeValue());
+        assertEquals(400, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertFalse(resp.getBody().isSuccess());
     }

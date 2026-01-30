@@ -57,7 +57,7 @@ public class TimeEntryBatchIntegrationTest {
         request.setDecisions(Arrays.asList(d1, d2));
 
         ResponseEntity<?> response = controller.approveTimeEntries(request, "approver1", null, "cid-001");
-        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(200, response.getStatusCode().value());
     }
 
     @Test
@@ -69,7 +69,7 @@ public class TimeEntryBatchIntegrationTest {
         request.setDecisions(Arrays.asList(d1));
 
         ResponseEntity<?> response = controller.rejectTimeEntries(request, "approver1", null, "cid-002");
-        assertEquals(400, response.getStatusCodeValue());
+        assertEquals(400, response.getStatusCode().value());
     }
 
     @Test
@@ -89,6 +89,6 @@ public class TimeEntryBatchIntegrationTest {
         request.setDecisions(Arrays.asList(d1));
 
         ResponseEntity<?> response = controller.rejectTimeEntries(request, "approver1", null, "cid-003");
-        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(200, response.getStatusCode().value());
     }
 }

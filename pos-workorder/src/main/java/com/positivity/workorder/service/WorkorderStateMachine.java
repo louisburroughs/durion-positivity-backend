@@ -6,7 +6,7 @@ import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepo
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,8 +32,7 @@ public class WorkorderStateMachine {
             WorkorderStatus.WORK_IN_PROGRESS,
             WorkorderStatus.AWAITING_PARTS,
             WorkorderStatus.AWAITING_APPROVAL,
-            WorkorderStatus.READY_FOR_PICKUP
-    );
+            WorkorderStatus.READY_FOR_PICKUP);
 
     @Transactional
     public void transitionWorkorder(Long workorderId, WorkorderStatus toStatus, Long userId, String reason) {
@@ -70,14 +69,16 @@ public class WorkorderStateMachine {
         if (changeRequestService.hasPendingApprovalGatedRequests(workorderId)) {
             List<ChangeRequest> pendingRequests = changeRequestService.getPendingApprovalGatedRequests(workorderId);
             throw new IllegalStateException(
-                    String.format("Workorder %d cannot be completed. There are %d unresolved approval-gated change request(s) pending approval",
+                    String.format(
+                            "Workorder %d cannot be completed. There are %d unresolved approval-gated change request(s) pending approval",
                             workorderId, pendingRequests.size()));
         }
 
         // Check for declined emergency items requiring acknowledgment
         if (!changeRequestService.canCloseWorkorder(workorderId)) {
             throw new IllegalStateException(
-                    String.format("Workorder %d cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
+                    String.format(
+                            "Workorder %d cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
                             workorderId));
         }
     }
@@ -105,7 +106,8 @@ public class WorkorderStateMachine {
 
         if (!pendingApprovalRequests.isEmpty()) {
             throw new IllegalStateException(
-                    String.format("Workorder %d cannot be started. There are %d pending change request(s) awaiting approval",
+                    String.format(
+                            "Workorder %d cannot be started. There are %d pending change request(s) awaiting approval",
                             workorderId, pendingApprovalRequests.size()));
         }
 
@@ -151,7 +153,7 @@ public class WorkorderStateMachine {
         transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, userId, "Work Order Completed");
 
         // Create audit event
-        createAuditEvent(workorderId, userId, "StateTransition", 
+        createAuditEvent(workorderId, userId, "StateTransition",
                 String.format("{\"fromState\":\"%s\",\"toState\":\"COMPLETED\"}", currentStatus));
 
         log.info("Workorder {} completed successfully by user {} at {}", workorderId, userId, completedAt);
@@ -182,7 +184,7 @@ public class WorkorderStateMachine {
     }
 
     private void recordTransition(Long workorderId, WorkorderStatus fromStatus, WorkorderStatus toStatus,
-                                   Long userId, String reason) {
+            Long userId, String reason) {
         WorkorderStateTransition transition = WorkorderStateTransition.builder()
                 .workorderId(workorderId)
                 .fromStatus(fromStatus)

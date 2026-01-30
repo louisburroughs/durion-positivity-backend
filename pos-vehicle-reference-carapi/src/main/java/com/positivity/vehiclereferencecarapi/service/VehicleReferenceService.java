@@ -9,9 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -25,7 +25,7 @@ public class VehicleReferenceService {
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
     private final CarApiMakeRepository makeRepository;
     private final CarApiModelRepository modelRepository;
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${carapi.base-url:https://carapi.app/api}")
@@ -37,7 +37,10 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = carApiBaseUrl + "/makes";
-        String response = restTemplate.getForObject(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("data");
@@ -62,7 +65,10 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = carApiBaseUrl + "/models?make_id=" + makeId;
-        String response = restTemplate.getForObject(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("data");
@@ -86,4 +92,3 @@ public class VehicleReferenceService {
         return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now());
     }
 }
-
