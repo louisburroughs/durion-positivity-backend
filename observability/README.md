@@ -47,66 +47,73 @@ docker-compose up -d jaeger prometheus grafana otel-collector
 
 ### 2. Access the Dashboards
 
-- **Grafana**: http://localhost:3000
+- **Grafana**: <http://localhost:3000>
   - Username: `admin`
   - Password: `admin`
   
-- **Jaeger UI**: http://localhost:16686
+- **Jaeger UI**: <http://localhost:16686>
   - View distributed traces across services
   
-- **Prometheus**: http://localhost:9090
+- **Prometheus**: <http://localhost:9090>
   - Query metrics and explore targets
 
-- **OTEL Collector Health**: http://localhost:13133
+- **OTEL Collector Health**: <http://localhost:13133>
   - Check collector status
 
 ### 3. Verify Services are Reporting
 
 1. **Check Prometheus Targets**:
-   - Navigate to http://localhost:9090/targets
+   - Navigate to <http://localhost:9090/targets>
    - All POS services should show as "UP"
 
 2. **Check Jaeger for Traces**:
-   - Navigate to http://localhost:16686
+   - Navigate to <http://localhost:16686>
    - Select a service from the dropdown
    - Click "Find Traces"
 
 3. **Check Grafana**:
-   - Navigate to http://localhost:3000
+   - Navigate to <http://localhost:3000>
    - Go to Explore → Prometheus
    - Query: `up{job=~"pos-.*"}`
 
 ## Configuration Files
 
 ### `prometheus.yml`
+
 Defines scrape jobs for all POS services. Each service exposes metrics at `/actuator/prometheus`.
 
 **Default Scrape Interval**: 15 seconds
 
 **Exposed Ports**:
+
 - Service health metrics on configured service ports
 - Actuator endpoints at `<service>:<port>/actuator/prometheus`
 
 ### `otel-collector-config.yml`
+
 Configures the OpenTelemetry Collector pipeline:
 
 **Receivers**:
+
 - OTLP gRPC: Port 4317
 - OTLP HTTP: Port 4318
 - Prometheus: Self-scraping
 
 **Processors**:
+
 - Batch: Groups telemetry for efficiency
 - Memory Limiter: Prevents OOM (512 MiB limit)
 - Resource: Adds environment attributes
 - Attributes: Custom attribute manipulation
 
 **Exporters**:
+
 - Jaeger: Traces via OTLP
 - Prometheus: Metrics on port 8889
 - Logging: Debug output
 
 ### `application-observability.yml`
+
 Shared Spring Boot configuration for OpenTelemetry integration. Services can import this configuration:
 
 ```yaml
@@ -116,6 +123,7 @@ spring:
 ```
 
 **Key Features**:
+
 - OTLP exporter configuration
 - Trace sampling (100% in dev, 10% in prod)
 - Metrics export intervals
@@ -245,6 +253,7 @@ Grafana is automatically configured with:
 3. Select Prometheus as the datasource
 
 **Recommended Dashboards**:
+
 - **Spring Boot 2.1 System Monitor** (ID: 11378)
 - **JVM (Micrometer)** (ID: 4701)
 - **Spring Cloud Gateway** (ID: 11506)
@@ -255,16 +264,19 @@ Grafana is automatically configured with:
 ### Services Not Reporting Metrics
 
 1. **Check service health**:
+
    ```bash
    curl http://localhost:<service-port>/actuator/health
    ```
 
 2. **Verify Prometheus endpoint**:
+
    ```bash
    curl http://localhost:<service-port>/actuator/prometheus
    ```
 
 3. **Check OTEL Collector logs**:
+
    ```bash
    docker-compose logs otel-collector
    ```
@@ -272,16 +284,19 @@ Grafana is automatically configured with:
 ### No Traces in Jaeger
 
 1. **Verify OTLP endpoint is reachable**:
+
    ```bash
    docker-compose exec pos-<service> curl -v http://otel-collector:4318/v1/traces
    ```
 
 2. **Check agent is loaded**:
+
    ```bash
    docker-compose logs pos-<service> | grep -i "opentelemetry"
    ```
 
 3. **Increase log verbosity**:
+
    ```bash
    OTEL_LOG_LEVEL=debug docker-compose up pos-<service>
    ```
@@ -289,11 +304,13 @@ Grafana is automatically configured with:
 ### High Memory Usage
 
 1. **Check OTEL Collector memory**:
+
    ```bash
    docker stats otel-collector
    ```
 
 2. **Adjust memory limiter** in `otel-collector-config.yml`:
+
    ```yaml
    processors:
      memory_limiter:
@@ -301,6 +318,7 @@ Grafana is automatically configured with:
    ```
 
 3. **Reduce trace sampling** in production:
+
    ```yaml
    otel:
      traces:
@@ -315,6 +333,7 @@ Grafana is automatically configured with:
 To send telemetry to Grafana Cloud:
 
 1. **Update docker-compose.yml**:
+
    ```yaml
    environment:
      OTEL_EXPORTER_OTLP_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp
@@ -342,6 +361,7 @@ To send telemetry to Grafana Cloud:
 ### Scaling
 
 1. **Horizontal Collector Scaling**:
+
    ```yaml
    otel-collector:
      deploy:
@@ -369,6 +389,7 @@ To send telemetry to Grafana Cloud:
 ## Support
 
 For issues or questions:
+
 1. Check service logs: `docker-compose logs <service-name>`
 2. Verify configuration files
 3. Consult the troubleshooting section above
