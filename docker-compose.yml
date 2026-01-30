@@ -1,4 +1,4 @@
-version: '2.36.2' # Use the latest version of Docker Compose
+version: '3.9' # Compatible with Docker Compose 1.29.2+
 
 services:
   # Observability Stack for Local Development
@@ -78,6 +78,27 @@ services:
     networks:
       - pos-network
 
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-positivity
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: positivity
+      POSTGRES_PASSWORD: positivity
+      POSTGRES_DB: positivity
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U positivity -d positivity"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - pos-network
+
   # POS Services
   
   eureka-server:
@@ -103,7 +124,13 @@ services:
       - "9001:9001"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -120,7 +147,13 @@ services:
       - "8081:8081"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -137,7 +170,13 @@ services:
       - "8082:8082"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -152,7 +191,13 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -167,7 +212,13 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -184,7 +235,13 @@ services:
       - "8083:8083"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -199,7 +256,13 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -214,7 +277,13 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -229,7 +298,13 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -246,7 +321,13 @@ services:
       - "8084:8084"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -261,7 +342,13 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -278,7 +365,13 @@ services:
       - "8085:8085"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -293,7 +386,13 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -310,7 +409,13 @@ services:
       - "8086:8086"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -327,7 +432,13 @@ services:
       - "8087:8087"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -344,7 +455,13 @@ services:
       - "8088:8088"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -361,7 +478,13 @@ services:
       - "8089:8089"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -378,7 +501,13 @@ services:
       - "8091:8091"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -395,7 +524,13 @@ services:
       - "8092:8092"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -412,7 +547,13 @@ services:
       - "8090:8090"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -430,6 +571,11 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_PROFILES_ACTIVE: dev
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       # Event-driven agent configurations
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
@@ -442,6 +588,8 @@ services:
       # Feature flags
       CONSUL_URL: http://consul:8500
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -459,7 +607,13 @@ services:
       - "8080:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+      SPRING_DATASOURCE_USERNAME: positivity
+      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
+      postgres:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:
@@ -480,4 +634,6 @@ volumes:
   prometheus-data:
     driver: local
   grafana-data:
+    driver: local
+  postgres-data:
     driver: local

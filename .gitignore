@@ -32,6 +32,15 @@ build/
 ### VS Code ###
 .vscode/
 
+### Secrets Management ###
+.env
+.env.local
+*.p12
+keystore.p12
+application-secrets.yml
+**/application-secrets.yml
+/src/main/resources/application-secrets.yml
+
 ### AI Session Files ###
 .ai/session.md
 .ai/session-*.md
