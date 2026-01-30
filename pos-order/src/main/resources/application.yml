@@ -1,38 +1,32 @@
-# Conversion to YAML from Properties formar report
-# Warnings:
-# - The yaml file had comments which are lost in the refactoring!
+# POS Order Service
 spring:
   application:
     name: pos-order
   datasource:
-    url: jdbc:h2:mem:posorder
-    driverClassName: org.h2.Driver
-    username: sa
-    password: ''
+    url: jdbc:postgresql://localhost:5432/pos_order_db
+    username: pos_user
+    password: pos_password
+    driver-class-name: org.postgresql.Driver
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: update
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
   security:
     user:
       name: admin
       password: admin
       roles: ADMIN
+
 server:
   port: 0
 
 management:
   server:
     port: 0
-management:
   endpoints:
     web:
       exposure:
@@ -40,14 +34,17 @@ management:
   endpoint:
     health:
       show-details: always
+
 logging:
   level:
+    root: INFO
     com:
       positivity:
-        order: DEBUG
+        order: INFO
     org:
       springframework:
-        security: DEBUG
+        web: INFO
+      hibernate: INFO
 springdoc:
   api-docs:
     enabled: true
