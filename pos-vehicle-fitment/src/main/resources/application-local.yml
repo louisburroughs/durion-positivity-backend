@@ -1,4 +1,19 @@
 # Local development profile — dynamic ports
+spring:
+  datasource:
+      url: jdbc:h2:mem:fitmentdb
+      driverClassName: org.h2.Driver
+      username: sa
+      password: ''
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+  h2:
+    console:
+      enabled: true
+  application:
+    name: FITMENT_SERVICE
 
 server:
   port: 0  # OS assigns available ephemeral port
@@ -24,4 +39,10 @@ eureka:
 
 logging:
   level:
-    org.springframework.boot.web.embedded.tomcat.TomcatWebServer: INFO
+    org:
+      springframework:
+        boot:
+          web:
+            embedded:
+              tomcat:
+                TomcatWebServer: INFO
