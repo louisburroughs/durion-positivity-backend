@@ -1,18 +1,30 @@
-# Local development profile — dynamic ports
+# Local development profile — H2 database + dynamic ports
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:pos_shop_manager;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ''
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
 
 server:
-  port: 0  # OS assigns available ephemeral port
+  port: 0
 
 management:
   server:
-    port: 0  # OS assigns available ephemeral port (internal-only)
+    port: 0
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
-  endpoint:
-    health:
-      show-details: when-authorized
 
 eureka:
   client:
@@ -24,4 +36,14 @@ eureka:
 
 logging:
   level:
-    org.springframework.boot.web.embedded.tomcat.TomcatWebServer: INFO
+    root: INFO
+    org:
+      springframework:
+        boot:
+          web:
+            embedded:
+              tomcat:
+                TomcatWebServer: INFO
+    com:
+      positivity:
+        shop: DEBUG

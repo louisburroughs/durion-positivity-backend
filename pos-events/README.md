@@ -6,6 +6,27 @@ A **Spring Boot auto-configuration library** that provides annotation-driven eve
 
 pos-events enables microservices to emit domain events asynchronously without introducing hard dependencies on event consumers. Services annotate business logic methods with `@EmitEvent` to automatically track important state changes and business transactions.
 
+## ⚠️ Critical Design Constraint
+
+**pos-events is a pure helper/library module. It MUST NOT:**
+- ❌ Have a database connection or data source
+- ❌ Register with service discovery (Eureka)
+- ❌ Expose REST API endpoints or gateway routes
+- ❌ Have external service dependencies
+
+**This module provides only:**
+- ✅ Annotation-driven event emission (`@EmitEvent`)
+- ✅ Auto-configuration for Spring Boot
+- ✅ Event publishing via Spring's `ApplicationEventPublisher`
+
+**Violation of these constraints will:**
+1. Break the module's reusability across services
+2. Create circular dependencies
+3. Prevent independent deployment
+4. Violate microservice architecture principles
+
+pos-events is a **dependency consumed by other modules**, not a service itself.
+
 ## Public API
 
 ### `@EmitEvent`

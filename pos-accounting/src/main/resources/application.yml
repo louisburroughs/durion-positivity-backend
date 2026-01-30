@@ -4,24 +4,25 @@ spring:
   profiles:
     active: local
   datasource:
-    url: jdbc:h2:mem:accounting
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+    url: jdbc:postgresql://localhost:5432/pos_accounting_db
+    username: pos_user
+    password: pos_password
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.H2Dialect
+
+server:
+  port: 0
 
 management:
+  server:
+    port: 0
   endpoints:
     web:
       exposure:
@@ -33,16 +34,26 @@ management:
     tags:
       application: ${spring.application.name}
 
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
 logging:
   level:
+    root: INFO
     com:
       positivity:
-        accounting: DEBUG
+        accounting: INFO
     org:
       springframework:
         web: INFO
       hibernate:
-        SQL: DEBUG
+        SQL: INFO
 springdoc:
   api-docs:
     enabled: true

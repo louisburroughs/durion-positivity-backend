@@ -2,22 +2,18 @@ spring:
   application:
     name: pos-inventory
   datasource:
-    url: jdbc:h2:mem:inventorydb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+    url: jdbc:postgresql://localhost:5432/pos_inventory_db
+    username: pos_user
+    password: pos_password
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: false
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.H2Dialect
     open-in-view: false
 
 server:
@@ -26,6 +22,13 @@ server:
 management:
   server:
     port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
 
 eureka:
   client:
@@ -33,21 +36,19 @@ eureka:
       defaultZone: http://localhost:8761/eureka/
     register-with-eureka: true
     fetch-registry: true
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
+  instance:
+    prefer-ip-address: true
 
 logging:
   level:
+    root: INFO
     com:
       positivity:
-        inventory: DEBUG
+        inventory: INFO
+    org:
+      springframework:
+        web: INFO
+      hibernate: INFO
     org:
       springframework:
         web: INFO

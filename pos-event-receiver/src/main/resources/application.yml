@@ -1,21 +1,45 @@
 spring:
+  application:
+    name: pos-event-receiver
   datasource:
-    url: jdbc:h2:mem:eventdb;DB_CLOSE_DELAY=-1
-    driverClassName: org.h2.Driver
-    username: sa
-    password: ''
+    url: jdbc:postgresql://localhost:5432/pos_event_receiver_db
+    username: pos_user
+    password: pos_password
+    driver-class-name: org.postgresql.Driver
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
-  h2:
-    console:
-      enabled: true
+
+server:
+  port: 0
+
 management:
+  server:
+    port: 0
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        event:
+          receiver: INFO

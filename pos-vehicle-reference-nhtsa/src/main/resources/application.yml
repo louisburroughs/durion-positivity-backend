@@ -1,20 +1,18 @@
 spring:
   application:
-    name: pos-invoice
+    name: pos-vehicle-reference-nhtsa
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pos_vehicle_reference_nhtsa_db
+    username: pos_user
+    password: pos_password
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: update
     database-platform: org.hibernate.dialect.PostgreSQLDialect
-  datasource:
-    url: jdbc:postgresql://localhost:5432/pos_invoice_db
-    username: pos_user
-    password: pos_password
-    driver-class-name: org.postgresql.Driver
 
 server:
   port: 0
-  servlet:
-    context-path: /
 
 management:
   server:
@@ -25,7 +23,7 @@ management:
         include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
 
 eureka:
   client:
@@ -40,9 +38,7 @@ logging:
   level:
     root: INFO
     org:
-      springframework:
-        web: INFO
-      hibernate: INFO
+      springframework: INFO
     com:
       positivity:
-        invoice: INFO
+        nhtsa: INFO

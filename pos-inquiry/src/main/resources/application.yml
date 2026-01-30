@@ -39,3 +39,10 @@ eureka:
 logging:
   level:
     root: INFO
+    org:
+      springframework:
+        web: INFO
+      hibernate: INFO
+    com:
+      positivity:
+        inquiry: INFO

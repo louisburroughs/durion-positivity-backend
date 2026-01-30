@@ -2,24 +2,18 @@
 # Warnings:
 # - The yaml file had comments which are lost in the refactoring!
 spring:
+  application:
+    name: pos-security-service
   datasource:
-    url: jdbc:h2:mem:securitydb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driverClassName: org.h2.Driver
-    username: sa
-    password: ''
+    url: jdbc:postgresql://localhost:5432/pos_security_db
+    username: pos_user
+    password: pos_password
+    driver-class-name: org.postgresql.Driver
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
-  h2:
-    console:
-      enabled: true
-  application:
-    name: SECURITY_SERVICE
-logging:
-  level:
-    org:
-      springframework: INFO
+
 server:
   ssl:
     enabled: true
@@ -32,20 +26,32 @@ server:
 management:
   server:
     port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
     fetch-registry: true
     register-with-eureka: true
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: always
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        security: INFO
+
 springdoc:
   api-docs:
     enabled: true
