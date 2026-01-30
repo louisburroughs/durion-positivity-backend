@@ -1,9 +1,9 @@
 package com.positivity.workorder.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.entity.*;
-import com.positivity.workorder.event.WorkCompletedEvent;
-import com.positivity.workorder.repository.*;
+import com.positivity.workorder.internal.entity.*;
+import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

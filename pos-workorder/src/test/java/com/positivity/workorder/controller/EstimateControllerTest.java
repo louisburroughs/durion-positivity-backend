@@ -1,10 +1,10 @@
 package com.positivity.workorder.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.dto.CreateEstimateRequest;
-import com.positivity.workorder.dto.CreateEstimateResponse;
-import com.positivity.workorder.entity.Estimate;
-import com.positivity.workorder.entity.EstimateStatus;
+import com.positivity.workorder.internal.controller.EstimateController;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.service.EstimateService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

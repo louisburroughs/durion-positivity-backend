@@ -50,7 +50,6 @@ public class EmitEventProxyFactory {
     private final ApplicationEventPublisher publisher;
 
     /**
-     * Creates a dynamic proxy that intercepts @EmitEvent annotated methods.
      * 
      * This method wraps {@link EmitEventProxy#createProxy} and automatically
      * provides the Spring-managed {@link ApplicationEventPublisher}.
@@ -58,7 +57,6 @@ public class EmitEventProxyFactory {
      * @param <T>           the interface type
      * @param target        the target object to proxy
      * @param interfaceType the interface class that the proxy will implement
-     * @return a proxy instance that intercepts @EmitEvent methods and publishes
      *         events
      */
     public <T> T createProxy(T target, Class<T> interfaceType) {

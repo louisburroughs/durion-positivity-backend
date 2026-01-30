@@ -16,7 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.modulith.NamedInterface;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @Tag(name = "Invoice Payments", description = "Apply payments and query invoice status.")
-@NamedInterface(name = "Invoice Payments API")
 public class InvoicePaymentController {
 
     private static final Logger log = LoggerFactory.getLogger(InvoicePaymentController.class);
@@ -49,7 +47,6 @@ public class InvoicePaymentController {
      */
     @PostMapping("/v1/accounting/payments/{paymentId}/applications")
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
-    @EmitEvent(id = "payment.applied")
     @Operation(summary = "Apply payment", description = "Apply a payment to an invoice and update its status.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Payment applied", content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class))),

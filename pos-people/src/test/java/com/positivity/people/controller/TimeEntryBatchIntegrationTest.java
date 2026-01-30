@@ -1,5 +1,6 @@
 package com.positivity.people.controller;
 
+import com.positivity.people.internal.controller.TimeEntryApprovalController;
 import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.repository.TimeEntryRepository;

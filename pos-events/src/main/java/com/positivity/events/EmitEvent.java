@@ -12,7 +12,6 @@ import java.lang.annotation.Target;
  * a significant business operation that should be captured as a domain event
  * for asynchronous consumption by other modules via Spring Modulith.
  * 
- * The {@link EmitEventAspect} intercepts methods annotated with @EmitEvent,
  * publishes an {@link EventEmitted} domain event after the method completes
  * successfully, and enables decoupled, event-driven communication between
  * modules while maintaining audit trails and observability.
@@ -20,7 +19,6 @@ import java.lang.annotation.Target;
  * Usage example:
  * 
  * <pre>
- * @EmitEvent(id = "order.created")
  * public Order createOrder(OrderRequest request) {
  *     // business logic
  *     return savedOrder;

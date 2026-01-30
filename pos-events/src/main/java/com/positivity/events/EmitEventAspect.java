@@ -13,7 +13,6 @@ import java.time.Instant;
 
 /**
  * Aspect for intercepting and publishing domain events from methods annotated
- * with @EmitEvent.
  * 
  * This aspect uses Spring AOP to intercept methods marked with the
  * {@link EmitEvent} annotation,
@@ -21,7 +20,6 @@ import java.time.Instant;
  * operations across
  * the backend microservices.
  * 
- * When an @EmitEvent annotated method executes, this aspect:
  * 1. Logs the event start timestamp
  * 2. Executes the target method
  * 3. Publishes an {@link EventEmitted} domain event via Spring's
@@ -31,7 +29,6 @@ import java.time.Instant;
  * 
  * The published EventEmitted events are consumed by the Event Receiver module
  * via
- * Spring Modulith's {@code @ApplicationModuleListener}, enabling decoupled,
  * asynchronous
  * communication between modules while maintaining audit trails and
  * observability.
@@ -55,7 +52,6 @@ public class EmitEventAspect {
     private final ApplicationEventPublisher publisher;
 
     /**
-     * Aspect method that intercepts methods annotated with @EmitEvent.
      * 
      * @param joinPoint
      * @return

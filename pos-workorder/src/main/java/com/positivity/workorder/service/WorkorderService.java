@@ -1,15 +1,15 @@
 package com.positivity.workorder.service;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.workorder.entity.AuditEvent;
-import com.positivity.workorder.entity.Estimate;
-import com.positivity.workorder.entity.EstimateStatus;
-import com.positivity.workorder.entity.Workorder;
-import com.positivity.workorder.entity.WorkorderStatus;
-import com.positivity.workorder.event.EstimateRevisedEvent;
-import com.positivity.workorder.event.WorkCompletedEvent;
-import com.positivity.workorder.repository.AuditEventRepository;
-import com.positivity.workorder.repository.WorkorderRepository;
+import com.positivity.workorder.internal.entity.AuditEvent;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.event.EstimateRevisedEvent;
+import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -145,16 +145,15 @@ public class WorkorderService {
         stateMachine.transitionWorkorder(workorderId, toStatus, userId, reason);
     }
 
-    public List<com.positivity.workorder.entity.WorkorderStateTransition> getTransitionHistory(Long workorderId) {
+    public List<com.positivity.workorder.internal.entity.WorkorderStateTransition> getTransitionHistory(Long workorderId) {
         return stateMachine.getTransitionHistory(workorderId);
     }
 
-    public List<com.positivity.workorder.entity.WorkorderSnapshot> getSnapshotHistory(Long workorderId) {
+    public List<com.positivity.workorder.internal.entity.WorkorderSnapshot> getSnapshotHistory(Long workorderId) {
         return stateMachine.getSnapshotHistory(workorderId);
     }
 
     @Transactional
-    @EmitEvent(id = "WorkCompleted")
     public WorkCompletedEvent completeWorkorder(Long workorderId, Long userId, String completionNotes) {
         // Perform the completion logic
         stateMachine.completeWorkorder(workorderId, userId, completionNotes);

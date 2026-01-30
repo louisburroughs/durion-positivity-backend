@@ -20,7 +20,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.modulith.NamedInterface;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
@@ -37,7 +36,6 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/v1/products")
 @Tag(name = "Catalog API", description = "API for managing catalog items")
-@NamedInterface(name = "Catalog API")
 public class CatalogController {
     public static final String UNSUPPORTED_ITEM_TYPE = "Unsupported item type: {}";
     public static final String PRODUCT = "product";
@@ -53,7 +51,6 @@ public class CatalogController {
      * @return ResponseEntity containing the product or a 404 status if not found.
      */
 
-    @EmitEvent(id = "Catalog-000001-0000000001")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}")
     @Operation(summary = "Get a product by ID", description = "Retrieves a specific product by its unique ID.")
@@ -73,7 +70,6 @@ public class CatalogController {
      * @param name The name of the products.
      * @return List of products matching the name.
      */
-    @EmitEvent(id = "Catalog-000001-0000000002")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/name/{name}")
     @Operation(summary = "Get products by name", description = "Retrieves a list of products matching the given name.")
@@ -96,7 +92,6 @@ public class CatalogController {
      * @return ResponseEntity containing the ProductDetailView or appropriate error
      *         status
      */
-    @EmitEvent(id = "Catalog-000001-0000000015")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("product/{productId}")
     @Operation(summary = "Get product details with pricing and availability", description = "Retrieves a consolidated view of product information including catalog data, "
@@ -141,7 +136,6 @@ public class CatalogController {
      * @param serviceId The ID of the service.
      * @return ResponseEntity containing the service or a 404 status if not found.
      */
-    @EmitEvent(id = "Catalog-000001-0000000003")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/service/{serviceId}")
     @Operation(summary = "Get a service by ID", description = "Retrieves a specific service by its unique ID.")
@@ -161,7 +155,6 @@ public class CatalogController {
      * @param name The name of the services.
      * @return List of services matching the name.
      */
-    @EmitEvent(id = "Catalog-000001-0000000004")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/service/name/{name}")
     @Operation(summary = "Get services by name", description = "Retrieves a list of services matching the given name.")
@@ -180,7 +173,6 @@ public class CatalogController {
      * @return ResponseEntity containing the non-inventory product or a 404 status
      *         if not found.
      */
-    @EmitEvent(id = "Catalog-000001-0000000005")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/noninventory/{productId}")
     @Operation(summary = "Get a non-inventory product by ID", description = "Retrieves a specific non-inventory product by its unique ID.")
@@ -200,7 +192,6 @@ public class CatalogController {
      * @param name The name of the non-inventory products.
      * @return List of non-inventory products matching the name.
      */
-    @EmitEvent(id = "Catalog-000001-0000000006")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/noninventory/name/{name}")
     @Operation(summary = "Get non-inventory products by name", description = "Retrieves a list of non-inventory products matching the given name.")
@@ -218,7 +209,6 @@ public class CatalogController {
      * @param catalogId The ID of the catalog.
      * @return ResponseEntity containing the catalog or a 404 status if not found.
      */
-    @EmitEvent(id = "Catalog-000001-0000000007")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/catalog/{catalogId}")
     @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
@@ -238,7 +228,6 @@ public class CatalogController {
      * @param name The name of the catalogs.
      * @return List of catalogs matching the name.
      */
-    @EmitEvent(id = "Catalog-000001-0000000008")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/catalog/name/{name}")
     @Operation(summary = "Get catalogs by name", description = "Retrieves a list of catalogs matching the given name.")
@@ -257,7 +246,6 @@ public class CatalogController {
      * @param type The type of the catalog item (product, service, noninventory).
      * @return ResponseEntity containing the created item or an error status.
      */
-    @EmitEvent(id = "Catalog-000001-0000000009")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/{type}")
     @Operation(summary = "Add a new catalog item", description = "Adds a new product, service, or non-inventory product to the catalog.")
@@ -303,7 +291,6 @@ public class CatalogController {
      * @param type      The type of the catalog item.
      * @return ResponseEntity containing the updated item or an error status.
      */
-    @EmitEvent(id = "Catalog-000001-0000000010")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/{type}/{catalogId}")
     @Operation(summary = "Update an existing catalog item", description = "Updates an existing product, service, or non-inventory product in the catalog.")
@@ -354,7 +341,6 @@ public class CatalogController {
      * @param type      The type of the catalog item.
      * @return ResponseEntity indicating success or failure.
      */
-    @EmitEvent(id = "Catalog-000001-0000000011")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
     @DeleteMapping("/{type}/{catalogId}")
     @Operation(summary = "Delete a catalog item", description = "Deletes a product, service, or non-inventory product from the catalog by its ID.")
@@ -391,7 +377,6 @@ public class CatalogController {
      * @param catalogEntity The catalog to add.
      * @return ResponseEntity containing the created catalog or an error status.
      */
-    @EmitEvent(id = "Catalog-000001-0000000012")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/catalog")
     @Operation(summary = "Add a new catalog", description = "Adds a new catalog.")
@@ -412,7 +397,6 @@ public class CatalogController {
      * @param catalogEntity The updated catalog details.
      * @return ResponseEntity containing the updated catalog or an error status.
      */
-    @EmitEvent(id = "Catalog-000001-0000000013")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PutMapping("/catalog/{catalogId}")
     @Operation(summary = "Update an existing catalog", description = "Updates an existing catalog.")
@@ -434,7 +418,6 @@ public class CatalogController {
      * @param catalogId The ID of the catalog to delete.
      * @return ResponseEntity indicating success or failure.
      */
-    @EmitEvent(id = "Catalog-000001-0000000014")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
     @DeleteMapping("/catalog/{catalogId}")
     @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
@@ -448,7 +431,6 @@ public class CatalogController {
         return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 
-    @EmitEvent(id = "Catalog-000001-0000000016")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/substitutes/{productId}")
     @Operation(summary = "Get substitute parts", description = "Returns list of substitute parts for a given productId.")

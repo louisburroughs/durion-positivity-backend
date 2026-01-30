@@ -1,13 +1,13 @@
 package com.positivity.workorder.service;
 
-import com.positivity.workorder.dto.CreateEstimateRequest;
-import com.positivity.workorder.entity.ApprovalConfiguration;
-import com.positivity.workorder.entity.Estimate;
-import com.positivity.workorder.entity.EstimateSequence;
-import com.positivity.workorder.entity.EstimateStatus;
-import com.positivity.workorder.entity.Workorder;
-import com.positivity.workorder.event.EstimateRevisedEvent;
-import com.positivity.workorder.repository.*;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.entity.ApprovalConfiguration;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateSequence;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.event.EstimateRevisedEvent;
+import com.positivity.workorder.internal.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;

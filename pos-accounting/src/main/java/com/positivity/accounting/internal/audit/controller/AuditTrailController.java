@@ -17,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.modulith.NamedInterface;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -32,7 +31,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Audit Trail", description = "Audit trail operations for tracking accounting exceptions and overrides")
-@NamedInterface(name = "Audit Trail API")
 public class AuditTrailController {
 
     private final AuditTrailService auditService;

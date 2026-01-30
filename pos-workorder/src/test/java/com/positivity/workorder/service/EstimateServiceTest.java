@@ -1,11 +1,11 @@
 package com.positivity.workorder.service;
 
-import com.positivity.workorder.dto.CreateEstimateRequest;
-import com.positivity.workorder.entity.ApprovalConfiguration;
-import com.positivity.workorder.entity.Estimate;
-import com.positivity.workorder.entity.EstimateStatus;
-import com.positivity.workorder.repository.ApprovalConfigurationRepository;
-import com.positivity.workorder.repository.EstimateRepository;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.entity.ApprovalConfiguration;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

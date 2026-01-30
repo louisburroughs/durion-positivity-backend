@@ -1,11 +1,11 @@
 package com.positivity.workorder.service;
 
-import com.positivity.workorder.entity.*;
-import com.positivity.workorder.repository.WorkorderRepository;
-import com.positivity.workorder.repository.WorkorderStateTransitionRepository;
-import com.positivity.workorder.repository.WorkorderSnapshotRepository;
-import com.positivity.workorder.repository.ChangeRequestRepository;
-import com.positivity.workorder.repository.AuditEventRepository;
+import com.positivity.workorder.internal.entity.*;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
+import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
+import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

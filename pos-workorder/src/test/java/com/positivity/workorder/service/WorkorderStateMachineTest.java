@@ -1,11 +1,11 @@
 package com.positivity.workorder.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.entity.*;
-import com.positivity.workorder.repository.ChangeRequestRepository;
-import com.positivity.workorder.repository.WorkorderRepository;
-import com.positivity.workorder.repository.WorkorderSnapshotRepository;
-import com.positivity.workorder.repository.WorkorderStateTransitionRepository;
+import com.positivity.workorder.internal.entity.*;
+import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
+import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

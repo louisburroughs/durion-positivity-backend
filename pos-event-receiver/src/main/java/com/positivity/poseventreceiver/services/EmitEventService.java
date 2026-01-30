@@ -7,15 +7,12 @@ import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.modulith.NamedInterface;
-import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
 
 
 @Slf4j
 @RequiredArgsConstructor
 @Service
-@NamedInterface(name = "Event Receiver API")
 public class EmitEventService {
     private final EventDao eventDao;
 
@@ -26,7 +23,6 @@ public class EmitEventService {
      *
      * @param request The event request containing id and timestamp
      */
-    @ApplicationModuleListener
     public void onEventEmitted(EmitEventRequest request) {
         log.info("Received EventEmitted event: id={}, timestamp={}", request.id(), request.timestamp());
         if (!eventDao.isPreregistered(request.id())) {
