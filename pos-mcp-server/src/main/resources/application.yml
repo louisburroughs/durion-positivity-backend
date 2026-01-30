@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-mcp-server
+    name: mcp-server
   jackson:
     default-property-inclusion: non_null
 

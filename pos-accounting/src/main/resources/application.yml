@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-accounting
+    name: accounting
   profiles:
     active: local
   datasource:

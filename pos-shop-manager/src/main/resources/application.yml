@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-shop-manager
+    name: shop-manager
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_shop_manager_db
     username: pos_user

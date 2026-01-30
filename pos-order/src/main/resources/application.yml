@@ -1,7 +1,7 @@
 # POS Order Service
 spring:
   application:
-    name: pos-order
+    name: order
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_order_db
     username: pos_user

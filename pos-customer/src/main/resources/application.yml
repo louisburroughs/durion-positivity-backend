@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-customer
+    name: customer
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_customer_db
     username: pos_user
