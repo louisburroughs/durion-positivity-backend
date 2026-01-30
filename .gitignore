@@ -34,7 +34,10 @@ build/
 
 ### Secrets Management ###
 .env
+.env.*
+!.env.example
 .env.local
+.env.docker
 *.p12
 keystore.p12
 application-secrets.yml
@@ -57,3 +60,7 @@ Durion-Processing.md
 **/Durion-Processing.md
 
 /logs/
+
+### guides that contain sensitive info ###
+SECRETS_UPDATE_SUMMARY.txt
+SECRETS_MANAGEMENT_GUIDE.md
