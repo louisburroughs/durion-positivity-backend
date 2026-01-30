@@ -1,6 +1,5 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.positivity</groupId>
@@ -13,7 +12,7 @@
     <packaging>jar</packaging>
     <properties>
         <java.version>21</java.version>
-		<spring-cloud.version>2024.0.0</spring-cloud.version>
+        <spring-cloud.version>2024.0.0</spring-cloud.version>
     </properties>
     <dependencies>
         <!-- https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-webflux -->
@@ -36,7 +35,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.6.0</version>
+            <version>${springdoc-openapi.version}</version>
         </dependency>
         <!-- Spring Boot Logging (includes SLF4J + Logback) -->
         <dependency>
@@ -55,7 +54,8 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <skip>false</skip> </configuration>
+                    <skip>false</skip>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -103,7 +103,7 @@
                     <plugin>
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                        <version>1.5</version>
+                        <version>${springdoc-openapi-maven-plugin.version}</version>
                         <executions>
                             <execution>
                                 <id>generate-openapi-profile</id>

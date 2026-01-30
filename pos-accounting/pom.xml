@@ -23,11 +23,7 @@
         </pluginRepository>
     </pluginRepositories>
 
-    <properties>
-        <opentelemetry.version>1.40.0</opentelemetry.version>
-        <springdoc.version>2.7.0</springdoc.version>
-        <springdoc.maven.plugin.version>1.5</springdoc.maven.plugin.version>
-    </properties>
+
 
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -112,7 +108,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>${springdoc.version}</version>
+            <version>${springdoc-openapi.version}</version>
         </dependency>
 
         <!-- Lombok -->
@@ -126,7 +122,6 @@
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Testing -->
@@ -215,7 +210,7 @@
                     <plugin>
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                        <version>1.5</version>
+                        <version>${springdoc-openapi-maven-plugin.version}</version>
                         <executions>
                             <execution>
                                 <id>generate-openapi-profile</id>

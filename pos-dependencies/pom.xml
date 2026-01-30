@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.positivity</groupId>
+    <artifactId>pos-dependencies</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>pos-dependencies</name>
+    <description>BOM for internal Positivity microservice artifacts and shared dependencies</description>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Shared Event Library -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-events</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Test Aggregator (Architecture Testing) -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-archunit</artifactId>
+                <version>${project.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- Agent Framework (Shared Library) -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-agent-framework</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>
