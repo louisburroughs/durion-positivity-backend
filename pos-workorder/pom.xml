@@ -68,7 +68,6 @@
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
         </dependency>
         <!-- Eureka Client -->
         <dependency>
@@ -98,14 +97,8 @@
         </dependency>
         <!-- Jackson Databind -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-        </dependency>
-        <!-- POS Events for event emission -->
-        <dependency>
-            <groupId>com.positivity</groupId>
-            <artifactId>pos-events</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
         </dependency>
         <!-- Test dependencies -->
         <dependency>

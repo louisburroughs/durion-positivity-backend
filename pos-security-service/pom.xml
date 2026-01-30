@@ -80,7 +80,6 @@
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
-            <version>6.0.0</version>
         </dependency>
         <!-- Tomcat Connector for HTTP to HTTPS redirect -->
         <dependency>
@@ -95,7 +94,7 @@
         </dependency>
         <!-- Jackson for JSON -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
         <!-- Spring Boot Starter Test -->
