@@ -1,0 +1,32 @@
+# Conversion to YAML from Properties formar report
+# Warnings:
+# - The yaml file had comments which are lost in the refactoring!
+spring:
+  application:
+    name: POSITIVITY_ARCHUNIT
+  modulith:
+    detection-strategy: classpath
+    events:
+      async-mode: async
+server:
+  port: 0
+  servlet:
+    context-path: /
+logging:
+  level:
+    root: INFO
+    org:
+      springframework:
+        modulith: DEBUG
+    com:
+      positivity: DEBUG
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,modulith
+  endpoint:
+    health:
+      show-details: always

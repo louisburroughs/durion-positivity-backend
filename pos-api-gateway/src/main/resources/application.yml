@@ -1,0 +1,63 @@
+server:
+  port: 8080
+# This is the configuration for the API Gateway in a Spring Boot application.
+spring:
+  application:
+    name: pos-api-gateway
+  profiles:
+    active: local
+  cloud:
+    gateway:
+      # Auto-route from Eureka service discovery
+      discovery:
+        locator:
+          enabled: true # Enable automatic route generation from Eureka
+          lower-case-service-id: true # Service IDs to lowercase (catalog, inventory, etc)
+      
+      # No static routes needed! Discovery locator auto-generates:
+      # Pattern: /v{version}/{serviceId}/** -> lb://{serviceId}
+      # Then ApiVersionHeaderToPathFilter rewrites /domain/** to /v{version}/domain/**
+      
+      # GlobalFilter pipeline:
+      # 1. ApiVersionHeaderToPathFilter: /inventory/items -> /v1/inventory/items
+      # 2. Discovery locator matches: /v1/inventory/** -> lb://inventory (Eureka)
+      # 3. Built-in RewritePath filter strips /v1/inventory -> /items
+      # Result: Service receives /items
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: gateway,health,info # Expose gateway-specific actuator endpoints
+  endpoint:
+    health:
+      show-details: always
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka # Address of your Eureka Server
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    config-url: /v3/api-docs/swagger-config
+    urls:
+      - name: gateway
+        url: /v3/api-docs
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework:
+        cloud:
+          gateway: DEBUG
+    com:
+      positivity:
+        gateway: DEBUG

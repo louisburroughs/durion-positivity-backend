@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: mcp-server
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: 0
+  servlet:
+    context-path: /
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+    health-check-url-path: /actuator/health
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  prometheus:
+    metrics:
+        export:
+            enabled: true
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  show-actuator: true
+
+logging:
+  level:
+    com:
+      positivity:
+        mcp: DEBUG
+    org:
+      springframework:
+        web: INFO
+        cloud: INFO

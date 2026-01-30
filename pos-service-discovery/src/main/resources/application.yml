@@ -1,0 +1,27 @@
+server:
+  port: 8761
+spring:
+  application:
+    name: pos-service-discovery
+  autoconfigure:
+    exclude:
+      - org.springframework.cloud.client.discovery.simple.SimpleDiscoveryClientAutoConfiguration
+      - org.springframework.cloud.autoconfigure.RefreshAutoConfiguration
+      - org.springframework.cloud.autoconfigure.LifecycleMvcEndpointAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.web.servlet.WebMvcEndpointHandlerMapping
+  main:
+    allow-bean-definition-overriding: true
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+  server:
+    wait-time-in-ms-when-sync-empty: 0
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
