@@ -6,8 +6,7 @@ import com.positivity.nhtsa.internal.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -26,20 +25,23 @@ public class VehicleReferenceService {
     private final MakeRepository makeRepository;
     private final ModelRepository modelRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final VehicleVariableRepository vehicleVariableRepository;
     private final VehicleVariableValueRepository vehicleVariableValueRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-     public List<VehicleVariable> getVehicleVariables() {
+    public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableList?format=json";
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
-            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
             vehicleVariableRepository.deleteAll();
             for (JsonNode node : results) {
@@ -61,9 +63,12 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + "?format=json";
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
-            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
             vehicleVariableValueRepository.deleteAll(cached);
             for (JsonNode node : results) {
@@ -79,15 +84,19 @@ public class VehicleReferenceService {
         }
         return vehicleVariableValueRepository.findByVariableId(variableId);
     }
+
     public List<Manufacturer> getManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/getallmanufacturers?format=json";
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
-            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
             manufacturerRepository.deleteAll();
             for (JsonNode node : results) {
@@ -111,9 +120,12 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + "?format=json";
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
-            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
             makeRepository.deleteAll(cached);
             for (JsonNode node : results) {
@@ -138,9 +150,12 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + "?format=json";
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
-            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
             modelRepository.deleteAll(cached);
             for (JsonNode node : results) {
@@ -165,9 +180,12 @@ public class VehicleReferenceService {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + "?format=json";
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+        String response = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(String.class);
         try {
-            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode root = objectMapper.readTree(response);
             JsonNode results = root.get("Results");
             vehicleTypeRepository.deleteAll(cached);
             for (JsonNode node : results) {

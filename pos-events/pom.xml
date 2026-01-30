@@ -19,10 +19,20 @@
             <artifactId>spring-context</artifactId>
         </dependency>
 
-        <!-- Spring AOP for aspect-based event interception -->
+        <!-- Spring AOP for aspect-based event interception (replaces spring-boot-starter-aop in Spring Boot 4.0) -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
+        </dependency>
+
+        <!-- AspectJ for AOP weaving -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjrt</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
         </dependency>
 
         <!-- Spring Boot Auto-configuration for seamless library integration -->
