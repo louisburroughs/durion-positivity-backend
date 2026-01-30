@@ -1,23 +1,17 @@
 package com.positivity.workorder;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
 
+/**
+ * Spring Boot application entry point for the Workorder service.
+ * 
+ * Note: Jackson 3.0 ObjectMapper is auto-configured by Spring Boot 4.0.1 with
+ * Java 8 date/time support built-in. No manual configuration required.
+ */
 @SpringBootApplication
 public class PosWorkorderApplication {
     public static void main(String[] args) {
         SpringApplication.run(PosWorkorderApplication.class, args);
-    }
-
-    @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        return mapper;
     }
 }

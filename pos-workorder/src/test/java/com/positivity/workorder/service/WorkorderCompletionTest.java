@@ -1,6 +1,6 @@
 package com.positivity.workorder.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.entity.*;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.repository.*;
