@@ -1,8 +1,7 @@
 package com.positivity.mcp;
 
-import tools.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
@@ -25,7 +24,7 @@ public class McpServerConfiguration {
         private static final Logger logger = LoggerFactory.getLogger(McpServerConfiguration.class);
 
         @Bean
-        public McpSyncServer mcpSyncServer(ObjectMapper objectMapper) {
+        public McpSyncServer mcpSyncServer() {
                 // Define the ping tool with empty object schema
                 McpSchema.Tool pingTool = McpSchema.Tool.builder()
                                 .name("positivity-ping")
@@ -35,7 +34,7 @@ public class McpServerConfiguration {
                                 .build();
 
                 // Build the sync server with the ping tool
-                McpJsonMapper jsonMapper = new JacksonMcpJsonMapper(objectMapper);
+                McpJsonMapper jsonMapper = new JacksonMcpJsonMapperSupplier().get();
                 McpServerTransportProvider transportProvider = new StdioServerTransportProvider(jsonMapper);
                 McpSyncServer server = McpServer.sync(transportProvider)
                                 .serverInfo("durion-positivity-mcp-server", "0.0.1")
