@@ -12,9 +12,7 @@
     <description>Architecture testing aggregator for all POS domain modules using ArchUnit</description>
     <packaging>jar</packaging>
 
-    <properties>
-        <java.version>21</java.version>
-    </properties>
+
 
     <dependencies>
         <!-- ArchUnit for architecture testing -->

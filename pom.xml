@@ -18,6 +18,7 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- Spring Cloud BOM -->
 			<dependency>
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-dependencies</artifactId>
@@ -25,16 +26,119 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+
+			<!-- Internal Positivity BOM (for internal com.positivity:* artifacts) -->
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-dependencies</artifactId>
+				<version>${project.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
+			<!-- TEST DEPENDENCIES -->
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter-api</artifactId>
+				<version>${junit5.version}</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter-engine</artifactId>
+				<version>${junit5.version}</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.mockito</groupId>
+				<artifactId>mockito-core</artifactId>
+				<version>${mockito.version}</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.mockito</groupId>
+				<artifactId>mockito-junit-jupiter</artifactId>
+				<version>${mockito.version}</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.assertj</groupId>
+				<artifactId>assertj-core</artifactId>
+				<version>${assertj.version}</version>
+				<scope>test</scope>
+			</dependency>
 			<dependency>
 				<groupId>com.tngtech.archunit</groupId>
 				<artifactId>archunit-junit5</artifactId>
 				<version>${archunit.version}</version>
 				<scope>test</scope>
 			</dependency>
+
+			<!-- UTILITY LIBRARIES -->
+			<dependency>
+				<groupId>org.projectlombok</groupId>
+				<artifactId>lombok</artifactId>
+				<version>${lombok.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+
+			<!-- OPENAPI / SWAGGER -->
+			<dependency>
+				<groupId>org.springdoc</groupId>
+				<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+				<version>${springdoc-openapi.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springdoc</groupId>
+				<artifactId>springdoc-openapi-starter-common</artifactId>
+				<version>${springdoc-openapi.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.swagger.core.v3</groupId>
+				<artifactId>swagger-annotations</artifactId>
+				<version>${swagger-annotations.version}</version>
+			</dependency>
+
+			<!-- OPENTELEMETRY (Optional - for gradual observability adoption) -->
+			<dependency>
+				<groupId>io.opentelemetry</groupId>
+				<artifactId>opentelemetry-api</artifactId>
+				<version>${opentelemetry.version}</version>
+				<optional>true</optional>
+			</dependency>
+			<dependency>
+				<groupId>io.opentelemetry</groupId>
+				<artifactId>opentelemetry-sdk</artifactId>
+				<version>${opentelemetry.version}</version>
+				<optional>true</optional>
+			</dependency>
+			<dependency>
+				<groupId>io.opentelemetry</groupId>
+				<artifactId>opentelemetry-exporter-otlp</artifactId>
+				<version>${opentelemetry.version}</version>
+				<optional>true</optional>
+			</dependency>
+			<dependency>
+				<groupId>io.opentelemetry</groupId>
+				<artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
+				<version>${opentelemetry.version}</version>
+				<optional>true</optional>
+			</dependency>
+			<dependency>
+				<groupId>io.micrometer</groupId>
+				<artifactId>micrometer-tracing-bridge-otel</artifactId>
+				<version>1.4.2</version>
+				<optional>true</optional>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
 	<modules>
+		<module>pos-dependencies</module>
 		<module>pos-archunit</module>
 		<module>pos-agent-framework</module>
 		<module>pos-catalog</module>
@@ -90,9 +194,42 @@
 		<archunit.version>1.3.0</archunit.version>
 		<postgresql.version>42.7.7</postgresql.version>
 		<tomcat.version>10.1.47</tomcat.version>
+		<!-- Test Dependencies -->
+		<junit5.version>5.10.1</junit5.version>
+		<mockito.version>5.8.0</mockito.version>
+		<assertj.version>3.25.1</assertj.version>
+		<!-- Utility Libraries -->
+		<lombok.version>1.18.32</lombok.version>
+		<slf4j.version>2.0.13</slf4j.version>
+		<springdoc-openapi.version>2.7.0</springdoc-openapi.version>
+		<swagger-annotations.version>2.2.22</swagger-annotations.version>
+		<!-- OpenTelemetry (Optional) -->
+		<opentelemetry.version>1.40.0</opentelemetry.version>
+		<!-- Build Plugins -->
+		<maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
+		<springdoc-openapi-maven-plugin.version>1.5</springdoc-openapi-maven-plugin.version>
 	</properties>
 
 	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<version>${maven-compiler-plugin.version}</version>
+					<configuration>
+						<source>21</source>
+						<target>21</target>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.springdoc</groupId>
+					<artifactId>springdoc-openapi-maven-plugin</artifactId>
+					<version>${springdoc-openapi-maven-plugin.version}</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -118,7 +255,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.11.0</version>
+				<version>${maven-compiler-plugin.version}</version>
 				<configuration>
 					<source>21</source>
 					<target>21</target>

@@ -1,0 +1,5 @@
+pos-events as formal shared library: Mark pos-events clearly as a shared library in its README and document which modules depend on it; should this also have a separate published artifact version lifecycle?
+
+Gradual OpenTelemetry rollout: Adding OTel to parent as optional means all modules inherit it but don't use it unless explicitly imported. Should a phased adoption guide be created for onboarding other modules?
+
+pos-archunit test aggregator role: Clarify whether pos-archunit should remain a deployable module or be restructured as a pure test utility (Maven type jar vs. test-only classification)?

@@ -1,6 +1,5 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.positivity</groupId>
@@ -21,10 +20,7 @@
             <url>https://repo1.maven.org/maven2/org/springdoc/</url>
         </pluginRepository>
     </pluginRepositories>
-    <properties>
-        <springdoc.version>2.7.0</springdoc.version>
-        <springdoc.maven.plugin.version>1.5</springdoc.maven.plugin.version>
-    </properties>
+
     <dependencies>
         <!-- Spring Boot Starter Data JPA -->
         <dependency>
@@ -60,7 +56,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>${springdoc.version}</version>
+            <version>${springdoc-openapi.version}</version>
         </dependency>
         <!-- Spring Boot Starter Web -->
         <dependency>
@@ -125,11 +121,11 @@
             <plugin>
                 <groupId>org.springdoc</groupId>
                 <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                <version>${springdoc.maven.plugin.version}</version>
+                <version>${springdoc-openapi-maven-plugin.version}</version>
             </plugin>
         </plugins>
     </build>
-    
+
     <profiles>
         <profile>
             <id>openapi</id>
