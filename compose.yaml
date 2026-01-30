@@ -1,8 +1,0 @@
-services:
-  durionpositivitybackend:
-    image: durionpositivitybackend
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    ports:
-      - 8080:8080
