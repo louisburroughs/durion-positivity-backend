@@ -21,8 +21,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -39,7 +39,7 @@ public class AccountingSecurityConfig {
     private static final Logger log = LoggerFactory.getLogger(AccountingSecurityConfig.class);
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, RestTemplate restTemplate) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, RestClient restClient) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -48,13 +48,13 @@ public class AccountingSecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated())
-                .addFilterBefore(new JwtTokenFilter(restTemplate), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtTokenFilter(restClient), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
     @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
+    public RestClient restClient() {
+        return RestClient.create();
     }
 
     /**
@@ -62,10 +62,10 @@ public class AccountingSecurityConfig {
      * pos-security-service.
      */
     static class JwtTokenFilter extends OncePerRequestFilter {
-        private final RestTemplate restTemplate;
+        private final RestClient restClient;
 
-        JwtTokenFilter(RestTemplate restTemplate) {
-            this.restTemplate = restTemplate;
+        JwtTokenFilter(RestClient restClient) {
+            this.restClient = restClient;
         }
 
         @Override
@@ -106,21 +106,30 @@ public class AccountingSecurityConfig {
         }
 
         private boolean isTokenValid(String token) {
-            ResponseEntity<Map> validationResponse = restTemplate.getForEntity(
-                    "http://pos-security-service/v1/auth/validate?token=" + token, Map.class);
-            if (!validationResponse.getStatusCode().is2xxSuccessful() || validationResponse.getBody() == null) {
+            try {
+                Map response = restClient.get()
+                        .uri("http://pos-security-service/v1/auth/validate?token={token}", token)
+                        .retrieve()
+                        .body(Map.class);
+                if (response == null) {
+                    return false;
+                }
+                Object valid = response.get("valid");
+                return Boolean.TRUE.equals(valid);
+            } catch (RestClientException e) {
+                log.warn("Token validation failed", e);
                 return false;
             }
-            Object valid = validationResponse.getBody().get("valid");
-            return Boolean.TRUE.equals(valid);
         }
 
         private String fetchSubject(String token) {
             try {
-                ResponseEntity<String> subjectResponse = restTemplate.getForEntity(
-                        "http://pos-security-service/v1/auth/subject?token=" + token, String.class);
-                if (subjectResponse.getStatusCode().is2xxSuccessful() && subjectResponse.getBody() != null) {
-                    return subjectResponse.getBody();
+                String subject = restClient.get()
+                        .uri("http://pos-security-service/v1/auth/subject?token={token}", token)
+                        .retrieve()
+                        .body(String.class);
+                if (subject != null && !subject.isBlank()) {
+                    return subject;
                 }
             } catch (RestClientException e) {
                 log.warn("Failed to fetch subject from security-service", e);
@@ -131,10 +140,12 @@ public class AccountingSecurityConfig {
         private Set<SimpleGrantedAuthority> fetchAuthorities(String token) {
             Set<String> authorityStrings = new HashSet<>();
             try {
-                ResponseEntity<List> authResponse = restTemplate.getForEntity(
-                        "http://pos-security-service/v1/auth/authorities?token=" + token, List.class);
-                if (authResponse.getStatusCode().is2xxSuccessful() && authResponse.getBody() != null) {
-                    authorityStrings.addAll((List<String>) authResponse.getBody());
+                List authList = restClient.get()
+                        .uri("http://pos-security-service/v1/auth/authorities?token={token}", token)
+                        .retrieve()
+                        .body(List.class);
+                if (authList != null) {
+                    authorityStrings.addAll((List<String>) authList);
                 }
             } catch (RestClientException e) {
                 log.warn("Failed to fetch authorities; falling back to roles", e);
@@ -142,10 +153,12 @@ public class AccountingSecurityConfig {
 
             if (authorityStrings.isEmpty()) {
                 try {
-                    ResponseEntity<List> rolesResponse = restTemplate.getForEntity(
-                            "http://pos-security-service/v1/auth/roles?token=" + token, List.class);
-                    if (rolesResponse.getStatusCode().is2xxSuccessful() && rolesResponse.getBody() != null) {
-                        authorityStrings.addAll((List<String>) rolesResponse.getBody());
+                    List rolesList = restClient.get()
+                            .uri("http://pos-security-service/v1/auth/roles?token={token}", token)
+                            .retrieve()
+                            .body(List.class);
+                    if (rolesList != null) {
+                        authorityStrings.addAll((List<String>) rolesList);
                     }
                 } catch (RestClientException e) {
                     log.warn("Failed to fetch roles from security-service", e);

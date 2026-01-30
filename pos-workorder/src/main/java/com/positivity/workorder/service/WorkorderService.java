@@ -15,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.time.Instant;
@@ -30,7 +30,7 @@ import java.util.UUID;
 @Slf4j
 public class WorkorderService {
     private final WorkorderRepository workorderRepository;
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final EstimateService estimateService;
     private final WorkorderStateMachine stateMachine;
     private final AuditEventRepository auditEventRepository;
@@ -84,8 +84,10 @@ public class WorkorderService {
 
     private boolean checkCustomerRequirements(Long customerId) {
         try {
-            Boolean result = restTemplate.getForObject(customerServiceUrl + "/" + customerId + "/requirements-met",
-                    Boolean.class);
+            Boolean result = restClient.get()
+                    .uri(customerServiceUrl + "/" + customerId + "/requirements-met")
+                    .retrieve()
+                    .body(Boolean.class);
             return Boolean.TRUE.equals(result);
         } catch (Exception e) {
             log.error("Failed to check customer requirements", e);
@@ -95,8 +97,10 @@ public class WorkorderService {
 
     private boolean checkCustomerApproval(Long approvalId) {
         try {
-            Boolean result = restTemplate.getForObject(customerApprovalServiceUrl + "/" + approvalId + "/is-approved",
-                    Boolean.class);
+            Boolean result = restClient.get()
+                    .uri(customerApprovalServiceUrl + "/" + approvalId + "/is-approved")
+                    .retrieve()
+                    .body(Boolean.class);
             return Boolean.TRUE.equals(result);
         } catch (Exception e) {
             log.error("Failed to check customer approval", e);
@@ -145,7 +149,8 @@ public class WorkorderService {
         stateMachine.transitionWorkorder(workorderId, toStatus, userId, reason);
     }
 
-    public List<com.positivity.workorder.internal.entity.WorkorderStateTransition> getTransitionHistory(Long workorderId) {
+    public List<com.positivity.workorder.internal.entity.WorkorderStateTransition> getTransitionHistory(
+            Long workorderId) {
         return stateMachine.getTransitionHistory(workorderId);
     }
 

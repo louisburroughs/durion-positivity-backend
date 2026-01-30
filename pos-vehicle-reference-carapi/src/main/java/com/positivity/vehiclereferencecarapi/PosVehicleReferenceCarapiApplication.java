@@ -3,7 +3,7 @@ package com.positivity.vehiclereferencecarapi;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 @SpringBootApplication
 public class PosVehicleReferenceCarapiApplication {
@@ -12,8 +12,7 @@ public class PosVehicleReferenceCarapiApplication {
     }
 
     @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
+    public RestClient restClient() {
+        return RestClient.create();
     }
 }
-
