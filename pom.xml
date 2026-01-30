@@ -36,19 +36,7 @@
 				<scope>import</scope>
 			</dependency>
 
-			<!-- TEST DEPENDENCIES -->
-			<dependency>
-				<groupId>org.junit.jupiter</groupId>
-				<artifactId>junit-jupiter-api</artifactId>
-				<version>${junit5.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.junit.jupiter</groupId>
-				<artifactId>junit-jupiter-engine</artifactId>
-				<version>${junit5.version}</version>
-				<scope>test</scope>
-			</dependency>
+			<!-- TEST DEPENDENCIES - JUnit managed by Spring Boot 4.0.1 (6.0.1) -->
 			<dependency>
 				<groupId>org.mockito</groupId>
 				<artifactId>mockito-core</artifactId>
@@ -216,8 +204,7 @@
 		<archunit.version>1.3.0</archunit.version>
 		<postgresql.version>42.7.7</postgresql.version>
 		<tomcat.version>10.1.28</tomcat.version>
-		<!-- Test Dependencies -->
-		<junit5.version>5.10.1</junit5.version>
+		<!-- Test Dependencies - JUnit managed by Spring Boot 4.0.1 (6.0.1) -->
 		<mockito.version>5.9.0</mockito.version>
 		<assertj.version>3.25.1</assertj.version>
 		<!-- Utility Libraries -->
