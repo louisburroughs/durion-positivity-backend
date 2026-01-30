@@ -37,11 +37,10 @@ import java.time.Instant;
  * communication,
  * enforcing the architectural constraint that all cross-module interactions
  * must use
- * Spring Modulith events rather than direct repository access or REST calls.
+ * direct repository access or REST calls.
  * 
  * @see EmitEvent
  * @see EventEmitted
- * @see org.springframework.modulith.events.ApplicationModuleListener
  */
 @Slf4j
 @Aspect

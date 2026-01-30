@@ -1,4 +1,4 @@
-package com.positivity.modulith;
+package com.positivity.archunit;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -22,10 +22,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * See: durion/docs/adr/0009-backend-domain-responsibilities-guide.adr.md
  */
 @SpringBootApplication
-public class PositivityModulithApplication {
+public class PositivityArchunitApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(PositivityModulithApplication.class, args);
+		SpringApplication.run(PositivityArchunitApplication.class, args);
 	}
 
 }

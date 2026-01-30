@@ -3,7 +3,7 @@
 # - The yaml file had comments which are lost in the refactoring!
 spring:
   application:
-    name: POSITIVITY_MODULITH
+    name: POSITIVITY_ARCHUNIT
   modulith:
     detection-strategy: classpath
     events:
