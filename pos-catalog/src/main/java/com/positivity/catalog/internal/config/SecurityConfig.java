@@ -23,7 +23,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -42,25 +42,26 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorizationManager -> authorizationManager
                         .requestMatchers("/actuator/**").permitAll()
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .addFilter(new JwtTokenFilter());
         return http.build();
     }
 
     @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
+    public RestClient restClient() {
+        return RestClient.create();
     }
 
     static class JwtTokenFilter extends OncePerRequestFilter {
-        private final RestTemplate restTemplate = new RestTemplate();
+        private final RestClient restClient = RestClient.create();
 
         public JwtTokenFilter() {
             // Default constructor
         }
+
         @Override
-        protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
+        protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response,
+                @NonNull FilterChain filterChain)
                 throws IOException, ServletException {
             String header = request.getHeader("Authorization");
 
@@ -68,16 +69,16 @@ public class SecurityConfig {
                 String token = header.substring(7);
                 try {
                     // Validate JWT
-                    HttpHeaders headers = new HttpHeaders();
-                    headers.setContentType(MediaType.APPLICATION_JSON);
-                    headers.set("Authorization", "Bearer " + token);
-                    HttpEntity<String> entity = new HttpEntity<>(null, headers);
                     String securityServiceUrl = "http://pos-security-service/api/auth/validate";
-                    ResponseEntity<String> validationResponse = restTemplate.exchange(
-                            securityServiceUrl, HttpMethod.POST, entity, String.class);
+                    String validationResult = restClient.post()
+                            .uri(securityServiceUrl)
+                            .header("Authorization", "Bearer " + token)
+                            .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                            .retrieve()
+                            .body(String.class);
 
-                    if (!validationResponse.getStatusCode().is2xxSuccessful()) {
-                        log.warn("JWT validation failed with status: {}", validationResponse.getStatusCode());
+                    if (validationResult == null) {
+                        log.warn("JWT validation failed");
                         SecurityContextHolder.clearContext();
                         response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
                         return;
@@ -85,21 +86,24 @@ public class SecurityConfig {
 
                     // Get roles
                     String rolesUrl = "http://pos-security-service/api/jwt/roles?token=" + token;
-                    ResponseEntity<List<String>> rolesResponse = restTemplate.exchange(rolesUrl,
-                            HttpMethod.GET,
-                            null,
-                            new org.springframework.core.ParameterizedTypeReference<>() {
+                    List<String> roles = restClient.get()
+                            .uri(rolesUrl)
+                            .retrieve()
+                            .body(new org.springframework.core.ParameterizedTypeReference<>() {
                             });
-                    List<?> body = rolesResponse.getBody();
-                    List<String> roles = (rolesResponse.getStatusCode().is2xxSuccessful() && body != null)
-                            ? body.stream().filter(String.class::isInstance).map(String.class::cast).toList()
-                            : List.of();
+                    if (roles == null) {
+                        roles = List.of();
+                    }
 
                     // Get username
                     String subjectUrl = "http://pos-security-service/api/jwt/subject?token=" + token;
-                    ResponseEntity<String> subjectResponse = restTemplate.getForEntity(subjectUrl, String.class);
-                    String username = (subjectResponse.getStatusCode().is2xxSuccessful() && subjectResponse.getBody() != null)
-                            ? subjectResponse.getBody() : "unknown";
+                    String username = restClient.get()
+                            .uri(subjectUrl)
+                            .retrieve()
+                            .body(String.class);
+                    if (username == null) {
+                        username = "unknown";
+                    }
 
                     List<SimpleGrantedAuthority> authorities = roles.stream()
                             .map(SimpleGrantedAuthority::new)
@@ -119,4 +123,3 @@ public class SecurityConfig {
         }
     }
 }
-

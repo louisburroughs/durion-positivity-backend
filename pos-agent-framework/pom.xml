@@ -24,11 +24,10 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- JUnit 5 for testing -->
+		<!-- JUnit 5 for testing - version managed by Spring Boot parent -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
-			<version>${junit5.version}</version>
 			<scope>test</scope>
 		</dependency>
 

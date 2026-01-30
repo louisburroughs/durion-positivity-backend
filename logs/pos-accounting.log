@@ -1,0 +1,1166 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.0.1)
+
+2026-01-30T11:32:37.548-05:00  INFO 851359 --- [accounting] [           main] c.p.accounting.PosAccountingApplication  : Starting PosAccountingApplication v0.0.1-SNAPSHOT using Java 21.0.5 with PID 851359 (/home/louisb/Projects/durion-positivity-backend/pos-accounting/target/pos-accounting-0.0.1-SNAPSHOT.jar started by louisb in /home/louisb/Projects/durion-positivity-backend)
+2026-01-30T11:32:37.573-05:00 DEBUG 851359 --- [accounting] [           main] c.p.accounting.PosAccountingApplication  : Running with Spring Boot v4.0.1, Spring v7.0.2
+2026-01-30T11:32:37.578-05:00  INFO 851359 --- [accounting] [           main] c.p.accounting.PosAccountingApplication  : The following 1 profile is active: "local"
+2026-01-30T11:32:42.093-05:00  INFO 851359 --- [accounting] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-01-30T11:32:42.233-05:00  INFO 851359 --- [accounting] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 124 ms. Found 17 JPA repository interfaces.
+2026-01-30T11:32:43.801-05:00  INFO 851359 --- [accounting] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 0 (http)
+2026-01-30T11:32:43.826-05:00  INFO 851359 --- [accounting] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-01-30T11:32:43.826-05:00  INFO 851359 --- [accounting] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.28]
+2026-01-30T11:32:43.870-05:00  INFO 851359 --- [accounting] [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 5808 ms
+2026-01-30T11:32:44.352-05:00  INFO 851359 --- [accounting] [           main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-01-30T11:32:44.446-05:00  INFO 851359 --- [accounting] [           main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.2.0.Final
+2026-01-30T11:32:45.211-05:00  INFO 851359 --- [accounting] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-01-30T11:32:45.252-05:00  INFO 851359 --- [accounting] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-01-30T11:32:45.507-05:00  INFO 851359 --- [accounting] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:pos_accounting user=SA
+2026-01-30T11:32:45.509-05:00  INFO 851359 --- [accounting] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-01-30T11:32:45.533-05:00  WARN 851359 --- [accounting] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-01-30T11:32:45.560-05:00  INFO 851359 --- [accounting] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:h2:mem:pos_accounting]
+	Database driver: H2 JDBC Driver
+	Database dialect: H2Dialect
+	Database version: 2.4.240
+	Default catalog/schema: POS_ACCOUNTING/PUBLIC
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: 100
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-01-30T11:32:47.321-05:00  INFO 851359 --- [accounting] [           main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-01-30T11:32:47.347-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists accounting_audit_log cascade 
+Hibernate: 
+    drop table if exists accounting_audit_log cascade 
+2026-01-30T11:32:47.349-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists accounting_event cascade 
+Hibernate: 
+    drop table if exists accounting_event cascade 
+2026-01-30T11:32:47.349-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists ap_payment cascade 
+Hibernate: 
+    drop table if exists ap_payment cascade 
+2026-01-30T11:32:47.350-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists audit_trail_entry cascade 
+Hibernate: 
+    drop table if exists audit_trail_entry cascade 
+2026-01-30T11:32:47.350-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists gl_account cascade 
+Hibernate: 
+    drop table if exists gl_account cascade 
+2026-01-30T11:32:47.350-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists gl_mapping cascade 
+Hibernate: 
+    drop table if exists gl_mapping cascade 
+2026-01-30T11:32:47.351-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists idempotency_keys cascade 
+Hibernate: 
+    drop table if exists idempotency_keys cascade 
+2026-01-30T11:32:47.351-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists invoice_status_views cascade 
+Hibernate: 
+    drop table if exists invoice_status_views cascade 
+2026-01-30T11:32:47.351-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists journal_entry cascade 
+Hibernate: 
+    drop table if exists journal_entry cascade 
+2026-01-30T11:32:47.351-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists journal_entry_line cascade 
+Hibernate: 
+    drop table if exists journal_entry_line cascade 
+2026-01-30T11:32:47.352-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists mapping_key cascade 
+Hibernate: 
+    drop table if exists mapping_key cascade 
+2026-01-30T11:32:47.352-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists override_policy_threshold cascade 
+Hibernate: 
+    drop table if exists override_policy_threshold cascade 
+2026-01-30T11:32:47.352-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists payment_applied_events cascade 
+Hibernate: 
+    drop table if exists payment_applied_events cascade 
+2026-01-30T11:32:47.353-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists posting_category cascade 
+Hibernate: 
+    drop table if exists posting_category cascade 
+2026-01-30T11:32:47.353-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists posting_rule_set cascade 
+Hibernate: 
+    drop table if exists posting_rule_set cascade 
+2026-01-30T11:32:47.353-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists posting_rule_version cascade 
+Hibernate: 
+    drop table if exists posting_rule_version cascade 
+2026-01-30T11:32:47.354-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists reconciliation cascade 
+Hibernate: 
+    drop table if exists reconciliation cascade 
+2026-01-30T11:32:47.354-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists refund_policy_config cascade 
+Hibernate: 
+    drop table if exists refund_policy_config cascade 
+2026-01-30T11:32:47.354-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists vendor_bill cascade 
+Hibernate: 
+    drop table if exists vendor_bill cascade 
+2026-01-30T11:32:47.359-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table accounting_audit_log (
+        timestamp timestamp(6) with time zone not null,
+        audit_log_id varchar(50) not null,
+        entity_id varchar(50) not null,
+        entity_type varchar(50) not null,
+        ip_address varchar(50),
+        operation varchar(50) not null,
+        user_id varchar(50) not null,
+        trace_id varchar(100),
+        justification varchar(2000),
+        new_value TEXT,
+        old_value TEXT,
+        primary key (audit_log_id)
+    )
+Hibernate: 
+    create table accounting_audit_log (
+        timestamp timestamp(6) with time zone not null,
+        audit_log_id varchar(50) not null,
+        entity_id varchar(50) not null,
+        entity_type varchar(50) not null,
+        ip_address varchar(50),
+        operation varchar(50) not null,
+        user_id varchar(50) not null,
+        trace_id varchar(100),
+        justification varchar(2000),
+        new_value TEXT,
+        old_value TEXT,
+        primary key (audit_log_id)
+    )
+2026-01-30T11:32:47.367-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table accounting_event (
+        transaction_date date not null,
+        processed_at timestamp(6) with time zone,
+        received_at timestamp(6) with time zone not null,
+        sequence_number bigint,
+        event_id varchar(50) not null,
+        journal_entry_id varchar(50),
+        event_type varchar(100) not null,
+        error_message varchar(2000),
+        payload json not null,
+        status enum ('FAILED','PROCESSED','PROCESSING','RECEIVED','SUSPENDED') not null,
+        primary key (event_id)
+    )
+Hibernate: 
+    create table accounting_event (
+        transaction_date date not null,
+        processed_at timestamp(6) with time zone,
+        received_at timestamp(6) with time zone not null,
+        sequence_number bigint,
+        event_id varchar(50) not null,
+        journal_entry_id varchar(50),
+        event_type varchar(100) not null,
+        error_message varchar(2000),
+        payload json not null,
+        status enum ('FAILED','PROCESSED','PROCESSING','RECEIVED','SUSPENDED') not null,
+        primary key (event_id)
+    )
+2026-01-30T11:32:47.369-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table ap_payment (
+        amount numeric(19,4) not null,
+        approval_threshold numeric(19,4),
+        currency varchar(3) not null,
+        payment_date date,
+        approved_at timestamp(6) with time zone,
+        cancelled_at timestamp(6) with time zone,
+        created_at timestamp(6) with time zone not null,
+        scheduled_at timestamp(6) with time zone,
+        approval_level varchar(30),
+        approved_by varchar(50),
+        bank_account_id varchar(50),
+        cancelled_by varchar(50),
+        created_by varchar(50) not null,
+        payment_id varchar(50) not null,
+        payment_transaction_id varchar(50),
+        scheduled_by varchar(50),
+        vendor_bill_id varchar(50) not null,
+        vendor_id varchar(50) not null,
+        vendor_name varchar(200),
+        approval_justification varchar(1000),
+        cancellation_reason varchar(1000),
+        payment_method enum ('ACH','CHECK','CREDIT_CARD','OTHER','WIRE'),
+        status enum ('APPROVED','CANCELLED','PAID','PENDING_APPROVAL','SCHEDULED') not null,
+        primary key (payment_id)
+    )
+Hibernate: 
+    create table ap_payment (
+        amount numeric(19,4) not null,
+        approval_threshold numeric(19,4),
+        currency varchar(3) not null,
+        payment_date date,
+        approved_at timestamp(6) with time zone,
+        cancelled_at timestamp(6) with time zone,
+        created_at timestamp(6) with time zone not null,
+        scheduled_at timestamp(6) with time zone,
+        approval_level varchar(30),
+        approved_by varchar(50),
+        bank_account_id varchar(50),
+        cancelled_by varchar(50),
+        created_by varchar(50) not null,
+        payment_id varchar(50) not null,
+        payment_transaction_id varchar(50),
+        scheduled_by varchar(50),
+        vendor_bill_id varchar(50) not null,
+        vendor_id varchar(50) not null,
+        vendor_name varchar(200),
+        approval_justification varchar(1000),
+        cancellation_reason varchar(1000),
+        payment_method enum ('ACH','CHECK','CREDIT_CARD','OTHER','WIRE'),
+        status enum ('APPROVED','CANCELLED','PAID','PENDING_APPROVAL','SCHEDULED') not null,
+        primary key (payment_id)
+    )
+2026-01-30T11:32:47.372-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table audit_trail_entry (
+        adjusted_price numeric(19,4),
+        original_price numeric(19,4),
+        refund_amount numeric(19,4),
+        timestamp timestamp(6) with time zone not null,
+        actor_id uuid not null,
+        audit_id uuid not null,
+        invoice_id uuid,
+        line_item_id uuid,
+        order_id uuid,
+        payment_id uuid,
+        source_event_id uuid,
+        gl_reversal_status varchar(50),
+        override_amount_or_percent varchar(50),
+        policy_version varchar(50) not null,
+        actor_role varchar(100) not null,
+        authorization_level varchar(100) not null,
+        forbidden_category_code varchar(100),
+        expected_accounting_outcome varchar(1000),
+        reason varchar(2000),
+        after_snapshot TEXT,
+        before_snapshot TEXT,
+        linked_source_ids TEXT,
+        partial_payment_info TEXT,
+        source_document_id varchar(255),
+        accounting_intent enum ('CUSTOMER_CREDIT','PAYMENT_RECOVERY','PAYMENT_REVERSAL','REVENUE_ADJUSTMENT','REVENUE_REVERSAL','WRITE_OFF'),
+        accounting_status enum ('FAILED','PENDING_POSTING','POSTED') not null,
+        cancellation_type enum ('INVOICE_CANCELLED','ORDER_CANCELLED'),
+        exception_type enum ('CANCELLATION','PRICE_OVERRIDE','REFUND') not null,
+        original_payment_status enum ('PENDING','SETTLED'),
+        policy_validation_result enum ('APPROVED','REJECTED_FORBIDDEN','REJECTED_THRESHOLD_EXCEEDED'),
+        refund_method enum ('CASH_REFUND','CHARGEBACK','CREDIT_MEMO','VOID'),
+        refund_type enum ('ADJUSTMENT','CREDIT_MEMO','REVERSAL'),
+        primary key (audit_id)
+    )
+Hibernate: 
+    create table audit_trail_entry (
+        adjusted_price numeric(19,4),
+        original_price numeric(19,4),
+        refund_amount numeric(19,4),
+        timestamp timestamp(6) with time zone not null,
+        actor_id uuid not null,
+        audit_id uuid not null,
+        invoice_id uuid,
+        line_item_id uuid,
+        order_id uuid,
+        payment_id uuid,
+        source_event_id uuid,
+        gl_reversal_status varchar(50),
+        override_amount_or_percent varchar(50),
+        policy_version varchar(50) not null,
+        actor_role varchar(100) not null,
+        authorization_level varchar(100) not null,
+        forbidden_category_code varchar(100),
+        expected_accounting_outcome varchar(1000),
+        reason varchar(2000),
+        after_snapshot TEXT,
+        before_snapshot TEXT,
+        linked_source_ids TEXT,
+        partial_payment_info TEXT,
+        source_document_id varchar(255),
+        accounting_intent enum ('CUSTOMER_CREDIT','PAYMENT_RECOVERY','PAYMENT_REVERSAL','REVENUE_ADJUSTMENT','REVENUE_REVERSAL','WRITE_OFF'),
+        accounting_status enum ('FAILED','PENDING_POSTING','POSTED') not null,
+        cancellation_type enum ('INVOICE_CANCELLED','ORDER_CANCELLED'),
+        exception_type enum ('CANCELLATION','PRICE_OVERRIDE','REFUND') not null,
+        original_payment_status enum ('PENDING','SETTLED'),
+        policy_validation_result enum ('APPROVED','REJECTED_FORBIDDEN','REJECTED_THRESHOLD_EXCEEDED'),
+        refund_method enum ('CASH_REFUND','CHARGEBACK','CREDIT_MEMO','VOID'),
+        refund_type enum ('ADJUSTMENT','CREDIT_MEMO','REVERSAL'),
+        primary key (audit_id)
+    )
+2026-01-30T11:32:47.376-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table gl_account (
+        activation_date date,
+        deactivation_date date,
+        version integer,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        account_code varchar(20) not null unique,
+        created_by varchar(50) not null,
+        gl_account_id varchar(50) not null,
+        modified_by varchar(50) not null,
+        parent_account_id varchar(50),
+        account_name varchar(100) not null,
+        description varchar(500),
+        account_type enum ('ASSET','EQUITY','EXPENSE','LIABILITY','REVENUE') not null,
+        primary key (gl_account_id)
+    )
+Hibernate: 
+    create table gl_account (
+        activation_date date,
+        deactivation_date date,
+        version integer,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        account_code varchar(20) not null unique,
+        created_by varchar(50) not null,
+        gl_account_id varchar(50) not null,
+        modified_by varchar(50) not null,
+        parent_account_id varchar(50),
+        account_name varchar(100) not null,
+        description varchar(500),
+        account_type enum ('ASSET','EQUITY','EXPENSE','LIABILITY','REVENUE') not null,
+        primary key (gl_account_id)
+    )
+2026-01-30T11:32:47.380-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table gl_mapping (
+        created_at timestamp(6) with time zone not null,
+        effective_end_date timestamp(6),
+        effective_start_date timestamp(6) not null,
+        created_by varchar(50) not null,
+        gl_account_id varchar(50) not null,
+        gl_mapping_id varchar(50) not null,
+        mapping_key_id varchar(50) not null,
+        posting_category_id varchar(50) not null,
+        source_system varchar(50) not null,
+        external_code varchar(100) not null,
+        dimensions json,
+        primary key (gl_mapping_id)
+    )
+Hibernate: 
+    create table gl_mapping (
+        created_at timestamp(6) with time zone not null,
+        effective_end_date timestamp(6),
+        effective_start_date timestamp(6) not null,
+        created_by varchar(50) not null,
+        gl_account_id varchar(50) not null,
+        gl_mapping_id varchar(50) not null,
+        mapping_key_id varchar(50) not null,
+        posting_category_id varchar(50) not null,
+        source_system varchar(50) not null,
+        external_code varchar(100) not null,
+        dimensions json,
+        primary key (gl_mapping_id)
+    )
+2026-01-30T11:32:47.382-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table idempotency_keys (
+        created_at timestamp(6) with time zone not null,
+        expires_at timestamp(6) with time zone not null,
+        id bigint generated by default as identity,
+        invoice_id varchar(255) not null,
+        key_value varchar(255) not null unique,
+        primary key (id)
+    )
+Hibernate: 
+    create table idempotency_keys (
+        created_at timestamp(6) with time zone not null,
+        expires_at timestamp(6) with time zone not null,
+        id bigint generated by default as identity,
+        invoice_id varchar(255) not null,
+        key_value varchar(255) not null unique,
+        primary key (id)
+    )
+2026-01-30T11:32:47.388-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table invoice_status_views (
+        invoice_total numeric(19,2) not null,
+        total_paid numeric(19,2) not null,
+        id bigint generated by default as identity,
+        last_updated timestamp(6) with time zone not null,
+        invoice_id varchar(255) not null unique,
+        latest_transaction_reference varchar(255),
+        current_status enum ('FAILED','PAID','PARTIALLY_PAID','UNPAID') not null,
+        primary key (id)
+    )
+Hibernate: 
+    create table invoice_status_views (
+        invoice_total numeric(19,2) not null,
+        total_paid numeric(19,2) not null,
+        id bigint generated by default as identity,
+        last_updated timestamp(6) with time zone not null,
+        invoice_id varchar(255) not null unique,
+        latest_transaction_reference varchar(255),
+        current_status enum ('FAILED','PAID','PARTIALLY_PAID','UNPAID') not null,
+        primary key (id)
+    )
+2026-01-30T11:32:47.392-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table journal_entry (
+        is_balanced boolean not null,
+        total_credits numeric(19,4) not null,
+        total_debits numeric(19,4) not null,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        posted_at timestamp(6) with time zone,
+        reversed_at timestamp(6) with time zone,
+        transaction_date timestamp(6) not null,
+        created_by varchar(50) not null,
+        journal_entry_id varchar(50) not null,
+        modified_by varchar(50) not null,
+        posted_by varchar(50),
+        posting_rule_set_id varchar(50),
+        posting_rule_version_id varchar(50),
+        reversal_journal_entry_id varchar(50),
+        reversed_by_journal_entry_id varchar(50),
+        source_event_id varchar(50),
+        source_event_type varchar(100),
+        description varchar(500),
+        justification varchar(1000),
+        entry_type enum ('EVENT_DRIVEN','MANUAL') not null,
+        reason_code enum ('ACCRUAL_ADJUSTMENT','DEPRECIATION','ERROR_CORRECTION','OTHER','RECLASSIFICATION'),
+        status enum ('DRAFT','PENDING','POSTED','REVERSED') not null,
+        primary key (journal_entry_id)
+    )
+Hibernate: 
+    create table journal_entry (
+        is_balanced boolean not null,
+        total_credits numeric(19,4) not null,
+        total_debits numeric(19,4) not null,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        posted_at timestamp(6) with time zone,
+        reversed_at timestamp(6) with time zone,
+        transaction_date timestamp(6) not null,
+        created_by varchar(50) not null,
+        journal_entry_id varchar(50) not null,
+        modified_by varchar(50) not null,
+        posted_by varchar(50),
+        posting_rule_set_id varchar(50),
+        posting_rule_version_id varchar(50),
+        reversal_journal_entry_id varchar(50),
+        reversed_by_journal_entry_id varchar(50),
+        source_event_id varchar(50),
+        source_event_type varchar(100),
+        description varchar(500),
+        justification varchar(1000),
+        entry_type enum ('EVENT_DRIVEN','MANUAL') not null,
+        reason_code enum ('ACCRUAL_ADJUSTMENT','DEPRECIATION','ERROR_CORRECTION','OTHER','RECLASSIFICATION'),
+        status enum ('DRAFT','PENDING','POSTED','REVERSED') not null,
+        primary key (journal_entry_id)
+    )
+2026-01-30T11:32:47.394-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table journal_entry_line (
+        credit_amount numeric(19,4) not null,
+        debit_amount numeric(19,4) not null,
+        line_number integer not null,
+        account_code varchar(20),
+        gl_account_id varchar(50) not null,
+        journal_entry_id varchar(50) not null,
+        line_id varchar(50) not null,
+        account_name varchar(100),
+        description varchar(500),
+        dimensions json,
+        primary key (line_id)
+    )
+Hibernate: 
+    create table journal_entry_line (
+        credit_amount numeric(19,4) not null,
+        debit_amount numeric(19,4) not null,
+        line_number integer not null,
+        account_code varchar(20),
+        gl_account_id varchar(50) not null,
+        journal_entry_id varchar(50) not null,
+        line_id varchar(50) not null,
+        account_name varchar(100),
+        description varchar(500),
+        dimensions json,
+        primary key (line_id)
+    )
+2026-01-30T11:32:47.396-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table mapping_key (
+        is_active boolean not null,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        created_by varchar(50) not null,
+        mapping_key_id varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_category_id varchar(50) not null,
+        key_name varchar(100) not null,
+        description varchar(500),
+        primary key (mapping_key_id)
+    )
+Hibernate: 
+    create table mapping_key (
+        is_active boolean not null,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        created_by varchar(50) not null,
+        mapping_key_id varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_category_id varchar(50) not null,
+        key_name varchar(100) not null,
+        description varchar(500),
+        primary key (mapping_key_id)
+    )
+2026-01-30T11:32:47.397-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table override_policy_threshold (
+        active boolean not null,
+        max_absolute_amount numeric(19,4),
+        max_percent_off numeric(5,2),
+        created_at timestamp(6) with time zone not null,
+        effective_date timestamp(6) with time zone not null,
+        expiration_date timestamp(6) with time zone,
+        updated_at timestamp(6) with time zone not null,
+        policy_id uuid not null,
+        version varchar(50) not null,
+        role varchar(100) not null,
+        primary key (policy_id)
+    )
+Hibernate: 
+    create table override_policy_threshold (
+        active boolean not null,
+        max_absolute_amount numeric(19,4),
+        max_percent_off numeric(5,2),
+        created_at timestamp(6) with time zone not null,
+        effective_date timestamp(6) with time zone not null,
+        expiration_date timestamp(6) with time zone,
+        updated_at timestamp(6) with time zone not null,
+        policy_id uuid not null,
+        version varchar(50) not null,
+        role varchar(100) not null,
+        primary key (policy_id)
+    )
+2026-01-30T11:32:47.399-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table payment_applied_events (
+        invoice_total numeric(19,2) not null,
+        payment_amount numeric(19,2) not null,
+        id bigint generated by default as identity,
+        timestamp timestamp(6) with time zone not null,
+        idempotency_key varchar(255),
+        invoice_id varchar(255) not null,
+        transaction_reference varchar(255) not null,
+        status enum ('FAILED','PAID','PARTIALLY_PAID','UNPAID') not null,
+        primary key (id)
+    )
+Hibernate: 
+    create table payment_applied_events (
+        invoice_total numeric(19,2) not null,
+        payment_amount numeric(19,2) not null,
+        id bigint generated by default as identity,
+        timestamp timestamp(6) with time zone not null,
+        idempotency_key varchar(255),
+        invoice_id varchar(255) not null,
+        transaction_reference varchar(255) not null,
+        status enum ('FAILED','PAID','PARTIALLY_PAID','UNPAID') not null,
+        primary key (id)
+    )
+2026-01-30T11:32:47.401-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table posting_category (
+        is_active boolean not null,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        created_by varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_category_id varchar(50) not null,
+        category_name varchar(100) not null,
+        description varchar(500),
+        primary key (posting_category_id)
+    )
+Hibernate: 
+    create table posting_category (
+        is_active boolean not null,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        created_by varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_category_id varchar(50) not null,
+        category_name varchar(100) not null,
+        description varchar(500),
+        primary key (posting_category_id)
+    )
+2026-01-30T11:32:47.404-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table posting_rule_set (
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        created_by varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_rule_set_id varchar(50) not null,
+        event_type varchar(100) not null,
+        name varchar(100) not null,
+        description varchar(500),
+        primary key (posting_rule_set_id)
+    )
+Hibernate: 
+    create table posting_rule_set (
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        created_by varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_rule_set_id varchar(50) not null,
+        event_type varchar(100) not null,
+        name varchar(100) not null,
+        description varchar(500),
+        primary key (posting_rule_set_id)
+    )
+2026-01-30T11:32:47.405-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table posting_rule_version (
+        version_number integer not null,
+        archived_at timestamp(6) with time zone,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        published_at timestamp(6) with time zone,
+        archived_by varchar(50),
+        created_by varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_rule_set_id varchar(50) not null,
+        published_by varchar(50),
+        version_id varchar(50) not null,
+        rules_definition TEXT not null,
+        state enum ('ARCHIVED','DRAFT','PUBLISHED') not null,
+        primary key (version_id),
+        constraint uk_posting_rule_set_version unique (posting_rule_set_id, version_number)
+    )
+Hibernate: 
+    create table posting_rule_version (
+        version_number integer not null,
+        archived_at timestamp(6) with time zone,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        published_at timestamp(6) with time zone,
+        archived_by varchar(50),
+        created_by varchar(50) not null,
+        modified_by varchar(50) not null,
+        posting_rule_set_id varchar(50) not null,
+        published_by varchar(50),
+        version_id varchar(50) not null,
+        rules_definition TEXT not null,
+        state enum ('ARCHIVED','DRAFT','PUBLISHED') not null,
+        primary key (version_id),
+        constraint uk_posting_rule_set_version unique (posting_rule_set_id, version_number)
+    )
+2026-01-30T11:32:47.407-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table reconciliation (
+        difference numeric(19,4) not null,
+        gl_ending_balance numeric(19,4) not null,
+        period_end_date date not null,
+        period_start_date date not null,
+        statement_date date not null,
+        statement_ending_balance numeric(19,4) not null,
+        created_at timestamp(6) with time zone not null,
+        finalized_at timestamp(6) with time zone,
+        account_code varchar(20),
+        created_by varchar(50) not null,
+        finalized_by varchar(50),
+        gl_account_id varchar(50) not null,
+        reconciliation_id varchar(50) not null,
+        account_name varchar(100),
+        adjustments json,
+        gl_transactions json,
+        statement_lines json,
+        status enum ('CANCELLED','FINALIZED','IN_PROGRESS') not null,
+        primary key (reconciliation_id)
+    )
+Hibernate: 
+    create table reconciliation (
+        difference numeric(19,4) not null,
+        gl_ending_balance numeric(19,4) not null,
+        period_end_date date not null,
+        period_start_date date not null,
+        statement_date date not null,
+        statement_ending_balance numeric(19,4) not null,
+        created_at timestamp(6) with time zone not null,
+        finalized_at timestamp(6) with time zone,
+        account_code varchar(20),
+        created_by varchar(50) not null,
+        finalized_by varchar(50),
+        gl_account_id varchar(50) not null,
+        reconciliation_id varchar(50) not null,
+        account_name varchar(100),
+        adjustments json,
+        gl_transactions json,
+        statement_lines json,
+        status enum ('CANCELLED','FINALIZED','IN_PROGRESS') not null,
+        primary key (reconciliation_id)
+    )
+2026-01-30T11:32:47.408-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table refund_policy_config (
+        active boolean not null,
+        requires_separate_authorization boolean not null,
+        created_at timestamp(6) with time zone not null,
+        updated_at timestamp(6) with time zone not null,
+        config_id uuid not null,
+        settled_payment_handling varchar(50) not null,
+        unsettled_payment_handling varchar(50) not null,
+        version varchar(50) not null,
+        primary key (config_id)
+    )
+Hibernate: 
+    create table refund_policy_config (
+        active boolean not null,
+        requires_separate_authorization boolean not null,
+        created_at timestamp(6) with time zone not null,
+        updated_at timestamp(6) with time zone not null,
+        config_id uuid not null,
+        settled_payment_handling varchar(50) not null,
+        unsettled_payment_handling varchar(50) not null,
+        version varchar(50) not null,
+        primary key (config_id)
+    )
+2026-01-30T11:32:47.410-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create table vendor_bill (
+        bill_date date not null,
+        due_date date,
+        total_amount numeric(19,4) not null,
+        approved_at timestamp(6) with time zone,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        paid_at timestamp(6) with time zone,
+        rejected_at timestamp(6) with time zone,
+        approved_by varchar(50),
+        bill_number varchar(50) not null,
+        created_by varchar(50) not null,
+        journal_entry_id varchar(50),
+        modified_by varchar(50) not null,
+        origin_event_id varchar(50),
+        paid_by varchar(50),
+        payment_transaction_id varchar(50),
+        rejected_by varchar(50),
+        vendor_bill_id varchar(50) not null,
+        vendor_id varchar(50) not null,
+        origin_event_type varchar(100),
+        vendor_name varchar(200),
+        approval_justification varchar(1000),
+        rejection_reason varchar(1000),
+        status enum ('APPROVED','CANCELLED','PAID','PENDING_REVIEW','REJECTED') not null,
+        primary key (vendor_bill_id)
+    )
+Hibernate: 
+    create table vendor_bill (
+        bill_date date not null,
+        due_date date,
+        total_amount numeric(19,4) not null,
+        approved_at timestamp(6) with time zone,
+        created_at timestamp(6) with time zone not null,
+        modified_at timestamp(6) with time zone not null,
+        paid_at timestamp(6) with time zone,
+        rejected_at timestamp(6) with time zone,
+        approved_by varchar(50),
+        bill_number varchar(50) not null,
+        created_by varchar(50) not null,
+        journal_entry_id varchar(50),
+        modified_by varchar(50) not null,
+        origin_event_id varchar(50),
+        paid_by varchar(50),
+        payment_transaction_id varchar(50),
+        rejected_by varchar(50),
+        vendor_bill_id varchar(50) not null,
+        vendor_id varchar(50) not null,
+        origin_event_type varchar(100),
+        vendor_name varchar(200),
+        approval_justification varchar(1000),
+        rejection_reason varchar(1000),
+        status enum ('APPROVED','CANCELLED','PAID','PENDING_REVIEW','REJECTED') not null,
+        primary key (vendor_bill_id)
+    )
+2026-01-30T11:32:47.412-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_audit_log_entity 
+       on accounting_audit_log (entity_type, entity_id)
+Hibernate: 
+    create index idx_audit_log_entity 
+       on accounting_audit_log (entity_type, entity_id)
+2026-01-30T11:32:47.413-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_audit_log_operation 
+       on accounting_audit_log (operation)
+Hibernate: 
+    create index idx_audit_log_operation 
+       on accounting_audit_log (operation)
+2026-01-30T11:32:47.414-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_audit_log_user 
+       on accounting_audit_log (user_id)
+Hibernate: 
+    create index idx_audit_log_user 
+       on accounting_audit_log (user_id)
+2026-01-30T11:32:47.415-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_audit_log_timestamp 
+       on accounting_audit_log (timestamp)
+Hibernate: 
+    create index idx_audit_log_timestamp 
+       on accounting_audit_log (timestamp)
+2026-01-30T11:32:47.416-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_audit_log_trace 
+       on accounting_audit_log (trace_id)
+Hibernate: 
+    create index idx_audit_log_trace 
+       on accounting_audit_log (trace_id)
+2026-01-30T11:32:47.417-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_accounting_event_type 
+       on accounting_event (event_type)
+Hibernate: 
+    create index idx_accounting_event_type 
+       on accounting_event (event_type)
+2026-01-30T11:32:47.418-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_accounting_event_status 
+       on accounting_event (status)
+Hibernate: 
+    create index idx_accounting_event_status 
+       on accounting_event (status)
+2026-01-30T11:32:47.420-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_accounting_event_transaction_date 
+       on accounting_event (transaction_date)
+Hibernate: 
+    create index idx_accounting_event_transaction_date 
+       on accounting_event (transaction_date)
+2026-01-30T11:32:47.421-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_accounting_event_received_at 
+       on accounting_event (received_at)
+Hibernate: 
+    create index idx_accounting_event_received_at 
+       on accounting_event (received_at)
+2026-01-30T11:32:47.424-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_ap_payment_vendor_bill 
+       on ap_payment (vendor_bill_id)
+Hibernate: 
+    create index idx_ap_payment_vendor_bill 
+       on ap_payment (vendor_bill_id)
+2026-01-30T11:32:47.424-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_ap_payment_vendor 
+       on ap_payment (vendor_id)
+Hibernate: 
+    create index idx_ap_payment_vendor 
+       on ap_payment (vendor_id)
+2026-01-30T11:32:47.425-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_ap_payment_status 
+       on ap_payment (status)
+Hibernate: 
+    create index idx_ap_payment_status 
+       on ap_payment (status)
+2026-01-30T11:32:47.426-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_ap_payment_date 
+       on ap_payment (payment_date)
+Hibernate: 
+    create index idx_ap_payment_date 
+       on ap_payment (payment_date)
+2026-01-30T11:32:47.427-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_exception_type 
+       on audit_trail_entry (exception_type)
+Hibernate: 
+    create index idx_exception_type 
+       on audit_trail_entry (exception_type)
+2026-01-30T11:32:47.427-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_order_id 
+       on audit_trail_entry (order_id)
+Hibernate: 
+    create index idx_order_id 
+       on audit_trail_entry (order_id)
+2026-01-30T11:32:47.428-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_invoice_id 
+       on audit_trail_entry (invoice_id)
+Hibernate: 
+    create index idx_invoice_id 
+       on audit_trail_entry (invoice_id)
+2026-01-30T11:32:47.429-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_actor_id 
+       on audit_trail_entry (actor_id)
+Hibernate: 
+    create index idx_actor_id 
+       on audit_trail_entry (actor_id)
+2026-01-30T11:32:47.430-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_timestamp 
+       on audit_trail_entry (timestamp)
+Hibernate: 
+    create index idx_timestamp 
+       on audit_trail_entry (timestamp)
+2026-01-30T11:32:47.431-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_account_type 
+       on gl_account (account_type)
+Hibernate: 
+    create index idx_account_type 
+       on gl_account (account_type)
+2026-01-30T11:32:47.432-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_activation_date 
+       on gl_account (activation_date)
+Hibernate: 
+    create index idx_activation_date 
+       on gl_account (activation_date)
+2026-01-30T11:32:47.433-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_deactivation_date 
+       on gl_account (deactivation_date)
+Hibernate: 
+    create index idx_deactivation_date 
+       on gl_account (deactivation_date)
+2026-01-30T11:32:47.434-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_gl_mapping_category_key 
+       on gl_mapping (posting_category_id, mapping_key_id)
+Hibernate: 
+    create index idx_gl_mapping_category_key 
+       on gl_mapping (posting_category_id, mapping_key_id)
+2026-01-30T11:32:47.434-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_gl_mapping_effective_from 
+       on gl_mapping (effective_start_date)
+Hibernate: 
+    create index idx_gl_mapping_effective_from 
+       on gl_mapping (effective_start_date)
+2026-01-30T11:32:47.435-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_gl_mapping_effective_to 
+       on gl_mapping (effective_end_date)
+Hibernate: 
+    create index idx_gl_mapping_effective_to 
+       on gl_mapping (effective_end_date)
+2026-01-30T11:32:47.436-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_gl_mapping_gl_account 
+       on gl_mapping (gl_account_id)
+Hibernate: 
+    create index idx_gl_mapping_gl_account 
+       on gl_mapping (gl_account_id)
+2026-01-30T11:32:47.437-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_gl_mapping_source_code 
+       on gl_mapping (source_system, external_code)
+Hibernate: 
+    create index idx_gl_mapping_source_code 
+       on gl_mapping (source_system, external_code)
+2026-01-30T11:32:47.438-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_journal_entry_status 
+       on journal_entry (status)
+Hibernate: 
+    create index idx_journal_entry_status 
+       on journal_entry (status)
+2026-01-30T11:32:47.439-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_journal_entry_entry_type 
+       on journal_entry (entry_type)
+Hibernate: 
+    create index idx_journal_entry_entry_type 
+       on journal_entry (entry_type)
+2026-01-30T11:32:47.440-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_journal_entry_transaction_date 
+       on journal_entry (transaction_date)
+Hibernate: 
+    create index idx_journal_entry_transaction_date 
+       on journal_entry (transaction_date)
+2026-01-30T11:32:47.440-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_journal_entry_source_event 
+       on journal_entry (source_event_id)
+Hibernate: 
+    create index idx_journal_entry_source_event 
+       on journal_entry (source_event_id)
+2026-01-30T11:32:47.441-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_journal_entry_posted_at 
+       on journal_entry (posted_at)
+Hibernate: 
+    create index idx_journal_entry_posted_at 
+       on journal_entry (posted_at)
+2026-01-30T11:32:47.441-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_journal_entry_line_je 
+       on journal_entry_line (journal_entry_id)
+Hibernate: 
+    create index idx_journal_entry_line_je 
+       on journal_entry_line (journal_entry_id)
+2026-01-30T11:32:47.442-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_journal_entry_line_gl_account 
+       on journal_entry_line (gl_account_id)
+Hibernate: 
+    create index idx_journal_entry_line_gl_account 
+       on journal_entry_line (gl_account_id)
+2026-01-30T11:32:47.443-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_mapping_key_category 
+       on mapping_key (posting_category_id)
+Hibernate: 
+    create index idx_mapping_key_category 
+       on mapping_key (posting_category_id)
+2026-01-30T11:32:47.444-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_mapping_key_name 
+       on mapping_key (key_name)
+Hibernate: 
+    create index idx_mapping_key_name 
+       on mapping_key (key_name)
+2026-01-30T11:32:47.445-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_role_effective 
+       on override_policy_threshold (role, effective_date)
+Hibernate: 
+    create index idx_role_effective 
+       on override_policy_threshold (role, effective_date)
+2026-01-30T11:32:47.445-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_category_name 
+       on posting_category (category_name)
+Hibernate: 
+    create index idx_category_name 
+       on posting_category (category_name)
+2026-01-30T11:32:47.446-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_posting_rule_set_name 
+       on posting_rule_set (name)
+Hibernate: 
+    create index idx_posting_rule_set_name 
+       on posting_rule_set (name)
+2026-01-30T11:32:47.447-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_posting_rule_set_event_type 
+       on posting_rule_set (event_type)
+Hibernate: 
+    create index idx_posting_rule_set_event_type 
+       on posting_rule_set (event_type)
+2026-01-30T11:32:47.448-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_posting_rule_version_set 
+       on posting_rule_version (posting_rule_set_id)
+Hibernate: 
+    create index idx_posting_rule_version_set 
+       on posting_rule_version (posting_rule_set_id)
+2026-01-30T11:32:47.448-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_posting_rule_version_state 
+       on posting_rule_version (state)
+Hibernate: 
+    create index idx_posting_rule_version_state 
+       on posting_rule_version (state)
+2026-01-30T11:32:47.449-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_reconciliation_account 
+       on reconciliation (gl_account_id)
+Hibernate: 
+    create index idx_reconciliation_account 
+       on reconciliation (gl_account_id)
+2026-01-30T11:32:47.450-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_reconciliation_status 
+       on reconciliation (status)
+Hibernate: 
+    create index idx_reconciliation_status 
+       on reconciliation (status)
+2026-01-30T11:32:47.451-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_reconciliation_period 
+       on reconciliation (period_start_date, period_end_date)
+Hibernate: 
+    create index idx_reconciliation_period 
+       on reconciliation (period_start_date, period_end_date)
+2026-01-30T11:32:47.452-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_vendor_bill_vendor 
+       on vendor_bill (vendor_id)
+Hibernate: 
+    create index idx_vendor_bill_vendor 
+       on vendor_bill (vendor_id)
+2026-01-30T11:32:47.453-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_vendor_bill_status 
+       on vendor_bill (status)
+Hibernate: 
+    create index idx_vendor_bill_status 
+       on vendor_bill (status)
+2026-01-30T11:32:47.453-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_vendor_bill_number 
+       on vendor_bill (bill_number)
+Hibernate: 
+    create index idx_vendor_bill_number 
+       on vendor_bill (bill_number)
+2026-01-30T11:32:47.454-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_vendor_bill_due_date 
+       on vendor_bill (due_date)
+Hibernate: 
+    create index idx_vendor_bill_due_date 
+       on vendor_bill (due_date)
+2026-01-30T11:32:47.455-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    create index idx_vendor_bill_origin_event 
+       on vendor_bill (origin_event_id)
+Hibernate: 
+    create index idx_vendor_bill_origin_event 
+       on vendor_bill (origin_event_id)
+2026-01-30T11:32:47.461-05:00  INFO 851359 --- [accounting] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-01-30T11:32:47.668-05:00  INFO 851359 --- [accounting] [           main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-01-30T11:32:48.909-05:00  WARN 851359 --- [accounting] [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'auditTrailController' defined in URL [jar:nested:/home/louisb/Projects/durion-positivity-backend/pos-accounting/target/pos-accounting-0.0.1-SNAPSHOT.jar/!BOOT-INF/classes/!/com/positivity/accounting/internal/audit/controller/AuditTrailController.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'auditTrailService' defined in URL [jar:nested:/home/louisb/Projects/durion-positivity-backend/pos-accounting/target/pos-accounting-0.0.1-SNAPSHOT.jar/!BOOT-INF/classes/!/com/positivity/accounting/internal/audit/service/AuditTrailService.class]: Unsatisfied dependency expressed through constructor parameter 4: No qualifying bean of type 'com.fasterxml.jackson.databind.ObjectMapper' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {}
+2026-01-30T11:32:48.909-05:00  INFO 851359 --- [accounting] [           main] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-01-30T11:32:48.910-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists accounting_audit_log cascade 
+Hibernate: 
+    drop table if exists accounting_audit_log cascade 
+2026-01-30T11:32:48.913-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists accounting_event cascade 
+Hibernate: 
+    drop table if exists accounting_event cascade 
+2026-01-30T11:32:48.914-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists ap_payment cascade 
+Hibernate: 
+    drop table if exists ap_payment cascade 
+2026-01-30T11:32:48.916-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists audit_trail_entry cascade 
+Hibernate: 
+    drop table if exists audit_trail_entry cascade 
+2026-01-30T11:32:48.917-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists gl_account cascade 
+Hibernate: 
+    drop table if exists gl_account cascade 
+2026-01-30T11:32:48.918-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists gl_mapping cascade 
+Hibernate: 
+    drop table if exists gl_mapping cascade 
+2026-01-30T11:32:48.920-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists idempotency_keys cascade 
+Hibernate: 
+    drop table if exists idempotency_keys cascade 
+2026-01-30T11:32:48.921-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists invoice_status_views cascade 
+Hibernate: 
+    drop table if exists invoice_status_views cascade 
+2026-01-30T11:32:48.922-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists journal_entry cascade 
+Hibernate: 
+    drop table if exists journal_entry cascade 
+2026-01-30T11:32:48.923-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists journal_entry_line cascade 
+Hibernate: 
+    drop table if exists journal_entry_line cascade 
+2026-01-30T11:32:48.925-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists mapping_key cascade 
+Hibernate: 
+    drop table if exists mapping_key cascade 
+2026-01-30T11:32:48.928-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists override_policy_threshold cascade 
+Hibernate: 
+    drop table if exists override_policy_threshold cascade 
+2026-01-30T11:32:48.929-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists payment_applied_events cascade 
+Hibernate: 
+    drop table if exists payment_applied_events cascade 
+2026-01-30T11:32:48.930-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists posting_category cascade 
+Hibernate: 
+    drop table if exists posting_category cascade 
+2026-01-30T11:32:48.931-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists posting_rule_set cascade 
+Hibernate: 
+    drop table if exists posting_rule_set cascade 
+2026-01-30T11:32:48.932-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists posting_rule_version cascade 
+Hibernate: 
+    drop table if exists posting_rule_version cascade 
+2026-01-30T11:32:48.933-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists reconciliation cascade 
+Hibernate: 
+    drop table if exists reconciliation cascade 
+2026-01-30T11:32:48.934-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists refund_policy_config cascade 
+Hibernate: 
+    drop table if exists refund_policy_config cascade 
+2026-01-30T11:32:48.936-05:00 DEBUG 851359 --- [accounting] [           main] org.hibernate.SQL                        : 
+    drop table if exists vendor_bill cascade 
+Hibernate: 
+    drop table if exists vendor_bill cascade 
+2026-01-30T11:32:48.941-05:00  INFO 851359 --- [accounting] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-01-30T11:32:48.944-05:00  INFO 851359 --- [accounting] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-01-30T11:32:48.947-05:00  INFO 851359 --- [accounting] [           main] o.apache.catalina.core.StandardService   : Stopping service [Tomcat]
+2026-01-30T11:32:48.962-05:00  INFO 851359 --- [accounting] [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-01-30T11:32:48.994-05:00 ERROR 851359 --- [accounting] [           main] o.s.b.d.LoggingFailureAnalysisReporter   : 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 4 of constructor in com.positivity.accounting.internal.audit.service.AuditTrailService required a bean of type 'com.fasterxml.jackson.databind.ObjectMapper' that could not be found.
+
+
+Action:
+
+Consider defining a bean of type 'com.fasterxml.jackson.databind.ObjectMapper' in your configuration.
+

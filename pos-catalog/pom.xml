@@ -59,9 +59,10 @@
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
+        <!-- Spring AOP for aspect-based features (replaces spring-boot-starter-aop in Spring Boot 4.0) -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
