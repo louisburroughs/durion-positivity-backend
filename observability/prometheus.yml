@@ -1,0 +1,209 @@
+# Prometheus Configuration for Durion POS Backend
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'durion-pos-local'
+    environment: 'development'
+
+# Alertmanager configuration (optional for local development)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # OTEL Collector metrics
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8888', 'otel-collector:8889']
+        labels:
+          service: 'otel-collector'
+
+  # Eureka Service Discovery
+  - job_name: 'eureka-server'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['eureka-server:8761']
+        labels:
+          service: 'pos-service-discovery'
+          application: 'pos-service-discovery'
+
+  # API Gateway
+  - job_name: 'pos-api-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-api-gateway:8080']
+        labels:
+          service: 'pos-api-gateway'
+          application: 'pos-api-gateway'
+
+  # Business Services
+  - job_name: 'pos-accounting'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-accounting:9001']
+        labels:
+          service: 'pos-accounting'
+          application: 'pos-accounting'
+
+  - job_name: 'pos-catalog'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-catalog:8081']
+        labels:
+          service: 'pos-catalog'
+          application: 'pos-catalog'
+
+  - job_name: 'pos-customer'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-customer:8082']
+        labels:
+          service: 'pos-customer'
+          application: 'pos-customer'
+
+  - job_name: 'pos-event-receiver'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-event-receiver:9002']
+        labels:
+          service: 'pos-event-receiver'
+          application: 'pos-event-receiver'
+
+  - job_name: 'pos-image'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-image:8083']
+        labels:
+          service: 'pos-image'
+          application: 'pos-image'
+
+  - job_name: 'pos-inquiry'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-inquiry:9004']
+        labels:
+          service: 'pos-inquiry'
+          application: 'pos-inquiry'
+
+  - job_name: 'pos-inventory'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-inventory:9005']
+        labels:
+          service: 'pos-inventory'
+          application: 'pos-inventory'
+
+  - job_name: 'pos-invoice'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-invoice:9006']
+        labels:
+          service: 'pos-invoice'
+          application: 'pos-invoice'
+
+  - job_name: 'pos-location'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-location:8084']
+        labels:
+          service: 'pos-location'
+          application: 'pos-location'
+
+  - job_name: 'pos-order'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-order:9007']
+        labels:
+          service: 'pos-order'
+          application: 'pos-order'
+
+  - job_name: 'pos-people'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-people:8085']
+        labels:
+          service: 'pos-people'
+          application: 'pos-people'
+
+  - job_name: 'pos-price'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-price:9008']
+        labels:
+          service: 'pos-price'
+          application: 'pos-price'
+
+  - job_name: 'pos-security-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-security-service:8086']
+        labels:
+          service: 'pos-security-service'
+          application: 'pos-security-service'
+
+  - job_name: 'pos-shop-manager'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-shop-manager:8087']
+        labels:
+          service: 'pos-shop-manager'
+          application: 'pos-shop-manager'
+
+  - job_name: 'pos-vehicle-fitment'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-vehicle-fitment:8088']
+        labels:
+          service: 'pos-vehicle-fitment'
+          application: 'pos-vehicle-fitment'
+
+  - job_name: 'pos-vehicle-inventory'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-vehicle-inventory:8089']
+        labels:
+          service: 'pos-vehicle-inventory'
+          application: 'pos-vehicle-inventory'
+
+  - job_name: 'pos-workorder'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-workorder:8090']
+        labels:
+          service: 'pos-workorder'
+          application: 'pos-workorder'
+
+  - job_name: 'pos-vehicle-reference-carapi'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-vehicle-reference-carapi:8091']
+        labels:
+          service: 'pos-vehicle-reference-carapi'
+          application: 'pos-vehicle-reference-carapi'
+
+  - job_name: 'pos-vehicle-reference-nhtsa'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-vehicle-reference-nhtsa:8092']
+        labels:
+          service: 'pos-vehicle-reference-nhtsa'
+          application: 'pos-vehicle-reference-nhtsa'
+
+  - job_name: 'pos-agent-framework'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-agent-framework:8080']
+        labels:
+          service: 'pos-agent-framework'
+          application: 'pos-agent-framework'
