@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-inventory
+    name: inventory
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_inventory_db
     username: pos_user

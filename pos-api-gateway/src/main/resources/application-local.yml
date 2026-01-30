@@ -1,7 +1,7 @@
 # Local development profile — dynamic ports
 
 server:
-  port: 0  # OS assigns available ephemeral port
+  port: 8080  # Fixed gateway entry point
 
 management:
   server:
@@ -9,10 +9,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: gateway,health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
 
 eureka:
   client:
@@ -24,4 +24,16 @@ eureka:
 
 logging:
   level:
-    org.springframework.boot.web.embedded.tomcat.TomcatWebServer: INFO
+    root: INFO
+    org:
+      springframework:
+        cloud:
+          gateway: DEBUG
+        boot:
+          web:
+            embedded:
+              tomcat:
+                TomcatWebServer: INFO
+    com:
+      positivity:
+        gateway: DEBUG

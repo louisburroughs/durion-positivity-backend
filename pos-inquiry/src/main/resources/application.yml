@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-inquiry
+    name: inquiry
   jpa:
     hibernate:
       ddl-auto: update

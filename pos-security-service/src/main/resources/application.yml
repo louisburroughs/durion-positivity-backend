@@ -3,7 +3,7 @@
 # - The yaml file had comments which are lost in the refactoring!
 spring:
   application:
-    name: pos-security-service
+    name: security-service
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_security_db
     username: pos_user

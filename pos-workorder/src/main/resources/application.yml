@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-workorder
+    name: workorder
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_workorder_db
     username: pos_user

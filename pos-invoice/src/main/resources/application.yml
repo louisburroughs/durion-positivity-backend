@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-invoice
+    name: invoice
   jpa:
     hibernate:
       ddl-auto: update

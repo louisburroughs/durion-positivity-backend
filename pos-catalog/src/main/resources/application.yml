@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-catalog
+    name: catalog
   profiles:
     active: local
   datasource:

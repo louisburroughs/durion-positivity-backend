@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-vehicle-fitment
+    name: vehicle-fitment
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_vehicle_fitment_db
     username: pos_user

@@ -1,6 +1,6 @@
 spring:
   application:
-    name: pos-event-receiver
+    name: event-receiver
   datasource:
     url: jdbc:postgresql://localhost:5432/pos_event_receiver_db
     username: pos_user

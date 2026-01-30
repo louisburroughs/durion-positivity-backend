@@ -1,5 +1,144 @@
-pos-events as formal shared library: Mark pos-events clearly as a shared library in its README and document which modules depend on it; should this also have a separate published artifact version lifecycle?
+## Goal (Pattern A)
 
-Gradual OpenTelemetry rollout: Adding OTel to parent as optional means all modules inherit it but don't use it unless explicitly imported. Should a phased adoption guide be created for onboarding other modules?
+External callers use **no version in the URL**:
 
-pos-archunit test aggregator role: Clarify whether pos-archunit should remain a deployable module or be restructured as a pure test utility (Maven type jar vs. test-only classification)?
+* `GET /catalog/items`
+* header: `X-API-Version: 1`
+
+Gateway rewrites to an internal versioned path so routing is automatic:
+
+* internal route match: `/v1/catalog/items`
+* forwarded to: `lb://catalog` (Eureka)
+
+This removes static `routes:` and makes “add a service” automatic via Eureka registration.
+
+---
+
+## 1) Make service IDs equal to domains
+
+Set each service’s Eureka ID to the domain name you want in the path.
+
+Example in `catalog` service:
+
+```yaml
+spring:
+  application:
+    name: catalog
+```
+
+Do the same for `customer`, `inventory`, `order`, `price`, `accounting`, etc.
+
+This is what enables `/v{n}/{domain}/**` to be generated without a mapping table.
+
+---
+
+## 2) Gateway: auto-routes from Eureka using the locator
+
+Gateway `application.yml`:
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+          # Auto-generate: /v{version}/{serviceId}/**
+          predicates:
+            - name: Path
+              args:
+                pattern: "'/v*' + '/' + serviceId + '/**'"
+
+          # Strip /v{version}/{serviceId} before forwarding
+          filters:
+            - name: RewritePath
+              args:
+                regexp: "'/v\\d+/' + serviceId + '/?(?<remaining>.*)'"
+                replacement: "'/${remaining}'"
+```
+
+This uses the built-in DiscoveryClient route generation and expression support for `serviceId`.
+
+(If your gateway is not picking up the `predicates:`/`filters:` customization, it’s usually a version mismatch; the above is the documented mechanism for the locator. )
+
+---
+
+## 3) GlobalFilter: rewrite `/domain/**` + header → `/v{n}/domain/**`
+
+Add a `GlobalFilter` that:
+
+* requires `X-API-Version`
+* rewrites the path from `/catalog/items` to `/v1/catalog/items`
+
+```java
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.core.Ordered;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+@Component
+public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
+
+  private static final String VERSION_HEADER = "X-API-Version";
+
+  @Override
+  public Mono<Void> filter(ServerWebExchange exchange,
+                           org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
+
+    var req = exchange.getRequest();
+    var version = req.getHeaders().getFirst(VERSION_HEADER);
+
+    if (version == null || version.isBlank() || !version.matches("\\d+")) {
+      exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
+      return exchange.getResponse().setComplete();
+    }
+
+    var rawPath = req.getURI().getRawPath(); // e.g. /catalog/items
+    if (rawPath == null || rawPath.isBlank() || rawPath.equals("/")) {
+      exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);
+      return exchange.getResponse().setComplete();
+    }
+
+    // Expect /{serviceId}/...
+    var parts = rawPath.split("/", 3); // ["", "catalog", "items..."]
+    if (parts.length < 2 || parts[1].isBlank()) {
+      exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);
+      return exchange.getResponse().setComplete();
+    }
+
+    var serviceId = parts[1].toLowerCase();
+    var remainder = (parts.length == 3) ? "/" + parts[2] : "";
+
+    var newPath = "/v" + version + "/" + serviceId + remainder;
+
+    var mutated = exchange.mutate()
+        .request(r -> r.path(newPath))
+        .build();
+
+    return chain.filter(mutated);
+  }
+
+  @Override
+  public int getOrder() {
+    // run early
+    return Ordered.HIGHEST_PRECEDENCE;
+  }
+}
+```
+
+---
+
+## 4) Resulting behavior
+
+* Caller: `GET /inventory/items/123` + `X-API-Version: 1`
+* Gateway rewrites to: `/v1/inventory/items/123`
+* Discovery locator matches `/v1/inventory/**` and sends to `lb://inventory`
+* Gateway strips `/v1/inventory` and the service receives: `/items/123`
+
+No per-service gateway YAML entries required.
+
+---
