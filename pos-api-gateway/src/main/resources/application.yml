@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: pos-api-gateway
+  profiles:
+    active: local
   cloud:
     gateway:
       discovery:

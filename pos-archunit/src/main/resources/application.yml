@@ -9,7 +9,7 @@ spring:
     events:
       async-mode: async
 server:
-  port: 8888
+  port: 0
   servlet:
     context-path: /
 logging:
@@ -21,6 +21,8 @@ logging:
     com:
       positivity: DEBUG
 management:
+  server:
+    port: 0
   endpoints:
     web:
       exposure:
