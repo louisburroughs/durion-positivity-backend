@@ -62,5 +62,5 @@ Durion-Processing.md
 /logs/
 
 ### guides that contain sensitive info ###
-SECRETS_UPDATE_SUMMARY.txt
-SECRETS_MANAGEMENT_GUIDE.md
+/docs/SECRETS_UPDATE_SUMMARY.txt
+/docs/SECRETS_MANAGEMENT_GUIDE.md

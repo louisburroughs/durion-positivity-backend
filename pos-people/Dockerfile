@@ -1,4 +1,4 @@
-FROM openjdk:21-jdk-alpine
+FROM eclipse-temurin:21-jdk-alpine
 VOLUME /tmp
 
 # Install curl for downloading the agent
