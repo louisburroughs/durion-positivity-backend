@@ -15,7 +15,7 @@ positivity/
 ├── pos-invoice/              # Invoicing and billing
 ├── pos-price/                # Pricing management
 ├── pos-accounting/           # Financial and accounting
-├── pos-work-order/           # Work order management
+├── pos-workorder/           # Work order management
 ├── pos-people/               # Staff and organizational management
 ├── pos-location/             # Location and geographic services
 ├── pos-events/               # Event publishing
@@ -110,7 +110,7 @@ pos-{service-name}/
 
 ### Operations Services
 
-- **pos-work-order** - Service scheduling, task management
+- **pos-workorder** - Service scheduling, task management
 - **pos-people** - Staff management, roles, permissions
 - **pos-location** - Multi-location support, geographic services
 - **pos-shop-manager** - Shop operations and management

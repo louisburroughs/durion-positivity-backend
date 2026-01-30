@@ -94,15 +94,15 @@
   - Include status tracking and audit trails
   - _Requirements: 3.1, 3.2, 3.5_
 
-- [ ] 5.2 Create pos-work-order microservice
+- [ ] 5.2 Create pos-workorder microservice
   - Implement work order lifecycle management
   - Create work order assignment and status tracking APIs
   - Add mechanic assignment and bay management
   - Include workflow state management and notifications
   - _Requirements: 4.1, 4.2, 4.3, 5.1, 5.2_
 
-- [ ] 5.3 Write property test for estimate-to-work-order conversion integrity
-  - **Property 5: Estimate-to-work-order conversion integrity**
+- [ ] 5.3 Write property test for estimate-to-workorder conversion integrity
+  - **Property 5: Estimate-to-workorder conversion integrity**
   - **Validates: Requirements 3.2, 3.5**
 
 - [ ] 5.4 Write property test for work order state management

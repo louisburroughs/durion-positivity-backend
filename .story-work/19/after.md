@@ -22,7 +22,7 @@ As a **Store Manager**, I need to cancel an order to correct mistakes or respond
 - **Primary Actor**: Store Manager (initiates cancellation).
 - **Primary Orchestrator (System)**: POS / `domain:positivity` (owns `Order` aggregate and drives orchestration).
 - **Billing (`domain:billing`)**: payment state authority; performs void/refund.
-- **Work Execution (`domain:workexec`)**: work order state authority; enforces cancellability and performs work-order cancellation.
+- **Work Execution (`domain:workexec`)**: work order state authority; enforces cancellability and performs workorder cancellation.
 - **Finance**: requires traceability for void/refund.
 - **Operations**: requires deterministic states and failure handling.
 
@@ -48,8 +48,8 @@ As a **Store Manager**, I need to cancel an order to correct mistakes or respond
 
 ### 3) Workexec gating and cancellation (first, per Decision Record)
 - If `workOrderId` exists, POS calls Workexec:
-  - **Pre-check (advisory UX)**: `GET /api/v1/work-orders/{workOrderId}` to obtain `status`, `cancellable`, and optional `nonCancellableReason`.
-  - **Command (authoritative)**: `POST /api/v1/work-orders/{workOrderId}/cancel` with:
+  - **Pre-check (advisory UX)**: `GET /api/v1/workorders/{workOrderId}` to obtain `status`, `cancellable`, and optional `nonCancellableReason`.
+  - **Command (authoritative)**: `POST /api/v1/workorders/{workOrderId}/cancel` with:
     - `orderId`
     - `requestedBy`
     - `reasonCode`
@@ -95,7 +95,7 @@ As a **Store Manager**, I need to cancel an order to correct mistakes or respond
   - `cancellationIdempotencyKey`
 
 - **Contracts (Decision Record minimums)**
-  - Workexec `GET work-order` response includes: `id`, `status`, `cancellable`, optional `nonCancellableReason`, `updatedAt/version`.
+  - Workexec `GET workorder` response includes: `id`, `status`, `cancellable`, optional `nonCancellableReason`, `updatedAt/version`.
   - Workexec `POST cancel` includes: `orderId`, `requestedBy`, `reasonCode`, `idempotencyKey`.
   - Billing `POST reverse` includes: `type` (intent), `amount` (optional), `currency`, `reasonCode`, `orderId`, `idempotencyKey`.
 

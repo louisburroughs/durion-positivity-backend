@@ -52,7 +52,7 @@ positivity/
 ├── pos-invoice/              # Invoicing and billing
 ├── pos-price/                # Pricing management
 ├── pos-accounting/           # Financial and accounting
-├── pos-work-order/           # Work order management
+├── pos-workorder/           # Work order management
 ├── pos-people/               # Staff management
 ├── pos-location/             # Location services
 ├── pos-events/               # Event publishing

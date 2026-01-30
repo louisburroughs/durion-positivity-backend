@@ -11,7 +11,7 @@ Positivity is a modular Point of Sale (POS) system designed for infinite scaling
 - **Inventory Management (pos-inventory, pos-vehicle-inventory)** - Stock tracking, warehouse management, and vehicle-specific inventory
 - **Order Processing (pos-order, pos-invoice)** - Order lifecycle, invoicing, and payment processing
 - **Pricing & Accounting (pos-price, pos-accounting)** - Dynamic pricing, financial tracking, and reporting
-- **Work Orders (pos-work-order)** - Service scheduling, task management, and completion tracking
+- **Work Orders (pos-workorder)** - Service scheduling, task management, and completion tracking
 - **Vehicle Services (pos-vehicle-fitment, pos-vehicle-reference-*)** - Automotive parts fitment and vehicle data integration
 - **Location Management (pos-location)** - Multi-location support and geographic services
 - **People Management (pos-people)** - Staff, roles, and organizational structure

@@ -28,7 +28,7 @@ Successfully enabled **OpenAPI 3.0.1/Swagger documentation generation** across *
 
 ---
 
-## ✅ Final Module: pos-work-order
+## ✅ Final Module: pos-workorder
 
 ### What Was Completed
 
@@ -84,7 +84,7 @@ Status: ✅ All service beans instantiate correctly
 16. **pos-invoice** - ✅ Invoice generation
 17. **pos-mcp-server** - ✅ MCP Server integration
 18. **pos-shop-manager** - ✅ Shop management (7 controllers)
-19. **pos-work-order** - ✅ Work order management (4 controllers)
+19. **pos-workorder** - ✅ Work order management (4 controllers)
 
 ---
 
@@ -180,7 +180,7 @@ done
 
 **Single Module**:
 ```bash
-cd durion-positivity-backend/pos-work-order
+cd durion-positivity-backend/pos-workorder
 ./mvnw -Popenapi clean verify -DskipTests
 # Spec at: target/openapi.json
 ```
@@ -188,7 +188,7 @@ cd durion-positivity-backend/pos-work-order
 ### Run Individual Service
 
 ```bash
-cd pos-work-order
+cd pos-workorder
 ./mvnw spring-boot:run
 # Access: http://localhost:8080/swagger-ui/
 ```

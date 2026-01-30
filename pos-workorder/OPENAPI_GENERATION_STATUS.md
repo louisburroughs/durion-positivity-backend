@@ -1,4 +1,4 @@
-# OpenAPI Generation Status - pos-work-order
+# OpenAPI Generation Status - pos-workorder
 
 ## Status
 ✅ **COMPLETE** - OpenAPI 3.0.1 integration configured and ready for use
@@ -75,17 +75,17 @@ All controllers include:
 
 ### Option 1: Maven Profile (Recommended)
 ```bash
-cd pos-work-order
+cd pos-workorder
 ./mvnw -Popenapi clean verify -DskipTests
 # Spec will be generated and available at: target/openapi.json
 ```
 
 ### Option 2: Manual Extraction from Running Instance
 ```bash
-cd pos-work-order
+cd pos-workorder
 
 # Start the application
-java -jar target/pos-work-order-0.0.1-SNAPSHOT.jar \
+java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar \
   --server.port=8081 \
   --spring.datasource.url='jdbc:h2:mem:openapi;MODE=PostgreSQL' \
   --spring.datasource.driverClassName=org.h2.Driver \
@@ -99,7 +99,7 @@ sleep 20
 curl http://localhost:8081/v3/api-docs > target/openapi.json
 
 # Stop the application
-pkill -f "pos-work-order"
+pkill -f "pos-workorder"
 ```
 
 ### Option 3: Access via Swagger UI (While Running)
@@ -112,7 +112,7 @@ pkill -f "pos-work-order"
 
 Build output:
 - ✅ All source files compiled successfully
-- ✅ Created Fat JAR: `pos-work-order-0.0.1-SNAPSHOT.jar`
+- ✅ Created Fat JAR: `pos-workorder-0.0.1-SNAPSHOT.jar`
 - ✅ Spring Boot repackage configuration
 - ✅ All dependencies resolved
 - ✅ Application starts successfully on port 8081
@@ -135,7 +135,7 @@ Based on controller analysis, the following endpoint categories are available:
 To view the complete OpenAPI specification:
 
 1. Run the Maven profile: `./mvnw -Popenapi clean verify -DskipTests`
-2. View spec in IDE: Open `pos-work-order/target/openapi.json`
+2. View spec in IDE: Open `pos-workorder/target/openapi.json`
 3. Or access via Swagger UI: Start app and navigate to `http://localhost:8081/swagger-ui/`
 
 ## Documentation Links

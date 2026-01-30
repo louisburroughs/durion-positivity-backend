@@ -19,6 +19,7 @@ ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # IMPORTANT: Set OTEL_EXPORTER_OTLP_HEADERS at runtime with your Grafana Cloud API key
 # Example: -e OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-instance-id:api-key>"
 
-COPY target/pos-work-order-*.jar pos-work-order.jar
+WORKDIR /app
+COPY target/pos-workorder-*.jar pos-workorder.jar
 EXPOSE 8090
-ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-work-order.jar"]
+ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-workorder.jar"]
