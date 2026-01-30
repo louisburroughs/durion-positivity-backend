@@ -97,7 +97,7 @@ com.positivity.accounting/
 - **Tests verify layering** - controllers must not directly access repositories or entities
 - **Tests verify service layer exposure** - only service packages are public APIs
 - **Architecture tests run automatically** as part of Maven test phase
-- Reference the `pos-modulith/ArchitectureTests.java` for cross-module validation patterns
+- Reference the `pos-archunit/ArchitectureTests.java` for cross-module validation patterns
 - Violating architecture rules will fail builds and prevent deployment
 
 **Inter-service Communication Patterns:**
