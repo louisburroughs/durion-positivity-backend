@@ -142,7 +142,7 @@ jobs:
           - pos-vehicle-inventory
           - pos-vehicle-reference-carapi
           - pos-vehicle-reference-nhtsa
-          - pos-work-order
+          - pos-workorder
           - pos-agent-framework
     
     steps:

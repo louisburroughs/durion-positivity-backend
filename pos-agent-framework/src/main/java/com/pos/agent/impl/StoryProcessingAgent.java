@@ -31,7 +31,7 @@ public class StoryProcessingAgent extends AbstractAgent {
                 "acceptance-criteria"));
     }
 
-     @Override
+    @Override
     public AgentContext getOrCreateContext(String sessionId) {
         return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> StoryContext.builder().requestId(sessionId).build());
@@ -42,7 +42,7 @@ public class StoryProcessingAgent extends AbstractAgent {
 
     private static final List<String> VALID_MODULES = List.of(
             "pos-inventory", "pos-customer", "pos-order", "pos-catalog",
-            "pos-price", "pos-vehicle-inventory", "pos-work-order",
+            "pos-price", "pos-vehicle-inventory", "pos-workorder",
             "pos-shop-manager", "pos-accounting");
 
     @Override

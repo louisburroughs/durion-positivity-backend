@@ -1,4 +1,4 @@
-# pos-work-order OpenAPI Documentation Index
+# pos-workorder OpenAPI Documentation Index
 
 ## Quick Links
 
@@ -9,13 +9,13 @@
 ### Build and Deployment
 ```bash
 # Build the module
-./mvnw -pl pos-work-order -am clean package -DskipTests
+./mvnw -pl pos-workorder -am clean package -DskipTests
 
 # Generate OpenAPI specification (Maven profile)
 ./mvnw -Popenapi clean verify -DskipTests
 
 # Run the application
-java -jar target/pos-work-order-0.0.1-SNAPSHOT.jar
+java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 ```
 
 ### API Documentation Access (While Running)
@@ -70,23 +70,23 @@ All 4 REST controllers are fully annotated and documented:
 
 #### Method 1: Maven Profile (Automated)
 ```bash
-cd pos-work-order
+cd pos-workorder
 ./mvnw -Popenapi clean verify -DskipTests
 # Spec generated at: target/openapi.json
 ```
 
 #### Method 2: Manual Extraction (Running Instance)
 ```bash
-cd pos-work-order
-java -jar target/pos-work-order-0.0.1-SNAPSHOT.jar &
+cd pos-workorder
+java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar &
 sleep 20
 curl http://localhost:8080/v3/api-docs > openapi.json
-pkill -f "pos-work-order"
+pkill -f "pos-workorder"
 ```
 
 #### Method 3: Interactive Swagger UI
 ```bash
-java -jar target/pos-work-order-0.0.1-SNAPSHOT.jar
+java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 # Open: http://localhost:8080/swagger-ui/index.html
 ```
 
@@ -125,7 +125,7 @@ java -jar target/pos-work-order-0.0.1-SNAPSHOT.jar
 - **Duration**: 24.1 seconds
 - **Java Version**: 21.0.5-tem
 - **JAR Size**: Spring Boot fat JAR
-- **Output**: `target/pos-work-order-0.0.1-SNAPSHOT.jar`
+- **Output**: `target/pos-workorder-0.0.1-SNAPSHOT.jar`
 
 ### Build Verification
 - ✅ All source files compiled
@@ -142,13 +142,13 @@ java -jar target/pos-work-order-0.0.1-SNAPSHOT.jar
 java -version
 
 # Clean and rebuild
-./mvnw -pl pos-work-order -am clean package -DskipTests
+./mvnw -pl pos-workorder -am clean package -DskipTests
 ```
 
 ### OpenAPI spec not generated
 ```bash
 # Check if app starts correctly
-java -jar target/pos-work-order-0.0.1-SNAPSHOT.jar --server.port=8081
+java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar --server.port=8081
 
 # In another terminal, check health
 curl http://localhost:8081/actuator/health
@@ -195,7 +195,7 @@ This module is part of the durion-positivity-backend microservice suite (now com
 - pos-price - Pricing
 - pos-security-service - Security
 - pos-shop-manager - Shop management
-- **pos-work-order** - Work order management (THIS MODULE - FINAL)
+- **pos-workorder** - Work order management (THIS MODULE - FINAL)
 
 ## Status Summary
 

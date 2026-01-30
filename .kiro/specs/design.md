@@ -33,7 +33,7 @@ The system is organized into domain-specific microservices, each with dedicated 
 - **Key APIs**: Vehicle lookup, VIN validation, fitment verification
 
 #### 4. Work Management Domain Services
-- **pos-work-order**: Work order lifecycle management and status tracking
+- **pos-workorder**: Work order lifecycle management and status tracking
 - **pos-inquiry**: Estimate creation and management
 - **Data Store**: DynamoDB tables for work orders, estimates, status history
 - **Key APIs**: Work order management, estimate processing, status updates
@@ -151,7 +151,7 @@ public class EstimateController {
 
 // Work Order Service
 @RestController
-@RequestMapping("/api/v1/work-orders")
+@RequestMapping("/api/v1/workorders")
 public class WorkOrderController {
     @PostMapping("/{workOrderId}/assign")
     public ResponseEntity<WorkOrder> assignWorkOrder(
@@ -319,7 +319,7 @@ After reviewing all properties identified in the prework, several areas of conso
 *For any* vehicle information operation, the system should integrate with external reference services and maintain accurate VIN validation and specifications
 **Validates: Requirements 2.3, 2.4**
 
-**Property 5: Estimate-to-work-order conversion integrity**
+**Property 5: Estimate-to-workorder conversion integrity**
 *For any* approved estimate, the conversion to work order should preserve all line items, pricing, and customer/vehicle associations
 **Validates: Requirements 3.2, 3.5**
 

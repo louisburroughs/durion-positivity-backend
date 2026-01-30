@@ -90,7 +90,7 @@
         </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
-            <artifactId>pos-work-order</artifactId>
+            <artifactId>pos-workorder</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>

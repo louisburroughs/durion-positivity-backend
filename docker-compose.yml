@@ -539,9 +539,9 @@ services:
       timeout: 3s
       retries: 20
 
-  pos-work-order:
+  pos-workorder:
     build:
-      context: ./pos-work-order
+      context: ./pos-workorder
       dockerfile: Dockerfile
     ports:
       - "8090:8090"
