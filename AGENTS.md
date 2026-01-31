@@ -274,6 +274,12 @@ public interface SomeService {
 ./mvnw -pl pos-order -am test
 ```
 
+## Documentation
+
+- **Architecture Guide**: `./docs/ARCHITECTURE_GUIDE.md` (Docker, ports, service communication, observability)
+- **Development Guide**: `./docs/DEVELOPMENT_GUIDE.md` (OpenAPI, POM, version management, pos-events)
+- **Operations Runbook**: `./docs/OPERATIONS_RUNBOOK.md` (operations, RBAC, permissions)
+
 ## Agent Docs to Consult
 
 - `.github/agents/sre.agent.md` (observability)
@@ -281,7 +287,6 @@ public interface SomeService {
 - `../AGENTS.md` (workspace-level guidance)
 - Backend test agent: `.github/agents/test.agent.md`
 - Java instructions: `../.github/instructions/java.instructions.md` (Java code guidelines and best practices)
-- Secrets management: `./SECRETS_MANAGEMENT_GUIDE.md` (environment variables, .env configuration, secret rotation, CI/CD integration)
 
 ## Notes for Agents
 
