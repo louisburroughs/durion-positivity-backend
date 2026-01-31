@@ -119,6 +119,9 @@ For detailed agent commands and local stack setup, refer to [AGENTS.md](AGENTS.m
 This repository participates in the workspace-wide agent ecosystem.
 
 - **Agent Guide**: [AGENTS.md](AGENTS.md) (Local context and commands)
+- **Architecture Guide**: [docs/ARCHITECTURE_GUIDE.md](docs/ARCHITECTURE_GUIDE.md) (Docker, ports, service communication, observability)
+- **Development Guide**: [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) (OpenAPI, POM, version management, pos-events)
+- **Operations Runbook**: [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md) (Operations, RBAC, permissions)
 - **Workspace Agents**: [../durion/AGENTS.md](../durion/AGENTS.md)
 - **Agent Roles & Runbooks**: [../durion/.github/agents/](../durion/.github/agents/)
     - [SRE / Observability](../durion/.github/agents/sre.agent.md)
