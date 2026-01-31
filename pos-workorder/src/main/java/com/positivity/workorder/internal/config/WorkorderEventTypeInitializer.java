@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
 import lombok.extern.slf4j.Slf4j;
@@ -26,16 +27,19 @@ public class WorkorderEventTypeInitializer implements ApplicationRunner {
 
     private final RestClient restClient;
     private final EventTypeInitializerSupport initializerSupport;
+    private final String apiSecret;
     private final boolean enabled;
 
     public WorkorderEventTypeInitializer(
             RestClient.Builder restClientBuilder,
             @Value("${gateway.base-url:http://localhost:8080}") String gatewayBaseUrl,
+            @Value("${pos.events.api-secret:}") String apiSecret,
             @Value("${pos-events.registration.enabled:true}") boolean enabled) {
         this.restClient = restClientBuilder
                 .baseUrl(gatewayBaseUrl + "/api/event-receiver/v1/eventTypes/code")
                 .build();
         this.initializerSupport = new EventTypeInitializerSupport(SERVICE_NAME);
+        this.apiSecret = apiSecret;
         this.enabled = enabled;
     }
 
@@ -58,11 +62,15 @@ public class WorkorderEventTypeInitializer implements ApplicationRunner {
     }
 
     private void registerViaHttp(EventTypeRegistration registration) {
-        restClient.put()
+        var request = restClient.put()
                 .uri("/{typeCode}", registration.getTypeCode())
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(registration)
-                .retrieve()
-                .toBodilessEntity();
+                .body(registration);
+
+        if (EventsApiConstants.hasSecret(apiSecret)) {
+            request.header(EventsApiConstants.SECRET_HEADER, apiSecret);
+        }
+
+        request.retrieve().toBodilessEntity();
     }
 }

@@ -172,6 +172,7 @@ Each module MUST have an ApplicationRunner that registers event types at startup
 ```java
 package com.positivity.{module}.internal.config;
 
+import com.positivity.events.EventsApiConstants;
 import com.positivity.events.EventTypeInitializerSupport;
 import com.positivity.events.EventTypeRegistration;
 import org.springframework.beans.factory.annotation.Value;
@@ -185,12 +186,15 @@ import org.springframework.web.client.RestClient;
 public class {Module}EventTypeInitializer implements ApplicationRunner {
     private final RestClient restClient;
     private final EventTypeInitializerSupport initializerSupport;
+    private final String apiSecret;
 
     public {Module}EventTypeInitializer(
             RestClient.Builder restClientBuilder,
-            @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl) {
+            @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl,
+            @Value("${pos.events.api-secret:}") String apiSecret) {
         this.restClient = restClientBuilder.baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code").build();
         this.initializerSupport = new EventTypeInitializerSupport("pos-{module}");
+        this.apiSecret = apiSecret;
     }
 
     @Override
@@ -200,8 +204,15 @@ public class {Module}EventTypeInitializer implements ApplicationRunner {
 
     private void registerEventType(EventTypeRegistration registration) {
         try {
-            restClient.put().uri("/{typeCode}", registration.getTypeCode())
-                .contentType(MediaType.APPLICATION_JSON).body(registration).retrieve().toBodilessEntity();
+            var request = restClient.put().uri("/{typeCode}", registration.getTypeCode())
+                .contentType(MediaType.APPLICATION_JSON).body(registration);
+
+            // Add shared secret header for authentication (avoids JWT circular dependency)
+            if (EventsApiConstants.hasSecret(apiSecret)) {
+                request.header(EventsApiConstants.SECRET_HEADER, apiSecret);
+            }
+
+            request.retrieve().toBodilessEntity();
         } catch (Exception e) {
             // Log warning but don't fail startup
         }
