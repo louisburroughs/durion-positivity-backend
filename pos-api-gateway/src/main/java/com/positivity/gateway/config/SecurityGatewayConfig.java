@@ -1,8 +1,8 @@
 package com.positivity.gateway.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,14 +20,21 @@ import java.util.Set;
 public class SecurityGatewayConfig {
     private static final Logger log = LoggerFactory.getLogger(SecurityGatewayConfig.class);
 
-    @Value("${security.service.url:http://pos-security-service:8086}")
-    private String securityServiceUrl;
-
-    @SuppressWarnings("null")
+    /**
+     * Load-balanced WebClient builder for service discovery.
+     * Uses Eureka to resolve "lb://security-service" to actual host:port.
+     */
     @Bean
-    public WebClient securityWebClient() {
-        return WebClient.builder()
-                .baseUrl(securityServiceUrl)
+    @LoadBalanced
+    public WebClient.Builder loadBalancedWebClientBuilder() {
+        return WebClient.builder();
+    }
+
+    @Bean
+    public WebClient securityWebClient(WebClient.Builder loadBalancedWebClientBuilder) {
+        // Use Eureka service name - port is dynamic, resolved via service discovery
+        return loadBalancedWebClientBuilder
+                .baseUrl("lb://security-service")
                 .build();
     }
 
@@ -38,7 +45,6 @@ public class SecurityGatewayConfig {
      * - Optionally injects subject as `X-User`
      * - Bypasses public endpoints (actuator, swagger)
      */
-    @SuppressWarnings("null")
     @Bean
     public GlobalFilter authFilter(WebClient securityWebClient) {
         return (exchange, chain) -> {

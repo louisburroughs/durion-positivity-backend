@@ -64,6 +64,11 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
         </dependency>
+        <!-- pos-security-common for gateway authentication -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-security-common</artifactId>
+        </dependency>
         <!-- Eureka Client -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>

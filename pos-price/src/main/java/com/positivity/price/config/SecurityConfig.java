@@ -1,24 +1,26 @@
 package com.positivity.price.config;
 
-import org.springframework.context.annotation.Bean;
+import com.positivity.security.common.GatewaySecurityConfig;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.context.annotation.Import;
 
+/**
+ * Price Service Security Configuration.
+ *
+ * <p>
+ * Imports {@link GatewaySecurityConfig} which provides:
+ * </p>
+ * <ul>
+ * <li>Gateway-based authentication via X-Authorities and X-User headers</li>
+ * <li>Stateless session management (JWT-based)</li>
+ * <li>Method-level security (@PreAuthorize support)</li>
+ * <li>Public access to actuator, swagger endpoints</li>
+ * </ul>
+ *
+ * @see GatewaySecurityConfig
+ */
 @Configuration
-@EnableWebSecurity
-@EnableMethodSecurity
+@Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(authz -> authz
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers("/actuator/health").permitAll()
-                .anyRequest().authenticated()).httpBasic(basic -> {
-                }).csrf(csrf -> csrf.disable());
-        return http.build();
-    }
+    // Gateway-based authentication is configured by GatewaySecurityConfig
 }
