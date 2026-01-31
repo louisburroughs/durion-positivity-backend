@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -37,6 +38,7 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "200", description = "Events listed"),
                         @ApiResponse(responseCode = "403", description = "Forbidden")
         })
+        @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
         public ResponseEntity<Void> listEvents(
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
@@ -66,6 +68,7 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "202", description = "Event accepted for processing"),
                         @ApiResponse(responseCode = "400", description = "Invalid request")
         })
+        @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
         public ResponseEntity<Void> submitEvent(@RequestBody(required = false) Object request) {
                 log.info("Stub submitEvent");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -78,6 +81,7 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "202", description = "Retry scheduled"),
                         @ApiResponse(responseCode = "404", description = "Event not found")
         })
+        @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
         public ResponseEntity<Void> retryEventProcessing(
                         @Parameter(description = "Event identifier") @PathVariable String eventId,
                         @RequestBody(required = false) Object request) {

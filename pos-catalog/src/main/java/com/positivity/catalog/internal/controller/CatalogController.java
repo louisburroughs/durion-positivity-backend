@@ -253,6 +253,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "201", description = "Catalog item created successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid item type or request body")
     })
+    @EmitEvent(id = "CATALOG_ITEM_CREATE", apiVersion = "1")
     public ResponseEntity<?> addCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
             @RequestBody CatalogItem item) { // Swapped order for clarity with @RequestBody
@@ -299,6 +300,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "400", description = "Invalid item type or request body"),
             @ApiResponse(responseCode = "404", description = "Catalog item not found")
     })
+    @EmitEvent(id = "CATALOG_ITEM_UPDATE", apiVersion = "1")
     public ResponseEntity<?> updateCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
             @Parameter(description = "ID of the catalog item to update") @PathVariable Long catalogId, // Changed to
@@ -384,6 +386,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "201", description = "Catalog created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogEntity.class))),
             @ApiResponse(responseCode = "400", description = "Invalid request body")
     })
+    @EmitEvent(id = "CATALOG_CATALOG_CREATE", apiVersion = "1")
     public ResponseEntity<CatalogEntity> addCatalog(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Catalog object to be added", required = true, content = @Content(schema = @Schema(implementation = CatalogEntity.class))) @RequestBody CatalogEntity catalogEntity) {
         CatalogEntity createdCatalog = catalogDao.saveCatalog(catalogEntity);
@@ -405,6 +408,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "400", description = "Invalid request body"),
             @ApiResponse(responseCode = "404", description = "Catalog not found")
     })
+    @EmitEvent(id = "CATALOG_CATALOG_UPDATE", apiVersion = "1")
     public ResponseEntity<CatalogEntity> updateCatalog(
             @Parameter(description = "ID of the catalog to update") @PathVariable Long catalogId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated catalog object", required = true, content = @Content(schema = @Schema(implementation = CatalogEntity.class))) @RequestBody CatalogEntity catalogEntity) {

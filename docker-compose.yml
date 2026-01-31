@@ -110,6 +110,11 @@ services:
     environment:
       # Configure Eureka to use its Docker Compose service name for registration
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck: # Optional but recommended for sequential startup
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
       interval: 5s
@@ -123,16 +128,17 @@ services:
     ports:
       - "9001:9001"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9001/actuator/health"]
       interval: 5s
@@ -146,16 +152,17 @@ services:
     ports:
       - "8081:8081"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
       interval: 5s
@@ -169,16 +176,17 @@ services:
     ports:
       - "8082:8082"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
       interval: 5s
@@ -190,16 +198,17 @@ services:
       context: ./pos-event-receiver
       dockerfile: Dockerfile
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9002/actuator/health"]
       interval: 5s
@@ -211,16 +220,17 @@ services:
       context: ./pos-events
       dockerfile: Dockerfile
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9003/actuator/health"]
       interval: 5s
@@ -234,16 +244,17 @@ services:
     ports:
       - "8083:8083"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
       interval: 5s
@@ -255,16 +266,17 @@ services:
       context: ./pos-inquiry
       dockerfile: Dockerfile
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9004/actuator/health"]
       interval: 5s
@@ -276,16 +288,17 @@ services:
       context: ./pos-inventory
       dockerfile: Dockerfile
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9005/actuator/health"]
       interval: 5s
@@ -297,16 +310,17 @@ services:
       context: ./pos-invoice
       dockerfile: Dockerfile
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9006/actuator/health"]
       interval: 5s
@@ -320,16 +334,17 @@ services:
     ports:
       - "8084:8084"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
       interval: 5s
@@ -341,16 +356,17 @@ services:
       context: ./pos-order
       dockerfile: Dockerfile
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9007/actuator/health"]
       interval: 5s
@@ -364,16 +380,17 @@ services:
     ports:
       - "8085:8085"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
       interval: 5s
@@ -385,16 +402,17 @@ services:
       context: ./pos-price
       dockerfile: Dockerfile
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9008/actuator/health"]
       interval: 5s
@@ -408,7 +426,7 @@ services:
     ports:
       - "8086:8086"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
@@ -416,8 +434,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      eureka-server:
+      pos-api-gateway:
         condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8086/actuator/health"]
       interval: 5s
@@ -431,16 +451,17 @@ services:
     ports:
       - "8087:8087"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8087/actuator/health"]
       interval: 5s
@@ -454,16 +475,17 @@ services:
     ports:
       - "8088:8088"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8088/actuator/health"]
       interval: 5s
@@ -477,16 +499,17 @@ services:
     ports:
       - "8089:8089"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8089/actuator/health"]
       interval: 5s
@@ -500,16 +523,17 @@ services:
     ports:
       - "8091:8091"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8091/actuator/health"]
       interval: 5s
@@ -523,16 +547,17 @@ services:
     ports:
       - "8092:8092"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8092/actuator/health"]
       interval: 5s
@@ -546,16 +571,17 @@ services:
     ports:
       - "8090:8090"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
       interval: 5s
@@ -569,7 +595,8 @@ services:
     ports:
       - "8093:8080"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_PROFILES_ACTIVE: dev
       # Database
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
@@ -588,10 +615,10 @@ services:
       # Feature flags
       CONSUL_URL: http://consul:8500
     depends_on:
-      postgres:
+      pos-security-service:
         condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    networks:
+      - pos-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
@@ -606,14 +633,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
-      postgres:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     healthcheck:

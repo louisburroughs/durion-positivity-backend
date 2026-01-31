@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.InventoryAvailabilityResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -34,6 +35,7 @@ public class InventoryAvailabilityController {
     }
 
     @PostMapping("/{productId}")
+    @EmitEvent(id = "INVENTORY_AVAILABILITY_UPDATE", apiVersion = "1")
     @Operation(summary = "Update inventory availability", description = "Updates availability for a product. Stub implementation.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Availability updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryAvailabilityResponse.class))),

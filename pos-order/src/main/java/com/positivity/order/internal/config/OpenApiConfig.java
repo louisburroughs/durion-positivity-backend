@@ -3,12 +3,15 @@ package com.positivity.order.internal.config;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.List;
-
+/**
+ * OpenAPI configuration for the Positivity Order service.
+ * 
+ * Sets up API documentation details including title, description,
+ * version, and contact information.
+ */
 @Configuration
 public class OpenApiConfig {
 
@@ -21,9 +24,7 @@ public class OpenApiConfig {
                                                 .version("v1")
                                                 .contact(new Contact()
                                                                 .email("louis.burroughs@gmail.com")
-                                                                .name("Durion Team")))
-                                .servers(List.of(
-                                                new Server().url("http://api-gateway.local/api/order")
-                                                                .description("API Gateway")));
+                                                                .name("Durion Team")));
+
         }
 }

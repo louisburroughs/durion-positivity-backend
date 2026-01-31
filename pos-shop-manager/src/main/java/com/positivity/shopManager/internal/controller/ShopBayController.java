@@ -1,5 +1,6 @@
 package com.positivity.shopManager.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.shopManager.service.BayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,6 +34,7 @@ public class ShopBayController {
 
     @Operation(summary = "Create bay", description = "Create a new bay for a specific shop location.")
     @ApiResponse(responseCode = "200", description = "Bay created successfully.")
+    @EmitEvent(id = "SHOP_BAY_CREATE", apiVersion = "1")
     @PostMapping("/{locationId}/bays")
     public ResponseEntity<Object> createBay(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
@@ -44,6 +46,7 @@ public class ShopBayController {
 
     @Operation(summary = "Manage bays", description = "Create or update bays in bulk.")
     @ApiResponse(responseCode = "200", description = "Bays managed successfully.")
+    @EmitEvent(id = "SHOP_BAY_MANAGE", apiVersion = "1")
     @PutMapping("/bays")
     public ResponseEntity<Object> manageBays(
             @Parameter(description = "Bay management request body") @RequestBody(required = false) Object request) {

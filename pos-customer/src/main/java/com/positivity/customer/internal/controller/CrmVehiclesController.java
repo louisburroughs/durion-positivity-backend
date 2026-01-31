@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -33,6 +34,7 @@ public class CrmVehiclesController {
         })
         @PostMapping("/{customerId}/vehicles")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_CREATE + "')")
+        @EmitEvent(id = "CUSTOMER_VEHICLE_CREATE_LEGACY", apiVersion = "1")
         public ResponseEntity<Void> createVehicles(
                         @Parameter(description = "Customer ID", required = true) @PathVariable String customerId,
                         @Parameter(description = "Vehicle creation request", required = false) @RequestBody(required = false) Object body) {
@@ -47,6 +49,7 @@ public class CrmVehiclesController {
         })
         @PutMapping("/{customerId}/vehicles")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_EDIT + "')")
+        @EmitEvent(id = "CUSTOMER_VEHICLE_UPDATE", apiVersion = "1")
         public ResponseEntity<Void> updateVehicles(
                         @Parameter(description = "Customer ID", required = true) @PathVariable String customerId,
                         @Parameter(description = "Vehicle update request", required = false) @RequestBody(required = false) Object body) {
@@ -75,6 +78,7 @@ public class CrmVehiclesController {
         })
         @PutMapping("/{customerId}/vehicles/{vehicleId}/transfer")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_PARTY_ASSOC_EDIT + "')")
+        @EmitEvent(id = "CUSTOMER_VEHICLE_TRANSFER", apiVersion = "1")
         public ResponseEntity<Void> transferVehicles(
                         @Parameter(description = "Source customer ID", required = true) @PathVariable String customerId,
                         @Parameter(description = "Vehicle ID to transfer", required = true) @PathVariable String vehicleId,

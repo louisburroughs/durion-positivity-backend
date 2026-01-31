@@ -3,6 +3,7 @@ package com.positivity.customer.internal.controller;
 import com.positivity.customer.internal.entity.AbstractCustomer;
 import com.positivity.customer.internal.repository.CustomerRepository;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -53,6 +54,7 @@ public class CustomerController {
     @ApiResponse(responseCode = "200", description = "Customer created successfully.")
     @PostMapping
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
+    @EmitEvent(id = "CUSTOMER_CUSTOMER_CREATE", apiVersion = "1")
     public ResponseEntity<AbstractCustomer> createCustomer(
             @Parameter(description = "Customer object to be created") @RequestBody AbstractCustomer customer) {
         log.info("Creating new customer: {}", customer);
@@ -67,6 +69,7 @@ public class CustomerController {
     })
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_EDIT + "')")
+    @EmitEvent(id = "CUSTOMER_CUSTOMER_UPDATE", apiVersion = "1")
     public ResponseEntity<AbstractCustomer> updateCustomer(
             @Parameter(description = "ID of the customer to update", example = "1") @PathVariable Long id,
             @Parameter(description = "Updated customer object") @RequestBody AbstractCustomer customer) {

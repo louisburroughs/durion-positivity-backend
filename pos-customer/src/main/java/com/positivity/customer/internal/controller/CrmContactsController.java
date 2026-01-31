@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -64,6 +65,7 @@ public class CrmContactsController {
     })
     @PutMapping("/{partyId}/contacts/{contactId}/roles")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
+    @EmitEvent(id = "CUSTOMER_CONTACT_ROLE_UPDATE_LEGACY", apiVersion = "1")
     public ResponseEntity<Void> updateContactRoles(
             @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
             @Parameter(description = "Contact ID", required = true) @PathVariable String contactId,

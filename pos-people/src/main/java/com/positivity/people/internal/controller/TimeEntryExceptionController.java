@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.entity.TimeEntryException;
@@ -34,6 +35,7 @@ public class TimeEntryExceptionController {
             @ApiResponse(responseCode = "200", description = "Exception created"),
             @ApiResponse(responseCode = "400", description = "Invalid request")
     })
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_CREATE", apiVersion = "1")
     @PostMapping(consumes = "application/json", produces = "application/json")
     public ResponseEntity<TimeEntryExceptionResponse> createException(@RequestBody TimeEntryExceptionRequest req) {
         TimeEntryException e = new TimeEntryException();
@@ -76,6 +78,7 @@ public class TimeEntryExceptionController {
     }
 
     @Operation(summary = "Acknowledge an exception", description = "Mark an exception as acknowledged by the specified actor.")
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/acknowledge", produces = "application/json")
     public ResponseEntity<?> acknowledgeException(@PathVariable java.util.UUID exceptionId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -85,7 +88,8 @@ public class TimeEntryExceptionController {
                 com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED, actor, null, correlationId);
         if (ok)
             return ResponseEntity.ok().build();
-        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("NOT_FOUND",
+        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                "NOT_FOUND",
                 "exception not found", correlationId);
         return ResponseEntity.status(404).body(err);
     }
@@ -95,6 +99,7 @@ public class TimeEntryExceptionController {
             @ApiResponse(responseCode = "200", description = "Exception resolved successfully"),
             @ApiResponse(responseCode = "404", description = "Exception not found")
     })
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/resolve", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> resolveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody(required = false) java.util.Map<String, String> body,
@@ -105,11 +110,13 @@ public class TimeEntryExceptionController {
         if (body != null && body.containsKey("resolutionNotes"))
             notes = body.get("resolutionNotes");
 
-        boolean ok = exceptionService.actionException(exceptionId, com.positivity.people.internal.model.ExceptionStatus.RESOLVED,
+        boolean ok = exceptionService.actionException(exceptionId,
+                com.positivity.people.internal.model.ExceptionStatus.RESOLVED,
                 actor, notes, correlationId);
         if (ok)
             return ResponseEntity.ok().build();
-        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("NOT_FOUND",
+        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                "NOT_FOUND",
                 "exception not found", correlationId);
         return ResponseEntity.status(404).body(err);
     }
@@ -120,6 +127,7 @@ public class TimeEntryExceptionController {
             @ApiResponse(responseCode = "400", description = "Invalid request - waiveReason is required"),
             @ApiResponse(responseCode = "404", description = "Exception not found")
     })
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/waive", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> waiveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody java.util.Map<String, String> body,
@@ -127,7 +135,8 @@ public class TimeEntryExceptionController {
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         if (body == null || !body.containsKey("waiveReason") || body.get("waiveReason") == null
                 || body.get("waiveReason").isBlank()) {
-            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("INVALID_INPUT",
+            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                    "INVALID_INPUT",
                     "waiveReason is required and cannot be blank", correlationId);
             return ResponseEntity.status(400).body(err);
         }
@@ -135,11 +144,13 @@ public class TimeEntryExceptionController {
         String actor = userId != null ? userId : "system";
         String waiveReason = body.get("waiveReason");
 
-        boolean ok = exceptionService.actionException(exceptionId, com.positivity.people.internal.model.ExceptionStatus.WAIVED,
+        boolean ok = exceptionService.actionException(exceptionId,
+                com.positivity.people.internal.model.ExceptionStatus.WAIVED,
                 actor, waiveReason, correlationId);
         if (ok)
             return ResponseEntity.ok().build();
-        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("NOT_FOUND",
+        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                "NOT_FOUND",
                 "exception not found", correlationId);
         return ResponseEntity.status(404).body(err);
     }

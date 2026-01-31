@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.entity.TimeEntryAdjustment;
@@ -37,6 +38,7 @@ public class TimeEntryAdjustmentController {
             @ApiResponse(responseCode = "200", description = "Adjustment created"),
             @ApiResponse(responseCode = "400", description = "Invalid request")
     })
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_CREATE", apiVersion = "1")
     @PostMapping(value = "/adjustments", consumes = "application/json", produces = "application/json")
     public ResponseEntity<TimeEntryAdjustmentResponse> createAdjustment(@RequestBody TimeEntryAdjustmentRequest req) {
         // Validate reasonCode is required
@@ -58,7 +60,8 @@ public class TimeEntryAdjustmentController {
             java.util.Optional<com.positivity.people.internal.entity.TimeEntry> entryOpt = timeEntryRepository
                     .findById(req.getTimeEntryId());
             if (entryOpt.isEmpty()) {
-                com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("NOT_FOUND",
+                com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                        "NOT_FOUND",
                         "Time entry not found", null);
                 return ResponseEntity.status(404).body(new TimeEntryAdjustmentResponse(null, false, err.getMessage()));
             }
@@ -70,7 +73,8 @@ public class TimeEntryAdjustmentController {
                 return ResponseEntity.status(422).body(new TimeEntryAdjustmentResponse(null, false, err.getMessage()));
             }
         } catch (Exception e) {
-            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("INTERNAL_ERROR",
+            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                    "INTERNAL_ERROR",
                     "Error validating time entry", null);
             return ResponseEntity.status(500).body(new TimeEntryAdjustmentResponse(null, false, err.getMessage()));
         }
@@ -80,13 +84,15 @@ public class TimeEntryAdjustmentController {
         boolean hasProposedTimes = req.getProposedStartAt() != null || req.getProposedEndAt() != null;
         boolean hasMinutesDelta = req.getMinutesDelta() != null;
         if (!(hasProposedTimes ^ hasMinutesDelta)) {
-            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("INVALID_REQUEST",
+            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                    "INVALID_REQUEST",
                     "Provide either both proposedStartAt and proposedEndAt, OR minutesDelta (exactly one)", null);
             return ResponseEntity.badRequest().body(new TimeEntryAdjustmentResponse(null, false, err.getMessage()));
         }
 
         if (hasProposedTimes && (req.getProposedStartAt() == null || req.getProposedEndAt() == null)) {
-            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("INVALID_REQUEST",
+            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                    "INVALID_REQUEST",
                     "Both proposedStartAt and proposedEndAt must be provided together", null);
             return ResponseEntity.badRequest().body(new TimeEntryAdjustmentResponse(null, false, err.getMessage()));
         }
@@ -127,6 +133,7 @@ public class TimeEntryAdjustmentController {
             @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions"),
             @ApiResponse(responseCode = "404", description = "Adjustment not found")
     })
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE", apiVersion = "1")
     @PostMapping(value = "/adjustments/{adjustmentId}/approve", produces = "application/json")
     public ResponseEntity<?> approveAdjustment(@PathVariable java.util.UUID adjustmentId,
             @RequestHeader(value = "X-Permissions", required = false) String permissionsHeader,
@@ -141,7 +148,8 @@ public class TimeEntryAdjustmentController {
         boolean ok = adjustmentService.approveAdjustment(adjustmentId, actor, perms, correlationId);
         if (ok)
             return ResponseEntity.ok().build();
-        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("FORBIDDEN",
+        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                "FORBIDDEN",
                 "forbidden or not found", correlationId);
         return ResponseEntity.status(403).body(err);
     }

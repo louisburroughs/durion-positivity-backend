@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -38,6 +39,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "200", description = "GL accounts listed"),
                         @ApiResponse(responseCode = "403", description = "Forbidden")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_LIST", apiVersion = "1")
         public ResponseEntity<Void> listGLAccounts(
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
@@ -67,6 +69,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "201", description = "GL account created"),
                         @ApiResponse(responseCode = "400", description = "Invalid request")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_CREATE", apiVersion = "1")
         public ResponseEntity<Void> createGLAccount(@RequestBody(required = false) Object request) {
                 log.info("Stub createGLAccount");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -79,6 +82,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "200", description = "GL account updated"),
                         @ApiResponse(responseCode = "404", description = "GL account not found")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_UPDATE", apiVersion = "1")
         public ResponseEntity<Void> updateGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
                         @RequestBody(required = false) Object request) {
@@ -93,6 +97,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "200", description = "GL account activated"),
                         @ApiResponse(responseCode = "404", description = "GL account not found")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ACTIVATE", apiVersion = "1")
         public ResponseEntity<Void> activateGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
                         @RequestBody(required = false) Object request) {
@@ -107,6 +112,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "200", description = "GL account deactivated"),
                         @ApiResponse(responseCode = "404", description = "GL account not found")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_DEACTIVATE", apiVersion = "1")
         public ResponseEntity<Void> deactivateGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
                         @RequestBody(required = false) Object request) {
@@ -121,6 +127,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "200", description = "GL account archived"),
                         @ApiResponse(responseCode = "404", description = "GL account not found")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ARCHIVE", apiVersion = "1")
         public ResponseEntity<Void> archiveGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
                         @RequestBody(required = false) Object request) {

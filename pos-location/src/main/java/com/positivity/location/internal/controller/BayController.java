@@ -1,5 +1,6 @@
 package com.positivity.location.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -30,6 +31,7 @@ public class BayController {
 
     @Operation(summary = "Create bay", description = "Create a new bay for a specific location.")
     @ApiResponse(responseCode = "200", description = "Bay created successfully.")
+    @EmitEvent(id = "LOCATION_BAY_CREATE", apiVersion = "1")
     @PostMapping("/{locationId}/bays")
     public ResponseEntity<Object> createBay(
             @Parameter(description = "Location ID", example = "1") @PathVariable Long locationId,
@@ -41,6 +43,7 @@ public class BayController {
 
     @Operation(summary = "Manage bays", description = "Create or update bays in bulk.")
     @ApiResponse(responseCode = "200", description = "Bays managed successfully.")
+    @EmitEvent(id = "LOCATION_BAY_MANAGE", apiVersion = "1")
     @PutMapping("/bays")
     public ResponseEntity<Object> manageBays(
             @Parameter(description = "Bay management request body") @RequestBody(required = false) Object request) {

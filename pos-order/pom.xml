@@ -71,6 +71,12 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Event Emission -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-events</artifactId>
+        </dependency>
+
         <!-- OpenAPI / Swagger UI -->
         <dependency>
             <groupId>org.springdoc</groupId>

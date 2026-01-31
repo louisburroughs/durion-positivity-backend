@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -19,6 +20,7 @@ public class WorkSessionController {
 
     @Operation(summary = "Start work session", description = "Create/start a work session for a person.")
     @ApiResponse(responseCode = "200", description = "Work session started successfully.")
+    @EmitEvent(id = "PEOPLE_WORK_SESSION_START", apiVersion = "1")
     @PostMapping("/start")
     public ResponseEntity<Object> startWorkSession(
             @Parameter(description = "Work session start request body") @RequestBody(required = false) Object request) {
@@ -29,6 +31,7 @@ public class WorkSessionController {
 
     @Operation(summary = "Stop work session", description = "Stop an active work session.")
     @ApiResponse(responseCode = "200", description = "Work session stopped successfully.")
+    @EmitEvent(id = "PEOPLE_WORK_SESSION_STOP", apiVersion = "1")
     @PostMapping("/stop")
     public ResponseEntity<Object> stopWorkSession(
             @Parameter(description = "Work session stop request body") @RequestBody(required = false) Object request) {
@@ -42,6 +45,7 @@ public class WorkSessionController {
             @ApiResponse(responseCode = "200", description = "Break started successfully."),
             @ApiResponse(responseCode = "404", description = "Work session not found.")
     })
+    @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_START", apiVersion = "1")
     @PostMapping("/{id}/breaks/start")
     public ResponseEntity<Object> startWorkSessionBreak(
             @Parameter(description = "Work session ID", example = "1") @PathVariable Long id,
@@ -56,6 +60,7 @@ public class WorkSessionController {
             @ApiResponse(responseCode = "200", description = "Break stopped successfully."),
             @ApiResponse(responseCode = "404", description = "Work session or break not found.")
     })
+    @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @PostMapping("/{id}/breaks/stop")
     public ResponseEntity<Object> stopWorkSessionBreak(
             @Parameter(description = "Work session ID", example = "1") @PathVariable Long id,

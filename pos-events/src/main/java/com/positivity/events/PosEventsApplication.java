@@ -21,22 +21,34 @@ public class PosEventsApplication {
     private final ApplicationEventPublisher publisher;
 
     /**
+     * Registers the core event emission service.
+     * 
+     * @return configured service for event emission logic
+     */
+    @Bean
+    public EventEmissionService eventEmissionService() {
+        return new EventEmissionService(publisher);
+    }
+
+    /**
      * Registers the event emission aspect for annotation-driven event tracking.
      * 
+     * @param eventEmissionService the event emission service
      * @return configured aspect for intercepting @EmitEvent methods
      */
     @Bean
-    public EmitEventAspect emitEventAspect() {
-        return new EmitEventAspect(publisher);
+    public EmitEventAspect emitEventAspect(EventEmissionService eventEmissionService) {
+        return new EmitEventAspect(eventEmissionService);
     }
 
     /**
      * Registers the factory for creating proxy-based event emitters.
      * 
+     * @param eventEmissionService the event emission service
      * @return proxy factory for manual event emission in non-method-level contexts
      */
     @Bean
-    public EmitEventProxyFactory emitEventProxyFactory() {
-        return new EmitEventProxyFactory(publisher);
+    public EmitEventProxyFactory emitEventProxyFactory(EventEmissionService eventEmissionService) {
+        return new EmitEventProxyFactory(eventEmissionService);
     }
 }

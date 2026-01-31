@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -70,6 +71,7 @@ public class CrmCommunicationPreferencesController {
     })
     @PostMapping("/{partyId}/communicationPreferences")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
+    @EmitEvent(id = "CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT_LEGACY", apiVersion = "1")
     public ResponseEntity<Void> upsertCommunicationPreferences(
             @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
             @Parameter(description = "Communication preferences to set", required = false) @RequestBody(required = false) Object body) {

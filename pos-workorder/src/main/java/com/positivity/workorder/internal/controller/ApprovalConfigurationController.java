@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.service.ApprovalConfigurationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ public class ApprovalConfigurationController {
     @Operation(summary = "Get all approval configurations", description = "Retrieve a list of all approval configurations.")
     @ApiResponse(responseCode = "200", description = "List of configurations returned successfully.")
     @GetMapping
+    @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_LIST", apiVersion = "1")
     public List<ApprovalConfiguration> getAllConfigurations() {
         return approvalConfigurationService.getAllConfigurations();
     }
@@ -37,8 +39,7 @@ public class ApprovalConfigurationController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Get applicable configuration", 
-               description = "Get the most specific configuration for a location and customer.")
+    @Operation(summary = "Get applicable configuration", description = "Get the most specific configuration for a location and customer.")
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "No configuration found (default will be used).")
     @GetMapping("/approvalConfigurations/applicable")
@@ -53,6 +54,7 @@ public class ApprovalConfigurationController {
     @Operation(summary = "Create a new approval configuration", description = "Add a new approval configuration.")
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
     @PostMapping("/approvalConfigurations")
+    @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_CREATE", apiVersion = "1")
     public ResponseEntity<ApprovalConfiguration> createConfiguration(
             @Parameter(description = "Configuration object to be created") @RequestBody ApprovalConfiguration configuration) {
         ApprovalConfiguration created = approvalConfigurationService.createConfiguration(configuration);
@@ -63,6 +65,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "Configuration updated successfully.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @PutMapping("/approvalConfigurations/{approvalId}")
+    @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_UPDATE", apiVersion = "1")
     public ResponseEntity<ApprovalConfiguration> updateConfiguration(
             @Parameter(description = "ID of the configuration to update", example = "1") @PathVariable Long approvalId,
             @Parameter(description = "Updated configuration object") @RequestBody ApprovalConfiguration configuration) {
@@ -78,6 +81,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "204", description = "Configuration deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @DeleteMapping("/approvalConfigurations/{approvalId}")
+    @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteConfiguration(
             @Parameter(description = "ID of the configuration to delete", example = "1") @PathVariable Long approvalId) {
         approvalConfigurationService.deleteConfiguration(approvalId);

@@ -33,4 +33,11 @@ public @interface EmitEvent {
      * Used to classify and route events to appropriate listeners.
      */
     String id();
+
+    /**
+     * API version for the event.
+     * Used to track which API version triggered the event.
+     * Defaults to "1".
+     */
+    String apiVersion() default "1";
 }

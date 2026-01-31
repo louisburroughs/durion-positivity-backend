@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.audit.dto.*;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.audit.service.AuditTrailQueryService;
 import com.positivity.accounting.internal.audit.service.AuditTrailService;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -48,6 +49,7 @@ public class AuditTrailController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/price-override")
+    @EmitEvent(id = "ACCOUNTING_AUDIT_PRICE_OVERRIDE", apiVersion = "1")
     public ResponseEntity<?> recordPriceOverride(@Valid @RequestBody PriceOverrideRequest request) {
         try {
             AuditTrailResponse response = auditService.recordPriceOverride(request);
@@ -75,6 +77,7 @@ public class AuditTrailController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/refund")
+    @EmitEvent(id = "ACCOUNTING_AUDIT_REFUND", apiVersion = "1")
     public ResponseEntity<?> recordRefund(@Valid @RequestBody RefundRequest request) {
         try {
             AuditTrailResponse response = auditService.recordRefund(request);
@@ -101,6 +104,7 @@ public class AuditTrailController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/cancellation")
+    @EmitEvent(id = "ACCOUNTING_AUDIT_CANCELLATION", apiVersion = "1")
     public ResponseEntity<?> recordCancellation(@Valid @RequestBody CancellationRequest request) {
         try {
             AuditTrailResponse response = auditService.recordCancellation(request);

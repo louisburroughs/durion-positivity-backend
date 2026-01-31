@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.service.PersonService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,8 +37,7 @@ public class PersonController {
     })
     @GetMapping("/{personId}")
     public ResponseEntity<Person> getPersonById(
-            @Parameter(description = "ID of the person to retrieve", example = "1")
-            @PathVariable Long personId) {
+            @Parameter(description = "ID of the person to retrieve", example = "1") @PathVariable Long personId) {
         return personService.getPersonById(personId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -45,10 +45,10 @@ public class PersonController {
 
     @Operation(summary = "Create a new person", description = "Add a new person to the system.")
     @ApiResponse(responseCode = "200", description = "Person created successfully.")
+    @EmitEvent(id = "PEOPLE_PERSON_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<Person> createPerson(
-            @Parameter(description = "Person object to be created")
-            @RequestBody Person person) {
+            @Parameter(description = "Person object to be created") @RequestBody Person person) {
         Person saved = personService.savePerson(person);
         return ResponseEntity.ok(saved);
     }
@@ -58,12 +58,11 @@ public class PersonController {
             @ApiResponse(responseCode = "200", description = "Person updated successfully."),
             @ApiResponse(responseCode = "404", description = "Person not found.")
     })
+    @EmitEvent(id = "PEOPLE_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
     public ResponseEntity<Person> updatePerson(
-            @Parameter(description = "ID of the person to update", example = "1")
-            @PathVariable Long personId,
-            @Parameter(description = "Updated person object")
-            @RequestBody Person person) {
+            @Parameter(description = "ID of the person to update", example = "1") @PathVariable Long personId,
+            @Parameter(description = "Updated person object") @RequestBody Person person) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -79,8 +78,7 @@ public class PersonController {
     })
     @DeleteMapping("/{personId}")
     public ResponseEntity<Void> deletePerson(
-            @Parameter(description = "ID of the person to delete", example = "1")
-            @PathVariable Long personId) {
+            @Parameter(description = "ID of the person to delete", example = "1") @PathVariable Long personId) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -88,4 +86,3 @@ public class PersonController {
         return ResponseEntity.noContent().build();
     }
 }
-

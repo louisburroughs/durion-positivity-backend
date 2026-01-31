@@ -3,25 +3,25 @@ package com.positivity.events;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.time.Instant;
-
-import org.springframework.context.ApplicationEventPublisher;
 
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
+ * Factory for creating JDK dynamic proxies that intercept method calls
+ * and emit domain events for methods annotated with {@link EmitEvent}.
  * 
- * This class creates JDK dynamic proxies that wrap target objects and intercept
- * method calls to track event execution timing and lifecycle. When a method
- * execution duration, and completion status (success or error), and publishes
- * an {@link EventEmitted} domain event.
+ * This class creates proxies that wrap target objects and delegate event
+ * emission logic to {@link EventEmissionService} for consistent behavior
+ * across all event emission mechanisms.
  * 
  * The proxy provides observability for event-driven operations by capturing:
- * - Event start timestamp
- * - Event end timestamp
- * - Event execution errors
- * - Domain event publication
+ * <ul>
+ * <li>Event start timestamp</li>
+ * <li>Event end timestamp</li>
+ * <li>Event execution errors</li>
+ * <li>Domain event publication</li>
+ * </ul>
  * 
  * This is a complementary approach to {@link EmitEventAspect} for scenarios
  * where aspect-oriented programming is not available or proxy-based
@@ -32,10 +32,10 @@ import lombok.extern.slf4j.Slf4j;
  * <pre>
  * &#64;Service
  * public class MyServiceFactory {
- *     private final ApplicationEventPublisher publisher;
+ *     private final EventEmissionService eventEmissionService;
  * 
  *     public MyService createProxy(MyService target) {
- *         return EmitEventProxy.createProxy(target, MyService.class, publisher);
+ *         return EmitEventProxy.createProxy(target, MyService.class, eventEmissionService);
  *     }
  * }
  * </pre>
@@ -43,59 +43,48 @@ import lombok.extern.slf4j.Slf4j;
  * @see EmitEvent
  * @see EmitEventAspect
  * @see EventEmitted
+ * @see EventEmissionService
  */
 @Slf4j
 @NoArgsConstructor(access = lombok.AccessLevel.PRIVATE)
 public class EmitEventProxy {
 
     /**
+     * Creates a proxy that intercepts method calls and emits events for
+     * methods annotated with {@link EmitEvent}.
      * 
-     * @param <T>           the interface type
-     * @param target        the target object to proxy
-     * @param interfaceType the interface class
-     * @param publisher     the Spring ApplicationEventPublisher for publishing
-     *                      events
+     * @param <T>                  the interface type
+     * @param target               the target object to proxy
+     * @param interfaceType        the interface class
+     * @param eventEmissionService the service for event emission logic
+     * @return a proxy instance that wraps the target
      */
     @SuppressWarnings("unchecked")
-    public static <T> T createProxy(T target, Class<T> interfaceType, ApplicationEventPublisher publisher) {
+    public static <T> T createProxy(T target, Class<T> interfaceType, EventEmissionService eventEmissionService) {
         return (T) Proxy.newProxyInstance(
                 interfaceType.getClassLoader(),
                 new Class<?>[] { interfaceType },
-                new EmitEventInvocationHandler(target, publisher));
+                new EmitEventInvocationHandler(target, eventEmissionService));
     }
 
     private static class EmitEventInvocationHandler implements InvocationHandler {
         private final Object target;
-        private final ApplicationEventPublisher publisher;
+        private final EventEmissionService eventEmissionService;
 
-        EmitEventInvocationHandler(Object target, ApplicationEventPublisher publisher) {
+        EmitEventInvocationHandler(Object target, EventEmissionService eventEmissionService) {
             this.target = target;
-            this.publisher = publisher;
+            this.eventEmissionService = eventEmissionService;
         }
 
+        @SuppressWarnings("null")
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             EmitEvent annotation = method.getAnnotation(EmitEvent.class);
             if (annotation != null) {
-                String id = annotation.id();
-                long start = Instant.now().toEpochMilli();
-                log.info("[EVENT-START] id={} timestamp={}", id, start);
-                try {
-                    Object result = method.invoke(target, args);
-                    long end = Instant.now().toEpochMilli();
-                    log.info("[EVENT-END] id={} timestamp={}", id, end);
-
-                    // Publish domain event to Event Receiver API
-                    EventEmitted event = EventEmitted.from(id, end);
-                    publisher.publishEvent(event);
-                    log.debug("[EVENT-PUBLISHED] id={} to Event Receiver API", id);
-
-                    return result;
-                } catch (Exception e) {
-                    long end = Instant.now().toEpochMilli();
-                    log.error("[EVENT-ERROR] id={} timestamp={} error={}", id, end, e.getMessage());
-                    throw e;
-                }
+                String eventId = annotation.id();
+                String apiVersion = annotation.apiVersion();
+                return eventEmissionService.executeWithEventEmission(eventId, apiVersion,
+                        () -> method.invoke(target, args));
             } else {
                 return method.invoke(target, args);
             }

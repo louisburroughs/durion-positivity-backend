@@ -1,5 +1,6 @@
 package com.positivity.poseventreceiver.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.poseventreceiver.internal.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
@@ -16,7 +17,9 @@ import org.springframework.web.bind.annotation.*;
 public class EmitEventController {
     private final EventDao eventDao;
 
+    @SuppressWarnings("null")
     @PostMapping
+    @EmitEvent(id = "EVENT_RECEIVER_EVENT_RECEIVE", apiVersion = "1")
     public ResponseEntity<String> receiveEvent(@RequestBody EmitEventRequest request) {
         if (!eventDao.isPreregistered(request.id())) {
             return ResponseEntity.badRequest().body("ID not preregistered");
@@ -31,7 +34,8 @@ public class EmitEventController {
      * @param request The event request containing id and timestamp
      */
     private void storeEvent(EmitEventRequest request) {
-        EmittedEvent event = new EmittedEvent(request.id(), request.timestamp(), request.publishedAt());
+        EmittedEvent event = new EmittedEvent(request.id(), request.apiVersion(), request.timestamp(),
+                request.elapsedMs(), request.publishedAt());
         eventDao.saveEmittedEvent(event);
     }
 }
