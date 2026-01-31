@@ -149,6 +149,7 @@
 
 	<modules>
 		<module>pos-dependencies</module>
+		<module>pos-security-common</module>
 		<module>pos-archunit</module>
 		<module>pos-agent-framework</module>
 		<module>pos-catalog</module>

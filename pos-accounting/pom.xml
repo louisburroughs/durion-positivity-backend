@@ -127,6 +127,12 @@
             <artifactId>pos-events</artifactId>
         </dependency>
 
+        <!-- Security Common (Gateway Authentication) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-security-common</artifactId>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

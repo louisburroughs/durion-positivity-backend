@@ -1,55 +1,35 @@
 package com.positivity.workorder.internal.config;
 
-import static org.springframework.security.config.Customizer.withDefaults;
-
+import com.positivity.security.common.GatewaySecurityConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.context.annotation.Import;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
- * Security configuration for work order service.
- * Enables OpenAPI documentation endpoint access while maintaining security for
- * other endpoints.
+ * Workorder Service Security Configuration.
+ *
+ * <p>
+ * Imports {@link GatewaySecurityConfig} which provides:
+ * </p>
+ * <ul>
+ * <li>Gateway-based authentication via X-Authorities and X-User headers</li>
+ * <li>Stateless session management (JWT-based)</li>
+ * <li>Method-level security (@PreAuthorize support)</li>
+ * <li>Public access to actuator, swagger endpoints</li>
+ * </ul>
+ *
+ * @see GatewaySecurityConfig
  */
 @Configuration
-@EnableWebSecurity
-@EnableMethodSecurity
+@Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
 
     /**
-     * Security filter chain configuration.
-     * Permits access to OpenAPI documentation and Swagger UI endpoints,
-     * allows health checks, while maintaining authorization on other endpoints.
-     */
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .cors(withDefaults())
-                .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/v3/api-docs/**").permitAll()
-                        .requestMatchers("/swagger-ui/**").permitAll()
-                        .requestMatchers("/swagger-ui.html").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/api/public/**").permitAll()
-                        .anyRequest().authenticated())
-                .sessionManagement(management -> management
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .httpBasic(withDefaults());
-
-        return http.build();
-    }
-
-    /**
-     * RestTemplate bean for HTTP client support.
+     * RestClient bean for HTTP client support.
      */
     @Bean
     public RestClient restClient() {

@@ -12,6 +12,13 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Shared Security Library (Gateway Authentication) -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-security-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- Shared Event Library -->
             <dependency>
                 <groupId>com.positivity</groupId>
