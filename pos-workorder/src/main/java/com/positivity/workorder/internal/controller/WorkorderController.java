@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderResponse;
@@ -31,6 +32,7 @@ public class WorkorderController {
     @Operation(summary = "Get all work orders", description = "Retrieve a list of all work orders.")
     @ApiResponse(responseCode = "200", description = "List of work orders returned successfully.")
     @GetMapping
+    @EmitEvent(id = "WORKORDER_LIST", apiVersion = "1")
     public List<Workorder> getAllWorkorders() {
         return workorderService.getAllWorkorders();
     }
@@ -49,6 +51,7 @@ public class WorkorderController {
     @Operation(summary = "Create a new work order", description = "Add a new work order to the system.")
     @ApiResponse(responseCode = "200", description = "Work order created successfully.")
     @PostMapping
+    @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
     public ResponseEntity<Workorder> createWorkorder(
             @Parameter(description = "Work order object to be created") @RequestBody Workorder workorder) {
         Workorder created = workorderService.createWorkorder(workorder);
@@ -59,6 +62,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "204", description = "Work order deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @DeleteMapping("/{workorderId}")
+    @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteWorkorder(
             @Parameter(description = "ID of the work order to delete", example = "1") @PathVariable Long workorderId) {
         workorderService.deleteWorkorder(workorderId);
@@ -70,6 +74,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "400", description = "Invalid state transition or pending change requests.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @PostMapping("/{workorderId}/start")
+    @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     public ResponseEntity<StartWorkorderResponse> startWorkorder(
             @Parameter(description = "ID of the work order to start", example = "1") @PathVariable Long workorderId,
             @RequestBody StartWorkorderRequest request) {
@@ -125,6 +130,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "400", description = "Work order cannot be approved in current state or customer ID mismatch.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @PostMapping("/{workorderId}/approval")
+    @EmitEvent(id = "WORKORDER_APPROVE", apiVersion = "1")
     public ResponseEntity<Workorder> approveWorkorder(
             @Parameter(description = "ID of the work order to approve", example = "1") @PathVariable Long workorderId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveWorkorderRequest request) {
@@ -147,6 +153,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "400", description = "Invalid state transition or work order already completed.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @PostMapping("/{workorderId}/complete")
+    @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
     public ResponseEntity<CompleteWorkorderResponse> completeWorkorder(
             @Parameter(description = "ID of the work order to complete", example = "1") @PathVariable Long workorderId,
             @RequestBody CompleteWorkorderRequest request) {

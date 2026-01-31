@@ -1,5 +1,6 @@
 package com.positivity.price.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -23,6 +24,7 @@ public class PriceNormalizationController {
             @ApiResponse(responseCode = "400", description = "Invalid request body."),
             @ApiResponse(responseCode = "500", description = "Internal server error.")
     })
+    @EmitEvent(id = "PRICE_NORMALIZATION_NORMALIZE", apiVersion = "1")
     @PostMapping("/normalize")
     public ResponseEntity<Object> normalizePricing(@RequestBody(required = false) Object requestBody) {
         log.info("POST /v1/price/normalize");

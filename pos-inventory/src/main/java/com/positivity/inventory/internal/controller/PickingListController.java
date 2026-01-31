@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 public class PickingListController {
 
     @PostMapping("/{id}/confirm")
+    @EmitEvent(id = "INVENTORY_PICKING_LIST_CONFIRM", apiVersion = "1")
     @Operation(summary = "Confirm picking list", description = "Confirms a picking list and commits consumption. Stub implementation.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Picking list confirmed"),

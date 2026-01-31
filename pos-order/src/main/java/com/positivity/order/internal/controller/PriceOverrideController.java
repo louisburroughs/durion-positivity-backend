@@ -1,5 +1,6 @@
 package com.positivity.order.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.*;
 import com.positivity.order.internal.exception.InsufficientPermissionException;
 import com.positivity.order.internal.model.OverrideStatus;
@@ -58,6 +59,7 @@ public class PriceOverrideController {
     })
     @PostMapping
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPLY + "')")
+    @EmitEvent(id = "ORDER_PRICE_OVERRIDE_APPLY", apiVersion = "1")
     public ResponseEntity<ApplyPriceOverrideResponse> applyPriceOverride(
             @Valid @RequestBody ApplyPriceOverrideRequest request,
             Authentication authentication) {
@@ -85,6 +87,7 @@ public class PriceOverrideController {
     })
     @PostMapping("/{overrideId}/approve")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + "')")
+    @EmitEvent(id = "ORDER_PRICE_OVERRIDE_APPROVE", apiVersion = "1")
     public ResponseEntity<PriceOverride> approvePriceOverride(
             @Parameter(description = "Price override ID", required = true) @PathVariable Long overrideId,
             @Valid @RequestBody ApprovePriceOverrideRequest request,
@@ -114,6 +117,7 @@ public class PriceOverrideController {
     })
     @PostMapping("/{overrideId}/reject")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_REJECT + "')")
+    @EmitEvent(id = "ORDER_PRICE_OVERRIDE_REJECT", apiVersion = "1")
     public ResponseEntity<PriceOverride> rejectPriceOverride(
             @Parameter(description = "Price override ID", required = true) @PathVariable Long overrideId,
             @Valid @RequestBody RejectPriceOverrideRequest request,
@@ -158,6 +162,7 @@ public class PriceOverrideController {
     })
     @GetMapping
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_VIEW + "')")
+    @EmitEvent(id = "ORDER_PRICE_OVERRIDE_SEARCH", apiVersion = "1")
     public ResponseEntity<List<PriceOverride>> getOverridesByOrder(
             @Parameter(description = "Order ID filter") @RequestParam(required = false) String orderId,
             @Parameter(description = "Override status filter") @RequestParam(required = false) OverrideStatus status,
@@ -187,6 +192,7 @@ public class PriceOverrideController {
     @ApiResponse(responseCode = "200", description = "Pending overrides retrieved")
     @GetMapping("/pending")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + "')")
+    @EmitEvent(id = "ORDER_PRICE_OVERRIDE_LIST_PENDING", apiVersion = "1")
     public ResponseEntity<List<PriceOverride>> getPendingApprovals() {
         List<PriceOverride> overrides = priceOverrideService.getPendingApprovals();
         return ResponseEntity.ok(overrides);

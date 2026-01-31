@@ -53,6 +53,7 @@ public class InvoicePaymentController {
             @ApiResponse(responseCode = "400", description = "Invalid payment request"),
             @ApiResponse(responseCode = "500", description = "Processing error")
     })
+    @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
     public ResponseEntity<InvoiceStatusResponse> applyPayment(
             @Parameter(description = "Payment identifier") @PathVariable String paymentId,
             @Valid @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Payment application payload", required = true, content = @Content(schema = @Schema(implementation = PaymentAppliedRequest.class))) PaymentAppliedRequest request) {
@@ -121,6 +122,7 @@ public class InvoicePaymentController {
             @ApiResponse(responseCode = "202", description = "Invoice regeneration accepted"),
             @ApiResponse(responseCode = "400", description = "Invalid request")
     })
+    @EmitEvent(id = "ACCOUNTING_INVOICE_REGENERATE", apiVersion = "1")
     public ResponseEntity<Void> regenerateInvoiceFromWorkorder(@RequestBody(required = false) Object body) {
         log.info("Stub regenerateInvoiceFromWorkorder");
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();

@@ -124,24 +124,111 @@ static final ArchRule controllers_should_not_access_repositories_directly =
 
 **All API events MUST be logged using `pos-events` annotations.** This is required for audit trails, observability, and compliance:
 
-- **Use `@ApiEvent` annotations** on all REST controller methods that perform state changes or significant actions.
-- **Pre-register all event types** in the module's `SpringBootApplication` startup configuration.
-- **Define the event registry** by implementing an `@Configuration` class that registers event schemas on application startup.
-- **Event registration must occur before any controllers are instantiated** to ensure events are tracked from the first request.
-- Example pattern:
+#### @EmitEvent Annotation Usage
 
-  ```java
-  @Configuration
-  public class EventRegistryConfig {
-      @Bean
-      public EventRegistry eventRegistry(PosEventService eventService) {
-          return new EventRegistry()
-              .register("order.created", OrderCreatedEvent.class)
-              .register("order.updated", OrderUpdatedEvent.class)
-              .register("payment.processed", PaymentProcessedEvent.class);
-      }
-  }
-  ```
+- **Use `@EmitEvent` annotations** on all REST controller methods that perform state changes (POST, PUT, DELETE) or significant read operations.
+- **Annotation format**: `@EmitEvent(id = "{MODULE}_{RESOURCE}_{ACTION}", apiVersion = "1")`
+- **Event ID naming convention**: `{MODULE}_{RESOURCE}_{ACTION}` (e.g., `ORDER_PRICE_OVERRIDE_CREATE`, `WORKORDER_ESTIMATE_APPROVE`)
+
+```java
+import com.positivity.events.EmitEvent;
+
+@PostMapping
+@EmitEvent(id = "ORDER_PRICE_OVERRIDE_CREATE", apiVersion = "1")
+public ResponseEntity<PriceOverride> createPriceOverride(@RequestBody PriceOverrideRequest request) {
+    // ...
+}
+```
+
+#### Event Type Registry Pattern
+
+Each module MUST define an event type registry class with all event types and their performance thresholds:
+
+```java
+package com.positivity.{module}.internal.config;
+
+import com.positivity.events.EventTypeRegistration;
+import java.util.List;
+
+public final class {Module}EventTypes {
+    private {Module}EventTypes() {}
+
+    public static List<EventTypeRegistration> all() {
+        return List.of(
+            // Use threshold presets based on operation type:
+            EventTypeRegistration.fastRead("MODULE_RESOURCE_LIST", "List resources").build(),      // p50=50ms, p95=200ms, p99=500ms
+            EventTypeRegistration.search("MODULE_RESOURCE_SEARCH", "Search resources").build(),   // p50=100ms, p95=500ms, p99=1s
+            EventTypeRegistration.write("MODULE_RESOURCE_CREATE", "Create a resource").build(),   // p50=200ms, p95=1s, p99=3s
+            EventTypeRegistration.approval("MODULE_RESOURCE_APPROVE", "Approve a resource").build() // p50=500ms, p95=2s, p99=5s
+        );
+    }
+}
+```
+
+#### Event Type Initializer Pattern
+
+Each module MUST have an ApplicationRunner that registers event types at startup:
+
+```java
+package com.positivity.{module}.internal.config;
+
+import com.positivity.events.EventTypeInitializerSupport;
+import com.positivity.events.EventTypeRegistration;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+@Component
+public class {Module}EventTypeInitializer implements ApplicationRunner {
+    private final RestClient restClient;
+    private final EventTypeInitializerSupport initializerSupport;
+
+    public {Module}EventTypeInitializer(
+            RestClient.Builder restClientBuilder,
+            @Value("${pos.events.base-url:http://localhost:8085}") String eventServiceBaseUrl) {
+        this.restClient = restClientBuilder.baseUrl(eventServiceBaseUrl + "/v1/eventTypes/code").build();
+        this.initializerSupport = new EventTypeInitializerSupport("pos-{module}");
+    }
+
+    @Override
+    public void run(ApplicationArguments args) {
+        initializerSupport.registerEventTypes({Module}EventTypes.all(), this::registerEventType);
+    }
+
+    private void registerEventType(EventTypeRegistration registration) {
+        try {
+            restClient.put().uri("/{typeCode}", registration.getTypeCode())
+                .contentType(MediaType.APPLICATION_JSON).body(registration).retrieve().toBodilessEntity();
+        } catch (Exception e) {
+            // Log warning but don't fail startup
+        }
+    }
+}
+```
+
+#### Threshold Presets
+
+| Preset | p50 | p95 | p99 | Use Case |
+|--------|-----|-----|-----|----------|
+| `fastRead` | 50ms | 200ms | 500ms | Simple GET/list operations |
+| `search` | 100ms | 500ms | 1s | Search/filter with pagination |
+| `write` | 200ms | 1s | 3s | POST/PUT/DELETE operations |
+| `approval` | 500ms | 2s | 5s | Workflow approval operations |
+
+#### Module Dependencies
+
+Modules using `@EmitEvent` MUST include pos-events dependency in pom.xml:
+
+```xml
+<dependency>
+    <groupId>com.positivity</groupId>
+    <artifactId>pos-events</artifactId>
+    <version>${project.version}</version>
+</dependency>
+```
 
 - Failing to register events results in silent audit failures and compliance violations.
 
@@ -151,12 +238,12 @@ static final ArchRule controllers_should_not_access_repositories_directly =
 
 **All non-null parameters MUST use `@NonNull` annotation:**
 
-- **`@NonNull`** (from `org.springframework.lang.NonNull`) provides **compile-time null safety** for IDE and static analysis tools
+- **`@NonNull`** (from `org.jspecify.annotations.NonNull`) provides **compile-time null safety** for IDE and static analysis tools
 
 **Pattern:**
 
 ```java
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 public interface SomeService {
     EventType saveEventType(@NonNull EventType eventType);

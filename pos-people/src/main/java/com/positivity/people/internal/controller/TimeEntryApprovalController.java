@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
 import com.positivity.people.internal.dto.TimeEntryDecisionResponse;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
@@ -37,6 +38,7 @@ public class TimeEntryApprovalController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Time entries approved successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request - decisions required")
     })
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_APPROVE", apiVersion = "1")
     @PostMapping("/approve")
     public ResponseEntity<Object> approveTimeEntries(@RequestBody TimeEntryDecisionBatchRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -85,13 +87,15 @@ public class TimeEntryApprovalController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Time entries rejected successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request - rejectionReason required for all decisions")
     })
+    @EmitEvent(id = "PEOPLE_TIME_ENTRY_REJECT", apiVersion = "1")
     @PostMapping("/reject")
     public ResponseEntity<Object> rejectTimeEntries(@RequestBody TimeEntryDecisionBatchRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Permissions", required = false) String permissionsHeader,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         if (request == null || request.getDecisions() == null || request.getDecisions().isEmpty()) {
-            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse("INVALID_REQUEST",
+            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                    "INVALID_REQUEST",
                     "Invalid request: decisions required and non-empty", correlationId);
             return ResponseEntity.badRequest().body(err);
         }

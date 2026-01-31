@@ -1,5 +1,6 @@
 package com.positivity.location.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.ParentType;
@@ -39,8 +40,7 @@ public class LocationController {
     })
     @GetMapping("/{locationId}")
     public ResponseEntity<Location> getLocationById(
-            @Parameter(description = "ID of the location to retrieve", example = "1")
-            @PathVariable Long locationId) {
+            @Parameter(description = "ID of the location to retrieve", example = "1") @PathVariable Long locationId) {
         return locationService.getLocationById(locationId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -48,10 +48,10 @@ public class LocationController {
 
     @Operation(summary = "Create a new location", description = "Add a new location to the system.")
     @ApiResponse(responseCode = "200", description = "Location created successfully.")
+    @EmitEvent(id = "LOCATION_LOCATION_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<Location> createLocation(
-            @Parameter(description = "Location object to be created")
-            @RequestBody Location location) {
+            @Parameter(description = "Location object to be created") @RequestBody Location location) {
         Location saved = locationService.saveLocation(location);
         return ResponseEntity.ok(saved);
     }
@@ -61,12 +61,11 @@ public class LocationController {
             @ApiResponse(responseCode = "200", description = "Location updated successfully."),
             @ApiResponse(responseCode = "404", description = "Location not found.")
     })
+    @EmitEvent(id = "LOCATION_LOCATION_UPDATE", apiVersion = "1")
     @PutMapping("/{locationId}")
     public ResponseEntity<Location> updateLocation(
-            @Parameter(description = "ID of the location to update", example = "1")
-            @PathVariable Long locationId,
-            @Parameter(description = "Updated location object")
-            @RequestBody Location location) {
+            @Parameter(description = "ID of the location to update", example = "1") @PathVariable Long locationId,
+            @Parameter(description = "Updated location object") @RequestBody Location location) {
         if (!locationService.getLocationById(locationId).isPresent()) {
             return ResponseEntity.notFound().build();
         }
@@ -82,8 +81,7 @@ public class LocationController {
     })
     @DeleteMapping("/{locationId}")
     public ResponseEntity<Void> deleteLocation(
-            @Parameter(description = "ID of the location to delete", example = "1")
-            @PathVariable Long locationId) {
+            @Parameter(description = "ID of the location to delete", example = "1") @PathVariable Long locationId) {
         if (!locationService.getLocationById(locationId).isPresent()) {
             return ResponseEntity.notFound().build();
         }
@@ -93,14 +91,12 @@ public class LocationController {
 
     @Operation(summary = "Add a parent to a location", description = "Add a parent relationship to a location.")
     @ApiResponse(responseCode = "200", description = "Parent relationship added successfully.")
+    @EmitEvent(id = "LOCATION_PARENT_ADD", apiVersion = "1")
     @PostMapping("/{childId}/parents/{parentId}")
     public ResponseEntity<LocationParent> addParent(
-            @Parameter(description = "ID of the child location", example = "2")
-            @PathVariable Long childId,
-            @Parameter(description = "ID of the parent location", example = "1")
-            @PathVariable Long parentId,
-            @Parameter(description = "Type of the parent relationship")
-            @RequestParam ParentType parentType) {
+            @Parameter(description = "ID of the child location", example = "2") @PathVariable Long childId,
+            @Parameter(description = "ID of the parent location", example = "1") @PathVariable Long parentId,
+            @Parameter(description = "Type of the parent relationship") @RequestParam ParentType parentType) {
         LocationParent parent = locationService.addParent(childId, parentId, parentType);
         return ResponseEntity.ok(parent);
     }
@@ -119,8 +115,7 @@ public class LocationController {
     })
     @GetMapping("/{locationId}/responsible-person")
     public ResponseEntity<PersonDTO> getResponsiblePerson(
-            @Parameter(description = "ID of the location", example = "1")
-            @PathVariable Long locationId) {
+            @Parameter(description = "ID of the location", example = "1") @PathVariable Long locationId) {
         PersonDTO person = locationService.getResponsiblePerson(locationId);
         if (person == null) {
             return ResponseEntity.notFound().build();

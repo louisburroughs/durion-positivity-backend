@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.service.JwtService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -23,6 +24,7 @@ public class JwtController {
     @Operation(summary = "Authenticate user and issue JWT", description = "Authenticate with username and password to receive a JWT token.")
     @ApiResponse(responseCode = "200", description = "JWT token issued successfully.")
     @ApiResponse(responseCode = "401", description = "Invalid credentials.")
+    @EmitEvent(id = "SECURITY_AUTH_LOGIN", apiVersion = "1")
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> generateToken(
             @RequestParam String subject,
@@ -31,6 +33,7 @@ public class JwtController {
         return ResponseEntity.ok(Map.of("token", token));
     }
 
+    @EmitEvent(id = "SECURITY_AUTH_TOKEN_PAIR", apiVersion = "1")
     @PostMapping("/token-pair")
     public ResponseEntity<JwtService.TokenPair> generateTokenPair(
             @RequestParam String subject,
@@ -39,6 +42,7 @@ public class JwtController {
         return ResponseEntity.ok(tokenPair);
     }
 
+    @EmitEvent(id = "SECURITY_AUTH_REFRESH", apiVersion = "1")
     @PostMapping("/refresh")
     public ResponseEntity<JwtService.TokenPair> refreshAccessToken(@RequestParam String refreshToken) {
         try {

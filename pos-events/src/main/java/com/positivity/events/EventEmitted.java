@@ -4,19 +4,25 @@ import java.time.Instant;
 
 /**
  * This event is consumed by the Event Receiver API to store event records.
+ * Includes apiVersion to track which API version triggered the event.
  */
 public record EventEmitted(
         String eventId,
+        String apiVersion,
         long timestamp,
+        long elapsedMs,
         Instant publishedAt) {
 
     /**
      * Create an EventEmitted event.
      *
-     * @param timestamp The timestamp from the event execution
+     * @param eventId    The unique identifier for the event
+     * @param apiVersion The API version that triggered the event
+     * @param timestamp  The timestamp from the event execution
+     * @param elapsedMs  The elapsed time in milliseconds for the operation
      * @return EventEmitted domain event
      */
-    public static EventEmitted from(String eventId, long timestamp) {
-        return new EventEmitted(eventId, timestamp, Instant.now());
+    public static EventEmitted from(String eventId, String apiVersion, long timestamp, long elapsedMs) {
+        return new EventEmitted(eventId, apiVersion, timestamp, elapsedMs, Instant.now());
     }
 }

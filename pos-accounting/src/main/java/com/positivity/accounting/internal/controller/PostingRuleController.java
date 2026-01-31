@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -37,6 +38,7 @@ public class PostingRuleController {
                         @ApiResponse(responseCode = "200", description = "Posting rule sets listed"),
                         @ApiResponse(responseCode = "403", description = "Forbidden")
         })
+        @EmitEvent(id = "ACCOUNTING_POSTING_RULE_LIST", apiVersion = "1")
         public ResponseEntity<Void> listPostingRuleSets(
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
@@ -65,6 +67,7 @@ public class PostingRuleController {
                         @ApiResponse(responseCode = "201", description = "Posting rule set created"),
                         @ApiResponse(responseCode = "400", description = "Invalid request")
         })
+        @EmitEvent(id = "ACCOUNTING_POSTING_RULE_CREATE", apiVersion = "1")
         public ResponseEntity<Void> createPostingRuleSet(@RequestBody(required = false) Object request) {
                 log.info("Stub createPostingRuleSet");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -77,6 +80,7 @@ public class PostingRuleController {
                         @ApiResponse(responseCode = "200", description = "Posting rule set published"),
                         @ApiResponse(responseCode = "404", description = "Posting rule set not found")
         })
+        @EmitEvent(id = "ACCOUNTING_POSTING_RULE_PUBLISH", apiVersion = "1")
         public ResponseEntity<Void> publishPostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable String postingRuleSetId,
                         @RequestBody(required = false) Object request) {
@@ -91,6 +95,7 @@ public class PostingRuleController {
                         @ApiResponse(responseCode = "200", description = "Posting rule set archived"),
                         @ApiResponse(responseCode = "404", description = "Posting rule set not found")
         })
+        @EmitEvent(id = "ACCOUNTING_POSTING_RULE_ARCHIVE", apiVersion = "1")
         public ResponseEntity<Void> archivePostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable String postingRuleSetId,
                         @RequestBody(required = false) Object request) {

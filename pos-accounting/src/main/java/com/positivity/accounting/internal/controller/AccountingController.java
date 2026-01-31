@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -63,6 +64,7 @@ public class AccountingController {
                         @ApiResponse(responseCode = "200", description = "Payment voided"),
                         @ApiResponse(responseCode = "404", description = "Payment not found")
         })
+        @EmitEvent(id = "ACCOUNTING_PAYMENT_VOID", apiVersion = "1")
         public ResponseEntity<Void> voidPayment(
                         @Parameter(description = "Payment identifier") @PathVariable String paymentId,
                         @RequestBody(required = false) Object body) {
@@ -77,6 +79,7 @@ public class AccountingController {
                         @ApiResponse(responseCode = "200", description = "Payment reversed"),
                         @ApiResponse(responseCode = "404", description = "Payment not found")
         })
+        @EmitEvent(id = "ACCOUNTING_PAYMENT_REVERSE", apiVersion = "1")
         public ResponseEntity<Void> reversePayment(
                         @Parameter(description = "Payment identifier") @PathVariable String paymentId,
                         @RequestBody(required = false) Object body) {
@@ -91,6 +94,7 @@ public class AccountingController {
                         @ApiResponse(responseCode = "201", description = "GL account created"),
                         @ApiResponse(responseCode = "400", description = "Invalid request")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_CREATE_LEGACY", apiVersion = "1")
         public ResponseEntity<Void> createGlAccount(@RequestBody(required = false) Object request) {
                 log.info("Stub createGlAccount");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -116,6 +120,7 @@ public class AccountingController {
                         @ApiResponse(responseCode = "200", description = "GL account updated"),
                         @ApiResponse(responseCode = "404", description = "GL account not found")
         })
+        @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_UPDATE_LEGACY", apiVersion = "1")
         public ResponseEntity<Void> manageGlAccount(
                         @Parameter(description = "GL account identifier") @PathVariable String accountId,
                         @RequestBody(required = false) Object request) {

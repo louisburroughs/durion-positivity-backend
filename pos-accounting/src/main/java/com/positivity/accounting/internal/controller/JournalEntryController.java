@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -37,6 +38,7 @@ public class JournalEntryController {
                         @ApiResponse(responseCode = "200", description = "Journal entries listed"),
                         @ApiResponse(responseCode = "403", description = "Forbidden")
         })
+        @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_LIST", apiVersion = "1")
         public ResponseEntity<Void> listJournalEntries(
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
@@ -65,6 +67,7 @@ public class JournalEntryController {
                         @ApiResponse(responseCode = "201", description = "Journal entry created"),
                         @ApiResponse(responseCode = "400", description = "Invalid request")
         })
+        @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_CREATE", apiVersion = "1")
         public ResponseEntity<Void> createJournalEntry(@RequestBody(required = false) Object request) {
                 log.info("Stub createJournalEntry");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -77,6 +80,7 @@ public class JournalEntryController {
                         @ApiResponse(responseCode = "200", description = "Journal entry updated"),
                         @ApiResponse(responseCode = "404", description = "Journal entry not found")
         })
+        @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_UPDATE", apiVersion = "1")
         public ResponseEntity<Void> updateJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable String journalEntryId,
                         @RequestBody(required = false) Object request) {
@@ -91,6 +95,7 @@ public class JournalEntryController {
                         @ApiResponse(responseCode = "200", description = "Journal entry posted"),
                         @ApiResponse(responseCode = "404", description = "Journal entry not found")
         })
+        @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_POST", apiVersion = "1")
         public ResponseEntity<Void> postJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable String journalEntryId,
                         @RequestBody(required = false) Object request) {
@@ -105,6 +110,7 @@ public class JournalEntryController {
                         @ApiResponse(responseCode = "200", description = "Journal entry reversed"),
                         @ApiResponse(responseCode = "404", description = "Journal entry not found")
         })
+        @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")
         public ResponseEntity<Void> reverseJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable String journalEntryId,
                         @RequestBody(required = false) Object request) {

@@ -1,5 +1,6 @@
 package com.positivity.shopManager.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.shopManager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopManager.internal.dto.AppointmentResponse;
 import com.positivity.shopManager.service.AppointmentsService;
@@ -28,6 +29,7 @@ public class AppointmentsController {
             @ApiResponse(responseCode = "409", description = "Scheduling conflict detected."),
             @ApiResponse(responseCode = "501", description = "Not implemented.")
     })
+    @EmitEvent(id = "SHOP_APPOINTMENT_CREATE", apiVersion = "1")
     @PostMapping("/appointments")
     public ResponseEntity<Object> createAppointment(
             @Parameter(description = "Idempotency key for safe retries") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,

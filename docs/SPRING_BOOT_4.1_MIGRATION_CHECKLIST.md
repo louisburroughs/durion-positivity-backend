@@ -459,7 +459,7 @@ Phase 3 focuses on updating Spring Security configurations to align with Spring 
 - [ ] **Task 4.8:** Audit nullability annotations
   - Search: `org.springframework.lang.Nullable` usage
   - Decision: Keep as-is OR migrate to JSpecify @Nullable
-  - Recommendation: Keep `@NonNull` from Spring, migrate others to JSpecify if needed
+  - Recommendation: Migrate `@NonNull` from Spring to JSpecify
   - Command: `grep -r "org.springframework.lang" durion-positivity-backend/pos-*/src/`
 
 ### Compilation Verification

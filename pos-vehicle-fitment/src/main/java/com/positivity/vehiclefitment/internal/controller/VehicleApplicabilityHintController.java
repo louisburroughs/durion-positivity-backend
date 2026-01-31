@@ -1,5 +1,6 @@
 package com.positivity.vehiclefitment.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.vehiclefitment.internal.dto.*;
 import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,16 +27,16 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/vehicle-fitment/hints")
 public class VehicleApplicabilityHintController {
-    
+
     private final VehicleApplicabilityHintService hintService;
-    
-    @Operation(summary = "Create a vehicle applicability hint", 
-               description = "Create a new hint with fitment tags for a product")
+
+    @Operation(summary = "Create a vehicle applicability hint", description = "Create a new hint with fitment tags for a product")
     @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Hint created successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid request data"),
-        @ApiResponse(responseCode = "404", description = "Product not found")
+            @ApiResponse(responseCode = "201", description = "Hint created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request data"),
+            @ApiResponse(responseCode = "404", description = "Product not found")
     })
+    @EmitEvent(id = "FITMENT_HINT_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<HintResponse> createHint(@Valid @RequestBody CreateHintRequest request) {
         try {
@@ -46,14 +47,14 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
-    
-    @Operation(summary = "Update a vehicle applicability hint", 
-               description = "Update the fitment tags for an existing hint")
+
+    @Operation(summary = "Update a vehicle applicability hint", description = "Update the fitment tags for an existing hint")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Hint updated successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid request data"),
-        @ApiResponse(responseCode = "404", description = "Hint not found")
+            @ApiResponse(responseCode = "200", description = "Hint updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request data"),
+            @ApiResponse(responseCode = "404", description = "Hint not found")
     })
+    @EmitEvent(id = "FITMENT_HINT_UPDATE", apiVersion = "1")
     @PutMapping("/{hintId}")
     public ResponseEntity<HintResponse> updateHint(
             @Parameter(description = "ID of the hint to update") @PathVariable Long hintId,
@@ -66,12 +67,11 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
-    
-    @Operation(summary = "Delete a vehicle applicability hint", 
-               description = "Remove a hint and all its associated tags")
+
+    @Operation(summary = "Delete a vehicle applicability hint", description = "Remove a hint and all its associated tags")
     @ApiResponses({
-        @ApiResponse(responseCode = "204", description = "Hint deleted successfully"),
-        @ApiResponse(responseCode = "404", description = "Hint not found")
+            @ApiResponse(responseCode = "204", description = "Hint deleted successfully"),
+            @ApiResponse(responseCode = "404", description = "Hint not found")
     })
     @DeleteMapping("/{hintId}")
     public ResponseEntity<Void> deleteHint(
@@ -84,12 +84,11 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
-    
-    @Operation(summary = "Get a vehicle applicability hint", 
-               description = "Retrieve a hint by its ID")
+
+    @Operation(summary = "Get a vehicle applicability hint", description = "Retrieve a hint by its ID")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Hint retrieved successfully"),
-        @ApiResponse(responseCode = "404", description = "Hint not found")
+            @ApiResponse(responseCode = "200", description = "Hint retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "Hint not found")
     })
     @GetMapping("/{hintId}")
     public ResponseEntity<HintResponse> getHint(
@@ -102,11 +101,10 @@ public class VehicleApplicabilityHintController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
-    
-    @Operation(summary = "Get hints by product ID", 
-               description = "Retrieve all hints associated with a specific product")
+
+    @Operation(summary = "Get hints by product ID", description = "Retrieve all hints associated with a specific product")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Hints retrieved successfully")
+            @ApiResponse(responseCode = "200", description = "Hints retrieved successfully")
     })
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<HintResponse>> getHintsByProductId(
@@ -114,13 +112,13 @@ public class VehicleApplicabilityHintController {
         List<HintResponse> responses = hintService.getHintsByProductId(productId);
         return ResponseEntity.ok(responses);
     }
-    
-    @Operation(summary = "Filter products by vehicle attributes", 
-               description = "Find products that match the provided vehicle attributes")
+
+    @Operation(summary = "Filter products by vehicle attributes", description = "Find products that match the provided vehicle attributes")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Products filtered successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid request data")
+            @ApiResponse(responseCode = "200", description = "Products filtered successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request data")
     })
+    @EmitEvent(id = "FITMENT_PRODUCTS_FILTER", apiVersion = "1")
     @PostMapping("/filter-products")
     public ResponseEntity<FilterProductsResponse> filterProducts(
             @RequestBody Map<String, String> vehicleAttributes) {

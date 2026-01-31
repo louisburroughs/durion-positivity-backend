@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.model.Permission;
@@ -21,7 +22,8 @@ import java.util.Set;
 
 /**
  * REST controller for role management and role assignments.
- * Provides endpoints for creating roles, assigning permissions, and managing user role assignments.
+ * Provides endpoints for creating roles, assigning permissions, and managing
+ * user role assignments.
  */
 @RestController
 @RequestMapping("/v1/roles")
@@ -29,24 +31,24 @@ import java.util.Set;
 @Slf4j
 @Tag(name = "Role Management", description = "Manage roles, permissions, and user assignments")
 public class RoleController {
-    
+
     private final RoleManagementService roleManagementService;
 
     /**
      * Create a new role
      */
+    @EmitEvent(id = "SECURITY_ROLE_CREATE", apiVersion = "1")
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Create a new role",
-               description = "Creates a new role with the specified name and description")
+    @Operation(summary = "Create a new role", description = "Creates a new role with the specified name and description")
     public ResponseEntity<Role> createRole(@RequestBody Map<String, String> request) {
         String name = request.get("name");
         String description = request.get("description");
-        
+
         if (name == null || name.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         try {
             Role role = roleManagementService.createRole(name, description);
             return ResponseEntity.status(HttpStatus.CREATED).body(role);
@@ -59,10 +61,10 @@ public class RoleController {
     /**
      * Update permissions for a role
      */
+    @EmitEvent(id = "SECURITY_ROLE_UPDATE_PERMISSIONS", apiVersion = "1")
     @PutMapping("/permissions")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Update role permissions",
-               description = "Assigns a set of permissions to a role")
+    @Operation(summary = "Update role permissions", description = "Assigns a set of permissions to a role")
     public ResponseEntity<Role> updateRolePermissions(@RequestBody RolePermissionsRequest request) {
         try {
             Role role = roleManagementService.updateRolePermissions(request);
@@ -76,10 +78,10 @@ public class RoleController {
     /**
      * Create a role assignment for a user
      */
+    @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_CREATE", apiVersion = "1")
     @PostMapping("/assignments")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Create role assignment",
-               description = "Assigns a role to a user with optional scope and effective dates")
+    @Operation(summary = "Create role assignment", description = "Assigns a role to a user with optional scope and effective dates")
     public ResponseEntity<RoleAssignment> createRoleAssignment(@RequestBody RoleAssignmentRequest request) {
         try {
             RoleAssignment assignment = roleManagementService.createRoleAssignment(request);
@@ -95,8 +97,7 @@ public class RoleController {
      */
     @GetMapping("/assignments/user/{userId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get user role assignments",
-               description = "Returns all effective role assignments for a user")
+    @Operation(summary = "Get user role assignments", description = "Returns all effective role assignments for a user")
     public ResponseEntity<List<RoleAssignment>> getUserRoleAssignments(@PathVariable Long userId) {
         try {
             List<RoleAssignment> assignments = roleManagementService.getEffectiveRoleAssignments(userId);
@@ -112,8 +113,7 @@ public class RoleController {
      */
     @GetMapping("/permissions/user/{userId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get user permissions",
-               description = "Returns all permissions for a user from their role assignments")
+    @Operation(summary = "Get user permissions", description = "Returns all permissions for a user from their role assignments")
     public ResponseEntity<Set<Permission>> getUserPermissions(@PathVariable Long userId) {
         try {
             Set<Permission> permissions = roleManagementService.getUserPermissions(userId);
@@ -128,16 +128,15 @@ public class RoleController {
      * Check if a user has a specific permission
      */
     @GetMapping("/check-permission")
-    @Operation(summary = "Check user permission",
-               description = "Checks if a user has a specific permission for a location")
+    @Operation(summary = "Check user permission", description = "Checks if a user has a specific permission for a location")
     public ResponseEntity<Boolean> checkUserPermission(
             @RequestParam Long userId,
             @RequestParam String permission,
             @RequestParam(required = false) String locationId) {
-        
+
         try {
             boolean hasPermission = roleManagementService.userHasPermission(
-                userId, permission, locationId != null ? locationId : "GLOBAL");
+                    userId, permission, locationId != null ? locationId : "GLOBAL");
             return ResponseEntity.ok(hasPermission);
         } catch (IllegalArgumentException e) {
             log.error("Failed to check permission: {}", e.getMessage());
@@ -150,8 +149,7 @@ public class RoleController {
      */
     @DeleteMapping("/assignments/{assignmentId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Revoke role assignment",
-               description = "Revokes a role assignment by setting its end date")
+    @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date")
     public ResponseEntity<Void> revokeRoleAssignment(@PathVariable Long assignmentId) {
         try {
             roleManagementService.revokeRoleAssignment(assignmentId);
@@ -167,8 +165,7 @@ public class RoleController {
      */
     @GetMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get all roles",
-               description = "Returns all roles in the system")
+    @Operation(summary = "Get all roles", description = "Returns all roles in the system")
     public ResponseEntity<List<Role>> getAllRoles() {
         return ResponseEntity.ok(roleManagementService.getAllRoles());
     }
@@ -178,8 +175,7 @@ public class RoleController {
      */
     @GetMapping("/{name}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get role by name",
-               description = "Returns a specific role by its name")
+    @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
     public ResponseEntity<Role> getRoleByName(@PathVariable String name) {
         try {
             Role role = roleManagementService.getRoleByName(name);

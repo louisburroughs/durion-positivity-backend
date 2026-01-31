@@ -1,5 +1,6 @@
 package com.positivity.price.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -23,6 +24,7 @@ public class PriceRestrictionsController {
             @ApiResponse(responseCode = "400", description = "Invalid request body."),
             @ApiResponse(responseCode = "500", description = "Internal server error.")
     })
+    @EmitEvent(id = "PRICE_RESTRICTIONS_EVALUATE", apiVersion = "1")
     @PostMapping("/restrictions:evaluate")
     public ResponseEntity<Object> evaluateRestrictions(@RequestBody(required = false) Object requestBody) {
         log.info("POST /v1/price/restrictions:evaluate");
@@ -36,6 +38,7 @@ public class PriceRestrictionsController {
             @ApiResponse(responseCode = "403", description = "Insufficient permissions to override restrictions."),
             @ApiResponse(responseCode = "500", description = "Internal server error.")
     })
+    @EmitEvent(id = "PRICE_RESTRICTIONS_OVERRIDE", apiVersion = "1")
     @PostMapping("/restrictions:override")
     public ResponseEntity<Object> overrideRestrictions(@RequestBody(required = false) Object requestBody) {
         log.info("POST /v1/price/restrictions:override");

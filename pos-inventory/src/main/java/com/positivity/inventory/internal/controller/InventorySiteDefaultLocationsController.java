@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -35,6 +36,7 @@ public class InventorySiteDefaultLocationsController {
     }
 
     @PutMapping("/{siteId}/defaultLocations")
+    @EmitEvent(id = "INVENTORY_SITE_DEFAULT_LOCATIONS_UPDATE", apiVersion = "1")
     @Operation(summary = "Replace site default locations", description = "Replaces the configured default locations for a site. Stub implementation.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Default locations replaced"),

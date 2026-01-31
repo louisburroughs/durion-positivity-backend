@@ -3,6 +3,7 @@ package com.positivity.customer.internal.controller;
 import com.positivity.customer.internal.entity.*;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.PartyService;
+import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -55,6 +56,7 @@ public class CrmAccountsController {
         })
         @PostMapping("/tierResolve")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
+        @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_RESOLVE", apiVersion = "1")
         public ResponseEntity<Void> resolveAccountTier(
                         @Parameter(description = "Tier resolution request", required = false) @RequestBody(required = false) Object body) {
                 log.info("Stub resolveAccountTiers");
@@ -71,6 +73,7 @@ public class CrmAccountsController {
         })
         @PostMapping("/parties")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
+        @EmitEvent(id = "CUSTOMER_PARTY_CREATE", apiVersion = "1")
         public ResponseEntity<CreateCommercialAccountResponse> createCommercialAccount(
                         @Parameter(description = "Commercial account creation request", required = false) @RequestBody(required = false) CreateCommercialAccountRequest body) {
                 log.info("createCommercialAccount");
@@ -103,6 +106,7 @@ public class CrmAccountsController {
         })
         @PostMapping("/parties/search")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
+        @EmitEvent(id = "CUSTOMER_PARTY_SEARCH", apiVersion = "1")
         public ResponseEntity<SearchPartiesResponse> searchParties(
                         @Parameter(description = "Search criteria", required = false) @RequestBody(required = false) SearchPartiesRequest body) {
                 log.info("searchParties");
@@ -119,6 +123,7 @@ public class CrmAccountsController {
         })
         @PostMapping("/parties/{partyId}/merge")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_MERGE + "')")
+        @EmitEvent(id = "CUSTOMER_PARTY_MERGE", apiVersion = "1")
         public ResponseEntity<MergePartiesResponse> mergeParties(
                         @Parameter(description = "Target party ID", required = true) @PathVariable String partyId,
                         @Parameter(description = "Merge request with source party IDs", required = false) @RequestBody(required = false) MergePartiesRequest body) {
@@ -153,6 +158,7 @@ public class CrmAccountsController {
         })
         @PutMapping("/parties/{partyId}/contacts/{contactId}/roles")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
+        @EmitEvent(id = "CUSTOMER_CONTACT_ROLE_UPDATE", apiVersion = "1")
         public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
                         @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
                         @Parameter(description = "Contact ID", required = true) @PathVariable String contactId,
@@ -188,6 +194,7 @@ public class CrmAccountsController {
         })
         @PostMapping("/parties/{partyId}/communicationPreferences")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
+        @EmitEvent(id = "CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT", apiVersion = "1")
         public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
                         @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
                         @Parameter(description = "Communication preferences to set", required = false) @RequestBody(required = false) UpsertCommunicationPreferencesRequest body) {
@@ -208,6 +215,7 @@ public class CrmAccountsController {
         })
         @PostMapping("/parties/{partyId}/vehicles")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_CREATE + "')")
+        @EmitEvent(id = "CUSTOMER_VEHICLE_CREATE", apiVersion = "1")
         public ResponseEntity<CreateVehicleForPartyResponse> createVehicleForParty(
                         @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
                         @Parameter(description = "Vehicle creation request", required = false) @RequestBody(required = false) CreateVehicleForPartyRequest body) {

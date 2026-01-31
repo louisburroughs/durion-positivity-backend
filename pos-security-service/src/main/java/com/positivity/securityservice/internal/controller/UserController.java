@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.model.Role;
 import com.positivity.securityservice.internal.model.User;
 import com.positivity.securityservice.service.JwtService;
@@ -31,6 +32,7 @@ public class UserController {
 
     @Operation(summary = "Create a new user", description = "Creates a new user with username, password, and roles.")
     @ApiResponse(responseCode = "200", description = "User created successfully.")
+    @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<User> createUser(@RequestBody Map<String, Object> payload) {
         String username = (String) payload.get("username");
@@ -44,6 +46,7 @@ public class UserController {
     }
 
     @Operation(summary = "User login", description = "Authenticates a user and returns a JWT token.")
+    @EmitEvent(id = "SECURITY_USER_LOGIN", apiVersion = "1")
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody Map<String, String> payload) {
         String username = payload.get("username");
@@ -73,8 +76,7 @@ public class UserController {
     @ApiResponse(responseCode = "404", description = "User not found.")
     @GetMapping("/{id}")
     public ResponseEntity<User> getUserById(
-            @Parameter(description = "ID of the user to retrieve", example = "1")
-            @PathVariable Long id) {
+            @Parameter(description = "ID of the user to retrieve", example = "1") @PathVariable Long id) {
         Optional<User> user = userService.getUserById(id);
         return user.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -82,12 +84,11 @@ public class UserController {
     @Operation(summary = "Update an existing user", description = "Update the details of an existing user.")
     @ApiResponse(responseCode = "200", description = "User updated successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")
+    @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
     public ResponseEntity<User> updateUser(
-            @Parameter(description = "ID of the user to update", example = "1")
-            @PathVariable Long id,
-            @Parameter(description = "Updated user object")
-            @RequestBody User user) {
+            @Parameter(description = "ID of the user to update", example = "1") @PathVariable Long id,
+            @Parameter(description = "Updated user object") @RequestBody User user) {
         Optional<User> existingUserOpt = userService.getUserById(id);
         if (existingUserOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -105,12 +106,12 @@ public class UserController {
     @ApiResponse(responseCode = "404", description = "User not found.")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(
-            @Parameter(description = "ID of the user to delete", example = "1")
-            @PathVariable Long id) {
+            @Parameter(description = "ID of the user to delete", example = "1") @PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
 
+    @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
     @PutMapping("/{username}/roles")
     public ResponseEntity<User> assignRoles(@PathVariable String username, @RequestBody Map<String, Object> payload) {
         List<?> rolesList = (List<?>) payload.get("roles");
@@ -121,4 +122,3 @@ public class UserController {
         return ResponseEntity.ok(user);
     }
 }
-

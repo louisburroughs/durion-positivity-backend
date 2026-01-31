@@ -1,5 +1,6 @@
 package com.positivity.shopManager.internal.controller;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.shopManager.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,6 +34,7 @@ public class ShopMobileUnitController {
 
     @Operation(summary = "Create mobile unit", description = "Create a new mobile unit for a specific shop location. Validate baseLocationId and capabilities.")
     @ApiResponse(responseCode = "200", description = "Mobile unit created successfully.")
+    @EmitEvent(id = "SHOP_MOBILE_UNIT_CREATE", apiVersion = "1")
     @PostMapping("/{locationId}/mobileUnit")
     public ResponseEntity<Object> createMobileUnit(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
@@ -44,6 +46,7 @@ public class ShopMobileUnitController {
 
     @Operation(summary = "Manage mobile units", description = "Create or update mobile units in bulk.")
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
+    @EmitEvent(id = "SHOP_MOBILE_UNIT_MANAGE", apiVersion = "1")
     @PutMapping("/mobileUnit")
     public ResponseEntity<Object> manageMobileUnits(
             @Parameter(description = "Mobile unit management request body") @RequestBody(required = false) Object request) {
