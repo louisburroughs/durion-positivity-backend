@@ -144,7 +144,7 @@
 
     <profiles>
         <profile>
-            <id>openapi</id>
+            <id>local</id>
             <build>
                 <plugins>
                     <plugin>
@@ -162,7 +162,8 @@
                                         <argument>--server.port=8080</argument>
                                         <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
                                         <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
-                                        <argument>--spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
+                                        <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
@@ -185,7 +186,7 @@
                     <plugin>
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                        <version>${springdoc.maven.plugin.version}</version>
+                        <version>${springdoc-openapi-maven-plugin.version}</version>
                         <executions>
                             <execution>
                                 <id>generate-openapi-profile</id>

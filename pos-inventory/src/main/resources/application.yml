@@ -48,10 +48,6 @@ logging:
     org:
       springframework:
         web: INFO
-      hibernate: INFO
-    org:
-      springframework:
-        web: INFO
       hibernate:
         SQL: DEBUG
 springdoc:

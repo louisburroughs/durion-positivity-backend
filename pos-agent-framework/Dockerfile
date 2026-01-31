@@ -1,5 +1,5 @@
 # Multi-stage build for optimized agent framework image
-FROM maven:3.9.4-openjdk-21-slim AS builder
+FROM maven:3.9.4-eclipse-temurin-21-slim AS builder
 
 # Set working directory
 WORKDIR /app
@@ -16,7 +16,7 @@ RUN mvn clean package -DskipTests -B
 FROM eclipse-temurin:21-jre-alpine
 
 # Install curl for health checks and agent download
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl
 
 # Download Grafana OpenTelemetry Java Agent
 ARG GRAFANA_OTEL_AGENT_VERSION=v2.9.0
@@ -24,7 +24,7 @@ RUN curl -L -o /opt/grafana-opentelemetry-java.jar \
     https://github.com/grafana/grafana-opentelemetry-java/releases/download/${GRAFANA_OTEL_AGENT_VERSION}/grafana-opentelemetry-java.jar
 
 # Create non-root user for security
-RUN groupadd -r agentuser && useradd -r -g agentuser agentuser
+RUN addgroup -g 1000 agentuser && adduser -D -u 1000 -G agentuser agentuser
 
 # Set working directory
 WORKDIR /app

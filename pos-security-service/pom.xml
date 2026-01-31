@@ -167,7 +167,7 @@
 
     <profiles>
         <profile>
-            <id>openapi</id>
+            <id>local</id>
             <build>
                 <plugins>
                     <plugin>
@@ -205,7 +205,7 @@
                     <plugin>
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                        <version>${springdoc.maven.plugin.version}</version>
+                        <version>${springdoc-openapi-maven-plugin.version}</version>
                         <executions>
                             <execution>
                                 <phase>integration-test</phase>

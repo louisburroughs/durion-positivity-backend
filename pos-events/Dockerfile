@@ -13,19 +13,12 @@ RUN curl -L -o /opt/grafana-opentelemetry-java.jar \
 ARG JAVA_OPTS
 ENV JAVA_OPTS=$JAVA_OPTS
 ENV OTEL_RESOURCE_ATTRIBUTES="service.name=DURION-POSITIVITY-BACKEND,service.namespace=durion-group,deployment.environment=pre-production"
-ENV OTEL_SERVICE_NAME=pos-accounting
+ENV OTEL_SERVICE_NAME=pos-events
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-https://otlp-gateway-prod-us-east-3.grafana.net/otlp}
 ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # IMPORTANT: Set OTEL_EXPORTER_OTLP_HEADERS at runtime with your Grafana Cloud API key
 # Example: -e OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-instance-id:api-key>"
 
-COPY target/pos-accounting-*.jar pos-accounting.jar
-EXPOSE 9001
-ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-accounting.jar"]
-
-
-
-
-
-
-
+COPY target/pos-events-*.jar pos-events.jar
+EXPOSE 9003
+ENTRYPOINT ["sh", "-c", "exec java -javaagent:/opt/grafana-opentelemetry-java.jar $JAVA_OPTS -jar pos-events.jar"]

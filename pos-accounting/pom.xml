@@ -51,7 +51,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-tracing-bridge-otel</artifactId>
@@ -177,7 +180,7 @@
 
     <profiles>
         <profile>
-            <id>openapi</id>
+            <id>local</id>
             <build>
                 <plugins>
                     <plugin>
@@ -195,7 +198,11 @@
                                         <argument>--server.port=8096</argument>
                                         <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
                                         <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
-                                        <argument>--spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
+                                        <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>--spring.flyway.enabled=false</argument>
+                                        <argument>--eureka.client.enabled=false</argument>
+                                        <argument>--spring.boot.admin.client.enabled=false</argument>
                                         <argument>--logging.level.root=WARN</argument>
                                         <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
                                     </arguments>

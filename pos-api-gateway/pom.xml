@@ -68,7 +68,7 @@
     </build>
     <profiles>
         <profile>
-            <id>openapi</id>
+            <id>local</id>
             <build>
                 <plugins>
                     <plugin>

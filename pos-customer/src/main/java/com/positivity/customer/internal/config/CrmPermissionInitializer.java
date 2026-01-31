@@ -2,6 +2,8 @@ package com.positivity.customer.internal.config;
 
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,9 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class CrmPermissionInitializer {
 
+    @Value("${gateway.url:http://localhost:8080}")
+    private String gatewayUrl;
+
     /**
      * Register CRM permissions with Security Domain on application startup
      */
@@ -33,21 +38,15 @@ public class CrmPermissionInitializer {
                 var request = CrmPermissionRegistry.buildCrmPermissionRegistration();
 
                 // Call security service to register permissions
-                String securityServiceUrl = System.getenv("SECURITY_SERVICE_URL");
-                if (securityServiceUrl == null) {
-                    securityServiceUrl = "http://localhost:8086"; // Default for local development
-                }
 
-                String registrationEndpoint = securityServiceUrl + "/v1/permissions/register";
+                // Route through gateway: /security-service/v1/permissions/register
 
                 try {
-                    var response = restClient
-                            .post()
-                            .uri(registrationEndpoint)
-                            .contentType(MediaType.APPLICATION_JSON)
+                    var response = restClient.post()
+                            .uri(gatewayUrl + "/security-service/v1/permissions/register")
+                            .header("X-API-Version", "1") // Required by gateway
                             .body(request)
-                            .retrieve()
-                            .toEntity(Object.class);
+                            .retrieve().toEntity(Object.class);
 
                     if (response.getStatusCode().is2xxSuccessful()) {
                         log.info("✓ CRM permissions registered successfully with Security Domain");
