@@ -54,15 +54,10 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- SLF4J for logging -->
+        <!-- SLF4J API (implementation provided by spring-boot-starter-logging) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <scope>runtime</scope>
         </dependency>
         <!-- pos-events for event emission -->
         <dependency>
@@ -162,7 +157,7 @@
     </build>
     <profiles>
         <profile>
-            <id>openapi</id>
+            <id>local</id>
             <build>
                 <plugins>
                     <plugin>
@@ -179,9 +174,9 @@
                                     <arguments>
                                         <argument>--server.port=8090</argument>
                                         <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
-                                        <argument>--spring.datasource.driverClassName=org.h2.Driver</argument>
+                                        <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
                                         <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
-                                        <argument>--spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
@@ -203,7 +198,7 @@
                     <plugin>
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                        <version>${springdoc.maven.plugin.version}</version>
+                        <version>${springdoc-openapi-maven-plugin.version}</version>
                         <configuration>
                             <apiDocsUrl>http://localhost:8090/v3/api-docs</apiDocsUrl>
                         </configuration>

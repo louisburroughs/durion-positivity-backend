@@ -194,6 +194,7 @@ public interface SomeService {
 - `../AGENTS.md` (workspace-level guidance)
 - Backend test agent: `.github/agents/test.agent.md`
 - Java instructions: `../.github/instructions/java.instructions.md` (Java code guidelines and best practices)
+- Secrets management: `./SECRETS_MANAGEMENT_GUIDE.md` (environment variables, .env configuration, secret rotation, CI/CD integration)
 
 ## Notes for Agents
 

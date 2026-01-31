@@ -10,8 +10,10 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
-  flyway:
-    enabled: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
 
 server:
   port: 0
@@ -23,6 +25,9 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
 
 eureka:
   client:
@@ -41,20 +46,7 @@ logging:
     com:
       positivity:
         customer: INFO
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
-  endpoint:
-    health:
-      show-details: always
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-    fetch-registry: true
-    register-with-eureka: true
+ 
 springdoc:
   api-docs:
     enabled: true

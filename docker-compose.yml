@@ -47,9 +47,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -85,9 +85,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: positivity
-      POSTGRES_PASSWORD: positivity
-      POSTGRES_DB: positivity
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -125,8 +125,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -148,8 +148,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -171,8 +171,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -192,8 +192,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -213,8 +213,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -236,8 +236,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -257,8 +257,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -278,8 +278,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -299,8 +299,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -322,8 +322,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -343,8 +343,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -366,8 +366,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -387,8 +387,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -410,8 +410,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -433,8 +433,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -456,8 +456,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -479,8 +479,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -502,8 +502,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -525,8 +525,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -548,8 +548,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:
@@ -573,8 +573,8 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       # Database
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       # Event-driven agent configurations
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -608,8 +608,8 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://localhost:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: positivity
-      SPRING_DATASOURCE_PASSWORD: positivity
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
     depends_on:
       postgres:

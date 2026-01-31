@@ -47,3 +47,6 @@ logging:
     com:
       positivity:
         customer: DEBUG
+# application.yml
+gateway:
+  url: ${GATEWAY_URL:http://localhost:8080}
