@@ -34,6 +34,12 @@ eureka:
   instance:
     prefer-ip-address: true
 
+# Shared secret for API authentication (avoids circular dependency with pos-security-service)
+# Set via POS_EVENTS_API_SECRET environment variable in production
+pos:
+  events:
+    api-secret: ${POS_EVENTS_API_SECRET:}
+
 logging:
   level:
     root: INFO

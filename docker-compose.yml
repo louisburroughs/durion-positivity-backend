@@ -134,6 +134,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -158,6 +159,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -182,6 +184,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -193,10 +196,16 @@ services:
       timeout: 3s
       retries: 20
 
+  # NOTE: pos-event-receiver does NOT require pos-security-service.
+  # Security is enforced via:
+  #   1. Shared secret (X-Events-Api-Secret header) for write operations
+  #   2. Preregistered event ID validation for event emission
+  #   3. Network isolation (no external ports exposed)
   pos-event-receiver:
     build:
       context: ./pos-event-receiver
       dockerfile: Dockerfile
+    # No external ports exposed - internal service only, accessed via API gateway
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
@@ -204,8 +213,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
-      pos-security-service:
+      postgres:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     networks:
       - pos-network
@@ -226,6 +239,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -250,6 +264,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -272,6 +287,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -294,6 +310,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -316,6 +333,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -340,6 +358,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -362,6 +381,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -386,6 +406,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -408,6 +429,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -431,6 +453,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -457,6 +480,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -481,6 +505,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -505,6 +530,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -529,6 +555,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -553,6 +580,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -577,6 +605,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       pos-security-service:
         condition: service_healthy
@@ -588,43 +617,44 @@ services:
       timeout: 3s
       retries: 20
 
-  pos-agent-framework:
-    build:
-      context: ./pos-agent-framework
-      dockerfile: Dockerfile
-    ports:
-      - "8093:8080"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_PROFILES_ACTIVE: dev
-      # Database
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      # Event-driven agent configurations
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: guest
-      RABBITMQ_PASSWORD: guest
-      # Configuration management
-      CONFIG_SERVER_URL: http://config-server:8888
-      # Feature flags
-      CONSUL_URL: http://consul:8500
-    depends_on:
-      pos-security-service:
-        condition: service_healthy
-    networks:
-      - pos-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+  # pos-agent-framework:  I don't need this to run for now, so commenting out
+  #   build:
+  #     context: ./pos-agent-framework
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8093:8080"
+  #   environment:
+  #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+  #     GATEWAY_URL: http://pos-api-gateway:8080
+  #     SPRING_PROFILES_ACTIVE: dev
+  #     # Database
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+  #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+  #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
+  #     # Event-driven agent configurations
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  #     SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  #     RABBITMQ_HOST: rabbitmq
+  #     RABBITMQ_PORT: 5672
+  #     RABBITMQ_USERNAME: guest
+  #     RABBITMQ_PASSWORD: guest
+  #     # Configuration management
+  #     CONFIG_SERVER_URL: http://config-server:8888
+  #     # Feature flags
+  #     CONSUL_URL: http://consul:8500
+  #   depends_on:
+  #     pos-security-service:
+  #       condition: service_healthy
+  #   networks:
+  #     - pos-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 60s
 
   pos-api-gateway:
     build:
@@ -638,6 +668,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
     depends_on:
       eureka-server:
         condition: service_healthy
