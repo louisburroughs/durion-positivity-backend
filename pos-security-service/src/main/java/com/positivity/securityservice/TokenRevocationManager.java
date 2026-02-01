@@ -2,6 +2,8 @@ package com.positivity.securityservice;
 
 import io.github.resilience4j.retry.Retry;
 import io.vavr.control.Try;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -62,6 +64,11 @@ public class TokenRevocationManager {
      * If OptimisticLockingFailureException occurs (entity version conflict),
      * automatically retries up to 3 times with exponential backoff.
      * 
+     * **Retry Configuration:**
+     * - Max attempts: 3
+     * - Initial delay: 100ms
+     * - Backoff multiplier: 2.0 (100ms → 200ms → 400ms)
+     * 
      * @param jti               JWT ID (unique identifier)
      * @param expirationSeconds token expiration time in seconds
      * @return true if successfully revoked, false if Redis unavailable
@@ -78,14 +85,13 @@ public class TokenRevocationManager {
 
         String revocationKey = REVOCATION_KEY_PREFIX + jti;
 
-        Try<Boolean> result = Try.of(() -> {
-            try {
-                redisTemplate.opsForValue().set(revocationKey, true, expirationSeconds, TimeUnit.SECONDS);
-                return true;
-            } catch (Exception e) {
-                throw e;
-            }
+        // Apply retry decorator with exponential backoff
+        var decoratedOperation = Retry.decorateSupplier(jwtRevocationRetry, () -> {
+            redisTemplate.opsForValue().set(revocationKey, true, expirationSeconds, TimeUnit.SECONDS);
+            return true;
         });
+
+        Try<Boolean> result = Try.of(decoratedOperation::get);
 
         return result
                 .onSuccess(success -> log.debug("Token revoked in Redis: jti={}, expirationSeconds={}", jti,
@@ -172,15 +178,44 @@ public class TokenRevocationManager {
     /**
      * Clears all revoked tokens from Redis (typically for testing or maintenance).
      * 
+     * **WARNING:** This method is intended for testing environments only.
+     * In production, avoid calling this method as it scans all Redis keys matching
+     * the pattern, which can impact performance. Use gradual key expiration (TTL)
+     * instead.
+     * 
+     * Uses SCAN command with batched deletes for non-blocking iteration.
+     * 
      * @return number of keys deleted
      */
     public long clearAllRevoked() {
-        try {
-            var result = redisTemplate.delete(
-                    redisTemplate.keys(REVOCATION_KEY_PREFIX + "*"));
-            long deletedCount = result instanceof Long ? (Long) result : 0;
+        try (var cursor = redisTemplate.opsForValue()
+                .getOperations()
+                .scan(org.springframework.data.redis.core.ScanOptions.scanOptions()
+                        .match(REVOCATION_KEY_PREFIX + "*")
+                        .count(100) // Batch size hint for SCAN
+                        .build())) {
+
+            long deletedCount = 0;
+            List<String> batch = new ArrayList<>(100);
+
+            while (cursor.hasNext()) {
+                batch.add(cursor.next());
+
+                // Delete in batches of 100 to avoid memory buildup
+                if (batch.size() >= 100) {
+                    deletedCount += redisTemplate.delete(batch);
+                    batch.clear();
+                }
+            }
+
+            // Delete remaining keys
+            if (!batch.isEmpty()) {
+                deletedCount += redisTemplate.delete(batch);
+            }
+
             log.info("Cleared all revoked tokens from Redis: count={}", deletedCount);
             return deletedCount;
+
         } catch (Exception e) {
             log.warn("Failed to clear revoked tokens from Redis: error={}", e.getClass().getSimpleName());
             return 0;

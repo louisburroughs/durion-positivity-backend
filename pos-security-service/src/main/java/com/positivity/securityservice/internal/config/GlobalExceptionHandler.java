@@ -1,9 +1,8 @@
 package com.positivity.securityservice.internal.config;
 
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
+import com.positivity.securityservice.internal.dto.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -60,7 +59,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
             IllegalArgumentException ex,
             WebRequest request) {
 
@@ -94,7 +93,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public ResponseEntity<Map<String, Object>> handleOptimisticLockingFailure(
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(
             ObjectOptimisticLockingFailureException ex,
             WebRequest request) {
 
@@ -121,7 +120,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ResponseEntity<Map<String, Object>> handleGenericException(
+    public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex,
             WebRequest request) {
 
@@ -142,15 +141,10 @@ public class GlobalExceptionHandler {
      * @param errorCode     error code for client processing
      * @param message       human-readable error message
      * @param correlationId request correlation ID for tracking
-     * @return error response map
+     * @return error response record
      */
-    private Map<String, Object> errorResponse(String errorCode, String message, String correlationId) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", errorCode);
-        response.put("message", message);
-        response.put("timestamp", Instant.now().toString());
-        response.put("correlationId", correlationId);
-        return response;
+    private ErrorResponse errorResponse(String errorCode, String message, String correlationId) {
+        return new ErrorResponse(errorCode, message, Instant.now().toString(), correlationId);
     }
 
     /**

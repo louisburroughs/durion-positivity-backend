@@ -7,6 +7,7 @@ import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import java.time.Duration;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ import org.springframework.data.redis.core.RedisTemplate;
  * 
  * @since 1.0
  */
+@Slf4j
 @Configuration
 @ConditionalOnProperty(name = "security.redis.enabled", havingValue = "true", matchIfMissing = true)
 public class RedisConfig {
@@ -67,7 +69,8 @@ public class RedisConfig {
     public Retry jwtRevocationRetry() {
         RetryConfig config = RetryConfig.custom()
                 .maxAttempts(3)
-                .waitDuration(Duration.ofMillis(100))
+                // Exponential backoff with initial delay 100ms and multiplier 2.0 (100ms →
+                // 200ms → 400ms)
                 .intervalFunction(io.github.resilience4j.core.IntervalFunction.ofExponentialBackoff(100, 2))
                 .retryOnException(
                         throwable -> throwable instanceof org.springframework.orm.ObjectOptimisticLockingFailureException
@@ -77,22 +80,37 @@ public class RedisConfig {
 
         RetryRegistry registry = RetryRegistry.of(config);
         registry.getEventPublisher()
-                .onEntryAdded(event -> onEntryAdded(event))
-                .onEntryRemoved(event -> onEntryRemoved(event))
-                .onEntryReplaced(event -> onEntryReplaced(event));
+                .onEntryAdded(this::onEntryAdded)
+                .onEntryRemoved(this::onEntryRemoved)
+                .onEntryReplaced(this::onEntryReplaced);
 
         return registry.retry(JWT_REVOCATION_RETRY);
     }
 
+    /**
+     * Handles retry creation events.
+     * Logs at DEBUG level when a new Retry instance is added to the registry.
+     */
     private void onEntryAdded(EntryAddedEvent<Retry> event) {
-        // Log retry creation if needed
+        log.debug("Retry instance created and registered: name={}", event.getAddedEntry().getName());
     }
 
+    /**
+     * Handles retry removal events.
+     * Logs at DEBUG level when a Retry instance is removed from the registry.
+     */
     private void onEntryRemoved(EntryRemovedEvent<Retry> event) {
-        // Log retry removal if needed
+        log.debug("Retry instance removed from registry: name={}", event.getRemovedEntry().getName());
     }
 
+    /**
+     * Handles retry replacement events.
+     * Logs at INFO level when a Retry instance is replaced in the registry,
+     * as this may indicate configuration changes.
+     */
     private void onEntryReplaced(EntryReplacedEvent<Retry> event) {
-        // Log retry replacement if needed
+        log.info("Retry instance replaced in registry: oldName={}, newName={}",
+                event.getOldEntry().getName(),
+                event.getNewEntry().getName());
     }
 }
