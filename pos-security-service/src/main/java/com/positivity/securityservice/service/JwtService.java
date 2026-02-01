@@ -4,20 +4,25 @@ import com.positivity.securityservice.TokenRevocationManager;
 import com.positivity.securityservice.internal.model.JwtToken;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 
-import io.jsonwebtoken.*;
-import java.nio.charset.StandardCharsets;
-import javax.crypto.spec.SecretKeySpec;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.annotation.PostConstruct;
-import java.time.temporal.ChronoUnit;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -238,7 +243,7 @@ public class JwtService {
                 .parseSignedClaims(token).getPayload();
         Object rolesObj = claims.get(ROLES);
         if (rolesObj instanceof List<?> rolesList) {
-            Set<String> roles = new java.util.HashSet<>();
+            Set<String> roles = new HashSet<>();
             for (Object role : rolesList) {
                 if (role instanceof String str) {
                     roles.add(str);
@@ -246,7 +251,7 @@ public class JwtService {
             }
             return roles;
         }
-        return java.util.Collections.emptySet();
+        return Collections.emptySet();
     }
 
     /**
@@ -259,7 +264,7 @@ public class JwtService {
                 .parseSignedClaims(token).getPayload();
         Object authObj = claims.get(AUTHORITIES);
         if (authObj instanceof List<?> list) {
-            Set<String> authorities = new java.util.HashSet<>();
+            Set<String> authorities = new HashSet<>();
             for (Object a : list) {
                 if (a instanceof String str) {
                     authorities.add(str);
@@ -398,7 +403,7 @@ public class JwtService {
                 .claim(AUTHORITIES, authorities)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(accessExpiry))
-                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .signWith(secretKey)
                 .compact();
 
         // Generate refresh token (minimal claims for security)
@@ -408,7 +413,7 @@ public class JwtService {
                 .claim("type", "refresh")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(refreshExpiry))
-                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .signWith(secretKey)
                 .compact();
 
         // Store both tokens in database
