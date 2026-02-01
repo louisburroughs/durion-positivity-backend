@@ -4,8 +4,7 @@ server:
   port: 8080  # Fixed gateway entry point
 
 management:
-  server:
-    port: 0  # OS assigns available ephemeral port (internal-only)
+  # No separate management port - expose actuator on main server port for healthchecks
   endpoints:
     web:
       exposure:

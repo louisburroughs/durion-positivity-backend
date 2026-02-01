@@ -1,0 +1,44 @@
+# Docker profile - PostgreSQL with SSL disabled
+spring:
+  datasource:
+    # Configured via environment variables in docker-compose
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  ssl:
+    enabled: false
+  port: 8086  # Fixed port for Docker healthcheck
+
+management:
+  # No separate management port - expose actuator on main server port for healthchecks
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+eureka:
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.uuid}
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        security: DEBUG

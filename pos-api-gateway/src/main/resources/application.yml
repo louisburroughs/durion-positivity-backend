@@ -25,6 +25,7 @@ spring:
       # Result: Service receives /items
 
 management:
+  # No separate management port - expose actuator on main server port
   endpoints:
     web:
       exposure:
