@@ -15,17 +15,10 @@ spring:
       ddl-auto: update
 
 server:
-  ssl:
-    enabled: true
-    key-store: classpath:keystore.p12
-    key-store-password: ${SSL_KEYSTORE_PASSWORD}
-    key-store-type: PKCS12
-    key-alias: pos-security-service
-  port: 0
+  port: 8086
 
 management:
-  server:
-    port: 0
+  # No separate management port - expose actuator on main server port for healthchecks
   endpoints:
     web:
       exposure:

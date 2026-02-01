@@ -21,8 +21,8 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-gateway</artifactId>
-            <version>4.0.8</version>
+            <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
+            <!-- Version managed by Spring Cloud BOM (2025.1.1) -->
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
@@ -34,7 +34,7 @@
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
             <version>${springdoc-openapi.version}</version>
         </dependency>
         <!-- Spring Boot Logging (includes SLF4J + Logback) -->

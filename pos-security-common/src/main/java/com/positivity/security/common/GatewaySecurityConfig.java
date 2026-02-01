@@ -14,24 +14,28 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *
  * <h2>Usage</h2>
  * <p>
- * Services should import this configuration or extend it:
+ * Services should import this configuration:
  * </p>
- * <pre>{@code
- * @Configuration
- * @Import(GatewaySecurityConfig.class)
- * public class MyServiceSecurityConfig {
- *     // Additional service-specific configuration
+ * 
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Configuration
+ *     @Import(GatewaySecurityConfig.class)
+ *     public class MyServiceSecurityConfig {
+ *         // Additional service-specific configuration
+ *     }
  * }
- * }</pre>
+ * </pre>
  *
  * <h2>What This Provides</h2>
  * <ul>
- *   <li>Stateless session management (no server-side sessions)</li>
- *   <li>CSRF disabled (stateless API, protected by JWT)</li>
- *   <li>Gateway authorities filter for reading X-Authorities header</li>
- *   <li>Method-level security enabled (@PreAuthorize, @Secured)</li>
- *   <li>Public access to actuator, swagger, and OpenAPI endpoints</li>
- *   <li>All other endpoints require authentication</li>
+ * <li>Stateless session management (no server-side sessions)</li>
+ * <li>CSRF disabled (stateless API, protected by JWT)</li>
+ * <li>Gateway authorities filter for reading X-Authorities header</li>
+ * <li>Method-level security enabled (@PreAuthorize, @Secured)</li>
+ * <li>Public access to actuator, swagger, and OpenAPI endpoints</li>
+ * <li>All other endpoints require authentication</li>
  * </ul>
  *
  * @see GatewayAuthoritiesFilter
@@ -41,40 +45,50 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity(prePostEnabled = true)
 public class GatewaySecurityConfig {
 
-    private final GatewayAuthoritiesFilter gatewayAuthoritiesFilter;
-
-    public GatewaySecurityConfig(GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-        this.gatewayAuthoritiesFilter = gatewayAuthoritiesFilter;
+    /**
+     * Creates the gateway authorities filter bean.
+     * <p>
+     * This is defined as a bean rather than using @Component to ensure it is
+     * available when this configuration is imported via @Import annotation.
+     * Component scanning does not work across module boundaries with @Import.
+     * </p>
+     *
+     * @return the gateway authorities filter
+     */
+    @Bean
+    public GatewayAuthoritiesFilter gatewayAuthoritiesFilter() {
+        return new GatewayAuthoritiesFilter();
     }
 
     @Bean
-    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
+            GatewayAuthoritiesFilter gatewayAuthoritiesFilter) throws Exception {
         http
-            // Disable CSRF - stateless API protected by JWT at gateway
-            .csrf(csrf -> csrf.disable())
+                // Disable CSRF - stateless API protected by JWT at gateway
+                .csrf(csrf -> csrf.disable())
 
-            // Stateless session - no server-side session storage
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Stateless session - no server-side session storage
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-            // Authorization rules
-            .authorizeHttpRequests(auth -> auth
-                // Public endpoints - health checks, metrics, API docs
-                .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers("/swagger-ui/**").permitAll()
-                .requestMatchers("/swagger-ui.html").permitAll()
-                .requestMatchers("/v3/api-docs/**").permitAll()
-                .requestMatchers("/api-docs/**").permitAll()
-                
-                // Permission registration endpoint - internal services only
-                // Note: This is called at startup before authentication is fully set up
-                .requestMatchers("/v1/permissions/register").permitAll()
-                
-                // All other requests require authentication
-                .anyRequest().authenticated())
+                // Authorization rules
+                .authorizeHttpRequests(auth -> auth
+                        // Public endpoints - health checks, metrics, API docs
+                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/swagger-ui.html").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/api-docs/**").permitAll()
 
-            // Add gateway authorities filter before username/password filter
-            .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
+                        // Permission registration endpoint - internal services only
+                        // Note: This is called at startup before authentication is fully set up
+                        .requestMatchers("/v1/permissions/register").permitAll()
+
+                        // All other requests require authentication
+                        .anyRequest().authenticated())
+
+                // Add gateway authorities filter before username/password filter
+                .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
