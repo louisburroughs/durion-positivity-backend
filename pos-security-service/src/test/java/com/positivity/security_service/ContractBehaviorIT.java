@@ -13,6 +13,9 @@ import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,7 +67,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @since 1.0
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = com.positivity.securityservice.PosSecurityServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @DisplayName("Security Service Contract Behavior Integration Tests")
 class ContractBehaviorIT {
@@ -193,7 +196,7 @@ class ContractBehaviorIT {
                 .andReturn();
 
         String id2 = objectMapper.readTree(result2.getResponse().getContentAsString()).get("id").asText();
-        assert id1.equals(id2) : "Idempotent requests should return same policy ID";
+        assertThat(id2).isEqualTo(id1).as("Idempotent requests should return same policy ID");
     }
 
     @Test
@@ -253,8 +256,7 @@ class ContractBehaviorIT {
                 .andReturn();
 
         String createdAt = objectMapper.readTree(result.getResponse().getContentAsString()).get("createdAt").asText();
-        assert createdAt.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z")
-                : "createdAt must be ISO 8601 UTC format";
+        assertThat(createdAt).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z");
     }
 
     @Test
@@ -269,7 +271,9 @@ class ContractBehaviorIT {
                 .andReturn();
 
         String status = objectMapper.readTree(result.getResponse().getContentAsString()).get("status").asText();
-        assert status.matches("ACTIVE|INACTIVE|ARCHIVED") : "Policy status must be valid enum value";
+        assertThat(status)
+                .matches("ACTIVE|INACTIVE|ARCHIVED")
+                .as("Policy status must be valid enum value");
     }
 
     // ========== JWT AUTHENTICATION & TOKEN MANAGEMENT TESTS ==========
@@ -665,40 +669,52 @@ class ContractBehaviorIT {
     /**
      * Test 15: Concurrency Handling - Concurrent Token Revocation
      *
-     * **Scenario:** Multiple threads attempt to revoke same token
+     * **Scenario:** Multiple threads attempt to revoke same token simultaneously
      * **Expected:** All requests succeed, token is revoked (idempotent)
-     * **Concurrency:** Tests optimistic locking with @Version field
+     * **Concurrency:** Uses CountDownLatch to ensure threads start simultaneously
      */
     @Test
     @DisplayName("T15: Concurrent token revocation is handled safely")
     void testConcurrentTokenRevocation() throws Exception {
         // Arrange
         String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
+        int threadCount = 5;
+        CountDownLatch startLatch = new CountDownLatch(1); // Barrier to start all threads simultaneously
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
 
-        // Act: Simulate concurrent revocation attempts
-        Thread thread1 = new Thread(() -> {
-            try {
-                mockMvc.perform(delete("/v1/auth/revoke").param("token", token))
-                        .andExpect(status().isNoContent());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+        // Act: Create threads that wait at the barrier
+        for (int i = 0; i < threadCount; i++) {
+            new Thread(() -> {
+                try {
+                    startLatch.await(); // Wait for signal to start
+                    mockMvc.perform(delete("/v1/auth/revoke").param("token", token))
+                            .andExpect(status().isNoContent());
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    failureCount.incrementAndGet();
+                } finally {
+                    doneLatch.countDown();
+                }
+            }).start();
+        }
 
-        Thread thread2 = new Thread(() -> {
-            try {
-                mockMvc.perform(delete("/v1/auth/revoke").param("token", token))
-                        .andExpect(status().isNoContent());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+        // Release all threads simultaneously
+        startLatch.countDown();
 
-        thread1.start();
-        thread2.start();
+        // Wait for all threads to complete (with timeout to prevent hanging)
+        assertThat(doneLatch.await(10, TimeUnit.SECONDS))
+                .as("All threads should complete within timeout")
+                .isTrue();
 
-        thread1.join();
-        thread2.join();
+        // Assert: All revocations should succeed (idempotent operation)
+        assertThat(successCount.get())
+                .as("All concurrent revocation requests should succeed")
+                .isEqualTo(threadCount);
+        assertThat(failureCount.get())
+                .as("No revocation requests should fail")
+                .isZero();
 
         // Assert: Token is revoked
         mockMvc.perform(get("/v1/auth/validate").param("token", token))

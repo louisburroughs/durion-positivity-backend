@@ -11,7 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
+import java.time.temporal.ChronoUnit;
 import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.util.Date;
@@ -56,37 +59,42 @@ public class JwtService {
     private final JwtTokenRepository jwtTokenRepository;
     private final RoleAuthorityService roleAuthorityService;
     private final TokenRevocationManager tokenRevocationManager;
-    private final SecretKey secretKey;
+
+    @Value("${security.jwt.secret}")
+    private String jwtSecret;
+
+    private SecretKey secretKey;
 
     /**
-     * Constructor that loads the JWT secret from environment variable.
+     * Post-construct initialization that validates and initializes the secret key.
      * 
-     * @param jwtTokenRepository     the JWT token repository
-     * @param roleAuthorityService   the role authority service
-     * @param tokenRevocationManager the token revocation manager
-     * @param jwtSecret              JWT secret from `SECURITY_JWT_SECRET`
-     *                               environment variable
+     * This method is called after Spring has injected all dependencies and values.
+     * It validates that the JWT secret is provided and meets the minimum strength
+     * requirements for HMAC-SHA256 (256 bits / 32 bytes).
+     * 
+     * @throws IllegalStateException if JWT secret is missing or too weak
      */
-    public JwtService(
-            JwtTokenRepository jwtTokenRepository,
-            RoleAuthorityService roleAuthorityService,
-            TokenRevocationManager tokenRevocationManager,
-            @Value("${security.jwt.secret}") String jwtSecret) {
-        this.jwtTokenRepository = jwtTokenRepository;
-        this.roleAuthorityService = roleAuthorityService;
-        this.tokenRevocationManager = tokenRevocationManager;
-
+    @PostConstruct
+    void initializeSecretKey() {
         // Validate that secret is provided
         if (jwtSecret == null || jwtSecret.isBlank()) {
             throw new IllegalStateException(
                     "JWT secret must be provided via SECURITY_JWT_SECRET environment variable");
         }
 
+        // Validate secret strength (minimum 32 characters for HMAC-SHA256)
+        byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT secret must be at least 32 characters (256 bits) for HMAC-SHA256 security. "
+                            + "Current length: " + secretBytes.length + " bytes");
+        }
+
         // Create HMAC-SHA256 key from secret string
         this.secretKey = new SecretKeySpec(
-                jwtSecret.getBytes(StandardCharsets.UTF_8),
+                secretBytes,
                 0,
-                jwtSecret.getBytes(StandardCharsets.UTF_8).length,
+                secretBytes.length,
                 "HmacSHA256");
 
         log.info("JwtService initialized with environment-injected JWT secret");
@@ -128,7 +136,7 @@ public class JwtService {
                 .claim(AUTHORITIES, authorities)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
-                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .signWith(secretKey)
                 .compact();
 
         // Store token in database
@@ -268,15 +276,29 @@ public class JwtService {
      * Redis.
      * 
      * **Process:**
-     * 1. Extract JTI from token
-     * 2. Revoke token in Redis with appropriate TTL
-     * 3. Delete token from database
+     * 1. Delete token from database first (fail-fast if token doesn't exist)
+     * 2. Extract JTI and revoke in Redis cache
+     * 
+     * **Consistency:**
+     * - Database deletion is performed first within a transaction
+     * - Redis revocation is best-effort (token is already invalidated in DB)
      *
      * @param token the JWT token string to delete
+     * @return true if the token was found and deleted, false if it didn't exist
      */
-    public void deleteToken(String token) {
+    @Transactional
+    public boolean deleteToken(String token) {
+        // Delete from database first - this is the authoritative store
+        Optional<JwtToken> existingToken = jwtTokenRepository.findByToken(token);
+        if (existingToken.isEmpty()) {
+            log.debug("Token deletion skipped: token not found in database");
+            return false;
+        }
+
+        jwtTokenRepository.delete(existingToken.get());
+
+        // Now revoke in Redis (best-effort for cache consistency)
         try {
-            // Extract JTI for revocation tracking
             Claims claims = Jwts.parser()
                     .verifyWith(secretKey)
                     .build()
@@ -287,19 +309,21 @@ public class JwtService {
             Instant expiresAt = claims.getExpiration().toInstant();
 
             if (jti != null && expiresAt != null) {
-                long secondsUntilExpiry = java.time.temporal.ChronoUnit.SECONDS.between(Instant.now(), expiresAt);
+                long secondsUntilExpiry = ChronoUnit.SECONDS.between(Instant.now(), expiresAt);
                 if (secondsUntilExpiry > 0) {
                     tokenRevocationManager.revokeToken(jti, secondsUntilExpiry);
+                    log.debug("Token deleted and revoked: jti={}", jti);
+                } else {
+                    log.debug("Token deleted (already expired, skipped Redis revocation): jti={}", jti);
                 }
             }
         } catch (JwtException e) {
-            log.debug("Failed to extract JTI from token for revocation: error={}",
+            // Token is already deleted from DB, Redis revocation is best-effort
+            log.warn("Token deleted from DB but failed to revoke in Redis: error={}",
                     e.getClass().getSimpleName());
         }
 
-        // Delete from database
-        jwtTokenRepository.deleteByToken(token);
-        log.debug("Token deleted and revoked");
+        return true;
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
@@ -272,17 +273,6 @@ public class JwtController {
         }
         String subject = jwtService.getUsernameFromToken(token);
         return ResponseEntity.ok(subject);
-    }
-
-    /**
-     * Error response record for OpenAPI documentation.
-     */
-    @Schema(description = "Standardized error response with correlation ID")
-    public record ErrorResponse(
-            @Schema(description = "Error code for client processing") String error,
-            @Schema(description = "Human-readable error message") String message,
-            @Schema(description = "ISO 8601 timestamp") String timestamp,
-            @Schema(description = "Unique request correlation ID for tracking") String correlationId) {
     }
 
     /**
