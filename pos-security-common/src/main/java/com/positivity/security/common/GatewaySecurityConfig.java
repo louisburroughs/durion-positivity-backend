@@ -20,12 +20,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * 
  * <pre>
  * {
- *     &#64;code
- *     &#64;Configuration
- *     @Import(GatewaySecurityConfig.class)
- *     public class MyServiceSecurityConfig {
- *         // Additional service-specific configuration
- *     }
+ *         &#64;code
+ *         &#64;Configuration
+ *         @Import(GatewaySecurityConfig.class)
+ *         public class MyServiceSecurityConfig {
+ *                 // Additional service-specific configuration
+ *         }
  * }
  * </pre>
  *
@@ -46,53 +46,53 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity(prePostEnabled = true)
 public class GatewaySecurityConfig {
 
-    /**
-     * Creates the gateway authorities filter bean.
-     * <p>
-     * This is defined as a bean rather than using @Component to ensure it is
-     * available when this configuration is imported via @Import annotation.
-     * Component scanning does not work across module boundaries with @Import.
-     * </p>
-     *
-     * @return the gateway authorities filter
-     */
-    @Bean
-    public GatewayAuthoritiesFilter gatewayAuthoritiesFilter() {
-        return new GatewayAuthoritiesFilter();
-    }
+        /**
+         * Creates the gateway authorities filter bean.
+         * <p>
+         * This is defined as a bean rather than using @Component to ensure it is
+         * available when this configuration is imported via @Import annotation.
+         * Component scanning does not work across module boundaries with @Import.
+         * </p>
+         *
+         * @return the gateway authorities filter
+         */
+        @Bean
+        public GatewayAuthoritiesFilter gatewayAuthoritiesFilter() {
+                return new GatewayAuthoritiesFilter();
+        }
 
-    @Bean
-    @Order(1)
-    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
-            GatewayAuthoritiesFilter gatewayAuthoritiesFilter) throws Exception {
-        http
-                // Disable CSRF - stateless API protected by JWT at gateway
-                .csrf(csrf -> csrf.disable())
+        @Bean
+        @Order(1)
+        public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
+                        GatewayAuthoritiesFilter gatewayAuthoritiesFilter) throws Exception {
+                http
+                                // Disable CSRF - stateless API protected by JWT at gateway
+                                .csrf(csrf -> csrf.disable())
 
-                // Stateless session - no server-side session storage
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                // Stateless session - no server-side session storage
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // Authorization rules - using String patterns (Spring Security 7.0+)
-                .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - health checks, metrics, API docs
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/swagger-ui/**").permitAll()
-                        .requestMatchers("/swagger-ui.html").permitAll()
-                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**").permitAll()
-                        .requestMatchers("/api-docs/**").permitAll()
-                        .requestMatchers("/webjars/**").permitAll()
+                                // Authorization rules - using String patterns (Spring Security 7.0+)
+                                .authorizeHttpRequests(auth -> auth
+                                                // Public endpoints - health checks, metrics, API docs
+                                                .requestMatchers("/actuator/**").permitAll()
+                                                .requestMatchers("/swagger-ui/**").permitAll()
+                                                .requestMatchers("/swagger-ui.html").permitAll()
+                                                .requestMatchers("/v3/api-docs", "/v3/api-docs/**").permitAll()
+                                                .requestMatchers("/api-docs/**").permitAll()
+                                                .requestMatchers("/webjars/**").permitAll()
 
-                        // Permission registration endpoint - internal services only
-                        // Note: This is called at startup before authentication is fully set up
-                        .requestMatchers("/v1/permissions/register").permitAll()
+                                                // Permission registration endpoint - internal services only
+                                                // Note: This is called at startup before authentication is fully set up
+                                                .requestMatchers("/v1/permissions/register").permitAll()
 
-                        // All other requests require authentication
-                        .anyRequest().authenticated())
+                                                // All other requests require authentication
+                                                .anyRequest().authenticated())
 
-                // Add gateway authorities filter before username/password filter
-                .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
+                                // Add gateway authorities filter before username/password filter
+                                .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
 
-        return http.build();
-    }
+                return http.build();
+        }
 }
