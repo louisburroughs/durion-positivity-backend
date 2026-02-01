@@ -1,7 +1,6 @@
 package com.positivity.accounting.service;
 
 import com.positivity.accounting.internal.domain.InvoiceStatusView;
-import com.positivity.accounting.internal.domain.PaymentAppliedEvent;
 import com.positivity.accounting.internal.domain.PaymentStatus;
 import com.positivity.accounting.internal.entity.InvoiceStatusResponse;
 import com.positivity.accounting.internal.entity.PaymentAppliedRequest;
@@ -34,9 +33,6 @@ class InvoicePaymentStatusServiceTest {
 
     @Autowired
     private InvoiceStatusViewRepository statusViewRepository;
-
-    @Autowired
-    private IdempotencyService idempotencyService;
 
     @BeforeEach
     void setUp() {
@@ -129,7 +125,7 @@ class InvoicePaymentStatusServiceTest {
         request.setPaymentFailed(true);
 
         // Act
-        InvoiceStatusResponse response = paymentStatusService.processPaymentApplied(request);
+        paymentStatusService.processPaymentApplied(request);
 
         // Assert - Failed payments don't count toward total
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId("INV-004").orElseThrow();

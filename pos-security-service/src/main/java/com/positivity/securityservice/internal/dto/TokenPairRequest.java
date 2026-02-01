@@ -17,7 +17,7 @@ import java.util.Set;
  */
 @Schema(description = "Request to generate an access token and refresh token pair")
 public record TokenPairRequest(
-        @JsonProperty("subject") @Schema(description = "User identifier (subject claim)", example = "user123", required = true) String subject,
+        @JsonProperty("subject") @Schema(description = "User identifier (subject claim)", example = "user123", requiredMode = Schema.RequiredMode.REQUIRED) String subject,
 
         @JsonProperty("roles") @Schema(description = "Optional set of role names to include in token", example = "[\"SHOP_MGR\"]") Set<String> roles) {
     /**

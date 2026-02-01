@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,7 +18,7 @@ import java.util.List;
 public class ApproveWorkorderRequest {
 
     @NotNull(message = "customerId is required")
-    @Schema(description = "Customer ID who is approving the work order", example = "12345", required = true)
+    @Schema(description = "Customer ID who is approving the work order", example = "12345", requiredMode = RequiredMode.REQUIRED)
     private Long customerId;
 
     @Schema(description = "Base64-encoded signature image data (PNG format recommended)", example = "data:image/png;base64,iVBORw0KGgoAAAANS...")

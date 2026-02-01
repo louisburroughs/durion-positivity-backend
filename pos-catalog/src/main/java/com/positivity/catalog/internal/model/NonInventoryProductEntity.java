@@ -1,7 +1,5 @@
 package com.positivity.catalog.internal.model;
 
-import com.positivity.catalog.internal.model.CatalogItem;
-
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;

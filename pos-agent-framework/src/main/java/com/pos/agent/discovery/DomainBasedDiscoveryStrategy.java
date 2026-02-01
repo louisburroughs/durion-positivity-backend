@@ -7,7 +7,6 @@ import com.pos.agent.framework.service.ServiceAgentMapping;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Discovers agents based on domain and service mapping.

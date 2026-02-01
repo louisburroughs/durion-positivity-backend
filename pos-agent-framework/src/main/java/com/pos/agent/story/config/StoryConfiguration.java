@@ -1,7 +1,6 @@
 package com.pos.agent.story.config;
 
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Configuration settings for the Story Strengthening Agent.
@@ -19,7 +18,8 @@ public class StoryConfiguration {
 
     private StoryConfiguration(Builder builder) {
         this.allowedRepository = Objects.requireNonNull(builder.allowedRepository, "Allowed repository cannot be null");
-        this.requiredIssuePrefix = Objects.requireNonNull(builder.requiredIssuePrefix, "Required issue prefix cannot be null");
+        this.requiredIssuePrefix = Objects.requireNonNull(builder.requiredIssuePrefix,
+                "Required issue prefix cannot be null");
         this.maxRewriteIterations = builder.maxRewriteIterations;
         this.maxAcceptanceCriteria = builder.maxAcceptanceCriteria;
         this.maxOpenQuestions = builder.maxOpenQuestions;
@@ -99,8 +99,9 @@ public class StoryConfiguration {
 
     @Override
     public String toString() {
-        return String.format("StoryConfiguration{repo='%s', prefix='%s', maxIterations=%d, maxScenarios=%d, maxQuestions=%d}", 
-                           allowedRepository, requiredIssuePrefix, maxRewriteIterations, 
-                           maxAcceptanceCriteria, maxOpenQuestions);
+        return String.format(
+                "StoryConfiguration{repo='%s', prefix='%s', maxIterations=%d, maxScenarios=%d, maxQuestions=%d}",
+                allowedRepository, requiredIssuePrefix, maxRewriteIterations,
+                maxAcceptanceCriteria, maxOpenQuestions);
     }
 }

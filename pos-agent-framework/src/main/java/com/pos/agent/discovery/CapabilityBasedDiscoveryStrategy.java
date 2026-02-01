@@ -5,7 +5,6 @@ import com.pos.agent.core.AgentRequest;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Discovers agents based on required capabilities extracted from request
@@ -25,6 +24,7 @@ public class CapabilityBasedDiscoveryStrategy implements AgentDiscoveryStrategy 
         return context.getProperty(REQUIRED_CAPABILITIES_KEY, List.class).isPresent();
     }
 
+    @SuppressWarnings("rawtypes")
     @Override
     public CompletableFuture<Optional<Agent>> discoverBestAgent(
             AgentRequest request,

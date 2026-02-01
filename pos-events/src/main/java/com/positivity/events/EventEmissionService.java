@@ -3,7 +3,6 @@ package com.positivity.events;
 import java.time.Instant;
 
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;

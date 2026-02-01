@@ -21,7 +21,6 @@ public class EmitEventService {
      *
      * @param request The event request containing id and timestamp
      */
-    @SuppressWarnings("null")
     public void onEventEmitted(EmitEventRequest request) {
         log.info("Received EventEmitted event: id={}, apiVersion={}, timestamp={}, elapsedMs={}",
                 request.id(), request.apiVersion(), request.timestamp(), request.elapsedMs());

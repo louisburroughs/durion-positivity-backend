@@ -69,6 +69,7 @@ public class EventTypeController {
          * @param id EventType ID
          * @return EventType with the specified ID
          */
+
         @GetMapping("/{id}")
         @Operation(summary = "Get event type by ID", description = "Retrieve a specific event type by its unique ID")
         @ApiResponses(value = {
@@ -89,6 +90,7 @@ public class EventTypeController {
          * @param typeCode Event type code
          * @return EventType with the specified code
          */
+
         @GetMapping("/code/{typeCode}")
         @Operation(summary = "Get event type by code", description = "Retrieve a specific event type by its unique type code")
         @ApiResponses(value = {
@@ -109,6 +111,7 @@ public class EventTypeController {
          * @param request EventType details
          * @return Created EventType
          */
+
         @PostMapping
         @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_CREATE", apiVersion = "1")
         @Operation(summary = "Create event type", description = "Create a new event type for PreregisteredEvents")
@@ -160,6 +163,7 @@ public class EventTypeController {
          * @param request  EventType details
          * @return Created or updated EventType
          */
+
         @PutMapping("/code/{typeCode}")
         @Operation(summary = "Upsert event type", description = "Create or update an event type by its type code. Creates if not exists, updates if exists.")
         @ApiResponses(value = {
@@ -231,6 +235,7 @@ public class EventTypeController {
          * @param request Updated EventType details
          * @return Updated EventType
          */
+
         @PutMapping("/{id}")
         @EmitEvent(id = "EVENT_RECEIVER_EVENT_TYPE_UPDATE", apiVersion = "1")
         @Operation(summary = "Update event type", description = "Update an existing event type")
@@ -279,6 +284,7 @@ public class EventTypeController {
          * @param id EventType ID to delete
          * @return No content response
          */
+
         @DeleteMapping("/{id}")
         @Operation(summary = "Delete event type", description = "Delete an event type by its ID")
         @ApiResponses(value = {

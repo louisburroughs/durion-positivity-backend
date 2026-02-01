@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.entity;
 import org.hibernate.annotations.JdbcTypeCode;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import jakarta.persistence.*;
-import org.hibernate.annotations.Type;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;

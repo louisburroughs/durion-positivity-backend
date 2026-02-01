@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -81,7 +80,8 @@ public class TimeEntryExceptionServiceTest {
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
         when(exceptionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED, "user1",
+        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED,
+                "user1",
                 null, "cid-5");
         assertTrue(ok);
 
@@ -120,7 +120,8 @@ public class TimeEntryExceptionServiceTest {
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
 
-        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.WAIVED, "user3", null,
+        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.WAIVED, "user3",
+                null,
                 "cid-7");
         assertFalse(ok);
         verify(exceptionRepository, never()).save(any());

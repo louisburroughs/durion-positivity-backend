@@ -12,7 +12,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Instant;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -59,7 +58,8 @@ class WorkorderCompletionTest {
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
                 .build();
 
-        // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as dependency
+        // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
+        // dependency
         workOrderService = new WorkorderService(workOrderRepository, null, null, stateMachine, auditEventRepository);
     }
 
@@ -188,8 +188,8 @@ class WorkorderCompletionTest {
     void testCompleteWorkorder_EventEmission() throws Exception {
         testWorkorder.setStatus(WorkorderStatus.WORK_IN_PROGRESS);
         when(workOrderRepository.findById(1L))
-            .thenReturn(Optional.of(testWorkorder))  // First call by completeWorkorder in service
-            .thenReturn(Optional.of(testWorkorder)); // Second call after completion
+                .thenReturn(Optional.of(testWorkorder)) // First call by completeWorkorder in service
+                .thenReturn(Optional.of(testWorkorder)); // Second call after completion
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
         // Simulate what happens when completeWorkorder is called
@@ -202,7 +202,7 @@ class WorkorderCompletionTest {
         assertNotNull(event.getEventId());
         assertNotNull(event.getIdempotencyKey());
         assertTrue(event.getIdempotencyKey().contains(String.valueOf(1L)));
-        
+
         WorkCompletedEvent.WorkCompletedPayload payload = event.getPayload();
         assertEquals(1L, payload.getWorkorderId());
         assertEquals(userId, payload.getCompletedBy());

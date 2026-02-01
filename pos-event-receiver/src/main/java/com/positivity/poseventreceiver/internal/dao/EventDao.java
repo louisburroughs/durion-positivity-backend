@@ -3,7 +3,7 @@ package com.positivity.poseventreceiver.internal.dao;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.entity.EventType;

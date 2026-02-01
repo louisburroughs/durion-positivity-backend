@@ -17,7 +17,7 @@ import java.util.Set;
  */
 @Schema(description = "Request to generate a single JWT token for user authentication")
 public record LoginRequest(
-        @JsonProperty("subject") @Schema(description = "User identifier (subject claim)", example = "user123", required = true) String subject,
+        @JsonProperty("subject") @Schema(description = "User identifier (subject claim)", example = "user123", requiredMode = Schema.RequiredMode.REQUIRED) String subject,
 
         @JsonProperty("roles") @Schema(description = "Optional set of role names to include in token", example = "[\"SHOP_MGR\", \"ACCOUNTING_CLERK\"]") Set<String> roles) {
     /**

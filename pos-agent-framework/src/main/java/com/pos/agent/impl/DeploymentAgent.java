@@ -1,7 +1,6 @@
 package com.pos.agent.impl;
 
 import com.pos.agent.context.AgentContext;
-import com.pos.agent.context.ArchitectureContext;
 import com.pos.agent.context.DeploymentContext;
 import com.pos.agent.core.AbstractAgent;
 import com.pos.agent.core.AgentRequest;
@@ -19,7 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DeploymentAgent extends AbstractAgent {
 
     protected static final Map<String, AgentContext> CONTEXT_MAP = new ConcurrentHashMap<>();
-    
 
     public DeploymentAgent() {
         super(AgentType.DEPLOYMENT, List.of(
@@ -30,7 +28,7 @@ public class DeploymentAgent extends AbstractAgent {
                 "infrastructure-automation"));
     }
 
-     @Override
+    @Override
     public AgentContext getOrCreateContext(String sessionId) {
         return CONTEXT_MAP.computeIfAbsent(sessionId,
                 sid -> DeploymentContext.builder().requestId(sessionId).build());

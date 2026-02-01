@@ -45,7 +45,6 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     @Transactional(readOnly = true)
-    @SuppressWarnings("null")
     public PostingRuleSet getPostingRuleSet(String ruleSetId) {
         return ruleSetRepository.findById(ruleSetId)
                 .orElseThrow(() -> new IllegalArgumentException("Posting rule set not found: " + ruleSetId));
@@ -86,7 +85,6 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     }
 
     @Override
-    @SuppressWarnings("null")
     public PostingRuleVersion updateVersion(String versionId, PostingRuleVersion updates) {
         PostingRuleVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
@@ -103,7 +101,6 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     }
 
     @Override
-    @SuppressWarnings("null")
     public PostingRuleVersion publishVersion(String versionId) {
         PostingRuleVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
@@ -137,7 +134,6 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     }
 
     @Override
-    @SuppressWarnings("null")
     public PostingRuleVersion archiveVersion(String versionId) {
         PostingRuleVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));

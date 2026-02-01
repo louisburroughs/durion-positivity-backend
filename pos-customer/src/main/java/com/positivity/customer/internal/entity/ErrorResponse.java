@@ -6,12 +6,11 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * Standard error response DTO for CRM domain endpoints.
- * Aligns with DECISION-INVENTORY-XXX error handling standards.
+ * Aligns with DECISION-INVENTORY-### error handling standards.
  */
 @Data
 @NoArgsConstructor
