@@ -1,0 +1,17 @@
+package com.positivity.securityservice.internal.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+/**
+ * Standardized error response DTO for JWT authentication endpoints.
+ * 
+ * Used in OpenAPI responses to document error payloads with correlation
+ * tracking.
+ */
+@Schema(description = "Standardized error response with correlation ID")
+public record ErrorResponse(
+        @Schema(description = "Error code for client processing") String error,
+        @Schema(description = "Human-readable error message") String message,
+        @Schema(description = "ISO 8601 timestamp") String timestamp,
+        @Schema(description = "Unique request correlation ID for tracking") String correlationId) {
+}
