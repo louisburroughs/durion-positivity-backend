@@ -70,6 +70,13 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
+        <!-- Kotlin Reflect - required by springdoc-openapi 2.8+ -->
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-reflect</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Jakarta Servlet API for Spring Security -->
         <dependency>
             <groupId>jakarta.servlet</groupId>

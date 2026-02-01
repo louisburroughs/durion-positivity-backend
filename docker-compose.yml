@@ -265,31 +265,31 @@ services:
       timeout: 3s
       retries: 20
 
-  pos-inquiry:
-    build:
-      context: ./pos-inquiry
-      dockerfile: Dockerfile
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-      SERVER_PORT: 8080
-      MANAGEMENT_SERVER_PORT: 8080
-    depends_on:
-      pos-security-service:
-        condition: service_healthy
-    networks:
-      - pos-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+  # pos-inquiry:
+  #   build:
+  #     context: ./pos-inquiry
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+  #     GATEWAY_URL: http://pos-api-gateway:8080
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+  #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+  #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     SERVER_PORT: 8080
+  #     MANAGEMENT_SERVER_PORT: 8080
+  #   depends_on:
+  #     pos-security-service:
+  #       condition: service_healthy
+  #   networks:
+  #     - pos-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 20
 
   pos-inventory:
     build:
@@ -371,31 +371,31 @@ services:
       timeout: 3s
       retries: 20
 
-  pos-order:
-    build:
-      context: ./pos-order
-      dockerfile: Dockerfile
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-      SERVER_PORT: 8080
-      MANAGEMENT_SERVER_PORT: 8080
-    depends_on:
-      pos-security-service:
-        condition: service_healthy
-    networks:
-      - pos-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+  # pos-order:
+  #   build:
+  #     context: ./pos-order
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+  #     GATEWAY_URL: http://pos-api-gateway:8080
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+  #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+  #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     SERVER_PORT: 8080
+  #     MANAGEMENT_SERVER_PORT: 8080
+  #   depends_on:
+  #     pos-security-service:
+  #       condition: service_healthy
+  #   networks:
+  #     - pos-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 20
 
   pos-people:
     build:
@@ -508,33 +508,33 @@ services:
       timeout: 3s
       retries: 20
 
-  pos-vehicle-fitment:
-    build:
-      context: ./pos-vehicle-fitment
-      dockerfile: Dockerfile
-    ports:
-      - "8088:8080"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-      SERVER_PORT: 8080
-      MANAGEMENT_SERVER_PORT: 8080
-    depends_on:
-      pos-security-service:
-        condition: service_healthy
-    networks:
-      - pos-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+  # pos-vehicle-fitment:
+  #   build:
+  #     context: ./pos-vehicle-fitment
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8088:8080"
+  #   environment:
+  #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+  #     GATEWAY_URL: http://pos-api-gateway:8080
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+  #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+  #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     SERVER_PORT: 8080
+  #     MANAGEMENT_SERVER_PORT: 8080
+  #   depends_on:
+  #     pos-security-service:
+  #       condition: service_healthy
+  #   networks:
+  #     - pos-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 20
 
   pos-vehicle-inventory:
     build:
@@ -564,61 +564,61 @@ services:
       timeout: 3s
       retries: 20
 
-  pos-vehicle-reference-carapi:
-    build:
-      context: ./pos-vehicle-reference-carapi
-      dockerfile: Dockerfile
-    ports:
-      - "8091:8080"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-      SERVER_PORT: 8080
-      MANAGEMENT_SERVER_PORT: 8080
-    depends_on:
-      pos-security-service:
-        condition: service_healthy
-    networks:
-      - pos-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+  # pos-vehicle-reference-carapi:
+  #   build:
+  #     context: ./pos-vehicle-reference-carapi
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8091:8080"
+  #   environment:
+  #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+  #     GATEWAY_URL: http://pos-api-gateway:8080
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+  #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+  #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     SERVER_PORT: 8080
+  #     MANAGEMENT_SERVER_PORT: 8080
+  #   depends_on:
+  #     pos-security-service:
+  #       condition: service_healthy
+  #   networks:
+  #     - pos-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 20
 
-  pos-vehicle-reference-nhtsa:
-    build:
-      context: ./pos-vehicle-reference-nhtsa
-      dockerfile: Dockerfile
-    ports:
-      - "8092:8080"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      GATEWAY_URL: http://pos-api-gateway:8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-      SERVER_PORT: 8080
-      MANAGEMENT_SERVER_PORT: 8080
-    depends_on:
-      pos-security-service:
-        condition: service_healthy
-    networks:
-      - pos-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+  # pos-vehicle-reference-nhtsa:
+  #   build:
+  #     context: ./pos-vehicle-reference-nhtsa
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8092:8080"
+  #   environment:
+  #     EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+  #     GATEWAY_URL: http://pos-api-gateway:8080
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/positivity
+  #     SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+  #     SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+  #     SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  #     POS_EVENTS_API_SECRET: ${POS_EVENTS_API_SECRET}
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  #     SERVER_PORT: 8080
+  #     MANAGEMENT_SERVER_PORT: 8080
+  #   depends_on:
+  #     pos-security-service:
+  #       condition: service_healthy
+  #   networks:
+  #     - pos-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 20
 
   pos-workorder:
     build:

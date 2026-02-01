@@ -42,16 +42,28 @@ public class ApiVersionHeaderToPathFilter implements GlobalFilter, Ordered {
             org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
 
         var req = exchange.getRequest();
+        var rawPath = req.getURI().getRawPath();
+
+        // Bypass public paths - no version header required
+        if (rawPath != null && (rawPath.startsWith("/actuator") ||
+                rawPath.contains("/actuator") ||
+                rawPath.startsWith("/swagger-ui") ||
+                rawPath.startsWith("/v3/api-docs") ||
+                rawPath.contains("/v3/api-docs") ||
+                rawPath.startsWith("/swagger-resources") ||
+                rawPath.startsWith("/eureka"))) {
+            return chain.filter(exchange);
+        }
+
         var version = req.getHeaders().getFirst(VERSION_HEADER);
 
-        // STRICT: Require valid X-API-Version header
+        // STRICT: Require valid X-API-Version header for API calls
         if (version == null || version.isBlank() || !version.matches("\\d+")) {
-            log.warn("Missing or invalid X-API-Version header in request to {}", req.getURI().getRawPath());
+            log.warn("Missing or invalid X-API-Version header in request to {}", rawPath);
             exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
             return exchange.getResponse().setComplete();
         }
 
-        var rawPath = req.getURI().getRawPath(); // e.g. /inventory/items/123
         if (rawPath == null || rawPath.isBlank() || rawPath.equals("/")) {
             log.warn("Invalid path: {}", rawPath);
             exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);

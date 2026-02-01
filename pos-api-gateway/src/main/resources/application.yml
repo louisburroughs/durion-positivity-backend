@@ -8,31 +8,126 @@ spring:
     active: local
   cloud:
     gateway:
-      # Auto-route from Eureka service discovery
-      discovery:
-        locator:
-          enabled: true # Enable automatic route generation from Eureka
-          lower-case-service-id: true # Service IDs to lowercase (catalog, inventory, etc)
-      
-      # No static routes needed! Discovery locator auto-generates:
-      # Pattern: /v{version}/{serviceId}/** -> lb://{serviceId}
-      # Then ApiVersionHeaderToPathFilter rewrites /domain/** to /v{version}/domain/**
-      
-      # GlobalFilter pipeline:
-      # 1. ApiVersionHeaderToPathFilter: /inventory/items -> /v1/inventory/items
-      # 2. Discovery locator matches: /v1/inventory/** -> lb://inventory (Eureka)
-      # 3. Built-in RewritePath filter strips /v1/inventory -> /items
-      # Result: Service receives /items
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+          routes:
+            - id: accounting
+              uri: lb://ACCOUNTING
+              predicates:
+                - Path=/accounting/**
+              filters:
+                - StripPrefix=1
+            - id: catalog
+              uri: lb://CATALOG
+              predicates:
+                - Path=/catalog/**
+              filters:
+                - StripPrefix=1
+            - id: customer
+              uri: lb://CUSTOMER
+              predicates:
+                - Path=/customer/**
+              filters:
+                - StripPrefix=1
+            - id: inventory
+              uri: lb://INVENTORY
+              predicates:
+                - Path=/inventory/**
+              filters:
+                - StripPrefix=1
+            - id: invoice
+              uri: lb://INVOICE
+              predicates:
+                - Path=/invoice/**
+              filters:
+                - StripPrefix=1
+            - id: inquiry
+              uri: lb://INQUIRY
+              predicates:
+                - Path=/inquiry/**
+              filters:
+                - StripPrefix=1
+            - id: location
+              uri: lb://LOCATION
+              predicates:
+                - Path=/location/**
+              filters:
+                - StripPrefix=1
+            - id: order
+              uri: lb://ORDER
+              predicates:
+                - Path=/order/**
+              filters:
+                - StripPrefix=1
+            - id: people
+              uri: lb://PEOPLE
+              predicates:
+                - Path=/people/**
+              filters:
+                - StripPrefix=1
+            - id: price
+              uri: lb://PRICE
+              predicates:
+                - Path=/price/**
+              filters:
+                - StripPrefix=1
+            - id: shop-manager
+              uri: lb://SHOP-MANAGER
+              predicates:
+                - Path=/shop-manager/**
+              filters:
+                - StripPrefix=1
+            - id: workorder
+              uri: lb://WORKORDER
+              predicates:
+                - Path=/workorder/**
+              filters:
+                - StripPrefix=1
+            - id: image
+              uri: lb://IMAGE
+              predicates:
+                - Path=/image/**
+              filters:
+                - StripPrefix=1
+            - id: security-service
+              uri: lb://SECURITY-SERVICE
+              predicates:
+                - Path=/security-service/**
+              filters:
+                - StripPrefix=1
+            - id: event-receiver
+              uri: lb://EVENT-RECEIVER
+              predicates:
+                - Path=/event-receiver/**
+              filters:
+                - StripPrefix=1
+            - id: vehicle-fitment
+              uri: lb://VEHICLE-FITMENT
+              predicates:
+                - Path=/vehicle-fitment/**
+              filters:
+                - StripPrefix=1
+            - id: vehicle-inventory
+              uri: lb://VEHICLE-INVENTORY
+              predicates:
+                - Path=/vehicle-inventory/**
+              filters:
+                - StripPrefix=1
 
 management:
-  # No separate management port - expose actuator on main server port
   endpoints:
     web:
       exposure:
-        include: gateway,health,info # Expose gateway-specific actuator endpoints
+        include: "*"
   endpoint:
+    gateway:
+      access: unrestricted
     health:
       show-details: always
+      access: unrestricted
 
 eureka:
   client:
@@ -43,14 +138,46 @@ springdoc:
   api-docs:
     enabled: true
     path: /v3/api-docs
-
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
-    config-url: /v3/api-docs/swagger-config
     urls:
-      - name: gateway
+      - name: Gateway
         url: /v3/api-docs
+      - name: Accounting
+        url: /accounting/v3/api-docs
+      - name: Catalog
+        url: /catalog/v3/api-docs
+      - name: Customer
+        url: /customer/v3/api-docs
+      - name: Event Receiver
+        url: /event-receiver/v3/api-docs
+      - name: Image
+        url: /image/v3/api-docs
+      - name: Inquiry
+        url: /inquiry/v3/api-docs
+      - name: Inventory
+        url: /inventory/v3/api-docs
+      - name: Invoice
+        url: /invoice/v3/api-docs
+      - name: Location
+        url: /location/v3/api-docs
+      - name: Order
+        url: /order/v3/api-docs
+      - name: People
+        url: /people/v3/api-docs
+      - name: Price
+        url: /price/v3/api-docs
+      - name: Security Service
+        url: /security-service/v3/api-docs
+      - name: Shop Manager
+        url: /shop-manager/v3/api-docs
+      - name: Vehicle Fitment
+        url: /vehicle-fitment/v3/api-docs
+      - name: Vehicle Inventory
+        url: /vehicle-inventory/v3/api-docs
+      - name: Workorder
+        url: /workorder/v3/api-docs
 
 logging:
   level:

@@ -43,7 +43,7 @@ public class SecurityGatewayConfig {
      * - Validates JWT via Security Service
      * - Retrieves expanded authorities and injects as `X-Authorities` header
      * - Optionally injects subject as `X-User`
-     * - Bypasses public endpoints (actuator, swagger)
+     * - Bypasses public endpoints (actuator, swagger, api-docs)
      */
     @Bean
     public GlobalFilter authFilter(WebClient securityWebClient) {
@@ -53,8 +53,10 @@ public class SecurityGatewayConfig {
 
             // Public paths bypass
             if (path.startsWith("/actuator") ||
+                    path.contains("/actuator") ||
                     path.startsWith("/swagger-ui") ||
                     path.startsWith("/v3/api-docs") ||
+                    path.contains("/v3/api-docs") ||
                     path.startsWith("/swagger-resources") ||
                     path.startsWith("/eureka")) {
                 return chain.filter(exchange);

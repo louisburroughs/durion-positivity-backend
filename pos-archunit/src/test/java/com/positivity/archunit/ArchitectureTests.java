@@ -1,4 +1,4 @@
-package com.positivity.modulith;
+package com.positivity.archunit;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;

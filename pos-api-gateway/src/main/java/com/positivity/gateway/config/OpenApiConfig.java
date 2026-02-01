@@ -4,6 +4,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.servers.Server;
+import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.Components;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,10 +15,8 @@ import java.util.List;
 /**
  * OpenAPI configuration for the Positivity API Gateway.
  *
- * All services are accessed through the gateway at http://localhost:8080 with
- * API versioning.
- * The X-API-Version header is required on all requests to specify the API
- * version.
+ * All services are accessed through the gateway at http://localhost:8080.
+ * API versioning is done via the X-API-Version header (not in the path).
  *
  * Example request:
  * curl -H "X-API-Version: 1" http://localhost:8080/inventory/items
@@ -36,49 +36,43 @@ public class OpenApiConfig {
                 return new OpenAPI()
                                 .info(new Info()
                                                 .title("Positivity API Gateway")
-                                                .description("Unified API Gateway for all POS microservices. "
-                                                                + "All requests must include the X-API-Version header to specify the API version. "
-                                                                + "The gateway automatically routes requests to the appropriate microservice using service discovery.")
-                                                .version("v1")
+                                                .description("Unified API Gateway for all POS microservices.\n\n"
+                                                                + "**API Versioning**: All requests must include the `X-API-Version` header.\n\n"
+                                                                + "**Available Routes**:\n"
+                                                                + "- `/accounting/**` - General ledger, journal entries, financial operations\n"
+                                                                + "- `/catalog/**` - Product information, categorization, details\n"
+                                                                + "- `/customer/**` - Customer profiles, preferences, history\n"
+                                                                + "- `/event-receiver/**` - Event ingestion and processing\n"
+                                                                + "- `/image/**` - Image storage, retrieval, transformation\n"
+                                                                + "- `/inquiry/**` - Customer inquiries and support tracking\n"
+                                                                + "- `/inventory/**` - Stock management and availability\n"
+                                                                + "- `/invoice/**` - Invoice generation, tracking, management\n"
+                                                                + "- `/location/**` - Store locations, warehouses, branches\n"
+                                                                + "- `/order/**` - Order creation, fulfillment, tracking\n"
+                                                                + "- `/people/**` - Employee management, staff administration\n"
+                                                                + "- `/price/**` - Pricing rules, discounts, cost calculations\n"
+                                                                + "- `/security-service/**` - Authentication, authorization, access control\n"
+                                                                + "- `/shop-manager/**` - Shop operations, scheduling, resources\n"
+                                                                + "- `/vehicle-fitment/**` - Vehicle compatibility, parts installation\n"
+                                                                + "- `/vehicle-inventory/**` - Vehicle stock and availability\n"
+                                                                + "- `/workorder/**` - Service requests, job tracking, assignments\n\n"
+                                                                + "**Example**: `curl -H \"X-API-Version: 1\" "
+                                                                + gatewayHost + "/inventory/items`")
+                                                .version("1.0.0")
                                                 .contact(new Contact()
                                                                 .email("louis.burroughs@gmail.com")
                                                                 .name("Durion Team")))
                                 .servers(List.of(
                                                 new Server().url(gatewayHost)
-                                                                .description("API Gateway (all services routed through this endpoint)"),
-                                                new Server().url(gatewayHost + "/v1/accounting/**")
-                                                                .description("Accounting service - General ledger, journal entries, and financial operations"),
-                                                new Server().url(gatewayHost + "/v1/invoice/**")
-                                                                .description("Invoice service - Invoice generation, tracking, and management"),
-                                                new Server().url(gatewayHost + "/v1/inquiry/**")
-                                                                .description("Inquiry service - Customer inquiries and support tracking"),
-                                                new Server().url(gatewayHost + "/v1/order/**")
-                                                                .description("Order service - Order creation, fulfillment, and tracking"),
-                                                new Server().url(gatewayHost + "/v1/customer/**")
-                                                                .description("Customer service - Customer profiles, preferences, and history"),
-                                                new Server().url(gatewayHost + "/v1/inventory/**")
-                                                                .description("Inventory service - Stock management and availability tracking"),
-                                                new Server().url(gatewayHost + "/v1/price/**")
-                                                                .description("Price service - Pricing rules, discounts, and cost calculations"),
-                                                new Server().url(gatewayHost + "/v1/catalog/**")
-                                                                .description("Catalog service - Product information, categorization, and details"),
-                                                new Server().url(gatewayHost + "/v1/location/**")
-                                                                .description("Location service - Store locations, warehouses, and branch management"),
-                                                new Server().url(gatewayHost + "/v1/people/**")
-                                                                .description("People service - Employee management and staff administration"),
-                                                new Server().url(gatewayHost + "/v1/workorder/**")
-                                                                .description("Workorder service - Service requests, job tracking, and assignments"),
-                                                new Server().url(gatewayHost + "/v1/shop-manager/**")
-                                                                .description("Shop Manager service - Shop operations, scheduling, and resources"),
-                                                new Server().url(gatewayHost + "/v1/vehicle-fitment/**")
-                                                                .description("Vehicle Fitment service - Vehicle compatibility and parts installation"),
-                                                new Server().url(gatewayHost + "/v1/vehicle-inventory/**")
-                                                                .description("Vehicle Inventory service - Vehicle stock and availability"),
-                                                new Server().url(gatewayHost + "/v1/image/**")
-                                                                .description("Image service - Image storage, retrieval, and transformation"),
-                                                new Server().url(gatewayHost + "/v1/security-service/**")
-                                                                .description("Security service - Authentication, authorization, and access control"),
-                                                new Server().url(gatewayHost + "/v1/event-receiver/**")
-                                                                .description("Event Receiver service - Event ingestion and processing")));
+                                                                .description("API Gateway - All services routed through this endpoint")))
+                                .components(new Components()
+                                                .addParameters("X-API-Version", new Parameter()
+                                                                .in("header")
+                                                                .name("X-API-Version")
+                                                                .description("API version number (required)")
+                                                                .required(true)
+                                                                .schema(new io.swagger.v3.oas.models.media.StringSchema()
+                                                                                ._default("1")
+                                                                                .example("1"))));
         }
 }
