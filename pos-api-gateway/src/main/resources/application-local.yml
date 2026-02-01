@@ -3,15 +3,20 @@
 server:
   port: 8080  # Fixed gateway entry point
 
+# NOTE: spring.cloud.gateway routes are defined in application.yml
+# Do NOT override spring.cloud.gateway here or it will erase the routes
+
 management:
-  # No separate management port - expose actuator on main server port for healthchecks
   endpoints:
     web:
       exposure:
-        include: gateway,health,info,metrics,prometheus
+        include: "*"
   endpoint:
+    gateway:
+      access: unrestricted
     health:
       show-details: always
+      access: unrestricted
 
 eureka:
   client:

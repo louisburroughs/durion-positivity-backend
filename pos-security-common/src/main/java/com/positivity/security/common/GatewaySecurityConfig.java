@@ -2,6 +2,7 @@ package com.positivity.security.common;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -61,6 +62,7 @@ public class GatewaySecurityConfig {
     }
 
     @Bean
+    @Order(1)
     public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
             GatewayAuthoritiesFilter gatewayAuthoritiesFilter) throws Exception {
         http
@@ -71,14 +73,15 @@ public class GatewaySecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // Authorization rules
+                // Authorization rules - using String patterns (Spring Security 7.0+)
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints - health checks, metrics, API docs
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/swagger-ui/**").permitAll()
                         .requestMatchers("/swagger-ui.html").permitAll()
-                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api-docs/**").permitAll()
+                        .requestMatchers("/webjars/**").permitAll()
 
                         // Permission registration endpoint - internal services only
                         // Note: This is called at startup before authentication is fully set up

@@ -90,6 +90,12 @@
 				<artifactId>swagger-annotations</artifactId>
 				<version>${swagger-annotations.version}</version>
 			</dependency>
+			<!-- Kotlin Reflect - required by springdoc-openapi 2.8+ -->
+			<dependency>
+				<groupId>org.jetbrains.kotlin</groupId>
+				<artifactId>kotlin-reflect</artifactId>
+				<version>2.1.10</version>
+			</dependency>
 
 			<!-- OPENTELEMETRY (Optional - for gradual observability adoption) -->
 			<dependency>

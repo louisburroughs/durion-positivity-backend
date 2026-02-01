@@ -51,6 +51,7 @@ logging:
         accounting: INFO
     org:
       springframework:
+        security: DEBUG
         web: INFO
       hibernate:
         SQL: INFO
