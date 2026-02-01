@@ -5,7 +5,6 @@ import com.positivity.nhtsa.internal.entity.Make;
 import com.positivity.nhtsa.internal.entity.Model;
 import com.positivity.nhtsa.internal.entity.VehicleType;
 import com.positivity.nhtsa.service.VehicleReferenceService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -15,7 +14,6 @@ public class VehicleReferenceController {
 
     private final VehicleReferenceService vehicleReferenceService;
 
-    @Autowired
     public VehicleReferenceController(VehicleReferenceService vehicleReferenceService) {
         this.vehicleReferenceService = vehicleReferenceService;
     }

@@ -64,7 +64,6 @@ public class EventReceiverEventTypeInitializer implements ApplicationRunner {
      * dependencies.
      * </p>
      */
-    @SuppressWarnings("null")
     private void registerEventTypeDirectly(EventTypeRegistration registration) {
         try {
             // Check if event type already exists

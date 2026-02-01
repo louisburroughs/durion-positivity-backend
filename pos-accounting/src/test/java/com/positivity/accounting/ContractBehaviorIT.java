@@ -55,7 +55,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("CP-001: Create GL Account with valid contract fields")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testCreateGLAccountHappyPath() throws Exception {
                 // Arrange: Prepare valid payload per contract guide
                 GLAccountCreateRequest request = new GLAccountCreateRequest();
@@ -80,6 +80,7 @@ public class ContractBehaviorIT {
 
                 // Assert: Response contains expected contract fields
                 String responseBody = result.getResponse().getContentAsString();
+
                 @SuppressWarnings("unchecked")
                 Map<String, Object> response = objectMapper.readValue(responseBody, Map.class);
 
@@ -90,7 +91,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("CP-002: Create Journal Entry with basic fields")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testCreateJournalEntryHappyPath() throws Exception {
                 // Arrange: Create GL accounts first (prerequisites)
                 createGLAccount("1000-000", "Cash", AccountType.ASSET);
@@ -116,11 +117,11 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("VE-001: Reject GL Account with invalid account code format")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testCreateGLAccountInvalidCodeFormat() throws Exception {
                 // Arrange: Prepare invalid account code (should match pattern)
                 GLAccountCreateRequest request = new GLAccountCreateRequest();
-                request.setAccountCode("INVALID"); // Not in format XXXX-XXX
+                request.setAccountCode("INVALID"); // Not in format ####-###
                 request.setAccountName("Invalid Account");
                 request.setAccountType(AccountType.ASSET);
                 request.setActivationDate(LocalDate.now());
@@ -136,7 +137,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("VE-002: Reject Journal Entry with missing required fields")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testCreateJournalEntryUnbalanced() throws Exception {
                 // Arrange: Prepare journal entry missing required fields
                 JournalEntryCreateRequest request = new JournalEntryCreateRequest();
@@ -154,7 +155,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("VE-003: Reject GL Account creation with duplicate account code")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testCreateGLAccountDuplicate() throws Exception {
                 // Arrange: Create first GL account
                 GLAccountCreateRequest first = new GLAccountCreateRequest();
@@ -186,7 +187,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("ID-001: Journal Entry POST works correctly")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testJournalEntryIdempotency() throws Exception {
                 // Arrange
                 createGLAccount("1000-000", "Cash", AccountType.ASSET);
@@ -204,7 +205,7 @@ public class ContractBehaviorIT {
                                 .andReturn();
 
                 String firstEntryId = objectMapper.readTree(firstResult.getResponse().getContentAsString())
-                                .get("journalEntryId").asText();
+                                .get("journalEntryId").asString();
 
                 // Assert: Entry was created with ID
                 assert !firstEntryId.isEmpty() : "Journal entry ID should not be empty";
@@ -216,7 +217,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("CC-001: Optimistic locking prevents concurrent updates")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testOptimisticLockingPreventsConflict() throws Exception {
                 // Arrange: Create GL account
                 MvcResult createResult = mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
@@ -228,7 +229,7 @@ public class ContractBehaviorIT {
                                 .andReturn();
 
                 String accountId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-                                .get("glAccountId").asText();
+                                .get("glAccountId").asString();
 
                 // Act: Attempt update - test endpoint behavior
                 GLAccountCreateRequest updateRequest = createGLAccountRequest("1000-000", "Updated Cash Account",
@@ -244,7 +245,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("CC-002: Journal Entry creation is validated")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testJournalEntryBalanceInvariant() throws Exception {
                 // Arrange: Create GL account
                 createGLAccount("1000-000", "Cash", AccountType.ASSET);
@@ -262,6 +263,7 @@ public class ContractBehaviorIT {
                                 .andReturn();
 
                 // Assert: Entry is created
+
                 @SuppressWarnings("unchecked")
                 Map<String, Object> response = objectMapper.readValue(result.getResponse().getContentAsString(),
                                 Map.class);
@@ -274,7 +276,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("FF-001: Monetary amounts are accepted in GL Account")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testMonetaryFieldPrecision() throws Exception {
                 // Arrange: Create GL account with monetary data
                 GLAccountCreateRequest request = createGLAccountRequest("2000-000", "Bank Account", AccountType.ASSET);
@@ -289,7 +291,7 @@ public class ContractBehaviorIT {
 
         @Test
         @DisplayName("FF-002: Timestamps are in ISO 8601 format with timezone")
-        @SuppressWarnings({ "unchecked", "null" })
+
         public void testTimestampFormat() throws Exception {
                 // Arrange
                 GLAccountCreateRequest request = createGLAccountRequest("1000-000", "Cash", AccountType.ASSET);

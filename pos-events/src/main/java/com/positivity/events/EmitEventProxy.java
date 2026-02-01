@@ -76,7 +76,6 @@ public class EmitEventProxy {
             this.eventEmissionService = eventEmissionService;
         }
 
-        @SuppressWarnings("null")
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             EmitEvent annotation = method.getAnnotation(EmitEvent.class);

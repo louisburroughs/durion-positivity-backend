@@ -1,6 +1,5 @@
 package com.positivity.workorder.service;
 
-import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateStatus;

@@ -46,8 +46,8 @@ public class VehicleReferenceService {
             vehicleVariableRepository.deleteAll();
             for (JsonNode node : results) {
                 VehicleVariable variable = new VehicleVariable();
-                variable.setName(node.path("Name").asText(""));
-                variable.setDescription(node.path("Description").asText(""));
+                variable.setName(node.path("Name").asString(""));
+                variable.setDescription(node.path("Description").asString(""));
                 variable.setCacheTimestamp(LocalDateTime.now());
                 vehicleVariableRepository.save(variable);
             }
@@ -74,8 +74,8 @@ public class VehicleReferenceService {
             for (JsonNode node : results) {
                 VehicleVariableValue value = new VehicleVariableValue();
                 value.setVariableId(variableId);
-                value.setValue(node.path("Value").asText(""));
-                value.setValueId(node.path("ValueId").asText(""));
+                value.setValue(node.path("Value").asString(""));
+                value.setValueId(node.path("ValueId").asString(""));
                 value.setCacheTimestamp(LocalDateTime.now());
                 vehicleVariableValueRepository.save(value);
             }
@@ -102,7 +102,7 @@ public class VehicleReferenceService {
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
                 m.setId(node.path("Mfr_ID").asLong());
-                m.setName(node.path("Mfr_CommonName").asText(""));
+                m.setName(node.path("Mfr_CommonName").asString(""));
                 m.setCacheTimestamp(LocalDateTime.now());
                 manufacturerRepository.save(m);
             }
@@ -131,7 +131,7 @@ public class VehicleReferenceService {
             for (JsonNode node : results) {
                 Make make = new Make();
                 make.setId(node.path("Make_ID").asLong());
-                make.setName(node.path("Make_Name").asText(""));
+                make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
                 make.setCacheTimestamp(LocalDateTime.now());
                 makeRepository.save(make);
@@ -161,7 +161,7 @@ public class VehicleReferenceService {
             for (JsonNode node : results) {
                 Model model = new Model();
                 model.setId(node.path("Model_ID").asLong());
-                model.setName(node.path("Model_Name").asText(""));
+                model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
                 model.setCacheTimestamp(LocalDateTime.now());
                 modelRepository.save(model);
@@ -191,8 +191,8 @@ public class VehicleReferenceService {
             for (JsonNode node : results) {
                 VehicleType vt = new VehicleType();
                 vt.setMake(make);
-                vt.setVehicleTypeId(node.path("VehicleTypeId").asText(""));
-                vt.setVehicleTypeName(node.path("VehicleTypeName").asText(""));
+                vt.setVehicleTypeId(node.path("VehicleTypeId").asString(""));
+                vt.setVehicleTypeName(node.path("VehicleTypeName").asString(""));
                 vt.setCacheTimestamp(LocalDateTime.now());
                 vehicleTypeRepository.save(vt);
             }

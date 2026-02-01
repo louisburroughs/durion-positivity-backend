@@ -1,16 +1,12 @@
 package com.positivity.catalog.internal.model;
 
-import com.positivity.catalog.internal.model.CatalogItem;
-
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
 @Data
 @Entity
 @Table(name = "service")
-public class ServiceEntity implements CatalogItem{
+public class ServiceEntity implements CatalogItem {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;

@@ -58,7 +58,6 @@ public class EmitEventController {
      * The pos-event-receiver module must NEVER emit events to itself.
      * This is an architectural invariant that must be preserved.
      */
-    @SuppressWarnings("null")
     @PostMapping
     // @EmitEvent - FORBIDDEN: See warning above. Would cause infinite recursion.
     public ResponseEntity<String> receiveEvent(@RequestBody EmitEventRequest request) {

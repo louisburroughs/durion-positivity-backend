@@ -9,12 +9,11 @@ import lombok.Builder;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-import com.positivity.inventory.internal.model.InventoryLedgerEventType;
-
 /**
  * Immutable ledger entry representing a single inventory transaction.
  * 
- * <p>This is the source of truth for all inventory quantity changes.
+ * <p>
+ * This is the source of truth for all inventory quantity changes.
  * Entries are never updated or deleted, only created.
  */
 @Entity
@@ -24,69 +23,70 @@ import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 @AllArgsConstructor
 @Builder
 public class InventoryLedgerEntry {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long ledgerEntryId;
-    
+
     /**
      * SKU identifier for the stock item.
      */
     @Column(nullable = false)
     private String stockItemId;
-    
+
     /**
      * Reference to the source adjustment that created this entry.
      * Null for non-adjustment transactions (e.g., sales, receipts).
      */
     private Long adjustmentId;
-    
+
     /**
-     * Type of inventory event (e.g., ADJUST_CYCLE_COUNT, GOODS_RECEIPT, GOODS_ISSUE).
+     * Type of inventory event (e.g., ADJUST_CYCLE_COUNT, GOODS_RECEIPT,
+     * GOODS_ISSUE).
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private InventoryLedgerEventType eventType;
-    
+
     /**
      * The signed quantity change for this transaction.
      * Positive for inbound, negative for outbound.
      */
     @Column(nullable = false)
     private Integer changeInQuantity;
-    
+
     /**
      * The quantity on-hand after this transaction was applied.
      * Calculated at transaction time for verification.
      */
     @Column(nullable = false)
     private Integer quantityAfter;
-    
+
     /**
      * Cost per unit at the time of the transaction.
      */
     @Column(precision = 19, scale = 4)
     private BigDecimal unitCost;
-    
+
     /**
      * User who initiated or approved this transaction.
      */
     @Column(nullable = false)
     private String transactionUserId;
-    
+
     /**
      * The exact time this transaction was posted to the ledger.
      * This is the authoritative timestamp for ordering transactions.
      */
     @Column(nullable = false, updatable = false)
     private Instant timestamp;
-    
+
     /**
      * Optional notes or context for this transaction.
      */
     @Column(length = 2000)
     private String notes;
-    
+
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {

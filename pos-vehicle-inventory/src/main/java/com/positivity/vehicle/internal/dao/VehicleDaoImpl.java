@@ -2,7 +2,6 @@ package com.positivity.vehicle.internal.dao;
 
 import com.positivity.vehicle.internal.model.VehicleEntity;
 import com.positivity.vehicle.internal.repository.VehicleRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
@@ -11,7 +10,6 @@ import java.util.Optional;
 public class VehicleDaoImpl implements VehicleDao {
     private final VehicleRepository vehicleRepository;
 
-    @Autowired
     public VehicleDaoImpl(VehicleRepository vehicleRepository) {
         this.vehicleRepository = vehicleRepository;
     }

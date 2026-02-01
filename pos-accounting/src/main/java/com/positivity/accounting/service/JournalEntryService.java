@@ -83,7 +83,6 @@ public class JournalEntryService {
      * Retrieves an existing journal entry by ID.
      */
     @Transactional(readOnly = true)
-    @SuppressWarnings("null")
     public JournalEntry getJournalEntry(String journalEntryId) {
         return journalEntryRepository.findById(journalEntryId)
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
@@ -212,7 +211,6 @@ public class JournalEntryService {
      * Lists journal entries with pagination and filtering.
      */
     @Transactional(readOnly = true)
-    @SuppressWarnings("null")
     public Page<JournalEntry> listJournalEntries(Pageable pageable) {
         return journalEntryRepository.findAll(pageable);
     }

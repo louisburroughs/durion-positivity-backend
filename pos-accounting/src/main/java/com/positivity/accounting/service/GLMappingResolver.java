@@ -194,7 +194,6 @@ public class GLMappingResolver {
      * @return saved mapping
      * @throws IllegalArgumentException if mapping validation fails
      */
-    @SuppressWarnings("null")
     public GLMapping saveMapping(GLMapping mapping) {
         validateMapping(mapping);
         return mappingRepository.save(mapping);

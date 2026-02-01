@@ -2,7 +2,6 @@ package com.positivity.shopManager.internal.dto;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Conflict response DTO for appointment scheduling conflicts (HTTP 409).

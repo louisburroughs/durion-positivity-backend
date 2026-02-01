@@ -1,12 +1,11 @@
 package com.pos.agent.story.output;
 
-import com.pos.agent.story.models.GherkinScenario;
-import com.pos.agent.story.models.OpenQuestion;
+
 import com.pos.agent.story.models.TransformedRequirements;
 import net.jqwik.api.*;
 
 import java.util.Collections;
-import java.util.List;
+
 
 import static org.junit.jupiter.api.Assertions.*;
 

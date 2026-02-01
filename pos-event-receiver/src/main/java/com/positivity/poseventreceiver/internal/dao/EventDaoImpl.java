@@ -6,7 +6,7 @@ import com.positivity.poseventreceiver.internal.entity.PreregisteredEvent;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
 import com.positivity.poseventreceiver.internal.repository.EventTypeRepository;
 import com.positivity.poseventreceiver.internal.repository.PreregisteredEventRepository;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 

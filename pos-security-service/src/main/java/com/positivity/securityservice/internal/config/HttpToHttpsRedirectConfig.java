@@ -1,12 +1,10 @@
 package com.positivity.securityservice.internal.config;
 
-import org.apache.catalina.connector.Connector;
 // NOTE: TomcatServletWebServerFactory package removed/restructured in Spring Boot 4.0
 // TODO: Research Spring Boot 4.0 embedded server configuration API if HTTP-to-HTTPS redirect is needed
 // Alternative: Handle HTTPS redirect at load balancer/reverse proxy level (recommended)
 // import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
 // import org.springframework.boot.web.server.WebServerFactoryCustomizer;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
