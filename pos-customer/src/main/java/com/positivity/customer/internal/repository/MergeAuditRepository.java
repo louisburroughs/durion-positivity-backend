@@ -1,0 +1,40 @@
+package com.positivity.customer.internal.repository;
+
+import com.positivity.customer.internal.entity.MergeAudit;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Repository for MergeAudit entity operations.
+ */
+@Repository
+public interface MergeAuditRepository extends JpaRepository<MergeAudit, UUID> {
+
+    /**
+     * Find all merge audits where the given party was the survivor.
+     *
+     * @param survivorPartyId the survivor party ID
+     * @return list of merge audits
+     */
+    List<MergeAudit> findBySurvivorPartyId(@NonNull Long survivorPartyId);
+
+    /**
+     * Find all merge audits where the given party was the source (merged).
+     *
+     * @param sourcePartyId the source party ID
+     * @return list of merge audits
+     */
+    List<MergeAudit> findBySourcePartyId(@NonNull Long sourcePartyId);
+
+    /**
+     * Find all merges performed by a specific user.
+     *
+     * @param userId the user ID
+     * @return list of merge audits
+     */
+    List<MergeAudit> findByMergedByUserId(@NonNull UUID userId);
+}
