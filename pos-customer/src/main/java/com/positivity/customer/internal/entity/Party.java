@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -24,9 +25,9 @@ import java.util.Set;
 @Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
 public class Party {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Schema(description = "Unique identifier of the party", example = "1")
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Schema(description = "Unique identifier of the party", nullable = false)
+    private UUID id;
 
     @Column(unique = true, nullable = false)
     @NotBlank

@@ -6,8 +6,9 @@ import org.springframework.stereotype.Repository;
 import com.positivity.customer.internal.entity.Party;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface PartyRepository extends JpaRepository<Party, Long> {
+public interface PartyRepository extends JpaRepository<Party, UUID> {
     Optional<Party> findByPartyNumber(String partyNumber);
 }

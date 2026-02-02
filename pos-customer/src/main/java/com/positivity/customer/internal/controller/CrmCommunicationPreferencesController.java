@@ -1,16 +1,21 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.customer.service.CommunicationPreferenceService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -21,36 +26,48 @@ import org.springframework.web.bind.annotation.*;
  * Handles communication preferences and consent flags for parties.
  * Manages email, SMS, and phone opt-in/opt-out preferences.
  * 
- * Issue #171: Contacts: Store Communication Preferences and Consent Flags
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/107">Backend
+ *      Issue #107</a>
  */
-@Tag(name = "CRM Communication Preferences", description = "Communication preferences and consent flag management (stub endpoints)")
+@Tag(name = "CRM Communication Preferences", description = "Communication preferences and consent flag management")
 @RestController
 @RequestMapping("/v1/crm/parties")
 public class CrmCommunicationPreferencesController {
 
     private static final Logger log = LoggerFactory.getLogger(CrmCommunicationPreferencesController.class);
 
+    private final CommunicationPreferenceService preferenceService;
+
+    public CrmCommunicationPreferencesController(CommunicationPreferenceService preferenceService) {
+        this.preferenceService = preferenceService;
+    }
+
     /**
      * Get communication preferences for a party.
      * 
      * GET /v1/crm/parties/{partyId}/communicationPreferences
      * Requires: CONTACT_PREFERENCE_VIEW permission
-     * 
-     * Note: Current backend implementation returns defaults.
-     * Preference persistence will be implemented when CommunicationPreference
-     * entity is added.
      */
-    @Operation(summary = "Get communication preferences", description = "Retrieve communication preferences and consent flags for a party (stub endpoint)")
+    @Operation(summary = "Get communication preferences", description = "Retrieve communication preferences and consent flags for a party")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
-            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+            @ApiResponse(responseCode = "200", description = "Preferences retrieved successfully", content = @Content(schema = @Schema(implementation = GetCommunicationPreferencesResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
     })
     @GetMapping("/{partyId}/communicationPreferences")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
-    public ResponseEntity<Void> getCommunicationPreferences(
-            @Parameter(description = "Party ID", required = true) @PathVariable String partyId) {
-        log.info("Stub getCommunicationPreferences partyId={}", partyId);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_GET", apiVersion = "1")
+    public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId) {
+
+        try {
+            GetCommunicationPreferencesResponse response = preferenceService.getCommunicationPreferences(partyId);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to get communication preferences: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
     }
 
     /**
@@ -58,24 +75,28 @@ public class CrmCommunicationPreferencesController {
      * 
      * POST /v1/crm/parties/{partyId}/communicationPreferences
      * Requires: CONTACT_PREFERENCE_EDIT permission
-     * 
-     * Note: Current backend implementation validates but does not persist
-     * preferences.
-     * Preference persistence will be implemented when CommunicationPreference
-     * entity is added.
      */
-    @Operation(summary = "Create or update communication preferences", description = "Set or update communication preferences and consent flags for a party (stub endpoint)")
+    @Operation(summary = "Create or update communication preferences", description = "Set or update communication preferences and consent flags for a party")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
-            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+            @ApiResponse(responseCode = "200", description = "Preferences updated successfully", content = @Content(schema = @Schema(implementation = UpsertCommunicationPreferencesResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Party not found", content = @Content)
     })
     @PostMapping("/{partyId}/communicationPreferences")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
-    @EmitEvent(id = "CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT_LEGACY", apiVersion = "1")
-    public ResponseEntity<Void> upsertCommunicationPreferences(
-            @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
-            @Parameter(description = "Communication preferences to set", required = false) @RequestBody(required = false) Object body) {
-        log.info("Stub upsertCommunicationPreferences partyId={}", partyId);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_UPSERT", apiVersion = "1")
+    public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId,
+            @Parameter(description = "Communication preferences to set", required = true) @RequestBody @NonNull UpsertCommunicationPreferencesRequest request) {
+
+        try {
+            UpsertCommunicationPreferencesResponse response = preferenceService.upsertCommunicationPreferences(partyId,
+                    request);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to upsert communication preferences: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
     }
 }
