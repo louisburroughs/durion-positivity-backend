@@ -67,6 +67,12 @@ public class ContactRoleAssignment {
     private ContactRole roleName;
 
     @Builder.Default
+    @Column(name = "is_primary", nullable = false)
+    @Schema(description = "Whether this is the primary contact for this role", example = "true")
+    private boolean primary = false;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false, nullable = false)
     @Schema(description = "Timestamp when the role assignment was created")
     private Instant createdAt;
 
