@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Data Transfer Object for Customer API operations.
@@ -22,8 +23,8 @@ import java.util.List;
 @Schema(description = "Customer data transfer object for API operations")
 public class CustomerDTO {
 
-    @Schema(description = "Unique identifier of the customer", example = "1")
-    private Long id;
+    @Schema(description = "Unique identifier of the customer", example = "123e4567-e89b-12d3-a456-426614174000")
+    private UUID id;
 
     @Schema(description = "Unique customer number", example = "CUST-1001")
     private String customerNumber;

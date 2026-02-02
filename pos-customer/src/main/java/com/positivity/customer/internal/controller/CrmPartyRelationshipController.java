@@ -82,7 +82,7 @@ public class CrmPartyRelationshipController {
             @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<CreatePartyRelationshipResponse> createRelationship(
-            @Parameter(description = "The commercial account party ID") @PathVariable Long partyId,
+            @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Valid @RequestBody CreatePartyRelationshipRequest request,
             Principal principal) {
 
@@ -119,7 +119,7 @@ public class CrmPartyRelationshipController {
             @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<GetCommercialAccountContactsResponse> getContacts(
-            @Parameter(description = "The commercial account party ID") @PathVariable Long partyId,
+            @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "Filter by relationship roles") @RequestParam(required = false) List<PartyRelationshipRole> roles,
             @Parameter(description = "Filter by status (ACTIVE or INACTIVE)") @RequestParam(required = false) String status) {
 
@@ -156,7 +156,7 @@ public class CrmPartyRelationshipController {
             @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<Void> designatePrimaryBillingContact(
-            @Parameter(description = "The commercial account party ID") @PathVariable Long partyId,
+            @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "The relationship ID to designate as primary") @PathVariable UUID relationshipId,
             Principal principal) {
 
@@ -189,7 +189,7 @@ public class CrmPartyRelationshipController {
             @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     })
     public ResponseEntity<Void> deactivateRelationship(
-            @Parameter(description = "The commercial account party ID") @PathVariable Long partyId,
+            @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
             @Parameter(description = "The relationship ID to deactivate") @PathVariable UUID relationshipId,
             Principal principal) {
 

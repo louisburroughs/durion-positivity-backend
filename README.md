@@ -114,6 +114,25 @@ durion-positivity-backend/
 
 For detailed agent commands and local stack setup, refer to [AGENTS.md](AGENTS.md).
 
+## Known Issues & Migration Notes
+
+### Spring Boot 3.4+ MockMvc Import Change
+**Issue**: The `@AutoConfigureMockMvc` annotation has moved in Spring Boot 3.4+.
+
+**Old Import** (Spring Boot 3.2.x and earlier):
+```java
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+```
+
+**New Import** (Spring Boot 3.4+):
+```java
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+```
+
+**Impact**: Integration tests using `@AutoConfigureMockMvc` will fail to compile until the import is updated.
+
+**Resolution**: Update all test classes to use the new import path. This affects contract behavior integration tests that use MockMvc for REST API testing.
+
 ## Agents & Documentation
 
 This repository participates in the workspace-wide agent ecosystem.
