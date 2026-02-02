@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.entity;
+package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+
+import com.positivity.customer.internal.dto.PartyRelationshipRole;
 
 /**
  * Response DTO for listing contacts with roles for a commercial account.

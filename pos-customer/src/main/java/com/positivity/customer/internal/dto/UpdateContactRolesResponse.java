@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.entity;
+package com.positivity.customer.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
@@ -7,30 +7,30 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Response DTO for upserting communication preferences.
- * Issue #171: Contacts: Manage Communication Preferences & Consent Flags
+ * Response DTO for updating contact role assignments.
+ * Issue #172: Contacts: Maintain Contact Roles and Primary Flags
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class UpsertCommunicationPreferencesResponse {
+public class UpdateContactRolesResponse {
 
     /**
-     * Party ID updated
+     * Party ID
      */
     private String partyId;
 
     /**
-     * Updated version (for optimistic locking)
+     * Contact ID that was updated
      */
-    private String version;
+    private String contactId;
 
     /**
-     * Operation type (CREATED|UPDATED)
+     * Updated version (for optimistic locking conflict resolution)
      */
-    private String operationType;
+    private String version;
 
     /**
      * Update status (SUCCESS|CONFLICT)

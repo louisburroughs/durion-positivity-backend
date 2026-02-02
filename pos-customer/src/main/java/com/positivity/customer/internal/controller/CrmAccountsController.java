@@ -1,6 +1,20 @@
 package com.positivity.customer.internal.controller;
 
-import com.positivity.customer.internal.entity.*;
+import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
+import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
+import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
+import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
+import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
+import com.positivity.customer.internal.dto.GetPartyResponse;
+import com.positivity.customer.internal.dto.MergePartiesRequest;
+import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.SearchPartiesRequest;
+import com.positivity.customer.internal.dto.SearchPartiesResponse;
+import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
+import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.PartyService;
 import com.positivity.events.EmitEvent;

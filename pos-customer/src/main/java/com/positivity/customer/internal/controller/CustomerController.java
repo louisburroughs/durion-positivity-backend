@@ -1,8 +1,8 @@
 package com.positivity.customer.internal.controller;
 
-import com.positivity.customer.internal.entity.AbstractCustomer;
-import com.positivity.customer.internal.repository.CustomerRepository;
+import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.customer.service.CustomerService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,15 +24,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CustomerController {
 
-    private final CustomerRepository customerRepository;
+    private final CustomerService customerService;
 
     @Operation(summary = "Get all customers", description = "Retrieve a list of all customers.")
     @ApiResponse(responseCode = "200", description = "List of customers returned successfully.")
     @GetMapping
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
-    public List<AbstractCustomer> getAllCustomers() {
+    public List<CustomerDTO> getAllCustomers() {
         log.info("Fetching all customers");
-        return customerRepository.findAll();
+        return customerService.getAllCustomers();
     }
 
     @Operation(summary = "Get customer by ID", description = "Retrieve a customer by their unique ID.")
@@ -42,10 +42,10 @@ public class CustomerController {
     })
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
-    public ResponseEntity<AbstractCustomer> getCustomerById(
+    public ResponseEntity<CustomerDTO> getCustomerById(
             @Parameter(description = "ID of the customer to retrieve", example = "1") @PathVariable Long id) {
         log.info("Fetching customer with id: {}", id);
-        return customerRepository.findById(id)
+        return customerService.getCustomerById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -55,10 +55,10 @@ public class CustomerController {
     @PostMapping
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
     @EmitEvent(id = "CUSTOMER_CUSTOMER_CREATE", apiVersion = "1")
-    public ResponseEntity<AbstractCustomer> createCustomer(
-            @Parameter(description = "Customer object to be created") @RequestBody AbstractCustomer customer) {
+    public ResponseEntity<CustomerDTO> createCustomer(
+            @Parameter(description = "Customer object to be created") @RequestBody CustomerDTO customer) {
         log.info("Creating new customer: {}", customer);
-        AbstractCustomer saved = customerRepository.save(customer);
+        CustomerDTO saved = customerService.createCustomer(customer);
         return ResponseEntity.ok(saved);
     }
 
@@ -70,16 +70,12 @@ public class CustomerController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_EDIT + "')")
     @EmitEvent(id = "CUSTOMER_CUSTOMER_UPDATE", apiVersion = "1")
-    public ResponseEntity<AbstractCustomer> updateCustomer(
+    public ResponseEntity<CustomerDTO> updateCustomer(
             @Parameter(description = "ID of the customer to update", example = "1") @PathVariable Long id,
-            @Parameter(description = "Updated customer object") @RequestBody AbstractCustomer customer) {
+            @Parameter(description = "Updated customer object") @RequestBody CustomerDTO customer) {
         log.info("Updating customer with id: {}", id);
-        return customerRepository.findById(id)
-                .map(existing -> {
-                    customer.setId(id);
-                    AbstractCustomer updated = customerRepository.save(customer);
-                    return ResponseEntity.ok(updated);
-                })
+        return customerService.updateCustomer(id, customer)
+                .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -93,8 +89,7 @@ public class CustomerController {
     public ResponseEntity<Void> deleteCustomer(
             @Parameter(description = "ID of the customer to delete", example = "1") @PathVariable Long id) {
         log.info("Deleting customer with id: {}", id);
-        if (customerRepository.existsById(id)) {
-            customerRepository.deleteById(id);
+        if (customerService.deleteCustomer(id)) {
             return ResponseEntity.noContent().build();
         } else {
             return ResponseEntity.notFound().build();

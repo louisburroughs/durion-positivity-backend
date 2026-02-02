@@ -1,6 +1,9 @@
 package com.positivity.customer.internal.controller;
 
-import com.positivity.customer.internal.entity.*;
+import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
+import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
+import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
+import com.positivity.customer.internal.dto.PartyRelationshipRole;
 import com.positivity.customer.service.PartyRelationshipService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
