@@ -58,7 +58,7 @@ public interface ContactRoleAssignmentRepository extends JpaRepository<ContactRo
      * @return optional containing the primary assignment if one exists
      */
     @NonNull
-    Optional<ContactRoleAssignment> findByCustomerAccountIdAndRoleNameAndIsPrimaryTrue(
+    Optional<ContactRoleAssignment> findByCustomerAccountIdAndRoleNameAndPrimaryTrue(
             @NonNull UUID customerAccountId,
             @NonNull ContactRole roleName);
 
