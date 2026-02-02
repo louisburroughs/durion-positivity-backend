@@ -127,15 +127,6 @@ public class PartyService {
         }
     }
 
-    @Deprecated
-    private Long parseId(String raw) {
-        try {
-            return Long.parseLong(raw);
-        } catch (NumberFormatException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid partyId");
-        }
-    }
-
     private Contact buildContactForParty(CreateCommercialAccountRequest request, Party party) {
         String nameFallback = request.getDisplayName();
         if (!StringUtils.hasText(nameFallback)) {
