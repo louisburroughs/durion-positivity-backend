@@ -65,16 +65,13 @@ public class ContactRoleService {
     @NonNull
     @Transactional(readOnly = true)
     public GetContactsWithRolesResponse getContactsWithRoles(@NonNull String partyId) {
-        Long partyLongId = parseLong(partyId, "partyId");
+        UUID partyUuid = parseUuid(partyId, "partyId");
 
         // Verify party exists
-        Party party = partyRepository.findById(partyLongId)
+        Party party = partyRepository.findById(partyUuid)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
 
-        // For now, use partyId as the account ID (since Party acts as CustomerAccount)
-        UUID partyUuid = UUID.nameUUIDFromBytes(("party-" + partyId).getBytes());
-
-        // Get all role assignments for this party
+        // Get all role assignments for this party (using partyUuid as the account ID)
         List<ContactRoleAssignment> assignments = roleAssignmentRepository.findByCustomerAccountId(partyUuid);
 
         // Group assignments by contact
@@ -147,12 +144,11 @@ public class ContactRoleService {
             @NonNull String contactId,
             @NonNull UpdateContactRolesRequest request) {
 
-        Long partyLongId = parseLong(partyId, "partyId");
+        UUID partyUuid = parseUuid(partyId, "partyId");
         UUID contactUuid = parseUuid(contactId, "contactId");
-        UUID partyUuid = UUID.nameUUIDFromBytes(("party-" + partyId).getBytes());
 
         // Verify party exists
-        partyRepository.findById(partyLongId)
+        partyRepository.findById(partyUuid)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
 
         // Verify contact (person) exists
@@ -216,6 +212,24 @@ public class ContactRoleService {
     }
 
     /**
+     * Parse a Long string with helpful error messages.
+     * 
+     * @param longStr   the Long string
+     * @param fieldName the field name for error messages
+     * @return parsed Long
+     * @throws IllegalArgumentException if Long is invalid
+     */
+    @Deprecated
+    @NonNull
+    private Long parseLong(@NonNull String longStr, @NonNull String fieldName) {
+        try {
+            return Long.parseLong(longStr);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid " + fieldName + " format: " + longStr, e);
+        }
+    }
+
+    /**
      * Parse a UUID string with helpful error messages.
      * 
      * @param uuidStr   the UUID string
@@ -229,23 +243,6 @@ public class ContactRoleService {
             return UUID.fromString(uuidStr);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid " + fieldName + " format: " + uuidStr, e);
-        }
-    }
-
-    /**
-     * Parse a Long string with helpful error messages.
-     * 
-     * @param longStr   the Long string
-     * @param fieldName the field name for error messages
-     * @return parsed Long
-     * @throws IllegalArgumentException if Long is invalid
-     */
-    @NonNull
-    private Long parseLong(@NonNull String longStr, @NonNull String fieldName) {
-        try {
-            return Long.parseLong(longStr);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid " + fieldName + " format: " + longStr, e);
         }
     }
 }

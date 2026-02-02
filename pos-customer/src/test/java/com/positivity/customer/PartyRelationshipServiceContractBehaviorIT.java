@@ -288,7 +288,7 @@ class PartyRelationshipServiceContractBehaviorIT {
         @Order(7)
         void createRelationship_nonExistentParty_fails() {
                 // Given: non-existent party ID
-                Long nonExistentPartyId = 999999L;
+                UUID nonExistentPartyId = UUID.randomUUID();
 
                 CreatePartyRelationshipRequest request = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson1.getPersonId())
