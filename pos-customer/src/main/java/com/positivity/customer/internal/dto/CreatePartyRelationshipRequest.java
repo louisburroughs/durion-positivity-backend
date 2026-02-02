@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.entity;
+package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
+
+import com.positivity.customer.internal.dto.PartyRelationshipRole;
 
 /**
  * Request DTO for creating a party relationship.

@@ -1,6 +1,11 @@
 package com.positivity.customer.service;
 
-import com.positivity.customer.internal.entity.*;
+import com.positivity.customer.internal.dto.CreatePersonRequest;
+import com.positivity.customer.internal.dto.CreatePersonResponse;
+import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.entity.Person;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PersonRepository;
 import lombok.RequiredArgsConstructor;
@@ -138,7 +143,7 @@ public class PersonService {
         List<ContactPoint> contactPoints = contactPointRepository.findByPersonPersonId(personId);
         person.getContactPoints().addAll(contactPoints);
 
-        return GetPersonResponse.from(person);
+        return toGetPersonResponse(person);
     }
 
     /**
@@ -184,7 +189,7 @@ public class PersonService {
                     List<ContactPoint> contactPoints = contactPointRepository
                             .findByPersonPersonId(person.getPersonId());
                     person.getContactPoints().addAll(contactPoints);
-                    return GetPersonResponse.from(person);
+                    return toGetPersonResponse(person);
                 })
                 .toList();
     }
@@ -220,5 +225,33 @@ public class PersonService {
         if (!email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid email format: " + email);
         }
+    }
+
+    /**
+     * Converts a Person entity to a GetPersonResponse DTO.
+     *
+     * @param person the person entity
+     * @return the response DTO
+     */
+    private GetPersonResponse toGetPersonResponse(Person person) {
+        List<GetPersonResponse.ContactPointDto> contactPointDtos = person.getContactPoints().stream()
+                .map(cp -> GetPersonResponse.ContactPointDto.builder()
+                        .contactPointId(cp.getContactPointId())
+                        .contactType(cp.getContactType())
+                        .value(cp.getValue())
+                        .isPrimary(cp.isPrimary())
+                        .build())
+                .toList();
+
+        return GetPersonResponse.builder()
+                .personId(person.getPersonId())
+                .firstName(person.getFirstName())
+                .lastName(person.getLastName())
+                .displayName(person.getDisplayName())
+                .preferredContactMethod(person.getPreferredContactMethod())
+                .contactPoints(contactPointDtos)
+                .createdAt(person.getCreatedAt())
+                .updatedAt(person.getUpdatedAt())
+                .build();
     }
 }

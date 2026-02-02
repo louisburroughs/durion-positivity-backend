@@ -1,7 +1,7 @@
 package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.PartyRelationship;
-import com.positivity.customer.internal.entity.PartyRelationshipRole;
+import com.positivity.customer.internal.dto.PartyRelationshipRole;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;

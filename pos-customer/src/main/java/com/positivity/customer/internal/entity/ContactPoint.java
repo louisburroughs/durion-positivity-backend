@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.entity;
 
+import com.positivity.customer.internal.dto.ContactPointType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;

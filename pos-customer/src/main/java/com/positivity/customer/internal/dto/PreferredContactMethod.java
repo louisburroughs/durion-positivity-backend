@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.entity;
+package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 

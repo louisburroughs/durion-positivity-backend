@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.entity;
+package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -11,6 +11,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+
+import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.dto.PreferredContactMethod;
 
 /**
  * Request DTO for creating an individual person record.
