@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.entity.Party;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
@@ -73,7 +74,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
     @DisplayName("getCommunicationPreferences - Success: Returns default preferences when none exist")
     void getCommunicationPreferences_defaultPreferences() {
         GetCommunicationPreferencesResponse response = preferenceService
-                .getCommunicationPreferences(String.valueOf(testParty.getPartyId()));
+                .getCommunicationPreferences(String.valueOf(testParty.getId()));
 
         assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
         assertThat(response.getEmailPreference()).isEqualTo("OPT_OUT");
@@ -98,7 +99,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
         preferenceRepository.save(preference);
 
         GetCommunicationPreferencesResponse response = preferenceService
-                .getCommunicationPreferences(String.valueOf(testParty.getPartyId()));
+                .getCommunicationPreferences(String.valueOf(testParty.getId()));
 
         assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
         assertThat(response.getEmailPreference()).isEqualTo("OPT_IN");
@@ -131,15 +132,13 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                 .updateSource("customer_portal")
                 .build();
 
-        GetCommunicationPreferencesResponse response = preferenceService
-                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
+        UpsertCommunicationPreferencesResponse response = preferenceService
+                .upsertCommunicationPreferences(String.valueOf(testParty.getId()), request);
 
         assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
-        assertThat(response.getEmailPreference()).isEqualTo("OPT_IN");
-        assertThat(response.getSmsPreference()).isEqualTo("OPT_IN");
-        assertThat(response.getPhonePreference()).isEqualTo("OPT_OUT");
-        assertThat(response.getMarketingPreference()).isEqualTo("OPT_IN");
-        assertThat(response.getConsentFlags()).containsEntry("marketing_email", true);
+        assertThat(response.getOperationType()).isEqualTo("CREATED");
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getUpdatedAt()).isNotNull();
 
         // Verify database state
         CommunicationPreference saved = preferenceRepository.findByPartyId(testPartyUuid).orElseThrow();
@@ -169,11 +168,13 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                 .updateSource("admin_portal")
                 .build();
 
-        GetCommunicationPreferencesResponse response = preferenceService
-                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
+        UpsertCommunicationPreferencesResponse response = preferenceService
+                .upsertCommunicationPreferences(String.valueOf(testParty.getId()), request);
 
-        assertThat(response.getEmailPreference()).isEqualTo("OPT_IN");
-        assertThat(response.getConsentFlags()).containsEntry("gdpr_consent", true);
+        assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
+        assertThat(response.getOperationType()).isEqualTo("UPDATED");
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getUpdatedAt()).isNotNull();
 
         // Verify only one record exists
         assertThat(preferenceRepository.findByPartyId(testPartyUuid)).isPresent();
@@ -187,13 +188,20 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                 // sms, phone, marketing left null
                 .build();
 
-        GetCommunicationPreferencesResponse response = preferenceService
-                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
+        UpsertCommunicationPreferencesResponse response = preferenceService
+                .upsertCommunicationPreferences(String.valueOf(testParty.getId()), request);
 
-        assertThat(response.getEmailPreference()).isEqualTo("OPT_IN");
-        assertThat(response.getSmsPreference()).isEqualTo("OPT_OUT");
-        assertThat(response.getPhonePreference()).isEqualTo("OPT_OUT");
-        assertThat(response.getMarketingPreference()).isEqualTo("OPT_OUT");
+        assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
+        assertThat(response.getOperationType()).isEqualTo("CREATED");
+        assertThat(response.getStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getUpdatedAt()).isNotNull();
+
+        // Verify database state
+        CommunicationPreference saved = preferenceRepository.findByPartyId(testPartyUuid).orElseThrow();
+        assertThat(saved.getEmailPreference()).isEqualTo("OPT_IN");
+        assertThat(saved.getSmsPreference()).isEqualTo("OPT_OUT");
+        assertThat(saved.getPhonePreference()).isEqualTo("OPT_OUT");
+        assertThat(saved.getMarketingPreference()).isEqualTo("OPT_OUT");
     }
 
     @Test

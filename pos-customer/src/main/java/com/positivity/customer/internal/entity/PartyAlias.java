@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Party alias entity for ID redirection after merge operations.
@@ -34,12 +35,12 @@ public class PartyAlias {
     @Id
     @Column(name = "source_party_id", updatable = false, nullable = false)
     @Schema(description = "ID of the party that was merged (source)")
-    private Long sourcePartyId;
+    private UUID sourcePartyId;
 
     @NotNull
     @Column(name = "target_party_id", nullable = false)
     @Schema(description = "ID of the party to redirect to (survivor)")
-    private Long targetPartyId;
+    private UUID targetPartyId;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
@@ -53,7 +54,7 @@ public class PartyAlias {
      * @param targetPartyId the ID of the surviving party
      * @return a new PartyAlias instance
      */
-    public static PartyAlias create(Long sourcePartyId, Long targetPartyId) {
+    public static PartyAlias create(UUID sourcePartyId, UUID targetPartyId) {
         PartyAlias alias = new PartyAlias();
         alias.setSourcePartyId(sourcePartyId);
         alias.setTargetPartyId(targetPartyId);

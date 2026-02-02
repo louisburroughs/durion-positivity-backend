@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Tag(name = "Customer API", description = "Operations related to customers")
@@ -43,7 +44,7 @@ public class CustomerController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     public ResponseEntity<CustomerDTO> getCustomerById(
-            @Parameter(description = "ID of the customer to retrieve", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID of the customer to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
         log.info("Fetching customer with id: {}", id);
         return customerService.getCustomerById(id)
                 .map(ResponseEntity::ok)
@@ -71,7 +72,7 @@ public class CustomerController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_EDIT + "')")
     @EmitEvent(id = "CUSTOMER_CUSTOMER_UPDATE", apiVersion = "1")
     public ResponseEntity<CustomerDTO> updateCustomer(
-            @Parameter(description = "ID of the customer to update", example = "1") @PathVariable Long id,
+            @Parameter(description = "ID of the customer to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id,
             @Parameter(description = "Updated customer object") @RequestBody CustomerDTO customer) {
         log.info("Updating customer with id: {}", id);
         return customerService.updateCustomer(id, customer)
@@ -87,7 +88,7 @@ public class CustomerController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_DEACTIVATE + "')")
     public ResponseEntity<Void> deleteCustomer(
-            @Parameter(description = "ID of the customer to delete", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID of the customer to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
         log.info("Deleting customer with id: {}", id);
         if (customerService.deleteCustomer(id)) {
             return ResponseEntity.noContent().build();

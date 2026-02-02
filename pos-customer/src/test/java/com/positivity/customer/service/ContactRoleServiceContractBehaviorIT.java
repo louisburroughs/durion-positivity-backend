@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest.RoleAssignment;
+import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactRole;
 import com.positivity.customer.internal.entity.ContactRoleAssignment;
 import com.positivity.customer.internal.entity.Party;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -59,39 +61,34 @@ class ContactRoleServiceContractBehaviorIT {
 
     @BeforeEach
     void setUp() {
-        // Create test party
+        // Create test party with a contact
         testParty = new Party();
         testParty.setPartyType("ORGANIZATION");
         testParty.setLegalName("Test Party");
         testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
         testParty.setStatus("ACTIVE");
+
+        // Create and add a contact to the party before saving
+        Contact contact = new Contact();
+        contact.setParty(testParty);
+        contact.setFirstName("John");
+        contact.setLastName("Doe");
+        contact.setActive(true);
+        testParty.getContacts().add(contact);
+
         testParty = partyRepository.save(testParty);
         testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getId()).getBytes());
 
-        // Create test contact person
+        // Create test person (independent entity for contact role assignments)
         Person contactPerson = new Person();
-        contactPerson.setPartyId(testParty.getId());
         contactPerson.setFirstName("John");
         contactPerson.setLastName("Doe");
+        contactPerson.setPreferredContactMethod(com.positivity.customer.internal.dto.PreferredContactMethod.EMAIL);
         contactPerson = personRepository.save(contactPerson);
         testContact = contactPerson;
         testContactUuid = contactPerson.getPersonId();
     }
 
-    @AfterEach
-    void tearDown() {
-        roleAssignmentRepository.deleteAll();
-        personRepository.deleteAll();
-        partyRepository.deleteAll();
-    }
-
-    // ========== getContactsWithRoles ==========
-
-    @Test
-    @DisplayName("getContactsWithRoles - Success: Returns empty list when no contacts assigned")
-    void getContactsWithRoles_emptyList() {
-        GetContactsWithRolesResponse response = contactRoleService
-            .getContactsWithRoles(String.valueOf(testParty.getId()));
     @Test
     @DisplayName("getContactsWithRoles - Success: Returns contacts with roles")
     void getContactsWithRoles_withRoles() {
@@ -105,16 +102,15 @@ class ContactRoleServiceContractBehaviorIT {
         roleAssignmentRepository.save(assignment);
 
         GetContactsWithRolesResponse response = contactRoleService
-            .getContactsWithRoles(String.valueOf(testParty.getId()));
+                .getContactsWithRoles(String.valueOf(testParty.getId()));
 
         assertThat(response.getContacts()).hasSize(1);
         var contact = response.getContacts().get(0);
         assertThat(contact.getContactId()).isEqualTo(testContactUuid.toString());
-        assertThat(contact.getFirstName()).isEqualTo("John");
-        assertThat(contact.getLastName()).isEqualTo("Doe");
-        assertThat(contact.getAssignedRoles()).hasSize(1);
-        assertThat(contact.getAssignedRoles().get(0).getRoleCode()).isEqualTo("BILLING");
-        assertThat(contact.getAssignedRoles().get(0).getIsPrimary()).isTrue();
+        assertThat(contact.getContactName()).isEqualTo("John Doe");
+        assertThat(contact.getRoles()).hasSize(1);
+        assertThat(contact.getRoles().get(0).getRoleCode()).isEqualTo("BILLING");
+        assertThat(contact.getRoles().get(0).getIsPrimary()).isTrue();
     }
 
     @Test
@@ -143,7 +139,7 @@ class ContactRoleServiceContractBehaviorIT {
                 .build();
 
         contactRoleService.updateContactRoles(
-                String.valueOf(testParty.getPartyId()),
+                String.valueOf(testParty.getId()),
                 testContactUuid.toString(),
                 request);
 
@@ -165,9 +161,9 @@ class ContactRoleServiceContractBehaviorIT {
     void updateContactRoles_demotesExistingPrimary() {
         // Create another contact
         Person contact2 = new Person();
-        contact2.setPartyId(testParty.getId());
         contact2.setFirstName("Jane");
         contact2.setLastName("Smith");
+        contact2.setPreferredContactMethod(com.positivity.customer.internal.dto.PreferredContactMethod.EMAIL);
         contact2 = personRepository.save(contact2);
         UUID contact2Uuid = contact2.getPersonId();
 
@@ -190,14 +186,15 @@ class ContactRoleServiceContractBehaviorIT {
                 .build();
 
         contactRoleService.updateContactRoles(
-                String.valueOf(testParty.getPartyId()),
+                String.valueOf(testParty.getId()),
                 testContactUuid.toString(),
                 request);
 
         // Verify old primary was demoted
-        List<ContactRoleAssignment> primaryAssignments = roleAssignmentRepository
-            .findByCustomerAccountIdAndRoleNameAndPrimaryTrue(testPartyUuid, ContactRole.BILLING)
-        assertThat(primaryAssignments.get(0).getContactId()).isEqualTo(testContactUuid);
+        Optional<ContactRoleAssignment> primaryAssignment = roleAssignmentRepository
+                .findByCustomerAccountIdAndRoleNameAndPrimaryTrue(testPartyUuid, ContactRole.BILLING);
+        assertThat(primaryAssignment).isPresent();
+        assertThat(primaryAssignment.get().getContactId()).isEqualTo(testContactUuid);
     }
 
     @Test
@@ -217,7 +214,7 @@ class ContactRoleServiceContractBehaviorIT {
                 .build();
 
         contactRoleService.updateContactRoles(
-                String.valueOf(testParty.getPartyId()),
+                String.valueOf(testParty.getId()),
                 testContactUuid.toString(),
                 request);
 
@@ -252,7 +249,7 @@ class ContactRoleServiceContractBehaviorIT {
         UUID nonExistentContactUuid = UUID.randomUUID();
 
         assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                String.valueOf(testParty.getPartyId()),
+                String.valueOf(testParty.getId()),
                 nonExistentContactUuid.toString(),
                 request))
                 .isInstanceOf(ResponseStatusException.class)
@@ -271,7 +268,7 @@ class ContactRoleServiceContractBehaviorIT {
                 .build();
 
         assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                String.valueOf(testParty.getPartyId()),
+                String.valueOf(testParty.getId()),
                 testContactUuid.toString(),
                 request))
                 .isInstanceOf(IllegalArgumentException.class);

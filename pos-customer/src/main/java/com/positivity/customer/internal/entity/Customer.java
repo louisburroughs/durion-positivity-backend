@@ -1,9 +1,10 @@
 package com.positivity.customer.internal.entity;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface Customer {
-    Long getId();
+    UUID getId();
 
     String getCustomerNumber();
 

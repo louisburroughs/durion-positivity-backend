@@ -91,7 +91,7 @@ public class PartyService {
     @Transactional(readOnly = true)
     public GetContactsWithRolesResponse getContactsWithRoles(String partyId) {
         Party party = findPartyOrThrow(partyId);
-        List<Contact> contacts = contactRepository.findByPartyId(party.getId());
+        List<Contact> contacts = contactRepository.findByParty(party);
 
         List<GetContactsWithRolesResponse.ContactWithRoles> contactDtos = new ArrayList<>();
         for (Contact contact : contacts) {
@@ -114,11 +114,20 @@ public class PartyService {
     }
 
     private Party findPartyOrThrow(String partyId) {
-        Long id = parseId(partyId);
+        UUID id = parseUuid(partyId);
         return partyRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "party not found"));
     }
 
+    private UUID parseUuid(String raw) {
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid UUID format");
+        }
+    }
+
+    @Deprecated
     private Long parseId(String raw) {
         try {
             return Long.parseLong(raw);
@@ -220,9 +229,9 @@ public class PartyService {
     public UpdateContactRolesResponse updateContactRoles(String partyId, String contactId,
             UpdateContactRolesRequest request) {
         Party party = findPartyOrThrow(partyId);
-        Long contactIdLong = parseId(contactId);
+        UUID contactIdUuid = parseUuid(contactId);
 
-        Contact contact = contactRepository.findById(contactIdLong)
+        Contact contact = contactRepository.findById(contactIdUuid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "contact not found"));
 
         if (!contact.getParty().getId().equals(party.getId())) {

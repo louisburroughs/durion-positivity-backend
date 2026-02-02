@@ -67,14 +67,11 @@ public class CommunicationPreferenceService {
     @NonNull
     @Transactional(readOnly = true)
     public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull String partyId) {
-        Long partyLongId = parseLong(partyId, "partyId");
+        UUID partyUuid = parseUuid(partyId, "partyId");
 
         // Verify party exists
-        partyRepository.findById(partyLongId)
+        partyRepository.findById(partyUuid)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
-
-        // Convert to UUID for preference lookup
-        UUID partyUuid = UUID.nameUUIDFromBytes(("party-" + partyId).getBytes());
 
         // Get preferences or return defaults
         return preferenceRepository.findByPartyId(partyUuid)
@@ -100,14 +97,11 @@ public class CommunicationPreferenceService {
             @NonNull String partyId,
             @NonNull UpsertCommunicationPreferencesRequest request) {
 
-        Long partyLongId = parseLong(partyId, "partyId");
+        UUID partyUuid = parseUuid(partyId, "partyId");
 
         // Verify party exists
-        partyRepository.findById(partyLongId)
+        partyRepository.findById(partyUuid)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
-
-        // Convert to UUID for preference storage
-        UUID partyUuid = UUID.nameUUIDFromBytes(("party-" + partyId).getBytes());
 
         // Find existing preferences or create new
         CommunicationPreference preference = preferenceRepository.findByPartyId(partyUuid)
@@ -209,12 +203,30 @@ public class CommunicationPreferenceService {
      * @return parsed Long
      * @throws IllegalArgumentException if Long is invalid
      */
+    @Deprecated
     @NonNull
     private Long parseLong(@NonNull String longStr, @NonNull String fieldName) {
         try {
             return Long.parseLong(longStr);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid " + fieldName + " format: " + longStr, e);
+        }
+    }
+
+    /**
+     * Parse UUID from string.
+     *
+     * @param uuidStr   UUID string
+     * @param fieldName field name for error messages
+     * @return parsed UUID
+     * @throws IllegalArgumentException if UUID is invalid
+     */
+    @NonNull
+    private UUID parseUuid(@NonNull String uuidStr, @NonNull String fieldName) {
+        try {
+            return UUID.fromString(uuidStr);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid " + fieldName + " format: " + uuidStr, e);
         }
     }
 }

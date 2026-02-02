@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Service for managing Customer entities.
@@ -46,7 +47,7 @@ public class CustomerService {
      * @return optional containing the customer DTO if found
      */
     @Transactional(readOnly = true)
-    public Optional<CustomerDTO> getCustomerById(@NonNull Long id) {
+    public Optional<CustomerDTO> getCustomerById(@NonNull UUID id) {
         log.debug("Fetching customer with id: {}", id);
         return customerRepository.findById(id)
                 .map(this::toDTO);
@@ -74,7 +75,7 @@ public class CustomerService {
      * @return optional containing the updated customer DTO if found
      */
     @Transactional
-    public Optional<CustomerDTO> updateCustomer(@NonNull Long id, @NonNull CustomerDTO dto) {
+    public Optional<CustomerDTO> updateCustomer(@NonNull UUID id, @NonNull CustomerDTO dto) {
         log.debug("Updating customer with id: {}", id);
         return customerRepository.findById(id)
                 .map(existing -> {
@@ -91,7 +92,7 @@ public class CustomerService {
      * @return true if customer was deleted, false if not found
      */
     @Transactional
-    public boolean deleteCustomer(@NonNull Long id) {
+    public boolean deleteCustomer(@NonNull UUID id) {
         log.debug("Deleting customer with id: {}", id);
         if (customerRepository.existsById(id)) {
             customerRepository.deleteById(id);
@@ -107,7 +108,7 @@ public class CustomerService {
      * @return true if customer exists
      */
     @Transactional(readOnly = true)
-    public boolean existsById(@NonNull Long id) {
+    public boolean existsById(@NonNull UUID id) {
         return customerRepository.existsById(id);
     }
 
