@@ -277,26 +277,14 @@
         }
       }
     },
-    "/v1/vehicles/vin/{vin}_POST": {
+    "/v1/vehicles/vin": {
       "post": {
         "tags": ["Vehicle API"],
         "summary": "Create vehicle by VIN",
         "description": "Add a new vehicle to the inventory using its VIN.",
         "operationId": "createVehicleByVIN",
-        "parameters": [
-          {
-            "name": "vin",
-            "in": "path",
-            "description": "VIN of the vehicle to create",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "1HGCM82633A004352"
-            }
-          }
-        ],
         "requestBody": {
-          "description": "Vehicle object to be created",
+          "description": "Vehicle object to be created (must include vin)",
           "content": {
             "application/json": {
               "schema": {
