@@ -3,13 +3,9 @@ package com.positivity.customer.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
-import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
-import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
-import com.positivity.customer.internal.entity.CommunicationPreference;
-import com.positivity.customer.internal.entity.CommercialParty;
-import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
-import com.positivity.customer.internal.repository.PartyRepository;
+import java.util.Map;
+import java.util.UUID;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,8 +16,14 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Map;
-import java.util.UUID;
+import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.CommunicationPreference;
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 
 /**
  * Contract behavior integration tests for Communication Preference Management
@@ -42,24 +44,23 @@ class CommunicationPreferenceServiceContractBehaviorIT {
         private CommunicationPreferenceService preferenceService;
 
         @Autowired
-        private PartyRepository partyRepository;
+        private CommercialPartyRepository partyRepository;
 
         @Autowired
         private CommunicationPreferenceRepository preferenceRepository;
 
-        private Party testParty;
+        private CommercialParty testParty;
         private UUID testPartyUuid;
 
         @BeforeEach
         void setUp() {
                 // Create test party
                 testParty = new CommercialParty();
-                testParty.setPartyType("ORGANIZATION");
                 testParty.setLegalName("Test Party");
                 testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
-                testParty.setStatus("ACTIVE");
+                testParty.setStatus(AccountStatus.ACTIVE);
                 testParty = partyRepository.save(testParty);
-                testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getId()).getBytes());
+                testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getPartyId()).getBytes());
         }
 
         @AfterEach
@@ -74,7 +75,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
         @DisplayName("getCommunicationPreferences - Success: Returns default preferences when none exist")
         void getCommunicationPreferences_defaultPreferences() {
                 GetCommunicationPreferencesResponse response = preferenceService
-                                .getCommunicationPreferences(String.valueOf(testParty.getId()));
+                                .getCommunicationPreferences(String.valueOf(testParty.getPartyId()));
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getEmailPreference()).isEqualTo("OPT_OUT");
@@ -99,7 +100,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                 preferenceRepository.save(preference);
 
                 GetCommunicationPreferencesResponse response = preferenceService
-                                .getCommunicationPreferences(String.valueOf(testParty.getId()));
+                                .getCommunicationPreferences(String.valueOf(testParty.getPartyId()));
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getEmailPreference()).isEqualTo("OPT_IN");
@@ -133,7 +134,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                                 .build();
 
                 UpsertCommunicationPreferencesResponse response = preferenceService
-                                .upsertCommunicationPreferences(String.valueOf(testParty.getId()), request);
+                                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getOperationType()).isEqualTo("CREATED");
@@ -169,7 +170,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                                 .build();
 
                 UpsertCommunicationPreferencesResponse response = preferenceService
-                                .upsertCommunicationPreferences(String.valueOf(testParty.getId()), request);
+                                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getOperationType()).isEqualTo("UPDATED");
@@ -189,7 +190,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                                 .build();
 
                 UpsertCommunicationPreferencesResponse response = preferenceService
-                                .upsertCommunicationPreferences(String.valueOf(testParty.getId()), request);
+                                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getOperationType()).isEqualTo("CREATED");
