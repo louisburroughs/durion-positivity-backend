@@ -5,6 +5,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,4 +15,6 @@ public interface EventProcessingLogRepository extends JpaRepository<EventProcess
     Optional<EventProcessingLog> findByEventId(@NonNull String eventId);
 
     boolean existsByEventId(@NonNull String eventId);
+
+    List<EventProcessingLog> findByVehicleId(@NonNull String vehicleId);
 }

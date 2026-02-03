@@ -90,6 +90,11 @@
             <artifactId>jspecify</artifactId>
             <version>1.0.0</version>
         </dependency>
+        <!-- Spring Cloud Stream with Kafka Binder -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-kafka</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
