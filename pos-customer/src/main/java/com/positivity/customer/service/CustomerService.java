@@ -2,8 +2,6 @@ package com.positivity.customer.service;
 
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.AbstractCustomer;
-import com.positivity.customer.internal.entity.CommercialCustomer;
-import com.positivity.customer.internal.entity.GovernmentCustomer;
 import com.positivity.customer.internal.entity.PrivateCustomer;
 import com.positivity.customer.internal.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
@@ -185,20 +183,12 @@ public class CustomerService {
     }
 
     /**
-     * Creates the appropriate entity subclass based on customer type.
+     * Creates a new customer entity.
      *
-     * @param customerType the customer type string
-     * @return the appropriate entity instance
+     * @return a new PrivateCustomer instance
      */
     private AbstractCustomer createEntityByType(String customerType) {
-        if (customerType == null) {
-            return new PrivateCustomer();
-        }
-        return switch (customerType.toLowerCase()) {
-            case "commercial" -> new CommercialCustomer();
-            case "government" -> new GovernmentCustomer();
-            default -> new PrivateCustomer();
-        };
+        return new PrivateCustomer();
     }
 
     /**
@@ -208,11 +198,6 @@ public class CustomerService {
      * @return the customer type string
      */
     private String determineCustomerType(AbstractCustomer entity) {
-        if (entity instanceof CommercialCustomer) {
-            return "commercial";
-        } else if (entity instanceof GovernmentCustomer) {
-            return "government";
-        }
         return "private";
     }
 }

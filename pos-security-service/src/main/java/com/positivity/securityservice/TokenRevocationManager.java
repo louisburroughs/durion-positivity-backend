@@ -1,15 +1,16 @@
 package com.positivity.securityservice;
 
-import io.github.resilience4j.retry.Retry;
-import io.vavr.control.Try;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
+
+import io.github.resilience4j.retry.Retry;
+import io.vavr.control.Try;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Manages JWT token revocation using Redis for high-performance lookup.
