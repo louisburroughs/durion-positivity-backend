@@ -30,7 +30,7 @@ public class Contact {
     @JoinColumn(name = "party_id", nullable = false)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Party party;
+    private CommercialParty commercialParty;
 
     @NotBlank
     @Schema(description = "First name of the contact", example = "Jane")

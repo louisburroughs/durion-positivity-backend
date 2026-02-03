@@ -6,17 +6,26 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Abstract base class for individual customers implementing PartyEntity
+ * (CAP:091 Story #104).
+ * Customers are parties that can own and manage vehicles.
+ */
 @Data
 @NoArgsConstructor
 @Entity
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
 @DiscriminatorColumn(name = "customer_type")
-@Schema(description = "Abstract base class for an individual customer (person). Use Party for organizations.")
+@Schema(description = "Abstract base class for an individual customer (person). Use CommercialParty for organizations.")
 public abstract class AbstractCustomer implements Customer {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -46,8 +55,21 @@ public abstract class AbstractCustomer implements Customer {
     private String primaryAddress;
 
     @ElementCollection
-    @Schema(description = "List of vehicle VINs associated with the customer")
-    private List<String> vehicleVins = new ArrayList<>();
+    @CollectionTable(name = "customer_vehicle", joinColumns = @JoinColumn(name = "customer_id"))
+    @Column(name = "vin")
+    @Schema(description = "Set of vehicle VINs associated with the customer")
+    private Set<String> vehicleVins = new HashSet<>();
+
+    @Column(nullable = false)
+    @Schema(description = "Status of the customer", example = "ACTIVE")
+    private String status = "ACTIVE";
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private Instant createdAt;
+
+    @UpdateTimestamp
+    private Instant modifiedAt;
 
     @PrePersist
     @PreUpdate
@@ -57,6 +79,32 @@ public abstract class AbstractCustomer implements Customer {
         }
         if (lastName == null || lastName.isBlank()) {
             throw new IllegalStateException("lastName is required for a customer");
+        }
+    }
+
+    // PartyEntity interface implementation
+    @Override
+    public String getDisplayName() {
+        return firstName + " " + lastName;
+    }
+
+    @Override
+    public String getPartyType() {
+        return "CUSTOMER";
+    }
+
+    @Override
+    public void addVehicleVin(String vin) {
+        if (vehicleVins == null) {
+            vehicleVins = new HashSet<>();
+        }
+        vehicleVins.add(vin);
+    }
+
+    @Override
+    public void removeVehicleVin(String vin) {
+        if (vehicleVins != null) {
+            vehicleVins.remove(vin);
         }
     }
 }

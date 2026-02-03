@@ -6,12 +6,12 @@ import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
 import com.positivity.customer.internal.dto.PartyRelationshipRole;
 import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.entity.Party;
+import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.Person;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
-import com.positivity.customer.internal.repository.PartyRepository;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PersonRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +51,7 @@ import java.util.UUID;
 public class PartyRelationshipService {
 
         private final PartyRelationshipRepository partyRelationshipRepository;
-        private final PartyRepository partyRepository;
+        private final CommercialPartyRepository partyRepository;
         private final PersonRepository personRepository;
         private final ContactPointRepository contactPointRepository;
 
@@ -81,7 +81,7 @@ public class PartyRelationshipService {
                                 partyId, request.getPersonId(), request.getRoles());
 
                 // Validate party exists
-                Party party = partyRepository.findById(partyId)
+                CommercialParty party = partyRepository.findById(partyId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Party not found"));
 

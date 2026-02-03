@@ -6,7 +6,7 @@ import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.entity.*;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
-import com.positivity.customer.internal.repository.PartyRepository;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PersonRepository;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -40,13 +40,13 @@ public class ContactRoleService {
     private static final Logger log = LoggerFactory.getLogger(ContactRoleService.class);
 
     private final ContactRoleAssignmentRepository roleAssignmentRepository;
-    private final PartyRepository partyRepository;
+    private final CommercialPartyRepository partyRepository;
     private final PersonRepository personRepository;
     private final ContactPointRepository contactPointRepository;
 
     public ContactRoleService(
             ContactRoleAssignmentRepository roleAssignmentRepository,
-            PartyRepository partyRepository,
+            CommercialPartyRepository partyRepository,
             PersonRepository personRepository,
             ContactPointRepository contactPointRepository) {
         this.roleAssignmentRepository = roleAssignmentRepository;
@@ -68,7 +68,7 @@ public class ContactRoleService {
         UUID partyUuid = parseUuid(partyId, "partyId");
 
         // Verify party exists
-        Party party = partyRepository.findById(partyUuid)
+        CommercialParty party = partyRepository.findById(partyUuid)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
 
         // Get all role assignments for this party (using partyUuid as the account ID)

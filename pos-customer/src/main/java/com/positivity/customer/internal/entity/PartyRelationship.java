@@ -55,7 +55,7 @@ public class PartyRelationship {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Schema(description = "The commercial account (organization) in this relationship")
-    private Party fromParty;
+    private PartyEntity fromParty;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "to_person_id", nullable = false)
