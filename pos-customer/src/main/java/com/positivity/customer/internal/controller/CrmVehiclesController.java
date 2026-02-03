@@ -87,31 +87,6 @@ public class CrmVehiclesController {
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
         }
 
-        @Operation(summary = "Get vehicle by ID", description = "Retrieve vehicle details by vehicle ID (stub endpoint)")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
-        })
-        @GetMapping("/vehicles/{vehicleId}")
-        @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_VIEW + "')")
-        public ResponseEntity<Void> getVehicle(
-                        @Parameter(description = "Vehicle ID", required = true) @PathVariable String vehicleId) {
-                log.info("Stub getVehicle vehicleId={}", vehicleId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
-        }
-
-        @Operation(summary = "Search vehicles", description = "Search and filter vehicles across all customers (stub endpoint)")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
-        })
-        @GetMapping("/vehicles")
-        @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_SEARCH + "')")
-        public ResponseEntity<Void> getAllVehiclesFiltered() {
-                log.info("Stub getAllVehiclesFiltered");
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
-        }
-
         @Operation(summary = "Get vehicle for customer", description = "Retrieve a specific vehicle for a given customer (stub endpoint)")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
