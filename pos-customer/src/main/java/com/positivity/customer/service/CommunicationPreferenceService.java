@@ -5,7 +5,7 @@ import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesReques
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
-import com.positivity.customer.internal.repository.PartyRepository;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,11 +44,11 @@ public class CommunicationPreferenceService {
     private static final String DEFAULT_SOURCE = "APP";
 
     private final CommunicationPreferenceRepository preferenceRepository;
-    private final PartyRepository partyRepository;
+    private final CommercialPartyRepository partyRepository;
 
     public CommunicationPreferenceService(
             CommunicationPreferenceRepository preferenceRepository,
-            PartyRepository partyRepository) {
+            CommercialPartyRepository partyRepository) {
         this.preferenceRepository = preferenceRepository;
         this.partyRepository = partyRepository;
     }

@@ -1,10 +1,14 @@
 package com.positivity.customer.internal.entity;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
-public interface Customer {
-    UUID getId();
+/**
+ * Customer interface extending PartyEntity (CAP:091 Story #104).
+ * Customers are parties that can own and manage vehicles.
+ */
+public interface Customer extends PartyEntity {
 
     String getCustomerNumber();
 
@@ -16,7 +20,12 @@ public interface Customer {
 
     String getEmail();
 
-    String getPrimaryAddress();
-
-    List<String> getVehicleVins();
+    // Inherited from PartyEntity:
+    // UUID getId();
+    // String getDisplayName();
+    // String getStatus();
+    // Set<String> getVehicleVins();
+    // void addVehicleVin(String vin);
+    // void removeVehicleVin(String vin);
+    // String getPrimaryAddress();
 }

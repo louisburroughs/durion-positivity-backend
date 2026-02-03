@@ -22,7 +22,7 @@ import com.positivity.customer.internal.dto.UpdateContactRolesRequest.RoleAssign
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactRole;
 import com.positivity.customer.internal.entity.ContactRoleAssignment;
-import com.positivity.customer.internal.entity.Party;
+import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Person;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
 import com.positivity.customer.internal.repository.PartyRepository;
@@ -62,7 +62,7 @@ class ContactRoleServiceContractBehaviorIT {
         @BeforeEach
         void setUp() {
                 // Create test party with a contact
-                testParty = new Party();
+                testParty = new CommercialParty();
                 testParty.setPartyType("ORGANIZATION");
                 testParty.setLegalName("Test Party");
                 testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());

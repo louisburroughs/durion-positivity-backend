@@ -73,7 +73,7 @@ class PartyRelationshipServiceContractBehaviorIT {
                 partyRepository.deleteAll();
 
                 // Create test party (commercial account)
-                testParty = new Party();
+                testParty = new CommercialParty();
                 testParty.setPartyNumber("TEST-" + UUID.randomUUID().toString().substring(0, 8));
                 testParty.setLegalName("Test Commercial Account");
                 testParty.setStatus("ACTIVE");

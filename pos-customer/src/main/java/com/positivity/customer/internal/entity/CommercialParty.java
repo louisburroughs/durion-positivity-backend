@@ -18,12 +18,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Commercial PartyEntity entity (organization/company) implementing PartyEntity
+ * (CAP:091 Story #104).
+ * Represents organizations doing business with the service provider.
+ * Supports hierarchy and requires at least one contact.
+ */
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "party")
+@Table(name = "commercial_party")
 @Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
-public class Party {
+public class CommercialParty implements PartyEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Schema(description = "Unique identifier of the party", nullable = false)
@@ -60,12 +66,12 @@ public class Party {
     @JoinColumn(name = "parent_party_id")
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Party parentParty;
+    private PartyEntity parentParty;
 
     @OneToMany(mappedBy = "parentParty", cascade = CascadeType.ALL)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Set<Party> childParties = new HashSet<>();
+    private Set<PartyEntity> childParties = new HashSet<>();
 
     @ElementCollection
     @CollectionTable(name = "party_vehicle", joinColumns = @JoinColumn(name = "party_id"))
@@ -102,5 +108,17 @@ public class Party {
         if (contacts == null || contacts.isEmpty()) {
             throw new IllegalStateException("Party must have at least one contact");
         }
+    }
+
+    @Override
+    public void addVehicleVin(String vin) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'addVehicleVin'");
+    }
+
+    @Override
+    public void removeVehicleVin(String vin) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'removeVehicleVin'");
     }
 }

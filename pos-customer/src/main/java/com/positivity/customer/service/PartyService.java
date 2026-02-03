@@ -16,9 +16,9 @@ import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.entity.Contact;
-import com.positivity.customer.internal.entity.Party;
+import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.repository.ContactRepository;
-import com.positivity.customer.internal.repository.PartyRepository;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PartyService {
 
-    private final PartyRepository partyRepository;
+    private final CommercialPartyRepository partyRepository;
     private final ContactRepository contactRepository;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
@@ -45,7 +45,7 @@ public class PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "legalName is required");
         }
 
-        Party party = new Party();
+        CommercialParty party = new CommercialParty();
         party.setLegalName(request.getLegalName());
         party.setDisplayName(request.getDisplayName());
         party.setTaxId(request.getTaxId());
@@ -60,7 +60,7 @@ public class PartyService {
         Contact contact = buildContactForParty(request, party);
         party.getContacts().add(contact);
 
-        Party saved = partyRepository.save(party);
+        CommercialParty saved = partyRepository.save(party);
         contactRepository.save(contact);
 
         return CreateCommercialAccountResponse.builder()
@@ -74,7 +74,7 @@ public class PartyService {
 
     @Transactional(readOnly = true)
     public GetPartyResponse getParty(String partyId) {
-        Party party = findPartyOrThrow(partyId);
+        CommercialParty party = findPartyOrThrow(partyId);
         return GetPartyResponse.builder()
                 .partyId(String.valueOf(party.getId()))
                 .partyType(party.getPartyType())
@@ -90,8 +90,8 @@ public class PartyService {
 
     @Transactional(readOnly = true)
     public GetContactsWithRolesResponse getContactsWithRoles(String partyId) {
-        Party party = findPartyOrThrow(partyId);
-        List<Contact> contacts = contactRepository.findByParty(party);
+        CommercialParty party = findPartyOrThrow(partyId);
+        List<Contact> contacts = contactRepository.findByCommercialParty(party);
 
         List<GetContactsWithRolesResponse.ContactWithRoles> contactDtos = new ArrayList<>();
         for (Contact contact : contacts) {
@@ -113,7 +113,7 @@ public class PartyService {
                 .build();
     }
 
-    private Party findPartyOrThrow(String partyId) {
+    private CommercialParty findPartyOrThrow(String partyId) {
         UUID id = parseUuid(partyId);
         return partyRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "party not found"));
@@ -127,13 +127,13 @@ public class PartyService {
         }
     }
 
-    private Contact buildContactForParty(CreateCommercialAccountRequest request, Party party) {
+    private Contact buildContactForParty(CreateCommercialAccountRequest request, CommercialParty party) {
         String nameFallback = request.getDisplayName();
         if (!StringUtils.hasText(nameFallback)) {
             nameFallback = request.getLegalName();
         }
         Contact contact = new Contact();
-        contact.setParty(party);
+        contact.setCommercialParty(party);
         contact.setFirstName(nameFallback);
         contact.setLastName("Contact");
         contact.setEmail(request.getEmail());
@@ -157,8 +157,8 @@ public class PartyService {
 
         // Simple search implementation - in production would use Specification or
         // QueryDSL
-        List<Party> allParties = partyRepository.findAll();
-        List<Party> filtered = allParties.stream()
+        List<CommercialParty> allParties = partyRepository.findAll();
+        List<CommercialParty> filtered = allParties.stream()
                 .filter(p -> matchesSearchCriteria(p, searchRequest))
                 .collect(Collectors.toList());
 
@@ -192,7 +192,7 @@ public class PartyService {
 
         // Merge contacts from loser to survivor
         for (Contact contact : new ArrayList<>(loser.getContacts())) {
-            contact.setParty(survivor);
+            contact.setCommercialParty(survivor);
             survivor.getContacts().add(contact);
         }
         loser.getContacts().clear();
@@ -219,13 +219,13 @@ public class PartyService {
     @Transactional
     public UpdateContactRolesResponse updateContactRoles(String partyId, String contactId,
             UpdateContactRolesRequest request) {
-        Party party = findPartyOrThrow(partyId);
+        CommercialParty party = findPartyOrThrow(partyId);
         UUID contactIdUuid = parseUuid(contactId);
 
         Contact contact = contactRepository.findById(contactIdUuid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "contact not found"));
 
-        if (!contact.getParty().getId().equals(party.getId())) {
+        if (!contact.getCommercialParty().getId().equals(party.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "contact does not belong to this party");
         }
 
@@ -240,7 +240,7 @@ public class PartyService {
 
     @Transactional(readOnly = true)
     public GetCommunicationPreferencesResponse getCommunicationPreferences(String partyId) {
-        Party party = findPartyOrThrow(partyId);
+        CommercialParty party = findPartyOrThrow(partyId);
 
         // Return default/empty preferences - would fetch from separate entity in
         // production
@@ -255,7 +255,7 @@ public class PartyService {
     @Transactional
     public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(String partyId,
             UpsertCommunicationPreferencesRequest request) {
-        Party party = findPartyOrThrow(partyId);
+        CommercialParty party = findPartyOrThrow(partyId);
 
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
@@ -274,7 +274,7 @@ public class PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "vinNumber is required");
         }
 
-        Party party = findPartyOrThrow(partyId);
+        CommercialParty party = findPartyOrThrow(partyId);
 
         if (party.getVehicleVins().contains(request.getVinNumber())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Vehicle already associated with this party");
@@ -290,7 +290,7 @@ public class PartyService {
                 .build();
     }
 
-    private boolean matchesSearchCriteria(Party party, SearchPartiesRequest request) {
+    private boolean matchesSearchCriteria(CommercialParty party, SearchPartiesRequest request) {
         if (StringUtils.hasText(request.getName())) {
             String searchTerm = request.getName().toLowerCase(Locale.US);
             boolean matchesLegal = party.getLegalName() != null
@@ -317,7 +317,7 @@ public class PartyService {
         return true;
     }
 
-    private SearchPartiesResponse.PartySummary mapToPartySummary(Party party) {
+    private SearchPartiesResponse.PartySummary mapToPartySummary(CommercialParty party) {
         return SearchPartiesResponse.PartySummary.builder()
                 .partyId(String.valueOf(party.getId()))
                 .legalName(party.getLegalName())
