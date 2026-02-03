@@ -6,13 +6,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for PartyAlias entity operations.
  * Used for ID redirection after merge operations.
  */
 @Repository
-public interface PartyAliasRepository extends JpaRepository<PartyAlias, Long> {
+public interface PartyAliasRepository extends JpaRepository<PartyAlias, UUID> {
 
     /**
      * Find alias by source party ID.
@@ -20,7 +21,7 @@ public interface PartyAliasRepository extends JpaRepository<PartyAlias, Long> {
      * @param sourcePartyId the source party ID
      * @return the alias if exists
      */
-    Optional<PartyAlias> findBySourcePartyId(@NonNull Long sourcePartyId);
+    Optional<PartyAlias> findBySourcePartyId(@NonNull UUID sourcePartyId);
 
     /**
      * Check if an alias exists for a source party ID.
@@ -28,7 +29,7 @@ public interface PartyAliasRepository extends JpaRepository<PartyAlias, Long> {
      * @param sourcePartyId the source party ID
      * @return true if alias exists
      */
-    boolean existsBySourcePartyId(@NonNull Long sourcePartyId);
+    boolean existsBySourcePartyId(@NonNull UUID sourcePartyId);
 
     /**
      * Find all aliases pointing to a target party.
@@ -36,5 +37,5 @@ public interface PartyAliasRepository extends JpaRepository<PartyAlias, Long> {
      * @param targetPartyId the target party ID
      * @return list of aliases
      */
-    java.util.List<PartyAlias> findByTargetPartyId(@NonNull Long targetPartyId);
+    java.util.List<PartyAlias> findByTargetPartyId(@NonNull UUID targetPartyId);
 }

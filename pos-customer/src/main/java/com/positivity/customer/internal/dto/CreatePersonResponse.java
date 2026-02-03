@@ -10,8 +10,6 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.positivity.customer.internal.dto.PreferredContactMethod;
-
 /**
  * Response DTO for person creation.
  *
