@@ -22,27 +22,26 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class VehicleService {
-    
+
     private final VehicleRecordRepository vehicleRepository;
-    
+
     /**
      * Creates a new vehicle with VIN validation and normalization.
      */
     @Transactional
     public VehicleResponse createVehicle(@NonNull CreateVehicleRequest request) {
         log.info("Creating vehicle for account {} with VIN {}", request.getAccountId(), request.getVin());
-        
+
         // Validate and normalize VIN
         String vinNormalized = VinUtils.validateAndNormalize(request.getVin());
-        
+
         // Check global uniqueness
         if (vehicleRepository.existsByVinNormalizedAndIsActiveTrue(vinNormalized)) {
             throw new IllegalArgumentException(
-                "Vehicle with VIN " + request.getVin() + " already exists. " +
-                "VINs must be globally unique across all active vehicles."
-            );
+                    "Vehicle with VIN " + request.getVin() + " already exists. " +
+                            "VINs must be globally unique across all active vehicles.");
         }
-        
+
         // Create entity
         VehicleRecord vehicle = VehicleRecord.builder()
                 .accountId(request.getAccountId())
@@ -58,13 +57,13 @@ public class VehicleService {
                 .trim(request.getTrim())
                 .isActive(true)
                 .build();
-        
+
         VehicleRecord saved = vehicleRepository.save(vehicle);
         log.info("Created vehicle with ID {} for account {}", saved.getVehicleId(), saved.getAccountId());
-        
+
         return mapToResponse(saved);
     }
-    
+
     /**
      * Gets a vehicle by ID.
      */
@@ -73,7 +72,7 @@ public class VehicleService {
         return vehicleRepository.findByVehicleId(vehicleId)
                 .map(this::mapToResponse);
     }
-    
+
     /**
      * Gets a vehicle by VIN (normalized lookup).
      */
@@ -83,17 +82,17 @@ public class VehicleService {
         return vehicleRepository.findByVinNormalized(vinNormalized)
                 .map(this::mapToResponse);
     }
-    
+
     /**
      * Updates a vehicle.
      */
     @Transactional
     public VehicleResponse updateVehicle(@NonNull UUID vehicleId, @NonNull CreateVehicleRequest request) {
         log.info("Updating vehicle {}", vehicleId);
-        
+
         VehicleRecord vehicle = vehicleRepository.findByVehicleId(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-        
+
         // Update fields
         vehicle.setDescription(request.getDescription());
         vehicle.setUnitNumber(request.getUnitNumber());
@@ -103,29 +102,29 @@ public class VehicleService {
         vehicle.setMake(request.getMake());
         vehicle.setModel(request.getModel());
         vehicle.setTrim(request.getTrim());
-        
+
         VehicleRecord saved = vehicleRepository.save(vehicle);
         log.info("Updated vehicle {}", vehicleId);
-        
+
         return mapToResponse(saved);
     }
-    
+
     /**
      * Deletes (deactivates) a vehicle.
      */
     @Transactional
     public void deleteVehicle(@NonNull UUID vehicleId) {
         log.info("Deactivating vehicle {}", vehicleId);
-        
+
         VehicleRecord vehicle = vehicleRepository.findByVehicleId(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-        
+
         vehicle.setIsActive(false);
         vehicleRepository.save(vehicle);
-        
+
         log.info("Deactivated vehicle {}", vehicleId);
     }
-    
+
     private VehicleResponse mapToResponse(VehicleRecord vehicle) {
         return VehicleResponse.builder()
                 .vehicleId(vehicle.getVehicleId())

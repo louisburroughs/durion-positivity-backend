@@ -10,8 +10,8 @@ import java.util.UUID;
 
 @Repository
 public interface EventProcessingLogRepository extends JpaRepository<EventProcessingLog, UUID> {
-    
+
     Optional<EventProcessingLog> findByEventId(@NonNull String eventId);
-    
+
     boolean existsByEventId(@NonNull String eventId);
 }

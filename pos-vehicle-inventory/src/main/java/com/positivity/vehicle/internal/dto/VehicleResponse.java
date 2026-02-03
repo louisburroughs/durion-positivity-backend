@@ -16,7 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class VehicleResponse {
-    
+
     private UUID vehicleId;
     private UUID accountId;
     private String vin;
@@ -25,12 +25,12 @@ public class VehicleResponse {
     private String description;
     private String licensePlate;
     private String licensePlateJurisdiction;
-    
+
     private Integer year;
     private String make;
     private String model;
     private String trim;
-    
+
     private Boolean isActive;
     private Instant createdAt;
     private Instant updatedAt;

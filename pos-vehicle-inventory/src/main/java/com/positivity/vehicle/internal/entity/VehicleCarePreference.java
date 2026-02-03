@@ -27,44 +27,44 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "vehicle_care_preferences", indexes = {
-    @Index(name = "idx_vcp_vehicle_id", columnList = "vehicle_id")
+        @Index(name = "idx_vcp_vehicle_id", columnList = "vehicle_id")
 })
 @EntityListeners(AuditingEntityListener.class)
 public class VehicleCarePreference {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
-    
+
     @NonNull
     @Column(name = "vehicle_id", nullable = false, unique = true)
     private UUID vehicleId;
-    
+
     @NonNull
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "preferences", columnDefinition = "jsonb", nullable = false)
     private Map<String, Object> preferences;
-    
+
     @Column(name = "service_notes", columnDefinition = "TEXT")
     private String serviceNotes;
-    
+
     @NonNull
     @Column(name = "created_by_user_id", nullable = false)
     private UUID createdByUserId;
-    
+
     @NonNull
     @Column(name = "updated_by_user_id", nullable = false)
     private UUID updatedByUserId;
-    
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-    
+
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-    
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
