@@ -8,7 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.jspecify.annotations.Nullable;
+
+import com.positivity.customer.internal.enums.AccountStatus;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -26,11 +27,11 @@ import java.util.UUID;
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
 @DiscriminatorColumn(name = "customer_type")
 @Schema(description = "Abstract base class for an individual customer (person). Use CommercialParty for organizations.")
-public abstract class AbstractCustomer implements Customer {
+public abstract class AbstractParty implements Party {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "customer_id", updatable = false, nullable = false)
-    private UUID id;
+    private UUID partyId;
 
     @Column(unique = true, nullable = false)
     @Schema(description = "Unique customer number", example = "CUST-1001")
@@ -62,7 +63,7 @@ public abstract class AbstractCustomer implements Customer {
 
     @Column(nullable = false)
     @Schema(description = "Status of the customer", example = "ACTIVE")
-    private String status = "ACTIVE";
+    private AccountStatus status = AccountStatus.ACTIVE;
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -80,17 +81,6 @@ public abstract class AbstractCustomer implements Customer {
         if (lastName == null || lastName.isBlank()) {
             throw new IllegalStateException("lastName is required for a customer");
         }
-    }
-
-    // PartyEntity interface implementation
-    @Override
-    public String getDisplayName() {
-        return firstName + " " + lastName;
-    }
-
-    @Override
-    public String getPartyType() {
-        return "CUSTOMER";
     }
 
     @Override

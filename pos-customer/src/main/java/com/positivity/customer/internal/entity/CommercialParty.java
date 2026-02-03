@@ -1,39 +1,46 @@
 package com.positivity.customer.internal.entity;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import com.positivity.customer.internal.enums.PartyType;
+
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
 /**
- * Commercial PartyEntity entity (organization/company) implementing PartyEntity
+ * Commercial PartyEntity entity (organization/company) implementing Party
  * (CAP:091 Story #104).
  * Represents organizations doing business with the service provider.
  * Supports hierarchy and requires at least one contact.
  */
 @Data
+@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @Entity
 @Table(name = "commercial_party")
 @Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
-public class CommercialParty implements PartyEntity {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Schema(description = "Unique identifier of the party", nullable = false)
-    private UUID id;
+public class CommercialParty extends AbstractParty {
 
     @Column(unique = true, nullable = false)
     @NotBlank
@@ -55,29 +62,19 @@ public class CommercialParty implements PartyEntity {
     private String billingTermsId;
 
     @Column(nullable = false)
-    @Schema(description = "Party type (ORGANIZATION|INDIVIDUAL)", example = "ORGANIZATION")
-    private String partyType = "ORGANIZATION";
-
-    @Column(nullable = false)
-    @Schema(description = "Status of the party", example = "ACTIVE")
-    private String status = "ACTIVE";
+    @Schema(description = "Party type (COMMERCIAL|PERSON)", example = "COMMERCIAL")
+    private PartyType partyType = PartyType.COMMERCIAL;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_party_id")
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private PartyEntity parentParty;
+    private Party parentParty;
 
     @OneToMany(mappedBy = "parentParty", cascade = CascadeType.ALL)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Set<PartyEntity> childParties = new HashSet<>();
-
-    @ElementCollection
-    @CollectionTable(name = "party_vehicle", joinColumns = @JoinColumn(name = "party_id"))
-    @Column(name = "vin")
-    @Schema(description = "VINs associated with this organization")
-    private Set<String> vehicleVins = new HashSet<>();
+    private Set<Party> childParties = new HashSet<>();
 
     @ElementCollection
     @CollectionTable(name = "party_external_identifier", joinColumns = @JoinColumn(name = "party_id"))
@@ -95,13 +92,6 @@ public class CommercialParty implements PartyEntity {
     @EqualsAndHashCode.Exclude
     private Set<Contact> contacts = new HashSet<>();
 
-    @CreationTimestamp
-    @Column(updatable = false)
-    private Instant createdAt;
-
-    @UpdateTimestamp
-    private Instant modifiedAt;
-
     @PrePersist
     @PreUpdate
     private void ensureContactsPresent() {
@@ -110,15 +100,4 @@ public class CommercialParty implements PartyEntity {
         }
     }
 
-    @Override
-    public void addVehicleVin(String vin) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'addVehicleVin'");
-    }
-
-    @Override
-    public void removeVehicleVin(String vin) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'removeVehicleVin'");
-    }
 }

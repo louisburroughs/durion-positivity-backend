@@ -1,14 +1,15 @@
 package com.positivity.customer.internal.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
+import java.util.UUID;
+
 import com.positivity.customer.internal.entity.Person;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Response DTO for person creation.

@@ -4,17 +4,20 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.PartyType;
+
 /**
  * High-level Party abstraction for vehicle associations (CAP:091 Story #104).
  * Both Customer and CommercialParty can be Party entities.
  * Vehicles belong to this Party interface, enabling polymorphic relationships.
  */
-public interface PartyEntity {
+public interface Party {
 
     /**
      * Unique identifier for this party.
      */
-    UUID getId();
+    UUID getPartyId();
 
     /**
      * Display name for this party (customer name or organization name).
@@ -24,7 +27,7 @@ public interface PartyEntity {
     /**
      * Status of the party (ACTIVE, INACTIVE, SUSPENDED).
      */
-    String getStatus();
+    AccountStatus getStatus();
 
     /**
      * Vehicle VINs associated with this party.
@@ -60,14 +63,14 @@ public interface PartyEntity {
      * Party type discriminator (CUSTOMER, COMMERCIAL, INDIVIDUAL, etc).
      * Implemented as default to provide sensible default behavior.
      */
-    default String getPartyType() {
-        return "UNKNOWN";
+    default PartyType getPartyType() {
+        return PartyType.UNKNOWN;
     }
 
     /**
      * Set the status of the party.
      */
-    void setStatus(String status);
+    void setStatus(AccountStatus status);
 
     /**
      * Set the vehicle VINs for this party.

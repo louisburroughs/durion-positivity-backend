@@ -9,6 +9,9 @@ import java.util.UUID;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import com.positivity.customer.internal.dto.PreferredContactMethod;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -57,4 +60,9 @@ public class Contact {
 
     @UpdateTimestamp
     private java.time.Instant modifiedAt;
+
+    public void setPreferredContactMethod(PreferredContactMethod email2) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setPreferredContactMethod'");
+    }
 }
