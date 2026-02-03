@@ -78,7 +78,8 @@ public class VehicleEventIngestionService {
         if (!vehicle.getVinNormalized().equals(event.getVinNormalized())) {
             log.warn("VIN change rejected: vehicle={}, old={}, new={}",
                     vehicleId, vehicle.getVinNormalized(), event.getVinNormalized());
-            var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId, ProcessingStatus.CONFLICT_VIN_CHANGE);
+            var eventLog = createEventProcessingLog(eventId, workorderId, vehicleId,
+                    ProcessingStatus.CONFLICT_VIN_CHANGE);
             eventLog.setConflictPolicy(ConflictPolicy.VIN_CHANGE);
             eventLog.setDetails(Map.of("oldVin", vehicle.getVinNormalized(), "newVin", event.getVinNormalized()));
             eventProcessingLogRepository.save(eventLog);
