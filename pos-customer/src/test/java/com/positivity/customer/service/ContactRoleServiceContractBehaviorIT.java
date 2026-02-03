@@ -19,13 +19,15 @@ import org.springframework.web.server.ResponseStatusException;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest.RoleAssignment;
+import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactRole;
 import com.positivity.customer.internal.entity.ContactRoleAssignment;
-import com.positivity.customer.internal.entity.Party;
 import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
-import com.positivity.customer.internal.repository.PartyRepository;
 import com.positivity.customer.internal.repository.PersonRepository;
 
 /**
@@ -46,7 +48,7 @@ class ContactRoleServiceContractBehaviorIT {
         private ContactRoleService contactRoleService;
 
         @Autowired
-        private PartyRepository partyRepository;
+        private CommercialPartyRepository partyRepository;
 
         @Autowired
         private PersonRepository personRepository;
@@ -54,30 +56,29 @@ class ContactRoleServiceContractBehaviorIT {
         @Autowired
         private ContactRoleAssignmentRepository roleAssignmentRepository;
 
-        private Party testParty;
-        private Person testContact;
+        private CommercialParty testParty;
         private UUID testContactUuid;
         private UUID testPartyUuid;
 
         @BeforeEach
         void setUp() {
                 // Create test party with a contact
-                testParty = new Party();
-                testParty.setPartyType("ORGANIZATION");
+                testParty = new CommercialParty();
+                testParty.setPartyType(PartyType.COMMERCIAL);
                 testParty.setLegalName("Test Party");
                 testParty.setPartyNumber("PARTY-TEST-" + System.currentTimeMillis());
-                testParty.setStatus("ACTIVE");
+                testParty.setStatus(AccountStatus.ACTIVE);
 
                 // Create and add a contact to the party before saving
                 Contact contact = new Contact();
-                contact.setParty(testParty);
+                contact.setCommercialParty(testParty);
                 contact.setFirstName("John");
                 contact.setLastName("Doe");
                 contact.setActive(true);
                 testParty.getContacts().add(contact);
 
                 testParty = partyRepository.save(testParty);
-                testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getId()).getBytes());
+                testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getPartyId()).getBytes());
 
                 // Create test person (independent entity for contact role assignments)
                 Person contactPerson = new Person();
@@ -86,7 +87,6 @@ class ContactRoleServiceContractBehaviorIT {
                 contactPerson.setPreferredContactMethod(
                                 com.positivity.customer.internal.dto.PreferredContactMethod.EMAIL);
                 contactPerson = personRepository.save(contactPerson);
-                testContact = contactPerson;
                 testContactUuid = contactPerson.getPersonId();
         }
 
@@ -103,7 +103,7 @@ class ContactRoleServiceContractBehaviorIT {
                 roleAssignmentRepository.save(assignment);
 
                 GetContactsWithRolesResponse response = contactRoleService
-                                .getContactsWithRoles(String.valueOf(testParty.getId()));
+                                .getContactsWithRoles(String.valueOf(testParty.getPartyId()));
 
                 assertThat(response.getContacts()).hasSize(1);
                 var contact = response.getContacts().get(0);
@@ -140,7 +140,7 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getId()),
+                                String.valueOf(testParty.getPartyId()),
                                 testContactUuid.toString(),
                                 request);
 
@@ -187,7 +187,7 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getId()),
+                                String.valueOf(testParty.getPartyId()),
                                 testContactUuid.toString(),
                                 request);
 
@@ -215,7 +215,7 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getId()),
+                                String.valueOf(testParty.getPartyId()),
                                 testContactUuid.toString(),
                                 request);
 
@@ -250,7 +250,7 @@ class ContactRoleServiceContractBehaviorIT {
                 UUID nonExistentContactUuid = UUID.randomUUID();
 
                 assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getId()),
+                                String.valueOf(testParty.getPartyId()),
                                 nonExistentContactUuid.toString(),
                                 request))
                                 .isInstanceOf(ResponseStatusException.class)
@@ -269,7 +269,7 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getId()),
+                                String.valueOf(testParty.getPartyId()),
                                 testContactUuid.toString(),
                                 request))
                                 .isInstanceOf(IllegalArgumentException.class);

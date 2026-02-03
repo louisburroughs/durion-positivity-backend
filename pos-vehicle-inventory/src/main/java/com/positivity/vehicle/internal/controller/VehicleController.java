@@ -19,7 +19,7 @@ import java.util.Optional;
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/v1/vehicles")
+@RequestMapping("/v1/vehicles-legacy")
 public class VehicleController {
     private final VehicleDao vehicleDao;
 
@@ -86,11 +86,12 @@ public class VehicleController {
 
     @Operation(summary = "Create vehicle by VIN", description = "Add a new vehicle to the inventory using its VIN.")
     @ApiResponse(responseCode = "200", description = "Vehicle created successfully.")
-    @PostMapping("/vin/{vin}")
+    @PostMapping("/vin")
     public ResponseEntity<VehicleEntity> createVehicleByVIN(
-            @Parameter(description = "VIN of the vehicle to create", example = "1HGCM82633A004352") @PathVariable String vin,
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleEntity vehicle) {
-        vehicle.setVIN(vin);
+        if (vehicle.getVIN() == null || vehicle.getVIN().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         VehicleEntity saved = vehicleDao.save(vehicle);
         log.info("Created vehicle with VIN {}", saved.getVIN());
         return ResponseEntity.ok(saved);

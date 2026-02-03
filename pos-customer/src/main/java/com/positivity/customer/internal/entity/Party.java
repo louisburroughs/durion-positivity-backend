@@ -1,106 +1,79 @@
 package com.positivity.customer.internal.entity;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-@Data
-@NoArgsConstructor
-@Entity
-@Table(name = "party")
-@Schema(description = "Organization or company doing business with the service provider. Supports hierarchy and requires at least one contact.")
-public class Party {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Schema(description = "Unique identifier of the party", nullable = false)
-    private UUID id;
+import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.PartyType;
 
-    @Column(unique = true, nullable = false)
-    @NotBlank
-    @Schema(description = "Unique party number", example = "PARTY-1001")
-    private String partyNumber;
+/**
+ * High-level Party abstraction for vehicle associations (CAP:091 Story #104).
+ * Both Customer and CommercialParty can be Party entities.
+ * Vehicles belong to this Party interface, enabling polymorphic relationships.
+ */
+public interface Party {
 
-    @Column(nullable = false)
-    @NotBlank
-    @Schema(description = "Legal name of the organization", example = "Acme Corporation")
-    private String legalName;
+    /**
+     * Unique identifier for this party.
+     */
+    UUID getPartyId();
 
-    @Schema(description = "Display name for the organization", example = "Acme")
-    private String displayName;
+    /**
+     * Display name for this party (customer name or organization name).
+     */
+    String getDisplayName();
 
-    @Schema(description = "Tax identification number", example = "99-1234567")
-    private String taxId;
+    /**
+     * Status of the party (ACTIVE, INACTIVE, SUSPENDED).
+     */
+    AccountStatus getStatus();
 
-    @Schema(description = "Billing terms foreign key", example = "NET30")
-    private String billingTermsId;
+    /**
+     * Vehicle VINs associated with this party.
+     */
+    Set<String> getVehicleVins();
 
-    @Column(nullable = false)
-    @Schema(description = "Party type (ORGANIZATION|INDIVIDUAL)", example = "ORGANIZATION")
-    private String partyType = "ORGANIZATION";
+    /**
+     * Add vehicle VIN to this party.
+     */
+    void addVehicleVin(String vin);
 
-    @Column(nullable = false)
-    @Schema(description = "Status of the party", example = "ACTIVE")
-    private String status = "ACTIVE";
+    /**
+     * Remove vehicle VIN from this party.
+     */
+    void removeVehicleVin(String vin);
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_party_id")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private Party parentParty;
+    /**
+     * Primary contact information for this party.
+     */
+    String getPrimaryAddress();
 
-    @OneToMany(mappedBy = "parentParty", cascade = CascadeType.ALL)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private Set<Party> childParties = new HashSet<>();
+    /**
+     * Party creation timestamp.
+     */
+    Instant getCreatedAt();
 
-    @ElementCollection
-    @CollectionTable(name = "party_vehicle", joinColumns = @JoinColumn(name = "party_id"))
-    @Column(name = "vin")
-    @Schema(description = "VINs associated with this organization")
-    private Set<String> vehicleVins = new HashSet<>();
+    /**
+     * Party last modification timestamp.
+     */
+    Instant getModifiedAt();
 
-    @ElementCollection
-    @CollectionTable(name = "party_external_identifier", joinColumns = @JoinColumn(name = "party_id"))
-    @MapKeyColumn(name = "system_name")
-    @Column(name = "identifier_value")
-    @Schema(description = "External identifiers keyed by source system")
-    private Map<String, String> externalIdentifiers = new HashMap<>();
-
-    @Schema(description = "Primary address label or identifier for the organization", example = "123 Main St, Springfield")
-    private String primaryAddress;
-
-    @OneToMany(mappedBy = "party", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @NotEmpty
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private Set<Contact> contacts = new HashSet<>();
-
-    @CreationTimestamp
-    @Column(updatable = false)
-    private Instant createdAt;
-
-    @UpdateTimestamp
-    private Instant modifiedAt;
-
-    @PrePersist
-    @PreUpdate
-    private void ensureContactsPresent() {
-        if (contacts == null || contacts.isEmpty()) {
-            throw new IllegalStateException("Party must have at least one contact");
-        }
+    /**
+     * Party type discriminator (CUSTOMER, COMMERCIAL, INDIVIDUAL, etc).
+     * Implemented as default to provide sensible default behavior.
+     */
+    default PartyType getPartyType() {
+        return PartyType.UNKNOWN;
     }
+
+    /**
+     * Set the status of the party.
+     */
+    void setStatus(AccountStatus status);
+
+    /**
+     * Set the vehicle VINs for this party.
+     */
+    void setVehicleVins(Set<String> vehicleVins);
 }

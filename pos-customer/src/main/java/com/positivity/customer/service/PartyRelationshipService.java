@@ -1,29 +1,31 @@
 package com.positivity.customer.service;
 
-import com.positivity.customer.internal.dto.ContactPointType;
-import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
-import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
-import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
-import com.positivity.customer.internal.dto.PartyRelationshipRole;
-import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.entity.Party;
-import com.positivity.customer.internal.entity.PartyRelationship;
-import com.positivity.customer.internal.entity.Person;
-import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.PartyRelationshipRepository;
-import com.positivity.customer.internal.repository.PartyRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
+import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
+import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
+import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
+import com.positivity.customer.internal.dto.PartyRelationshipRole;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.PartyRelationship;
+import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.PartyRelationshipRepository;
+import com.positivity.customer.internal.repository.PersonRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for managing party relationships between commercial accounts and
@@ -51,7 +53,7 @@ import java.util.UUID;
 public class PartyRelationshipService {
 
         private final PartyRelationshipRepository partyRelationshipRepository;
-        private final PartyRepository partyRepository;
+        private final CommercialPartyRepository partyRepository;
         private final PersonRepository personRepository;
         private final ContactPointRepository contactPointRepository;
 
@@ -81,7 +83,7 @@ public class PartyRelationshipService {
                                 partyId, request.getPersonId(), request.getRoles());
 
                 // Validate party exists
-                Party party = partyRepository.findById(partyId)
+                CommercialParty party = partyRepository.findById(partyId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Party not found"));
 
@@ -251,7 +253,7 @@ public class PartyRelationshipService {
                 partyRelationshipRepository.save(relationship);
 
                 log.info("Deactivated relationship {} for party {} and person {}",
-                                relationshipId, relationship.getFromParty().getId(),
+                                relationshipId, relationship.getFromParty().getPartyId(),
                                 relationship.getToPerson().getPersonId());
         }
 
@@ -275,7 +277,7 @@ public class PartyRelationshipService {
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Relationship not found"));
 
-                if (!relationship.getFromParty().getId().equals(partyId)) {
+                if (!relationship.getFromParty().getPartyId().equals(partyId)) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Relationship does not belong to party " + partyId);
                 }
