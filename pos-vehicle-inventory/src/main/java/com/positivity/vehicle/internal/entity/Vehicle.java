@@ -1,4 +1,4 @@
-package com.positivity.vehicle.internal.model;
+package com.positivity.vehicle.internal.entity;
 
 public interface Vehicle {
     Long getId();

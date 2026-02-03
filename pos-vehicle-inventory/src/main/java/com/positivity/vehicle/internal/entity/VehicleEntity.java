@@ -1,4 +1,4 @@
-package com.positivity.vehicle.internal.model;
+package com.positivity.vehicle.internal.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
