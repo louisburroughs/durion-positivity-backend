@@ -1102,7 +1102,7 @@
                     "primaryAddress": {
                         "type": "string",
                         "description": "Primary address label or identifier for the customer",
-                        "example": 123
+                        "example": "123"
                     },
                     "vehicleVins": {
                         "type": "array",

@@ -1,23 +1,32 @@
 package com.positivity.customer;
 
-import com.positivity.customer.internal.dto.ContactPointType;
-import com.positivity.customer.internal.dto.CreatePersonRequest;
-import com.positivity.customer.internal.dto.CreatePersonResponse;
-import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.dto.PreferredContactMethod;
-import com.positivity.customer.internal.entity.*;
-import com.positivity.customer.internal.repository.*;
-import com.positivity.customer.service.PersonService;
-import org.junit.jupiter.api.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.*;
+import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.dto.CreatePersonRequest;
+import com.positivity.customer.internal.dto.CreatePersonResponse;
+import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.internal.dto.PreferredContactMethod;
+import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.PersonRepository;
+import com.positivity.customer.service.PersonService;
 
 /**
  * Contract behavior integration tests for Party Management services.

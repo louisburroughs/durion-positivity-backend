@@ -1,24 +1,26 @@
 package com.positivity.customer.service;
 
-import com.positivity.customer.internal.dto.CreatePersonRequest;
-import com.positivity.customer.internal.dto.CreatePersonResponse;
-import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.dto.ContactPointType;
-import com.positivity.customer.internal.entity.Person;
-import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.dto.CreatePersonRequest;
+import com.positivity.customer.internal.dto.CreatePersonResponse;
+import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.internal.entity.ContactPoint;
+import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.PersonRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for managing individual person records in the CRM system.

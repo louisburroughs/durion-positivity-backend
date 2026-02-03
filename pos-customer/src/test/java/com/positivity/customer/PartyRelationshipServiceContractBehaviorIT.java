@@ -9,6 +9,7 @@ import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse
 import com.positivity.customer.internal.dto.PartyRelationshipRole;
 import com.positivity.customer.internal.dto.PreferredContactMethod;
 import com.positivity.customer.internal.entity.*;
+import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.repository.*;
 import com.positivity.customer.service.PartyRelationshipService;
 import com.positivity.customer.service.PersonService;
@@ -49,7 +50,7 @@ class PartyRelationshipServiceContractBehaviorIT {
         private PersonService personService;
 
         @Autowired
-        private PartyRepository partyRepository;
+        private CommercialPartyRepository partyRepository;
 
         @Autowired
         private PersonRepository personRepository;
@@ -60,7 +61,7 @@ class PartyRelationshipServiceContractBehaviorIT {
         @Autowired
         private ContactPointRepository contactPointRepository;
 
-        private Party testParty;
+        private CommercialParty testParty;
         private Person testPerson1;
         private Person testPerson2;
 
@@ -73,10 +74,10 @@ class PartyRelationshipServiceContractBehaviorIT {
                 partyRepository.deleteAll();
 
                 // Create test party (commercial account)
-                testParty = new Party();
+                testParty = new CommercialParty();
                 testParty.setPartyNumber("TEST-" + UUID.randomUUID().toString().substring(0, 8));
                 testParty.setLegalName("Test Commercial Account");
-                testParty.setStatus("ACTIVE");
+                testParty.setStatus(AccountStatus.ACTIVE);
                 testParty = partyRepository.save(testParty);
 
                 // Create test persons
@@ -132,11 +133,11 @@ class PartyRelationshipServiceContractBehaviorIT {
 
                 // When: creating relationship
                 CreatePartyRelationshipResponse response = partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request, UUID.randomUUID());
 
                 // Then: relationship created
                 assertThat(response.getRelationshipId()).isNotNull();
-                assertThat(response.getPartyId()).isEqualTo(String.valueOf(testParty.getId()));
+                assertThat(response.getPartyId()).isEqualTo(String.valueOf(testParty.getPartyId()));
                 assertThat(response.getPersonId()).isEqualTo(testPerson1.getPersonId());
                 assertThat(response.getRoles()).contains(PartyRelationshipRole.PRIMARY_CONTACT);
                 assertThat(response.isPrimaryBillingContact()).isFalse();
@@ -157,7 +158,7 @@ class PartyRelationshipServiceContractBehaviorIT {
 
                 // When: creating relationship
                 CreatePartyRelationshipResponse response = partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request, UUID.randomUUID());
 
                 // Then: relationship has both roles
                 assertThat(response.getRoles()).hasSize(2);
@@ -181,7 +182,7 @@ class PartyRelationshipServiceContractBehaviorIT {
 
                 // When: creating relationship
                 CreatePartyRelationshipResponse response = partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request, UUID.randomUUID());
 
                 // Then: marked as primary billing
                 assertThat(response.isPrimaryBillingContact()).isTrue();
@@ -203,7 +204,7 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .isPrimaryBillingContact(true)
                                 .build();
                 CreatePartyRelationshipResponse response1 = partyRelationshipService.createRelationship(
-                                testParty.getId(), request1, UUID.randomUUID());
+                                testParty.getPartyId(), request1, UUID.randomUUID());
                 assertThat(response1.isPrimaryBillingContact()).isTrue();
 
                 // When: creating new primary billing contact
@@ -214,7 +215,7 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .isPrimaryBillingContact(true)
                                 .build();
                 CreatePartyRelationshipResponse response2 = partyRelationshipService.createRelationship(
-                                testParty.getId(), request2, UUID.randomUUID());
+                                testParty.getPartyId(), request2, UUID.randomUUID());
 
                 // Then: new relationship is primary, old one demoted
                 assertThat(response2.isPrimaryBillingContact()).isTrue();
@@ -242,7 +243,7 @@ class PartyRelationshipServiceContractBehaviorIT {
 
                 // When/Then: expect validation error
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID()))
+                                testParty.getPartyId(), request, UUID.randomUUID()))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -263,7 +264,7 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .roles(Set.of(PartyRelationshipRole.PRIMARY_CONTACT))
                                 .effectiveStartDate(LocalDate.now())
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getId(), request1, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
 
                 // When/Then: creating overlapping relationship fails
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
@@ -273,7 +274,7 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .build();
 
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
-                                testParty.getId(), request2, UUID.randomUUID()))
+                                testParty.getPartyId(), request2, UUID.randomUUID()))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -323,7 +324,7 @@ class PartyRelationshipServiceContractBehaviorIT {
 
                 // When/Then: expect not found
                 assertThatThrownBy(() -> partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID()))
+                                testParty.getPartyId(), request, UUID.randomUUID()))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;
@@ -345,18 +346,18 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .effectiveStartDate(LocalDate.now())
                                 .isPrimaryBillingContact(true)
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getId(), request1, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
 
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL))
                                 .effectiveStartDate(LocalDate.now())
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getId(), request2, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request2, UUID.randomUUID());
 
                 // When: getting contacts
                 GetCommercialAccountContactsResponse response = partyRelationshipService
-                                .getContactsForCommercialAccount(testParty.getId(), null, "ACTIVE");
+                                .getContactsForCommercialAccount(testParty.getPartyId(), null, "ACTIVE");
 
                 // Then: both contacts returned
                 assertThat(response.getContacts()).hasSize(2);
@@ -377,18 +378,18 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .roles(Set.of(PartyRelationshipRole.BILLING))
                                 .effectiveStartDate(LocalDate.now())
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getId(), request1, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request1, UUID.randomUUID());
 
                 CreatePartyRelationshipRequest request2 = CreatePartyRelationshipRequest.builder()
                                 .personId(testPerson2.getPersonId())
                                 .roles(Set.of(PartyRelationshipRole.TECHNICAL))
                                 .effectiveStartDate(LocalDate.now())
                                 .build();
-                partyRelationshipService.createRelationship(testParty.getId(), request2, UUID.randomUUID());
+                partyRelationshipService.createRelationship(testParty.getPartyId(), request2, UUID.randomUUID());
 
                 // When: filtering by BILLING role
                 GetCommercialAccountContactsResponse response = partyRelationshipService
-                                .getContactsForCommercialAccount(testParty.getId(),
+                                .getContactsForCommercialAccount(testParty.getPartyId(),
                                                 List.of(PartyRelationshipRole.BILLING), "ACTIVE");
 
                 // Then: only billing contact returned
@@ -410,7 +411,7 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .effectiveStartDate(LocalDate.now().minusDays(30))
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request, UUID.randomUUID());
 
                 // When: deactivating
                 partyRelationshipService.deactivateRelationship(created.getRelationshipId(), UUID.randomUUID());
@@ -437,11 +438,11 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .isPrimaryBillingContact(false)
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request, UUID.randomUUID());
 
                 // When: designating as primary
                 partyRelationshipService.designatePrimaryBillingContact(
-                                testParty.getId(), created.getRelationshipId(), UUID.randomUUID());
+                                testParty.getPartyId(), created.getRelationshipId(), UUID.randomUUID());
 
                 // Then: relationship is now primary
                 PartyRelationship relationship = partyRelationshipRepository
@@ -459,11 +460,11 @@ class PartyRelationshipServiceContractBehaviorIT {
                                 .effectiveStartDate(LocalDate.now())
                                 .build();
                 CreatePartyRelationshipResponse created = partyRelationshipService.createRelationship(
-                                testParty.getId(), request, UUID.randomUUID());
+                                testParty.getPartyId(), request, UUID.randomUUID());
 
                 // When/Then: expect validation error
                 assertThatThrownBy(() -> partyRelationshipService.designatePrimaryBillingContact(
-                                testParty.getId(), created.getRelationshipId(), UUID.randomUUID()))
+                                testParty.getPartyId(), created.getRelationshipId(), UUID.randomUUID()))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .satisfies(ex -> {
                                         ResponseStatusException rse = (ResponseStatusException) ex;

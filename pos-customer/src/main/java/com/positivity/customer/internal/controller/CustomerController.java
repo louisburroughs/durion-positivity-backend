@@ -11,6 +11,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -27,13 +30,20 @@ public class CustomerController {
 
     private final CustomerService customerService;
 
-    @Operation(summary = "Get all customers", description = "Retrieve a list of all customers.")
-    @ApiResponse(responseCode = "200", description = "List of customers returned successfully.")
+    @Operation(summary = "Get all customers", description = "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.")
+    @ApiResponse(responseCode = "200", description = "Page of customers returned successfully.")
     @GetMapping
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
-    public List<CustomerDTO> getAllCustomers() {
-        log.info("Fetching all customers");
-        return customerService.getAllCustomers();
+    public Page<CustomerDTO> getAllCustomers(
+            @Parameter(description = "Customer type filter: PERSON or COMMERCIAL", example = "PERSON") @RequestParam(required = false, defaultValue = "PERSON") String customerType,
+            @Parameter(description = "Pagination parameters (page, size, sort)") @PageableDefault(size = 20, sort = "lastName") Pageable pageable) {
+        log.info("Fetching customers of type: {} with paging: {}", customerType, pageable);
+
+        if ("COMMERCIAL".equalsIgnoreCase(customerType)) {
+            return customerService.getAllCommercialCustomers(pageable);
+        } else {
+            return customerService.getAllCustomers(pageable);
+        }
     }
 
     @Operation(summary = "Get customer by ID", description = "Retrieve a customer by their unique ID.")
