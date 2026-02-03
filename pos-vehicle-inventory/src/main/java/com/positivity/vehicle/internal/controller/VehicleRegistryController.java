@@ -28,38 +28,23 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/vehicles")
 public class VehicleRegistryController {
-    
+
     private final VehicleService vehicleService;
-    
-    @Operation(
-        summary = "Create a new vehicle",
-        description = "Creates a new vehicle record with VIN validation and normalization. " +
-                      "VIN must be globally unique across all active vehicles. " +
-                      "Story #105 / Issue #105."
-    )
+
+    @Operation(summary = "Create a new vehicle", description = "Creates a new vehicle record with VIN validation and normalization. "
+            +
+            "VIN must be globally unique across all active vehicles. " +
+            "Story #105 / Issue #105.")
     @ApiResponses(value = {
-        @ApiResponse(
-            responseCode = "201",
-            description = "Vehicle created successfully",
-            content = @Content(schema = @Schema(implementation = VehicleResponse.class))
-        ),
-        @ApiResponse(
-            responseCode = "400",
-            description = "Invalid request - VIN format invalid, missing required fields, or duplicate VIN",
-            content = @Content
-        ),
-        @ApiResponse(
-            responseCode = "409",
-            description = "Conflict - VIN already exists for another active vehicle",
-            content = @Content
-        )
+            @ApiResponse(responseCode = "201", description = "Vehicle created successfully", content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request - VIN format invalid, missing required fields, or duplicate VIN", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Conflict - VIN already exists for another active vehicle", content = @Content)
     })
     @PostMapping
     @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     public ResponseEntity<VehicleResponse> createVehicle(
-            @Parameter(description = "Vehicle creation request with VIN, unit number, and description", required = true)
-            @RequestBody CreateVehicleRequest request) {
-        
+            @Parameter(description = "Vehicle creation request with VIN, unit number, and description", required = true) @RequestBody CreateVehicleRequest request) {
+
         try {
             VehicleResponse response = vehicleService.createVehicle(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -71,88 +56,47 @@ public class VehicleRegistryController {
             return ResponseEntity.badRequest().build();
         }
     }
-    
-    @Operation(
-        summary = "Get vehicle by ID",
-        description = "Retrieves a vehicle by its unique ID. Story #105."
-    )
+
+    @Operation(summary = "Get vehicle by ID", description = "Retrieves a vehicle by its unique ID. Story #105.")
     @ApiResponses(value = {
-        @ApiResponse(
-            responseCode = "200",
-            description = "Vehicle found",
-            content = @Content(schema = @Schema(implementation = VehicleResponse.class))
-        ),
-        @ApiResponse(
-            responseCode = "404",
-            description = "Vehicle not found",
-            content = @Content
-        )
+            @ApiResponse(responseCode = "200", description = "Vehicle found", content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found", content = @Content)
     })
     @GetMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> getVehicle(
-            @Parameter(description = "Vehicle UUID", required = true)
-            @PathVariable UUID vehicleId) {
-        
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId) {
+
         return vehicleService.getVehicle(vehicleId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
-    
-    @Operation(
-        summary = "Get vehicle by VIN",
-        description = "Retrieves a vehicle by its VIN (normalized lookup). Story #105."
-    )
+
+    @Operation(summary = "Get vehicle by VIN", description = "Retrieves a vehicle by its VIN (normalized lookup). Story #105.")
     @ApiResponses(value = {
-        @ApiResponse(
-            responseCode = "200",
-            description = "Vehicle found",
-            content = @Content(schema = @Schema(implementation = VehicleResponse.class))
-        ),
-        @ApiResponse(
-            responseCode = "404",
-            description = "Vehicle not found",
-            content = @Content
-        )
+            @ApiResponse(responseCode = "200", description = "Vehicle found", content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found", content = @Content)
     })
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleResponse> getVehicleByVin(
-            @Parameter(description = "Vehicle VIN (17 characters)", required = true, example = "1HGCM82633A004352")
-            @PathVariable String vin) {
-        
+            @Parameter(description = "Vehicle VIN (17 characters)", required = true, example = "1HGCM82633A004352") @PathVariable String vin) {
+
         return vehicleService.getVehicleByVin(vin)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
-    
-    @Operation(
-        summary = "Update vehicle",
-        description = "Updates an existing vehicle's details. VIN cannot be changed. Story #105."
-    )
+
+    @Operation(summary = "Update vehicle", description = "Updates an existing vehicle's details. VIN cannot be changed. Story #105.")
     @ApiResponses(value = {
-        @ApiResponse(
-            responseCode = "200",
-            description = "Vehicle updated successfully",
-            content = @Content(schema = @Schema(implementation = VehicleResponse.class))
-        ),
-        @ApiResponse(
-            responseCode = "404",
-            description = "Vehicle not found",
-            content = @Content
-        ),
-        @ApiResponse(
-            responseCode = "400",
-            description = "Invalid request",
-            content = @Content
-        )
+            @ApiResponse(responseCode = "200", description = "Vehicle updated successfully", content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content)
     })
     @PutMapping("/{vehicleId}")
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     public ResponseEntity<VehicleResponse> updateVehicle(
-            @Parameter(description = "Vehicle UUID", required = true)
-            @PathVariable UUID vehicleId,
-            @Parameter(description = "Vehicle update request", required = true)
-            @RequestBody CreateVehicleRequest request) {
-        
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId,
+            @Parameter(description = "Vehicle update request", required = true) @RequestBody CreateVehicleRequest request) {
+
         try {
             VehicleResponse response = vehicleService.updateVehicle(vehicleId, request);
             return ResponseEntity.ok(response);
@@ -161,26 +105,16 @@ public class VehicleRegistryController {
             return ResponseEntity.notFound().build();
         }
     }
-    
-    @Operation(
-        summary = "Delete vehicle",
-        description = "Soft-deletes (deactivates) a vehicle. Story #105."
-    )
+
+    @Operation(summary = "Delete vehicle", description = "Soft-deletes (deactivates) a vehicle. Story #105.")
     @ApiResponses(value = {
-        @ApiResponse(
-            responseCode = "204",
-            description = "Vehicle deleted successfully"
-        ),
-        @ApiResponse(
-            responseCode = "404",
-            description = "Vehicle not found"
-        )
+            @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully"),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found")
     })
     @DeleteMapping("/{vehicleId}")
     public ResponseEntity<Void> deleteVehicle(
-            @Parameter(description = "Vehicle UUID", required = true)
-            @PathVariable UUID vehicleId) {
-        
+            @Parameter(description = "Vehicle UUID", required = true) @PathVariable UUID vehicleId) {
+
         try {
             vehicleService.deleteVehicle(vehicleId);
             return ResponseEntity.noContent().build();

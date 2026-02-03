@@ -15,24 +15,24 @@ import java.util.UUID;
 
 @Repository
 public interface VehiclePartyAssociationRepository extends JpaRepository<VehiclePartyAssociation, UUID> {
-    
+
     @Query("SELECT vpa FROM VehiclePartyAssociation vpa WHERE " +
-           "vpa.vehicleId = :vehicleId AND " +
-           "vpa.associationType = :type AND " +
-           "vpa.effectiveEndDate IS NULL")
+            "vpa.vehicleId = :vehicleId AND " +
+            "vpa.associationType = :type AND " +
+            "vpa.effectiveEndDate IS NULL")
     Optional<VehiclePartyAssociation> findActiveAssociation(
             @Param("vehicleId") @NonNull UUID vehicleId,
             @Param("type") @NonNull AssociationType type);
-    
+
     @Query("SELECT vpa FROM VehiclePartyAssociation vpa WHERE " +
-           "vpa.vehicleId = :vehicleId AND " +
-           "vpa.effectiveEndDate IS NULL")
+            "vpa.vehicleId = :vehicleId AND " +
+            "vpa.effectiveEndDate IS NULL")
     List<VehiclePartyAssociation> findAllActiveAssociations(@Param("vehicleId") @NonNull UUID vehicleId);
-    
+
     @Query("SELECT vpa FROM VehiclePartyAssociation vpa WHERE " +
-           "vpa.vehicleId = :vehicleId AND " +
-           "vpa.associationType = :type AND " +
-           "(vpa.effectiveEndDate IS NULL OR vpa.effectiveEndDate > :asOf)")
+            "vpa.vehicleId = :vehicleId AND " +
+            "vpa.associationType = :type AND " +
+            "(vpa.effectiveEndDate IS NULL OR vpa.effectiveEndDate > :asOf)")
     List<VehiclePartyAssociation> findAssociationsAsOf(
             @Param("vehicleId") @NonNull UUID vehicleId,
             @Param("type") @NonNull AssociationType type,

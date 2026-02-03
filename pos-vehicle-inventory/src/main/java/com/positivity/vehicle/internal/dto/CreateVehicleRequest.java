@@ -16,22 +16,22 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateVehicleRequest {
-    
+
     @NonNull
     private UUID accountId;
-    
+
     @NonNull
     private String vin;
-    
+
     @NonNull
     private String unitNumber;
-    
+
     @NonNull
     private String description;
-    
+
     private String licensePlate;
     private String licensePlateJurisdiction;
-    
+
     // Optional structured fields
     private Integer year;
     private String make;
