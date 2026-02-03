@@ -19,7 +19,7 @@ import java.util.Optional;
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/v1/vehicles")
+@RequestMapping("/v1/vehicles-legacy")
 public class VehicleController {
     private final VehicleDao vehicleDao;
 
