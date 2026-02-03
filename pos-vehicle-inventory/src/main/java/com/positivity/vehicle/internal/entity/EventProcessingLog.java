@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -50,23 +51,26 @@ public class EventProcessingLog {
 
     @NonNull
     @Column(name = "vehicle_id", nullable = false)
-    private UUID vehicleId;
+    private String vehicleId;
 
     @NonNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     private ProcessingStatus status;
 
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "conflict_policy", length = 50)
+    private ConflictPolicy conflictPolicy;
+
+    @Nullable
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "details", columnDefinition = "jsonb")
     private Map<String, Object> details;
 
-    @NonNull
-    @Column(name = "received_timestamp", nullable = false)
-    private Instant receivedTimestamp;
-
-    @Column(name = "processed_timestamp")
-    private Instant processedTimestamp;
+    @Nullable
+    @Column(name = "processed_at")
+    private Instant processedAt;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -74,10 +78,17 @@ public class EventProcessingLog {
 
     public enum ProcessingStatus {
         SUCCESS,
-        SUCCESS_WITH_FLAGS,
-        DUPLICATE,
-        ERROR_VALIDATION,
-        ERROR_NOT_FOUND,
-        PENDING_REVIEW
+        PENDING_REVIEW,
+        DUPLICATE_EVENT,
+        CONFLICT_VIN_CHANGE,
+        ERROR_VEHICLE_NOT_FOUND,
+        ERROR_INVALID_ODOMETER,
+        ERROR_PROCESSING
+    }
+
+    public enum ConflictPolicy {
+        MILEAGE_DECREASE, // Accept and flag for review
+        VIN_CHANGE, // Reject (controlled separately)
+        DUPLICATE_EVENT // Skip
     }
 }
