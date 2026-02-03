@@ -1,4 +1,4 @@
-package com.positivity.vehicle.internal.model;
+package com.positivity.vehicle.internal.entity;
 
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
@@ -9,4 +9,5 @@ import lombok.EqualsAndHashCode;
 @Entity
 @EqualsAndHashCode(callSuper = true)
 @DiscriminatorValue("PASSENGER_TRUCK")
-public class PassengerTruck extends VehicleEntity {}
+public class PassengerTruck extends VehicleEntity {
+}

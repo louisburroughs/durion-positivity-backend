@@ -1,7 +1,8 @@
 package com.positivity.vehicle.internal.controller;
 
 import com.positivity.vehicle.internal.dao.VehicleDao;
-import com.positivity.vehicle.internal.model.VehicleEntity;
+import com.positivity.vehicle.internal.entity.VehicleEntity;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -18,7 +19,7 @@ import java.util.Optional;
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/vehicles")
+@RequestMapping("/v1/vehicles")
 public class VehicleController {
     private final VehicleDao vehicleDao;
 
