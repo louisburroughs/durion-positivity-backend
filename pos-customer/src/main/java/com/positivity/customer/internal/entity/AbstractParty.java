@@ -10,6 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.positivity.customer.internal.enums.AccountStatus;
+import com.positivity.customer.internal.enums.AccountTier;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -64,6 +65,19 @@ public abstract class AbstractParty implements Party {
     @Column(nullable = false)
     @Schema(description = "Status of the customer", example = "ACTIVE")
     private AccountStatus status = AccountStatus.ACTIVE;
+
+    @Column(nullable = false)
+    @Schema(description = "Account tier level", example = "STANDARD")
+    private AccountTier tier = AccountTier.STANDARD;
+
+    @Schema(description = "When the tier was last assigned or updated")
+    private Instant tierAssignedAt;
+
+    @Schema(description = "User who assigned or last modified the tier")
+    private String tierAssignedBy;
+
+    @Schema(description = "Whether tier was manually assigned (true) or auto-calculated (false)")
+    private boolean tierManualOverride = false;
 
     @CreationTimestamp
     @Column(updatable = false)

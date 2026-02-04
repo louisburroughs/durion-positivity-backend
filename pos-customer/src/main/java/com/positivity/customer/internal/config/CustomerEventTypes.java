@@ -26,6 +26,8 @@ public final class CustomerEventTypes {
                                                 "Update an existing customer").build(),
 
                                 // CrmAccountsController - 8 events
+                                EventTypeRegistration.fastRead("CUSTOMER_ACCOUNT_TIER_GET",
+                                                "Retrieve the tier level for a specific account").build(),
                                 EventTypeRegistration.search("CUSTOMER_ACCOUNT_TIER_RESOLVE",
                                                 "Resolve or compute the account tier based on business rules").build(),
                                 EventTypeRegistration.write("CUSTOMER_PARTY_CREATE",

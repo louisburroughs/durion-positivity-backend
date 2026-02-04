@@ -519,34 +519,20 @@
                     "CRM Accounts"
                 ],
                 "summary": "Resolve account tier",
-                "description": "Resolve or compute the account tier based on business rules",
+                "description": "Resolve or compute the account tier based on business rules (stub endpoint)",
                 "operationId": "resolveAccountTier",
                 "requestBody": {
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/ResolveAccountTierRequest"
+                                "description": "Tier resolution request"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "responses": {
-                    "200": {
-                        "description": "Tier resolved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ResolveAccountTierResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request"
-                    },
-                    "404": {
-                        "description": "Account not found"
+                    "501": {
+                        "description": "Not implemented"
                     },
                     "403": {
                         "description": "Forbidden - insufficient permissions"
@@ -974,7 +960,7 @@
                     "CRM Accounts"
                 ],
                 "summary": "Get account tier",
-                "description": "Retrieve the tier level for a specific account",
+                "description": "Retrieve the tier level for a specific account (stub endpoint)",
                 "operationId": "getAccountTier",
                 "parameters": [
                     {
@@ -988,18 +974,8 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Tier retrieved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GetAccountTierResponse"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Account not found"
+                    "501": {
+                        "description": "Not implemented"
                     },
                     "403": {
                         "description": "Forbidden - insufficient permissions"
@@ -1610,130 +1586,6 @@
                     },
                     "updateSource": {
                         "type": "string"
-                    }
-                }
-            },
-            "GetAccountTierResponse": {
-                "type": "object",
-                "description": "Account tier information response",
-                "required": ["accountId", "tier", "tierDisplayName"],
-                "properties": {
-                    "accountId": {
-                        "type": "string",
-                        "description": "Account/party identifier",
-                        "example": "123e4567-e89b-12d3-a456-426614174000"
-                    },
-                    "tier": {
-                        "type": "string",
-                        "description": "Current tier level",
-                        "enum": ["STANDARD", "BRONZE", "SILVER", "GOLD", "PLATINUM", "ENTERPRISE"],
-                        "example": "GOLD"
-                    },
-                    "tierDisplayName": {
-                        "type": "string",
-                        "description": "Display name of the tier",
-                        "example": "Gold"
-                    },
-                    "tierAssignedAt": {
-                        "type": "string",
-                        "format": "date-time",
-                        "description": "When the tier was last assigned or updated",
-                        "nullable": true
-                    },
-                    "tierAssignedBy": {
-                        "type": "string",
-                        "description": "Who assigned or last modified the tier",
-                        "nullable": true
-                    },
-                    "notes": {
-                        "type": "string",
-                        "description": "Optional notes about tier assignment or status",
-                        "nullable": true
-                    },
-                    "manualOverride": {
-                        "type": "boolean",
-                        "description": "Whether tier was manually assigned or auto-calculated"
-                    }
-                }
-            },
-            "ResolveAccountTierRequest": {
-                "type": "object",
-                "description": "Request to compute account tier based on business rules",
-                "required": ["accountId"],
-                "properties": {
-                    "accountId": {
-                        "type": "string",
-                        "description": "Account/party identifier",
-                        "example": "123e4567-e89b-12d3-a456-426614174000"
-                    },
-                    "annualRevenue": {
-                        "type": "number",
-                        "format": "decimal",
-                        "description": "Annual revenue or spending for tier calculation",
-                        "example": 125000.00,
-                        "nullable": true
-                    },
-                    "activeContractCount": {
-                        "type": "integer",
-                        "description": "Number of active contracts or subscriptions",
-                        "nullable": true
-                    },
-                    "accountAgeMonths": {
-                        "type": "integer",
-                        "description": "Account age in months",
-                        "nullable": true
-                    },
-                    "applyTier": {
-                        "type": "boolean",
-                        "description": "Whether to apply the resolved tier or just return the recommendation",
-                        "default": false
-                    },
-                    "forceRecalculation": {
-                        "type": "boolean",
-                        "description": "Force recalculation even if tier was manually set",
-                        "default": false
-                    }
-                }
-            },
-            "ResolveAccountTierResponse": {
-                "type": "object",
-                "description": "Account tier resolution result",
-                "required": ["accountId", "currentTier", "recommendedTier"],
-                "properties": {
-                    "accountId": {
-                        "type": "string",
-                        "description": "Account/party identifier",
-                        "example": "123e4567-e89b-12d3-a456-426614174000"
-                    },
-                    "currentTier": {
-                        "type": "string",
-                        "description": "Currently assigned tier (before resolution)",
-                        "enum": ["STANDARD", "BRONZE", "SILVER", "GOLD", "PLATINUM", "ENTERPRISE"],
-                        "example": "SILVER"
-                    },
-                    "recommendedTier": {
-                        "type": "string",
-                        "description": "Recommended/resolved tier based on business rules",
-                        "enum": ["STANDARD", "BRONZE", "SILVER", "GOLD", "PLATINUM", "ENTERPRISE"],
-                        "example": "GOLD"
-                    },
-                    "tierApplied": {
-                        "type": "boolean",
-                        "description": "Whether the tier was applied to the account"
-                    },
-                    "manualOverrideActive": {
-                        "type": "boolean",
-                        "description": "Whether the current tier was manually set and blocked auto-update"
-                    },
-                    "resolutionReason": {
-                        "type": "string",
-                        "description": "Explanation of why this tier was recommended",
-                        "nullable": true
-                    },
-                    "tierScore": {
-                        "type": "integer",
-                        "description": "Score or metric used for tier calculation",
-                        "nullable": true
                     }
                 }
             }
