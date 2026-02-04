@@ -4,11 +4,14 @@ import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
+import com.positivity.customer.internal.dto.GetAccountTierResponse;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
+import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
 import com.positivity.customer.internal.dto.SearchPartiesRequest;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
@@ -16,6 +19,7 @@ import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.customer.service.AccountTierService;
 import com.positivity.customer.service.PartyService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,9 +37,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Stub controller implementing CRM account-tier endpoints from the API catalog.
- *
- * Intentionally unimplemented: returns 501 for all operations.
+ * Controller implementing CRM account-tier endpoints from the API catalog.
+ * 
+ * Provides account management operations including tier management, party
+ * creation,
+ * search, merge, contacts, preferences, and vehicle operations.
  */
 @Tag(name = "CRM Accounts", description = "Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations")
 @RestController
@@ -45,36 +51,54 @@ public class CrmAccountsController {
         private static final Logger log = LoggerFactory.getLogger(CrmAccountsController.class);
 
         private final PartyService partyService;
+        private final AccountTierService accountTierService;
 
-        public CrmAccountsController(PartyService partyService) {
+        public CrmAccountsController(PartyService partyService, AccountTierService accountTierService) {
                 this.partyService = partyService;
+                this.accountTierService = accountTierService;
         }
 
-        @Operation(summary = "Get account tier", description = "Retrieve the tier level for a specific account (stub endpoint)")
+        @Operation(summary = "Get account tier", description = "Retrieve the tier level for a specific account")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
+                        @ApiResponse(responseCode = "200", description = "Tier retrieved successfully", content = @Content(schema = @Schema(implementation = GetAccountTierResponse.class))),
+                        @ApiResponse(responseCode = "404", description = "Account not found", content = @Content),
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @GetMapping("/{accountId}/tier")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
-        public ResponseEntity<Void> getAccountTier(
+        @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_GET", apiVersion = "1")
+        public ResponseEntity<GetAccountTierResponse> getAccountTier(
                         @Parameter(description = "Account ID", required = true) @PathVariable String accountId) {
-                log.info("Stub getAccountTier accountId={}", accountId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+                log.info("Getting account tier for accountId={}", accountId);
+                try {
+                        GetAccountTierResponse response = accountTierService.getAccountTier(accountId);
+                        return ResponseEntity.ok(response);
+                } catch (IllegalArgumentException e) {
+                        log.warn("Account not found: {}", accountId);
+                        return ResponseEntity.notFound().build();
+                }
         }
 
-        @Operation(summary = "Resolve account tier", description = "Resolve or compute the account tier based on business rules (stub endpoint)")
+        @Operation(summary = "Resolve account tier", description = "Resolve or compute the account tier based on business rules")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "501", description = "Not implemented", content = @Content),
+                        @ApiResponse(responseCode = "200", description = "Tier resolved successfully", content = @Content(schema = @Schema(implementation = ResolveAccountTierResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Account not found", content = @Content),
                         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
         })
         @PostMapping("/tierResolve")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_RESOLVE", apiVersion = "1")
-        public ResponseEntity<Void> resolveAccountTier(
-                        @Parameter(description = "Tier resolution request", required = false) @RequestBody(required = false) Object body) {
-                log.info("Stub resolveAccountTiers");
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        public ResponseEntity<ResolveAccountTierResponse> resolveAccountTier(
+                        @Parameter(description = "Tier resolution request", required = true) @RequestBody ResolveAccountTierRequest body) {
+                log.info("Resolving account tier for accountId={}", body.getAccountId());
+                try {
+                        ResolveAccountTierResponse response = accountTierService.resolveAccountTier(body);
+                        return ResponseEntity.ok(response);
+                } catch (IllegalArgumentException e) {
+                        log.warn("Account not found or invalid request: {}", e.getMessage());
+                        return ResponseEntity.notFound().build();
+                }
         }
 
         // --- Party/Commercial Account Management (Issue #176) ---
