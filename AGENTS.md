@@ -6,9 +6,11 @@ POS backend microservice suite for Durion. Multi-module Maven project containing
 
 ## Quick Prerequisites
 
-- Java 21+
+- Java 21+ (Use [SDKMAN!](https://sdkman.io/) - the project includes `.sdkmanrc` for automatic version switching)
 - Maven (use `./mvnw` wrapper)
 - Docker for local test stacks
+
+**Note**: This project uses SDKMAN! for Java version management. When you `cd` into the project directory, SDKMAN! will automatically switch to Java 21.0.5-tem if you have it configured with `sdk_auto_env=true` in `~/.sdkman/etc/config`.
 
 ## Setup & Build
 
