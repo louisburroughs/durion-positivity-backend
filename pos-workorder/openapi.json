@@ -1,0 +1,1266 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Workorder Service API",
+    "description": "API for managing workorders, estimates, change requests, and approval configurations",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Durion Platform",
+      "url": "https://github.com/louisburroughs/durion-positivity-backend"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local API Gateway"
+    },
+    {
+      "url": "http://localhost:8087",
+      "description": "Local Workorder Service"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Estimates",
+      "description": "Endpoints for managing repair estimates"
+    },
+    {
+      "name": "Change Requests",
+      "description": "Endpoints for managing additional work requests and approvals"
+    },
+    {
+      "name": "Approval Configuration",
+      "description": "Endpoints for managing approval configurations by location and customer"
+    }
+  ],
+  "paths": {
+    "/v1/estimates": {
+      "get": {
+        "tags": ["Estimates"],
+        "summary": "Get all estimates",
+        "description": "Retrieve a list of all estimates",
+        "operationId": "getAllEstimates",
+        "responses": {
+          "200": {
+            "description": "List of estimates returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Estimate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Estimates"],
+        "summary": "Create a new draft estimate",
+        "description": "Create a new estimate in DRAFT status for a customer and vehicle",
+        "operationId": "createEstimate",
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "description": "ID of the user creating the estimate",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEstimateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estimate created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateEstimateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request - missing required fields"
+          },
+          "403": {
+            "description": "Forbidden - user does not have ESTIMATE_CREATE permission"
+          },
+          "500": {
+            "description": "Internal server error - estimate creation failed"
+          }
+        }
+      }
+    },
+    "/v1/estimates/{estimateId}": {
+      "get": {
+        "tags": ["Estimates"],
+        "summary": "Get estimate by ID",
+        "description": "Retrieve an estimate by its unique ID",
+        "operationId": "getEstimateById",
+        "parameters": [
+          {
+            "name": "estimateId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the estimate to retrieve",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estimate found and returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Estimate not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Estimates"],
+        "summary": "Delete an estimate",
+        "description": "Delete an estimate by its unique ID",
+        "operationId": "deleteEstimate",
+        "parameters": [
+          {
+            "name": "estimateId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the estimate to delete",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Estimate deleted successfully"
+          },
+          "404": {
+            "description": "Estimate not found"
+          }
+        }
+      }
+    },
+    "/v1/estimates/customer/{customerId}": {
+      "get": {
+        "tags": ["Estimates"],
+        "summary": "Get estimates by customer",
+        "description": "Retrieve all estimates for a specific customer",
+        "operationId": "getEstimatesByCustomer",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the customer",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of estimates returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Estimate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/estimates/location/{locationId}": {
+      "get": {
+        "tags": ["Estimates"],
+        "summary": "Get estimates by location",
+        "description": "Retrieve all estimates for a specific location",
+        "operationId": "getEstimatesByLocation",
+        "parameters": [
+          {
+            "name": "locationId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the location",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of estimates returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Estimate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/estimates/{estimateId}/decline": {
+      "post": {
+        "tags": ["Estimates"],
+        "summary": "Decline an estimate",
+        "description": "Transition estimate to declined state",
+        "operationId": "declineEstimate",
+        "parameters": [
+          {
+            "name": "estimateId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the estimate to decline",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "description": "Reason for decline",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estimate declined successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Estimate cannot be declined in current state"
+          },
+          "404": {
+            "description": "Estimate not found"
+          }
+        }
+      }
+    },
+    "/v1/estimates/{estimateId}/reopen": {
+      "post": {
+        "tags": ["Estimates"],
+        "summary": "Reopen a declined estimate",
+        "description": "Transition a declined estimate back to DRAFT state",
+        "operationId": "reopenEstimate",
+        "parameters": [
+          {
+            "name": "estimateId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the estimate to reopen",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estimate reopened successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Estimate cannot be reopened"
+          },
+          "404": {
+            "description": "Estimate not found"
+          }
+        }
+      }
+    },
+    "/v1/estimates/{estimateId}/approval": {
+      "post": {
+        "tags": ["Estimates"],
+        "summary": "Approve an estimate with customer signature",
+        "description": "Transition estimate to approved state with customer signature capture",
+        "operationId": "approveEstimate",
+        "parameters": [
+          {
+            "name": "estimateId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the estimate to approve",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveEstimateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estimate approved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Estimate cannot be approved in current state or PO required but not provided"
+          },
+          "404": {
+            "description": "Estimate not found"
+          }
+        }
+      }
+    },
+    "/v1/workorders/{workorderId}/changeRequests": {
+      "get": {
+        "tags": ["Change Requests"],
+        "summary": "Get all change requests for a work order",
+        "description": "Retrieve all change requests associated with a specific work order",
+        "operationId": "getChangeRequestsByWorkorder",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the work order",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of change requests returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChangeRequest"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Change Requests"],
+        "summary": "Create a change request",
+        "description": "Technician creates a request for additional work beyond authorized scope",
+        "operationId": "createChangeRequest",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the work order",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChangeRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Change request created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "404": {
+            "description": "Work order not found"
+          }
+        }
+      }
+    },
+    "/v1/workorders/{workorderId}/canClose": {
+      "get": {
+        "tags": ["Change Requests"],
+        "summary": "Check if work order can be closed",
+        "description": "Verify all declined emergency/safety items have customer denial acknowledgment",
+        "operationId": "canCloseWorkorder",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the work order",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns true if work order can be closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workorders/changeRequests/{changeId}": {
+      "get": {
+        "tags": ["Change Requests"],
+        "summary": "Get change request by ID",
+        "description": "Retrieve details of a specific change request",
+        "operationId": "getChangeRequestById",
+        "parameters": [
+          {
+            "name": "changeId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the change request",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Change request found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Change request not found"
+          }
+        }
+      }
+    },
+    "/v1/workorders/changeRequests/{changeId}/approve": {
+      "post": {
+        "tags": ["Change Requests"],
+        "summary": "Approve a change request",
+        "description": "Service Advisor approves the change request",
+        "operationId": "approveChangeRequest",
+        "parameters": [
+          {
+            "name": "changeId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the change request",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveChangeRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Change request approved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot approve - invalid state"
+          },
+          "404": {
+            "description": "Change request not found"
+          }
+        }
+      }
+    },
+    "/v1/workorders/changeRequests/{changeId}/decline": {
+      "post": {
+        "tags": ["Change Requests"],
+        "summary": "Decline a change request",
+        "description": "Service Advisor declines the change request",
+        "operationId": "declineChangeRequest",
+        "parameters": [
+          {
+            "name": "changeId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the change request",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineChangeRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Change request declined successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot decline - invalid state"
+          },
+          "404": {
+            "description": "Change request not found"
+          }
+        }
+      }
+    },
+    "/v1/workorders/changeRequests/{changeId}/acknowledgeDenial": {
+      "post": {
+        "tags": ["Change Requests"],
+        "summary": "Record customer denial acknowledgment",
+        "description": "For declined emergency/safety items, record that customer acknowledged the denial",
+        "operationId": "recordCustomerDenialAcknowledgment",
+        "parameters": [
+          {
+            "name": "changeId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the change request",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Acknowledgment recorded successfully"
+          },
+          "400": {
+            "description": "Not an emergency request or invalid state"
+          },
+          "404": {
+            "description": "Change request not found"
+          }
+        }
+      }
+    },
+    "/v1/workorders/changeRequests/{changeId}/emergency-override": {
+      "post": {
+        "tags": ["Change Requests"],
+        "summary": "Apply emergency override",
+        "description": "Manager applies emergency override to approve a change request with exception",
+        "operationId": "applyEmergencyOverride",
+        "parameters": [
+          {
+            "name": "changeId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the change request",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyOverrideDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Emergency override applied successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot apply override"
+          },
+          "403": {
+            "description": "Insufficient permissions - Manager role required"
+          },
+          "404": {
+            "description": "Change request not found"
+          }
+        }
+      }
+    },
+    "/v1/workexec/approvalConfigurations": {
+      "get": {
+        "tags": ["Approval Configuration"],
+        "summary": "Get all approval configurations",
+        "description": "Retrieve a list of all approval configurations",
+        "operationId": "getAllConfigurations",
+        "responses": {
+          "200": {
+            "description": "List of configurations returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalConfiguration"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Approval Configuration"],
+        "summary": "Create a new approval configuration",
+        "description": "Add a new approval configuration",
+        "operationId": "createConfiguration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalConfiguration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workexec/approvalConfigurations/{approvalId}": {
+      "get": {
+        "tags": ["Approval Configuration"],
+        "summary": "Get configuration by ID",
+        "description": "Retrieve an approval configuration by its unique ID",
+        "operationId": "getConfigurationById",
+        "parameters": [
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the configuration to retrieve",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration found and returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Configuration not found"
+          }
+        }
+      },
+      "put": {
+        "tags": ["Approval Configuration"],
+        "summary": "Update an approval configuration",
+        "description": "Update an existing approval configuration",
+        "operationId": "updateConfiguration",
+        "parameters": [
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the configuration to update",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalConfiguration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Configuration not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Approval Configuration"],
+        "summary": "Delete an approval configuration",
+        "description": "Delete a configuration by its unique ID",
+        "operationId": "deleteConfiguration",
+        "parameters": [
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the configuration to delete",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Configuration deleted successfully"
+          },
+          "404": {
+            "description": "Configuration not found"
+          }
+        }
+      }
+    },
+    "/v1/workexec/approvalConfigurations/applicable": {
+      "get": {
+        "tags": ["Approval Configuration"],
+        "summary": "Get applicable configuration",
+        "description": "Get the most specific configuration for a location and customer",
+        "operationId": "getApplicableConfiguration",
+        "parameters": [
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "description": "Location ID",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "customerId",
+            "in": "query",
+            "required": false,
+            "description": "Customer ID",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration found and returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No configuration found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Estimate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the estimate",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "estimateNumber": {
+            "type": "string",
+            "description": "Human-readable estimate number",
+            "example": "EST-2024-1001"
+          },
+          "locationId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Reference to Location"
+          },
+          "vehicleId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Reference to Vehicle"
+          },
+          "customerId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Reference to Customer"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "APPROVED", "DECLINED", "EXPIRED"],
+            "description": "Current status of the estimate"
+          },
+          "currencyUomId": {
+            "type": "string",
+            "description": "Currency code",
+            "example": "USD"
+          },
+          "taxRegionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdById": {
+            "type": "integer",
+            "format": "int64",
+            "description": "User who created the estimate"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "declinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approvalConfigurationId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "declineReason": {
+            "type": "string"
+          },
+          "approvedBy": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "signatureData": {
+            "type": "string",
+            "description": "Base64-encoded signature image"
+          },
+          "signatureMimeType": {
+            "type": "string",
+            "example": "image/png"
+          },
+          "signerName": {
+            "type": "string"
+          },
+          "approvalNotes": {
+            "type": "string"
+          },
+          "purchaseOrderNumber": {
+            "type": "string",
+            "description": "Purchase order number for commercial accounts (CAP:092)"
+          }
+        }
+      },
+      "CreateEstimateRequest": {
+        "type": "object",
+        "required": ["customerId", "vehicleId"],
+        "properties": {
+          "customerId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vehicleId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "locationId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "currencyUomId": {
+            "type": "string",
+            "default": "USD"
+          },
+          "taxRegionId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreateEstimateResponse": {
+        "type": "object",
+        "properties": {
+          "estimateId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "estimateNumber": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ApproveEstimateRequest": {
+        "type": "object",
+        "required": ["customerId", "signatureData", "signatureMimeType", "signerName"],
+        "properties": {
+          "customerId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "signatureData": {
+            "type": "string",
+            "description": "Base64-encoded signature image"
+          },
+          "signatureMimeType": {
+            "type": "string",
+            "example": "image/png"
+          },
+          "signerName": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "purchaseOrderNumber": {
+            "type": "string",
+            "description": "Required for commercial accounts with PO enforcement (CAP:092)"
+          }
+        }
+      },
+      "ChangeRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the change request",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "workorderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requestedByUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING_APPROVAL", "APPROVED", "DECLINED", "CANCELLED"],
+            "description": "Current status of the change request"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of additional work required"
+          },
+          "isApprovalGated": {
+            "type": "boolean",
+            "description": "Whether this request requires explicit approval"
+          },
+          "approvedBy": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approvalNote": {
+            "type": "string"
+          },
+          "customerDenialAcknowledgedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateChangeRequestDTO": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "workorderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": "string"
+          },
+          "requestedByUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkorderItemDTO"
+            }
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkorderItemDTO"
+            }
+          }
+        }
+      },
+      "WorkorderItemDTO": {
+        "type": "object",
+        "properties": {
+          "serviceEntityId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "productEntityId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "isEmergencySafety": {
+            "type": "boolean"
+          },
+          "emergencyReason": {
+            "type": "string"
+          }
+        }
+      },
+      "ApproveChangeRequestDTO": {
+        "type": "object",
+        "required": ["approvedBy", "approvalNote"],
+        "properties": {
+          "approvedBy": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "approvalNote": {
+            "type": "string"
+          }
+        }
+      },
+      "DeclineChangeRequestDTO": {
+        "type": "object",
+        "required": ["approvalNote"],
+        "properties": {
+          "approvalNote": {
+            "type": "string"
+          }
+        }
+      },
+      "EmergencyOverrideDTO": {
+        "type": "object",
+        "required": ["managerId", "exceptionReason"],
+        "properties": {
+          "managerId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "exceptionReason": {
+            "type": "string"
+          }
+        }
+      },
+      "ApprovalConfiguration": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the configuration",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "locationId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "If null, applies to all locations"
+          },
+          "customerId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "If null, applies to all customers at the location"
+          },
+          "approvalMethod": {
+            "type": "string",
+            "enum": ["CLICK_CONFIRM", "SIGNATURE", "BIOMETRIC"],
+            "default": "CLICK_CONFIRM"
+          },
+          "declineExpiryDays": {
+            "type": "integer",
+            "default": 30,
+            "description": "Number of days a declined estimate can be reopened"
+          },
+          "requireSignature": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    }
+  }
+}
