@@ -7,8 +7,10 @@ import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.repository.*;
+import com.positivity.workorder.internal.service.BillingRulesClientService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +30,7 @@ public class EstimateService {
     private final ApprovalConfigurationRepository approvalConfigurationRepository;
     private final WorkorderRepository workOrderRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final BillingRulesClientService billingRulesClientService;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -185,6 +188,27 @@ public class EstimateService {
     @Transactional
     public Estimate approveEstimate(Long estimateId, Long customerId, String signatureData,
             String signatureMimeType, String signerName, String notes) {
+        return approveEstimate(estimateId, customerId, signatureData, signatureMimeType, 
+                              signerName, notes, null);
+    }
+
+    /**
+     * Approve estimate with full parameters including purchase order.
+     * CAP:092 Story #98 - Enforces PO requirement for commercial accounts.
+     *
+     * @param estimateId estimate to approve
+     * @param customerId customer approving the estimate
+     * @param signatureData base64-encoded signature image
+     * @param signatureMimeType MIME type of signature
+     * @param signerName name of person signing
+     * @param notes approval notes
+     * @param purchaseOrderNumber PO number (required if account requires PO)
+     * @return approved estimate
+     */
+    @Transactional
+    public Estimate approveEstimate(Long estimateId, Long customerId, String signatureData,
+            String signatureMimeType, String signerName, String notes, 
+            @Nullable String purchaseOrderNumber) {
         Estimate estimate = estimateRepository.findById(estimateId)
                 .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
 
@@ -198,6 +222,19 @@ public class EstimateService {
             throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
         }
 
+        // CAP:092 Story #98: Enforce PO requirement for commercial accounts
+        String partyId = String.valueOf(customerId); // Convert customerId to partyId
+        if (billingRulesClientService.isPurchaseOrderRequired(partyId)) {
+            if (purchaseOrderNumber == null || purchaseOrderNumber.isBlank()) {
+                log.warn("Purchase order required but not provided for estimate {} (partyId={})", 
+                        estimateId, partyId);
+                throw new IllegalArgumentException(
+                    "Purchase order number is required for this customer account");
+            }
+            log.info("PO enforcement: validating PO {} for estimate {} (partyId={})", 
+                    purchaseOrderNumber, estimateId, partyId);
+        }
+
         estimate.setStatus(EstimateStatus.APPROVED);
         estimate.setApprovedAt(LocalDateTime.now());
         estimate.setApprovedBy(customerId); // Using customerId as approver
@@ -205,6 +242,7 @@ public class EstimateService {
         estimate.setSignatureMimeType(signatureMimeType);
         estimate.setSignerName(signerName);
         estimate.setApprovalNotes(notes);
+        estimate.setPurchaseOrderNumber(purchaseOrderNumber);
 
         log.info("Estimate {} approved by customer {} with signature capture", estimateId, customerId);
         return estimateRepository.save(estimate);

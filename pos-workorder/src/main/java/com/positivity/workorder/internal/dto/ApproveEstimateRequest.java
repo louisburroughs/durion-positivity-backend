@@ -36,4 +36,7 @@ public class ApproveEstimateRequest {
 
     @Schema(description = "Individual line item approvals/rejections. If omitted, all items are considered approved.")
     private List<LineItemApprovalDto> lineItemApprovals;
+
+    @Schema(description = "Purchase order number (required when PO enforcement is enabled for the account)", example = "PO-2024-12345")
+    private String purchaseOrderNumber;
 }
