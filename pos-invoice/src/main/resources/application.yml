@@ -46,3 +46,24 @@ logging:
     com:
       positivity:
         invoice: INFO
+
+# Billing defaults (CAP:092)
+billing:
+  defaults:
+    purchase-order-required: false
+    payment-terms-code: NET_30
+    invoice-delivery-method: EMAIL
+    invoice-grouping-strategy: PER_WORKORDER
+
+# Event service configuration
+pos:
+  events:
+    base-url: http://localhost:8085
+    api-secret: ${POS_EVENTS_API_SECRET:}
+
+# OpenAPI/Swagger configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
