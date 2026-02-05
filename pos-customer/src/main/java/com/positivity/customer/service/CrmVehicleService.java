@@ -317,11 +317,11 @@ public class CrmVehicleService {
 
         log.debug("Found owner {} for vehicle {}", owner.getPartyId(), vehicleId);
         
-        // Delegate to party service but need to pass party ID
-        return buildSnapshotForPartyEntity(owner);
+        // Delegate to shared snapshot builder
+        return buildSnapshotForOwnerParty(owner);
     }
 
-    private CrmSnapshotDTO buildSnapshotForPartyEntity(CommercialParty party) {
+    public CrmSnapshotDTO buildSnapshotForOwnerParty(CommercialParty party) {
         com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = 
             new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
                 java.util.UUID.randomUUID(),
@@ -338,10 +338,7 @@ public class CrmVehicleService {
             );
 
         java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles = 
-            party.getVehicleVins().stream()
-                .map(this::fetchVehicleSummaryByVin)
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toList());
+            collectVehiclesForParty(party);
 
         CrmSnapshotDTO result = new CrmSnapshotDTO();
         result.setSnapshotMetadata(meta);
@@ -351,5 +348,12 @@ public class CrmVehicleService {
         result.setPreferences(null);
         
         return result;
+    }
+
+    public java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(CommercialParty party) {
+        return party.getVehicleVins().stream()
+            .map(this::fetchVehicleSummaryByVin)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toList());
     }
 }
