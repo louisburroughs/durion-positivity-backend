@@ -15,7 +15,7 @@ public final class CustomerEventTypes {
 
         /**
          * All event type registrations for the customer module.
-         * Total: 22 event types.
+         * Total: 24 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -76,6 +76,12 @@ public final class CustomerEventTypes {
                                 EventTypeRegistration.write("CRM_RELATIONSHIP_PRIMARY_BILLING_UPDATE",
                                                 "Designate a relationship as the primary billing contact").build(),
                                 EventTypeRegistration.write("CRM_RELATIONSHIP_DEACTIVATE",
-                                                "Deactivate a party relationship").build());
+                                                "Deactivate a party relationship").build(),
+
+                                // CrmSnapshotController - 2 events (Story #99)
+                                EventTypeRegistration.fastRead("CRM_SNAPSHOT_PARTY_RETRIEVE",
+                                                "Retrieve comprehensive CRM snapshot for a party").build(),
+                                EventTypeRegistration.fastRead("CRM_SNAPSHOT_VEHICLE_RETRIEVE",
+                                                "Retrieve comprehensive CRM snapshot via vehicle ownership").build());
         }
 }

@@ -3,7 +3,9 @@ package com.positivity.customer.service;
 import com.positivity.customer.internal.client.VehicleInventoryClient;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
 import com.positivity.customer.internal.dto.VehicleTransferRequest;
+import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.entity.AbstractParty;
+import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.vehicle.internal.dto.CreateVehicleRequest;
@@ -14,6 +16,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -242,5 +245,111 @@ public class CrmVehicleService {
         } else if (party instanceof com.positivity.customer.internal.entity.CommercialParty) {
             commercialPartyRepository.save((com.positivity.customer.internal.entity.CommercialParty) party);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public CommercialParty findPartyByVehicleId(@NonNull String vehicleId) {
+        log.debug("Finding party for vehicle: {}", vehicleId);
+        UUID vehicleUuid = parseVehicleId(vehicleId);
+        VehicleResponse vehicleData = vehicleInventoryClient.getVehicle(vehicleUuid).orElse(null);
+        
+        if (vehicleData == null || vehicleData.getVin() == null) {
+            log.debug("Vehicle not found: {}", vehicleId);
+            return null;
+        }
+
+        return findPartyByVin(vehicleData.getVin());
+    }
+
+    @Transactional(readOnly = true)
+    public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
+        try {
+            VehicleResponse vehicleData = vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
+            
+            if (vehicleData == null) {
+                log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
+                return null;
+            }
+            
+            com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary summary = 
+                new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary();
+            summary.setVehicleId(vehicleData.getVehicleId().toString());
+            summary.setVin(vehicleData.getVin());
+            summary.setLicensePlate(vehicleData.getLicensePlate());
+            summary.setMake(vehicleData.getMake());
+            summary.setModel(vehicleData.getModel());
+            summary.setYear(vehicleData.getYear());
+            return summary;
+        } catch (Exception ex) {
+            log.warn("Vehicle fetch failed for VIN {}: {}", vinCode, ex.getMessage());
+            return null;
+        }
+    }
+
+    private CommercialParty findPartyByVin(String vinCode) {
+        if (vinCode == null || vinCode.isBlank()) {
+            return null;
+        }
+        
+        // Search through commercial parties
+        List<com.positivity.customer.internal.entity.CommercialParty> allParties = commercialPartyRepository.findAll();
+        
+        for (com.positivity.customer.internal.entity.CommercialParty candidate : allParties) {
+            if (candidate.getVehicleVins().contains(vinCode)) {
+                log.debug("Party located for VIN {}: {}", vinCode, candidate.getPartyId());
+                return candidate;
+            }
+        }
+        
+        log.debug("No party found owning VIN: {}", vinCode);
+        return null;
+    }
+
+    @Transactional(readOnly = true)
+    public CrmSnapshotDTO buildSnapshotForVehicleOwner(@NonNull String vehicleId) {
+        log.debug("Building snapshot via vehicle: {}", vehicleId);
+        CommercialParty owner = findPartyByVehicleId(vehicleId);
+        
+        if (owner == null) {
+            log.warn("No owner found for vehicle: {}", vehicleId);
+            return null;
+        }
+
+        log.debug("Found owner {} for vehicle {}", owner.getPartyId(), vehicleId);
+        
+        // Delegate to party service but need to pass party ID
+        return buildSnapshotForPartyEntity(owner);
+    }
+
+    private CrmSnapshotDTO buildSnapshotForPartyEntity(CommercialParty party) {
+        com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = 
+            new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
+                java.util.UUID.randomUUID(),
+                java.time.Instant.now(),
+                "1.0.0"
+            );
+
+        com.positivity.customer.internal.dto.snapshot.AccountSummary acct = 
+            new com.positivity.customer.internal.dto.snapshot.AccountSummary(
+                party.getPartyId().toString(),
+                party.getPartyNumber() != null ? party.getPartyNumber() : "N/A",
+                party.getDisplayName() != null ? party.getDisplayName() : party.getLegalName(),
+                party.getPartyType().name()
+            );
+
+        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles = 
+            party.getVehicleVins().stream()
+                .map(this::fetchVehicleSummaryByVin)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toList());
+
+        CrmSnapshotDTO result = new CrmSnapshotDTO();
+        result.setSnapshotMetadata(meta);
+        result.setAccount(acct);
+        result.setContacts(java.util.Collections.emptyList());
+        result.setVehicles(vehicles);
+        result.setPreferences(null);
+        
+        return result;
     }
 }
