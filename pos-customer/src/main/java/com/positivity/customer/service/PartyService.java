@@ -479,7 +479,9 @@ public class PartyService {
     }
 
     private java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(CommercialParty party) {
-        // This will be delegated to vehicle service
+        // Note: Vehicle summaries are currently not populated in party-initiated snapshots
+        // to avoid circular dependency between PartyService and CrmVehicleService.
+        // Vehicle snapshots requested via /vehicle/{id} endpoint include full vehicle details.
         return new java.util.ArrayList<>();
     }
 
