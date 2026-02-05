@@ -4,11 +4,88 @@ This document covers development workflows, build configuration, OpenAPI documen
 
 ## Table of Contents
 
-1. [Build Configuration](#build-configuration)
-2. [OpenAPI Documentation](#openapi-documentation)
-3. [Version Management](#version-management)
-4. [pos-events Shared Library](#pos-events-shared-library)
-5. [Spring Boot 4.0 Migration Status](#spring-boot-40-migration-status)
+1. [Java Version Management with SDKMAN!](#java-version-management-with-sdkman)
+2. [Build Configuration](#build-configuration)
+3. [OpenAPI Documentation](#openapi-documentation)
+4. [Version Management](#version-management)
+5. [pos-events Shared Library](#pos-events-shared-library)
+6. [Spring Boot 4.0 Migration Status](#spring-boot-40-migration-status)
+
+---
+
+## Java Version Management with SDKMAN!
+
+This project uses **SDKMAN!** to manage Java versions consistently across development environments.
+
+### Why SDKMAN!?
+
+- **Automatic version switching**: When you `cd` into the project, the correct Java version is activated automatically
+- **Consistent environments**: All developers use the same Java distribution and version
+- **Multiple Java versions**: Install and manage multiple Java versions side-by-side without conflicts
+
+### Required Java Version
+
+This project requires **Java 21.0.5-tem** (Eclipse Temurin 21.0.5), as specified in `.sdkmanrc`.
+
+### Installation & Setup
+
+1. **Install SDKMAN!** (one-time setup):
+   ```bash
+   curl -s "https://get.sdkman.io" | bash
+   source "$HOME/.sdkman/bin/sdkman-init.sh"
+   ```
+
+2. **Enable automatic environment switching**:
+   Edit `~/.sdkman/etc/config` and set:
+   ```properties
+   sdkman_auto_env=true
+   ```
+
+3. **Install the required Java version**:
+   ```bash
+   cd durion-positivity-backend
+   sdk env install
+   ```
+   This reads `.sdkmanrc` and installs Java 21.0.5-tem if not already present.
+
+4. **Verify the version**:
+   ```bash
+   java -version
+   # Should output: openjdk version "21.0.5"
+   ```
+
+### Usage
+
+With `sdkman_auto_env=true`, SDKMAN! automatically switches to the correct Java version when you enter the project directory:
+
+```bash
+cd durion-positivity-backend
+# SDKMAN! activates Java 21.0.5-tem automatically
+
+java -version
+# openjdk version "21.0.5" 2026-10-15
+```
+
+### Manual Switching
+
+If automatic switching is disabled, use:
+```bash
+sdk env
+```
+
+### Troubleshooting
+
+**Problem**: "SDK version not available"
+```bash
+sdk list java           # View available versions
+sdk install java 21.0.5-tem
+```
+
+**Problem**: Wrong Java version active
+```bash
+sdk env                 # Force environment switch
+sdk current java        # Check active version
+```
 
 ---
 
