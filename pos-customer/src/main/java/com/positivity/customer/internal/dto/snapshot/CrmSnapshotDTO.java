@@ -21,6 +21,72 @@ public class CrmSnapshotDTO {
     @Nullable
     private BillingPreferences preferences;
 
+    /**
+     * Vehicle summary within CRM snapshot context.
+     */
+    public static class VehicleSummary {
+        @NonNull
+        private String vehicleId;
+        @Nullable
+        private String vin;
+        @Nullable
+        private String licensePlate;
+        @Nullable
+        private String make;
+        @Nullable
+        private String model;
+        @Nullable
+        private Integer year;
+
+        public VehicleSummary() {}
+
+        @NonNull
+        public String getVehicleId() { return vehicleId; }
+        public void setVehicleId(@NonNull String val) { this.vehicleId = val; }
+
+        @Nullable
+        public String getVin() { return vin; }
+        public void setVin(@Nullable String val) { this.vin = val; }
+
+        @Nullable
+        public String getLicensePlate() { return licensePlate; }
+        public void setLicensePlate(@Nullable String val) { this.licensePlate = val; }
+
+        @Nullable
+        public String getMake() { return make; }
+        public void setMake(@Nullable String val) { this.make = val; }
+
+        @Nullable
+        public String getModel() { return model; }
+        public void setModel(@Nullable String val) { this.model = val; }
+
+        @Nullable
+        public Integer getYear() { return year; }
+        public void setYear(@Nullable Integer val) { this.year = val; }
+    }
+
+    /**
+     * Account-level billing preferences within CRM snapshot context.
+     */
+    public static class BillingPreferences {
+        private boolean marketingOptOut;
+        private boolean doNotContact;
+        @Nullable
+        private String invoiceDeliveryMethod;
+
+        public BillingPreferences() {}
+
+        public boolean isMarketingOptOut() { return marketingOptOut; }
+        public void setMarketingOptOut(boolean val) { this.marketingOptOut = val; }
+
+        public boolean isDoNotContact() { return doNotContact; }
+        public void setDoNotContact(boolean val) { this.doNotContact = val; }
+
+        @Nullable
+        public String getInvoiceDeliveryMethod() { return invoiceDeliveryMethod; }
+        public void setInvoiceDeliveryMethod(@Nullable String val) { this.invoiceDeliveryMethod = val; }
+    }
+
     // Constructors
 
     public CrmSnapshotDTO() {
