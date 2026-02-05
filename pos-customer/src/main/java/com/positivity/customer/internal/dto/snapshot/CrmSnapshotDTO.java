@@ -38,31 +38,62 @@ public class CrmSnapshotDTO {
         @Nullable
         private Integer year;
 
-        public VehicleSummary() {}
+        public VehicleSummary() {
+        }
 
         @NonNull
-        public String getVehicleId() { return vehicleId; }
-        public void setVehicleId(@NonNull String val) { this.vehicleId = val; }
+        public String getVehicleId() {
+            return vehicleId;
+        }
+
+        public void setVehicleId(@NonNull String val) {
+            this.vehicleId = val;
+        }
 
         @Nullable
-        public String getVin() { return vin; }
-        public void setVin(@Nullable String val) { this.vin = val; }
+        public String getVin() {
+            return vin;
+        }
+
+        public void setVin(@Nullable String val) {
+            this.vin = val;
+        }
 
         @Nullable
-        public String getLicensePlate() { return licensePlate; }
-        public void setLicensePlate(@Nullable String val) { this.licensePlate = val; }
+        public String getLicensePlate() {
+            return licensePlate;
+        }
+
+        public void setLicensePlate(@Nullable String val) {
+            this.licensePlate = val;
+        }
 
         @Nullable
-        public String getMake() { return make; }
-        public void setMake(@Nullable String val) { this.make = val; }
+        public String getMake() {
+            return make;
+        }
+
+        public void setMake(@Nullable String val) {
+            this.make = val;
+        }
 
         @Nullable
-        public String getModel() { return model; }
-        public void setModel(@Nullable String val) { this.model = val; }
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(@Nullable String val) {
+            this.model = val;
+        }
 
         @Nullable
-        public Integer getYear() { return year; }
-        public void setYear(@Nullable Integer val) { this.year = val; }
+        public Integer getYear() {
+            return year;
+        }
+
+        public void setYear(@Nullable Integer val) {
+            this.year = val;
+        }
     }
 
     /**
