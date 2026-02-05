@@ -57,6 +57,10 @@ public class Estimate {
     private String signerName; // Name of person who signed
     private String approvalNotes; // Additional notes at approval time
 
+    // Purchase order tracking (CAP:092 Story #98)
+    @Column(length = 100)
+    private String purchaseOrderNumber; // PO number when approval requires it
+
     // Financial tracking for approval invalidation
     private BigDecimal subtotal;
     private BigDecimal taxAmount;

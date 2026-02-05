@@ -157,9 +157,10 @@ public class EstimateController {
     @Operation(summary = "Approve an estimate with customer signature", description = "Transition estimate to approved state with customer signature capture. "
             +
             "Estimate can be approved from DRAFT status. Requires customer ID validation " +
-            "and signature data (base64-encoded image).")
+            "and signature data (base64-encoded image). For commercial accounts with PO enforcement " +
+            "enabled, a purchase order number must be provided (CAP:092 Story #98).")
     @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be approved in current state or customer ID mismatch.")
+    @ApiResponse(responseCode = "400", description = "Estimate cannot be approved in current state, customer ID mismatch, or PO required but not provided.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_APPROVE", apiVersion = "1")
@@ -173,7 +174,8 @@ public class EstimateController {
                     request.getSignatureData(),
                     request.getSignatureMimeType(),
                     request.getSignerName(),
-                    request.getNotes());
+                    request.getNotes(),
+                    request.getPurchaseOrderNumber());
             return ResponseEntity.ok(approved);
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
