@@ -74,17 +74,33 @@ public class CrmSnapshotDTO {
         @Nullable
         private String invoiceDeliveryMethod;
 
-        public BillingPreferences() {}
+        public BillingPreferences() {
+        }
 
-        public boolean isMarketingOptOut() { return marketingOptOut; }
-        public void setMarketingOptOut(boolean val) { this.marketingOptOut = val; }
+        public boolean isMarketingOptOut() {
+            return marketingOptOut;
+        }
 
-        public boolean isDoNotContact() { return doNotContact; }
-        public void setDoNotContact(boolean val) { this.doNotContact = val; }
+        public void setMarketingOptOut(boolean val) {
+            this.marketingOptOut = val;
+        }
+
+        public boolean isDoNotContact() {
+            return doNotContact;
+        }
+
+        public void setDoNotContact(boolean val) {
+            this.doNotContact = val;
+        }
 
         @Nullable
-        public String getInvoiceDeliveryMethod() { return invoiceDeliveryMethod; }
-        public void setInvoiceDeliveryMethod(@Nullable String val) { this.invoiceDeliveryMethod = val; }
+        public String getInvoiceDeliveryMethod() {
+            return invoiceDeliveryMethod;
+        }
+
+        public void setInvoiceDeliveryMethod(@Nullable String val) {
+            this.invoiceDeliveryMethod = val;
+        }
     }
 
     // Constructors
