@@ -89,7 +89,16 @@ durion-positivity-backend/
 
 ### Prerequisites
 
-- **Java 21+**
+- **Java 21+** (Recommended: Use [SDKMAN!](https://sdkman.io/) for automatic version management)
+  ```bash
+  # Install SDKMAN! (if not already installed)
+  curl -s "https://get.sdkman.io" | bash
+  
+  # After installation, cd into the project directory
+  # SDKMAN! will automatically switch to Java 21.0.5-tem based on .sdkmanrc
+  cd durion-positivity-backend
+  sdk env install  # Install the required Java version if needed
+  ```
 - **Docker** (for running databases/infrastructure)
 - **Maven** (optional, wrapper provided)
 
