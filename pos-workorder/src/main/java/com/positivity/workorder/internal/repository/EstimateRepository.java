@@ -8,9 +8,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface EstimateRepository extends JpaRepository<Estimate, Long> {
+public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
     List<Estimate> findByCustomerId(Long customerId);
 
     @Deprecated

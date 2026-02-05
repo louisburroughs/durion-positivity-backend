@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "estimate", uniqueConstraints = @UniqueConstraint(columnNames = { "locationId", "estimateNumber" }))
@@ -13,8 +14,8 @@ import java.time.LocalDateTime;
 @Builder
 public class Estimate {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(unique = false) // Uniqueness enforced at DB level with composite constraint
     private String estimateNumber; // Human-readable identifier (e.g., EST-2024-1001)

@@ -40,14 +40,6 @@
                 <artifactId>pos-agent-framework</artifactId>
                 <version>${project.version}</version>
             </dependency>
+        </dependencyManagement>
 
-            <!-- Invoice Service (for billing rules access) -->
-            <dependency>
-                <groupId>com.positivity</groupId>
-                <artifactId>pos-invoice</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
-</project>
+    </project>

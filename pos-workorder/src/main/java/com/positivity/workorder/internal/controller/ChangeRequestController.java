@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Tag(name = "Change Request API", description = "Endpoints for managing additional work requests and approvals")
 @RestController
@@ -34,7 +35,7 @@ public class ChangeRequestController {
     @PostMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_CREATE", apiVersion = "1")
     public ResponseEntity<ChangeRequest> createChangeRequest(
-            @Parameter(description = "ID of the work order", example = "1") @PathVariable Long workorderId,
+            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @Parameter(description = "Change request details including items") @RequestBody CreateChangeRequestDTO dto) {
         try {
             dto.setWorkorderId(workorderId);
@@ -54,7 +55,7 @@ public class ChangeRequestController {
     @PostMapping("/changeRequests/{changeId}/approve")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_APPROVE", apiVersion = "1")
     public ResponseEntity<ChangeRequest> approveChangeRequest(
-            @Parameter(description = "ID of the change request", example = "1") @PathVariable Long changeId,
+            @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Approval details including user ID and note") @RequestBody ApproveChangeRequestDTO dto) {
         try {
             ChangeRequest approved = changeRequestService.approveChangeRequest(
@@ -74,7 +75,7 @@ public class ChangeRequestController {
     @PostMapping("/changeRequests/{changeId}/decline")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DECLINE", apiVersion = "1")
     public ResponseEntity<ChangeRequest> declineChangeRequest(
-            @Parameter(description = "ID of the change request", example = "1") @PathVariable Long changeId,
+            @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Decline details including note") @RequestBody DeclineChangeRequestDTO dto) {
         try {
             ChangeRequest declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
@@ -93,7 +94,7 @@ public class ChangeRequestController {
     @PostMapping("/changeRequests/{changeId}/acknowledgeDenial")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE", apiVersion = "1")
     public ResponseEntity<Void> recordCustomerDenialAcknowledgment(
-            @Parameter(description = "ID of the change request", example = "1") @PathVariable Long changeId) {
+            @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
         try {
             changeRequestService.recordCustomerDenialAcknowledgment(changeId);
             return ResponseEntity.noContent().build();
@@ -113,7 +114,7 @@ public class ChangeRequestController {
     @PostMapping("/changeRequests/{changeId}/emergency-override")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE", apiVersion = "1")
     public ResponseEntity<ChangeRequest> applyEmergencyOverride(
-            @Parameter(description = "ID of the change request", example = "1") @PathVariable Long changeId,
+            @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Emergency override details including manager ID and reason") @RequestBody EmergencyOverrideDTO dto) {
         try {
             // TODO: Add role-based authorization check for Manager role
@@ -130,7 +131,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @GetMapping("/changeRequests/{changeId}")
     public ResponseEntity<ChangeRequest> getChangeRequestById(
-            @Parameter(description = "ID of the change request", example = "1") @PathVariable Long changeId) {
+            @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
         try {
             ChangeRequest changeRequest = changeRequestService.getChangeRequestById(changeId);
             return ResponseEntity.ok(changeRequest);
@@ -144,7 +145,7 @@ public class ChangeRequestController {
     @GetMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_LIST", apiVersion = "1")
     public ResponseEntity<List<ChangeRequest>> getChangeRequestsByWorkorder(
-            @Parameter(description = "ID of the work order", example = "1") @PathVariable Long workorderId) {
+            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         List<ChangeRequest> changeRequests = changeRequestService.getChangeRequestsByWorkorder(workorderId);
         return ResponseEntity.ok(changeRequests);
     }
@@ -153,7 +154,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "Returns true if work order can be closed, false otherwise")
     @GetMapping("/{workorderId}/canClose")
     public ResponseEntity<Boolean> canCloseWorkorder(
-            @Parameter(description = "ID of the work order", example = "1") @PathVariable Long workorderId) {
+            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         boolean canClose = changeRequestService.canCloseWorkorder(workorderId);
         return ResponseEntity.ok(canClose);
     }

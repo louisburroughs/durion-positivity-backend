@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -12,8 +13,8 @@ import java.util.List;
 @Builder
 public class Workorder {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     private Long shopId; // Reference to Shop
     private Long vehicleId; // Reference to Vehicle

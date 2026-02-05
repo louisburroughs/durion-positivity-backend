@@ -6,10 +6,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface ChangeRequestRepository extends JpaRepository<ChangeRequest, Long> {
+public interface ChangeRequestRepository extends JpaRepository<ChangeRequest, UUID> {
     List<ChangeRequest> findByWorkorderId(Long workorderId);
+
     List<ChangeRequest> findByWorkorderIdAndStatus(Long workorderId, ChangeRequestStatus status);
+
     List<ChangeRequest> findByStatus(ChangeRequestStatus status);
 }

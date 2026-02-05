@@ -3,16 +3,17 @@ package com.positivity.workorder.internal.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Immutable audit record for all change request resolution decisions.
- * This entity serves as the primary audit trail for customer-facing 
+ * This entity serves as the primary audit trail for customer-facing
  * approval decisions and emergency overrides.
  */
 @Entity
 @Table(name = "approval_record", indexes = {
-    @Index(name = "idx_approval_change_request", columnList = "changeRequestId"),
-    @Index(name = "idx_approval_workorder", columnList = "workorderId")
+        @Index(name = "idx_approval_change_request", columnList = "changeRequestId"),
+        @Index(name = "idx_approval_workorder", columnList = "workorderId")
 })
 @Data
 @NoArgsConstructor
@@ -20,8 +21,8 @@ import java.time.LocalDateTime;
 @Builder
 public class ApprovalRecord {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false)
     private Long changeRequestId;

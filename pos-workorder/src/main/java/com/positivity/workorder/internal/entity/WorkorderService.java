@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -11,17 +12,18 @@ import java.util.List;
 @Builder
 public class WorkorderService {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "work_order_id")
     private Workorder workOrder;
 
     private Long serviceEntityId; // Reference to ServiceEntity in pos-catalog
-    private Long technicianId;    // Reference to Technician
+    private Long technicianId; // Reference to Technician
 
-    // Flag to indicate this service was declined by customer during estimate approval
+    // Flag to indicate this service was declined by customer during estimate
+    // approval
     @Builder.Default
     private Boolean declined = false;
 
@@ -52,11 +54,11 @@ public class WorkorderService {
     private List<WorkorderPart> parts;
 
     /**
-     * Check if this service can be executed (not pending approval unless emergency exception)
+     * Check if this service can be executed (not pending approval unless emergency
+     * exception)
      */
     public boolean canExecute() {
-        return status != WorkorderItemStatus.PENDING_APPROVAL 
-            || (isEmergencySafety && customerDenialAcknowledged != null);
+        return status != WorkorderItemStatus.PENDING_APPROVAL
+                || (isEmergencySafety && customerDenialAcknowledged != null);
     }
 }
-

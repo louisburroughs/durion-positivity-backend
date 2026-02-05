@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -20,7 +21,7 @@ public class ApprovalConfigurationService {
         return approvalConfigurationRepository.findAll();
     }
 
-    public Optional<ApprovalConfiguration> getConfigurationById(Long id) {
+    public Optional<ApprovalConfiguration> getConfigurationById(UUID id) {
         return approvalConfigurationRepository.findById(id);
     }
 
@@ -30,7 +31,7 @@ public class ApprovalConfigurationService {
     }
 
     @Transactional
-    public ApprovalConfiguration updateConfiguration(Long id, ApprovalConfiguration updatedConfig) {
+    public ApprovalConfiguration updateConfiguration(UUID id, ApprovalConfiguration updatedConfig) {
         ApprovalConfiguration existing = approvalConfigurationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Configuration not found: " + id));
 
@@ -43,7 +44,7 @@ public class ApprovalConfigurationService {
         return approvalConfigurationRepository.save(existing);
     }
 
-    public void deleteConfiguration(Long id) {
+    public void deleteConfiguration(UUID id) {
         approvalConfigurationRepository.deleteById(id);
     }
 

@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Tag(name = "Approval Configuration API", description = "Endpoints for managing approval configurations by location and customer")
 @RestController
@@ -33,7 +34,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @GetMapping("/approvalConfigurations/{approvalId}")
     public ResponseEntity<ApprovalConfiguration> getConfigurationById(
-            @Parameter(description = "ID of the configuration to retrieve", example = "1") @PathVariable Long approvalId) {
+            @Parameter(description = "ID of the configuration to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId) {
         return approvalConfigurationService.getConfigurationById(approvalId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -67,7 +68,7 @@ public class ApprovalConfigurationController {
     @PutMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_UPDATE", apiVersion = "1")
     public ResponseEntity<ApprovalConfiguration> updateConfiguration(
-            @Parameter(description = "ID of the configuration to update", example = "1") @PathVariable Long approvalId,
+            @Parameter(description = "ID of the configuration to update", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId,
             @Parameter(description = "Updated configuration object") @RequestBody ApprovalConfiguration configuration) {
         try {
             ApprovalConfiguration updated = approvalConfigurationService.updateConfiguration(approvalId, configuration);
@@ -83,7 +84,7 @@ public class ApprovalConfigurationController {
     @DeleteMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteConfiguration(
-            @Parameter(description = "ID of the configuration to delete", example = "1") @PathVariable Long approvalId) {
+            @Parameter(description = "ID of the configuration to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId) {
         approvalConfigurationService.deleteConfiguration(approvalId);
         return ResponseEntity.noContent().build();
     }

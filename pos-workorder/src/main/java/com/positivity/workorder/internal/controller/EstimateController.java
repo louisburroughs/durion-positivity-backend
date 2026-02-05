@@ -41,7 +41,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @GetMapping("/{estimateId}")
     public ResponseEntity<Estimate> getEstimateById(
-            @Parameter(description = "ID of the estimate to retrieve", example = "1") @PathVariable Long estimateId) {
+            @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         return estimateService.getEstimateById(estimateId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -128,7 +128,7 @@ public class EstimateController {
     @PostMapping("/{estimateId}/decline")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DECLINE", apiVersion = "1")
     public ResponseEntity<Estimate> declineEstimate(
-            @Parameter(description = "ID of the estimate to decline", example = "1") @PathVariable Long estimateId,
+            @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Reason for decline") @RequestParam(required = false) String reason) {
         try {
             Estimate declined = estimateService.declineEstimate(estimateId, reason);
@@ -145,7 +145,7 @@ public class EstimateController {
     @PostMapping("/{estimateId}/reopen")
     @EmitEvent(id = "WORKORDER_ESTIMATE_REOPEN", apiVersion = "1")
     public ResponseEntity<Estimate> reopenEstimate(
-            @Parameter(description = "ID of the estimate to reopen", example = "1") @PathVariable Long estimateId) {
+            @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
             Estimate reopened = estimateService.reopenEstimate(estimateId);
             return ResponseEntity.ok(reopened);
@@ -165,7 +165,7 @@ public class EstimateController {
     @PostMapping("/{estimateId}/approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_APPROVE", apiVersion = "1")
     public ResponseEntity<Estimate> approveEstimate(
-            @Parameter(description = "ID of the estimate to approve", example = "1") @PathVariable Long estimateId,
+            @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveEstimateRequest request) {
         try {
             Estimate approved = estimateService.approveEstimate(
@@ -189,7 +189,7 @@ public class EstimateController {
     @DeleteMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteEstimate(
-            @Parameter(description = "ID of the estimate to delete", example = "1") @PathVariable Long estimateId) {
+            @Parameter(description = "ID of the estimate to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         estimateService.deleteEstimate(estimateId);
         return ResponseEntity.noContent().build();
     }
