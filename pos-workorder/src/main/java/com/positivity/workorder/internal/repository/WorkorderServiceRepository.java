@@ -5,9 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface WorkorderServiceRepository extends JpaRepository<WorkorderService, Long> {
+public interface WorkorderServiceRepository extends JpaRepository<WorkorderService, UUID> {
     List<WorkorderService> findByChangeRequestId(Long changeRequestId);
 }
-

@@ -13,7 +13,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableDiscoveryClient
 @EnableJpaRepositories
 public class PosInvoiceApplication {
+
     public static void main(String[] args) {
         SpringApplication.run(PosInvoiceApplication.class, args);
     }
+    
 }

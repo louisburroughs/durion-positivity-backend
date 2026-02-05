@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -10,8 +11,8 @@ import lombok.*;
 @Builder
 public class ApprovalConfiguration {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     // Location ID - if null, applies to all locations
     private Long locationId;
@@ -39,8 +40,8 @@ public class ApprovalConfiguration {
     private Integer priority = 0;
 
     public enum ApprovalMethod {
-        CLICK_CONFIRM,      // Service advisor clicks to confirm
-        SIGNATURE,          // Customer signature on tablet
+        CLICK_CONFIRM, // Service advisor clicks to confirm
+        SIGNATURE, // Customer signature on tablet
         ELECTRONIC_SIGNATURE, // Electronic signature via email/SMS
         VERBAL_CONFIRMATION // Verbal confirmation recorded
     }

@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -10,8 +11,8 @@ import lombok.*;
 @Builder
 public class Vehicle {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
     private String vin;
     private String make;
     private String model;
@@ -19,4 +20,3 @@ public class Vehicle {
     private String licensePlate;
     private String color;
 }
-

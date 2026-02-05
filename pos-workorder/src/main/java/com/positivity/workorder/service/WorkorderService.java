@@ -43,7 +43,7 @@ public class WorkorderService {
         return workorderRepository.findAll();
     }
 
-    public Optional<Workorder> getWorkorderById(Long id) {
+    public Optional<Workorder> getWorkorderById(UUID id) {
         return workorderRepository.findById(id);
     }
 

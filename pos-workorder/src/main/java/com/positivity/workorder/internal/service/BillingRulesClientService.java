@@ -1,6 +1,6 @@
 package com.positivity.workorder.internal.service;
 
-import com.positivity.invoice.internal.dto.BillingRulesDTO;
+import com.positivity.workorder.internal.dto.BillingRulesDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -32,22 +32,22 @@ public class BillingRulesClientService {
     public Optional<BillingRulesDTO> getBillingRules(@NonNull String partyId) {
         try {
             log.debug("Fetching billing rules for partyId={}", partyId);
-            
+
             BillingRulesDTO rules = invoiceServiceRestClient
                     .get()
                     .uri("/v1/billing/rules/{partyId}", partyId)
                     .retrieve()
                     .body(BillingRulesDTO.class);
-            
+
             if (rules != null) {
-                log.debug("Successfully fetched billing rules for partyId={}, purchaseOrderRequired={}", 
-                         partyId, rules.isPurchaseOrderRequired());
+                log.debug("Successfully fetched billing rules for partyId={}, purchaseOrderRequired={}",
+                        partyId, rules.isPurchaseOrderRequired());
                 return Optional.of(rules);
             }
-            
+
             log.debug("No billing rules found for partyId={}", partyId);
             return Optional.empty();
-            
+
         } catch (Exception e) {
             // Log warning but don't fail - default to not requiring PO
             log.warn("Failed to fetch billing rules for partyId={}: {}", partyId, e.getMessage());
@@ -66,7 +66,7 @@ public class BillingRulesClientService {
         if (partyId == null || partyId.isBlank()) {
             return false;
         }
-        
+
         return getBillingRules(partyId)
                 .map(BillingRulesDTO::isPurchaseOrderRequired)
                 .orElse(false);
