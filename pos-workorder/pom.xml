@@ -69,11 +69,6 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-security-common</artifactId>
         </dependency>
-        <!-- pos-invoice for billing rules access (CAP:092 Story #98) -->
-        <dependency>
-            <groupId>com.positivity</groupId>
-            <artifactId>pos-invoice</artifactId>
-        </dependency>
         <!-- Eureka Client -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>

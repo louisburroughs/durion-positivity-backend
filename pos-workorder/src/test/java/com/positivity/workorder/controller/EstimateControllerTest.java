@@ -3,6 +3,7 @@ package com.positivity.workorder.controller;
 import tools.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.controller.EstimateController;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.service.EstimateService;
@@ -14,10 +15,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -37,56 +38,60 @@ class EstimateControllerTest {
         @Test
         void testCreateEstimate_Success() throws Exception {
                 // Given
+                UUID testEstimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+                UUID testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+                UUID testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440002");
                 CreateEstimateRequest request = CreateEstimateRequest.builder()
-                                .customerId(1L)
-                                .vehicleId(2L)
+                                .customerId(testCustomerId)
+                                .vehicleId(testVehicleId)
                                 .build();
 
                 Estimate mockEstimate = Estimate.builder()
-                                .id(1L)
+                                .id(testEstimateId)
                                 .estimateNumber("EST-2024-1000")
-                                .customerId(1L)
-                                .vehicleId(2L)
-                                .locationId(1L)
+                                .customerId(testCustomerId)
+                                .vehicleId(testVehicleId)
+                                .locationId(UUID.fromString("550e8400-e29b-41d4-a716-446655440003"))
                                 .currencyUomId("USD")
-                                .taxRegionId(1L)
+                                .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440004"))
                                 .status(EstimateStatus.DRAFT)
-                                .createdByUserId(100L)
+                                .createdByUserId(UUID.fromString("550e8400-e29b-41d4-a716-446655440005"))
                                 .createdAt(LocalDateTime.now())
                                 .build();
 
-                when(estimateService.createEstimate(any(CreateEstimateRequest.class), anyLong()))
+                when(estimateService.createEstimate(any(CreateEstimateRequest.class), any(UUID.class)))
                                 .thenReturn(mockEstimate);
 
                 // When & Then
-                mockMvc.perform(post("/api/estimates/create")
+                mockMvc.perform(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .header("X-User-Id", "100")
+                                .header("X-User-Id", "550e8400-e29b-41d4-a716-446655440001")
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isOk())
                                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andExpect(jsonPath("$.estimateId", is(1)))
+                                .andExpect(jsonPath("$.id", is(testEstimateId.toString())))
                                 .andExpect(jsonPath("$.estimateNumber", is("EST-2024-1000")))
                                 .andExpect(jsonPath("$.status", is("DRAFT")))
-                                .andExpect(jsonPath("$.customerId", is(1)))
-                                .andExpect(jsonPath("$.vehicleId", is(2)))
-                                .andExpect(jsonPath("$.locationId", is(1)))
+                                .andExpect(jsonPath("$.customerId", is(testCustomerId.toString())))
+                                .andExpect(jsonPath("$.vehicleId", is(testVehicleId.toString())))
+                                .andExpect(jsonPath("$.locationId", is("550e8400-e29b-41d4-a716-446655440003")))
                                 .andExpect(jsonPath("$.currencyUomId", is("USD")))
-                                .andExpect(jsonPath("$.createdByUserId", is(100)));
+                                .andExpect(jsonPath("$.createdByUserId", is("550e8400-e29b-41d4-a716-446655440005")));
         }
 
         @Test
         void testCreateEstimate_MissingCustomerId_ReturnsBadRequest() throws Exception {
+                UUID testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440002");
                 // Given
                 CreateEstimateRequest request = CreateEstimateRequest.builder()
-                                .vehicleId(2L)
+                                .vehicleId(testVehicleId)
                                 .build();
 
-                when(estimateService.createEstimate(any(CreateEstimateRequest.class), anyLong()))
+                when(estimateService.createEstimate(any(CreateEstimateRequest.class), any(UUID.class)))
                                 .thenThrow(new IllegalArgumentException("customerId is required"));
 
                 // When & Then
-                mockMvc.perform(post("/api/estimates/create")
+                mockMvc.perform(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .header("X-User-Id", "100")
                                 .content(objectMapper.writeValueAsString(request)))
@@ -95,37 +100,41 @@ class EstimateControllerTest {
 
         @Test
         void testCreateEstimate_MissingVehicleId_ReturnsBadRequest() throws Exception {
+                UUID testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
                 // Given
                 CreateEstimateRequest request = CreateEstimateRequest.builder()
-                                .customerId(1L)
+                                .customerId(testCustomerId)
                                 .build();
 
-                when(estimateService.createEstimate(any(CreateEstimateRequest.class), anyLong()))
+                when(estimateService.createEstimate(any(CreateEstimateRequest.class), any(UUID.class)))
                                 .thenThrow(new IllegalArgumentException("vehicleId is required"));
 
                 // When & Then
-                mockMvc.perform(post("/api/estimates/create")
+                mockMvc.perform(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .header("X-User-Id", "100")
+                                .header("X-User-Id", "550e8400-e29b-41d4-a716-446655440011")
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isBadRequest());
         }
 
         @Test
         void testCreateEstimate_UnexpectedException_ReturnsInternalServerError() throws Exception {
+
                 // Given
+                UUID testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+                UUID testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440002");
                 CreateEstimateRequest request = CreateEstimateRequest.builder()
-                                .customerId(1L)
-                                .vehicleId(2L)
+                                .customerId(testCustomerId)
+                                .vehicleId(testVehicleId)
                                 .build();
 
-                when(estimateService.createEstimate(any(CreateEstimateRequest.class), anyLong()))
+                when(estimateService.createEstimate(any(CreateEstimateRequest.class), any(UUID.class)))
                                 .thenThrow(new RuntimeException("Database connection failed"));
 
                 // When & Then
-                mockMvc.perform(post("/api/estimates/create")
+                mockMvc.perform(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .header("X-User-Id", "100")
+                                .header("X-User-Id", "550e8400-e29b-41d4-a716-446655440012")
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isInternalServerError())
                                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -136,33 +145,37 @@ class EstimateControllerTest {
         @Test
         void testCreateEstimate_WithoutUserId_UsesDefault() throws Exception {
                 // Given
+                UUID testEstimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+                UUID testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+                UUID testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440002");
                 CreateEstimateRequest request = CreateEstimateRequest.builder()
-                                .customerId(1L)
-                                .vehicleId(2L)
+                                .customerId(testCustomerId)
+                                .vehicleId(testVehicleId)
                                 .build();
 
                 Estimate mockEstimate = Estimate.builder()
-                                .id(1L)
+                                .id(testEstimateId)
                                 .estimateNumber("EST-2024-1000")
-                                .customerId(1L)
-                                .vehicleId(2L)
-                                .locationId(1L)
+                                .customerId(testCustomerId)
+                                .vehicleId(testVehicleId)
+                                .locationId(UUID.fromString("550e8400-e29b-41d4-a716-446655440003"))
                                 .currencyUomId("USD")
-                                .taxRegionId(1L)
+                                .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440004"))
                                 .status(EstimateStatus.DRAFT)
-                                .createdByUserId(1L) // Default userId
+                                .createdByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001")) // Default
+                                                                                                          // userId
                                 .createdAt(LocalDateTime.now())
                                 .build();
 
-                when(estimateService.createEstimate(any(CreateEstimateRequest.class), anyLong()))
+                when(estimateService.createEstimate(any(CreateEstimateRequest.class), any(UUID.class)))
                                 .thenReturn(mockEstimate);
 
                 // When & Then
-                mockMvc.perform(post("/api/estimates/create")
+                mockMvc.perform(post("/v1/workorders/estimates")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isOk())
                                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andExpect(jsonPath("$.estimateId", is(1)));
+                                .andExpect(jsonPath("$.id", is(testEstimateId.toString())));
         }
 }

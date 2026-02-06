@@ -1,11 +1,19 @@
 package com.positivity.workorder.service;
 
-import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.internal.entity.ApprovalConfiguration;
-import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateStatus;
-import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
-import com.positivity.workorder.internal.repository.EstimateRepository;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,13 +24,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.entity.ApprovalConfiguration;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -39,19 +46,21 @@ class EstimateServiceTest {
 
         private CreateEstimateRequest validRequest;
         private ApprovalConfiguration defaultConfig;
-        private Long testUserId;
+        private UUID testUserId;
+        private UUID testConfigId;
 
         @BeforeEach
         void setUp() {
-                testUserId = 100L;
+                testUserId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+                testConfigId = UUID.fromString("550e8400-e29b-41d4-a716-446655440010");
 
                 validRequest = CreateEstimateRequest.builder()
-                                .customerId(1L)
-                                .vehicleId(2L)
+                                .customerId(UUID.fromString("550e8400-e29b-41d4-a716-446655440011"))
+                                .vehicleId(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"))
                                 .build();
 
                 defaultConfig = ApprovalConfiguration.builder()
-                                .id(1L)
+                                .id(testConfigId)
                                 .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
                                 .declineExpiryDays(30)
                                 .requireSignature(false)
@@ -59,24 +68,25 @@ class EstimateServiceTest {
                                 .build();
 
                 // Setup default mocks
-                when(approvalConfigurationRepository.findApplicableConfigurations(anyLong(), anyLong()))
+                when(approvalConfigurationRepository.findApplicableConfigurations(any(UUID.class), any(UUID.class)))
                                 .thenReturn(List.of(defaultConfig));
 
-                when(estimateRepository.existsByLocationIdAndEstimateNumber(anyLong(), anyString()))
+                when(estimateRepository.existsByLocationIdAndEstimateNumber(any(UUID.class), anyString()))
                                 .thenReturn(false);
         }
 
         @Test
         void testCreateEstimate_Success() {
                 // Given
+                UUID testEstimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440020");
                 Estimate savedEstimate = Estimate.builder()
-                                .id(1L)
+                                .id(testEstimateId)
                                 .estimateNumber("EST-2024-1000")
-                                .customerId(1L)
-                                .vehicleId(2L)
-                                .locationId(1L)
+                                .customerId(UUID.fromString("550e8400-e29b-41d4-a716-446655440011"))
+                                .vehicleId(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"))
+                                .locationId(UUID.fromString("550e8400-e29b-41d4-a716-446655440013"))
                                 .currencyUomId("USD")
-                                .taxRegionId(1L)
+                                .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440014"))
                                 .status(EstimateStatus.DRAFT)
                                 .createdByUserId(testUserId)
                                 .build();
@@ -90,8 +100,8 @@ class EstimateServiceTest {
                 // Then
                 assertNotNull(result);
                 assertEquals(EstimateStatus.DRAFT, result.getStatus());
-                assertEquals(1L, result.getCustomerId());
-                assertEquals(2L, result.getVehicleId());
+                assertEquals(UUID.fromString("550e8400-e29b-41d4-a716-446655440011"), result.getCustomerId());
+                assertEquals(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"), result.getVehicleId());
                 assertNotNull(result.getEstimateNumber());
                 assertEquals(testUserId, result.getCreatedByUserId());
 
@@ -112,7 +122,7 @@ class EstimateServiceTest {
         void testCreateEstimate_MissingCustomerId_ThrowsException() {
                 // Given
                 CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
-                                .vehicleId(2L)
+                                .vehicleId(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"))
                                 .build();
 
                 // When & Then
@@ -128,7 +138,7 @@ class EstimateServiceTest {
         void testCreateEstimate_MissingVehicleId_ThrowsException() {
                 // Given
                 CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
-                                .customerId(1L)
+                                .customerId(UUID.fromString("550e8400-e29b-41d4-a716-446655440011"))
                                 .build();
 
                 // When & Then
@@ -160,9 +170,9 @@ class EstimateServiceTest {
         void testCreateEstimate_WithProvidedLocation() {
                 // Given
                 CreateEstimateRequest requestWithLocation = CreateEstimateRequest.builder()
-                                .customerId(1L)
-                                .vehicleId(2L)
-                                .locationId(5L)
+                                .customerId(UUID.fromString("550e8400-e29b-41d4-a716-446655440011"))
+                                .vehicleId(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"))
+                                .locationId(UUID.fromString("550e8400-e29b-41d4-a716-446655440015"))
                                 .build();
 
                 when(estimateRepository.save(any(Estimate.class)))
@@ -172,7 +182,8 @@ class EstimateServiceTest {
                 Estimate result = estimateService.createEstimate(requestWithLocation, testUserId);
 
                 // Then
-                assertEquals(5L, result.getLocationId(), "Should use provided location");
+                assertEquals(UUID.fromString("550e8400-e29b-41d4-a716-446655440015"), result.getLocationId(),
+                                "Should use provided location");
         }
 
         @Test
@@ -205,6 +216,6 @@ class EstimateServiceTest {
                 assertNotNull(result.getApprovalConfigurationId());
                 assertEquals(defaultConfig.getId(), result.getApprovalConfigurationId());
                 verify(approvalConfigurationRepository, times(1))
-                                .findApplicableConfigurations(anyLong(), anyLong());
+                                .findApplicableConfigurations(any(UUID.class), any(UUID.class));
         }
 }

@@ -1,7 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
-import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
-import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
+import com.positivity.workorder.internal.enums.InvoiceDeliveryMethod;
+import com.positivity.workorder.internal.enums.InvoiceGroupingStrategy;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -39,8 +39,8 @@ public class BillingRulesDTO {
     }
 
     public BillingRulesDTO(@NonNull String partyId, boolean purchaseOrderRequired, @NonNull String paymentTermsCode,
-                           @NonNull InvoiceDeliveryMethod invoiceDeliveryMethod,
-                           @NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
+            @NonNull InvoiceDeliveryMethod invoiceDeliveryMethod,
+            @NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
         this.partyId = partyId;
         this.purchaseOrderRequired = purchaseOrderRequired;
         this.paymentTermsCode = paymentTermsCode;

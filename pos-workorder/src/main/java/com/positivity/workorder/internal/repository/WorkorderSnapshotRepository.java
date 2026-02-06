@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Repository
 public interface WorkorderSnapshotRepository extends JpaRepository<WorkorderSnapshot, UUID> {
-    List<WorkorderSnapshot> findByWorkorderIdOrderByCapturedAtDesc(Long workOrderId);
+    List<WorkorderSnapshot> findByWorkorderIdOrderByCapturedAtDesc(UUID workOrderId);
 
-    List<WorkorderSnapshot> findByWorkorderIdAndSnapshotType(Long workOrderId, String snapshotType);
+    List<WorkorderSnapshot> findByWorkorderIdAndSnapshotType(UUID workOrderId, String snapshotType);
 }

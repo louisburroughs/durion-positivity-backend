@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -37,6 +38,9 @@ class WorkorderCompletionTest {
     private AuditEventRepository auditEventRepository;
 
     @Mock
+    private ChangeRequestService changeRequestService;
+
+    @Mock
     private ObjectMapper objectMapper;
 
     @InjectMocks
@@ -46,15 +50,24 @@ class WorkorderCompletionTest {
     private WorkorderService workOrderService;
 
     private Workorder testWorkorder;
-    private Long userId = 100L;
+    private UUID userId;
+    private UUID testWorkorderId;
+    private UUID testShopId;
+    private UUID testVehicleId;
+    private UUID testCustomerId;
 
     @BeforeEach
     void setUp() {
+        testWorkorderId = UUID.fromString("550e8400-e29b-41d4-a716-446655440030");
+        testShopId = UUID.fromString("550e8400-e29b-41d4-a716-446655440031");
+        testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440032");
+        testCustomerId = UUID.fromString("550e8400-e29b-41d4-a716-446655440033");
+        userId = UUID.fromString("550e8400-e29b-41d4-a716-446655440034");
         testWorkorder = Workorder.builder()
-                .id(1L)
-                .shopId(1L)
-                .vehicleId(1L)
-                .customerId(1L)
+                .id(testWorkorderId)
+                .shopId(testShopId)
+                .vehicleId(testVehicleId)
+                .customerId(testCustomerId)
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
                 .build();
 
@@ -65,10 +78,12 @@ class WorkorderCompletionTest {
 
     @Test
     void testCompleteWorkorder_Success_FromWorkInProgress() throws Exception {
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkorder));
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
+        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
-        stateMachine.completeWorkorder(1L, userId, "Work completed successfully");
+        stateMachine.completeWorkorder(testWorkorderId, userId, "Work completed successfully");
 
         ArgumentCaptor<Workorder> workOrderCaptor = ArgumentCaptor.forClass(Workorder.class);
         verify(workOrderRepository, atLeastOnce()).save(workOrderCaptor.capture());
@@ -87,10 +102,12 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_Success_FromAwaitingParts() throws Exception {
         testWorkorder.setStatus(WorkorderStatus.AWAITING_PARTS);
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkorder));
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
+        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
-        stateMachine.completeWorkorder(1L, userId, "Parts arrived, work completed");
+        stateMachine.completeWorkorder(testWorkorderId, userId, "Parts arrived, work completed");
 
         ArgumentCaptor<Workorder> workOrderCaptor = ArgumentCaptor.forClass(Workorder.class);
         verify(workOrderRepository, atLeastOnce()).save(workOrderCaptor.capture());
@@ -103,10 +120,12 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_Success_FromReadyForPickup() throws Exception {
         testWorkorder.setStatus(WorkorderStatus.READY_FOR_PICKUP);
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkorder));
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
+        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
-        stateMachine.completeWorkorder(1L, userId, "Customer picked up");
+        stateMachine.completeWorkorder(testWorkorderId, userId, "Customer picked up");
 
         ArgumentCaptor<Workorder> workOrderCaptor = ArgumentCaptor.forClass(Workorder.class);
         verify(workOrderRepository, atLeastOnce()).save(workOrderCaptor.capture());
@@ -117,10 +136,10 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_AlreadyCompleted_ThrowsException() {
         testWorkorder.setStatus(WorkorderStatus.COMPLETED);
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkorder));
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            stateMachine.completeWorkorder(1L, userId, "Trying to complete again");
+            stateMachine.completeWorkorder(testWorkorderId, userId, "Trying to complete again");
         });
 
         assertTrue(exception.getMessage().contains("already completed"));
@@ -131,10 +150,10 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_CancelledStatus_ThrowsException() {
         testWorkorder.setStatus(WorkorderStatus.CANCELLED);
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkorder));
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            stateMachine.completeWorkorder(1L, userId, "Trying to complete cancelled order");
+            stateMachine.completeWorkorder(testWorkorderId, userId, "Trying to complete cancelled order");
         });
 
         assertTrue(exception.getMessage().contains("cancelled"));
@@ -144,10 +163,10 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_InvalidStatus_ThrowsException() {
         testWorkorder.setStatus(WorkorderStatus.DRAFT);
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkorder));
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            stateMachine.completeWorkorder(1L, userId, "Invalid completion attempt");
+            stateMachine.completeWorkorder(testWorkorderId, userId, "Invalid completion attempt");
         });
 
         assertTrue(exception.getMessage().contains("cannot be completed from status"));
@@ -156,10 +175,11 @@ class WorkorderCompletionTest {
 
     @Test
     void testCompleteWorkorder_WorkorderNotFound_ThrowsException() {
-        when(workOrderRepository.findById(999L)).thenReturn(Optional.empty());
+        UUID nonExistentId = UUID.fromString("550e8400-e29b-41d4-a716-446655440999");
+        when(workOrderRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            stateMachine.completeWorkorder(999L, userId, "Work order not found");
+            stateMachine.completeWorkorder(nonExistentId, userId, "Work order not found");
         });
 
         assertTrue(exception.getMessage().contains("Workorder not found"));
@@ -167,17 +187,19 @@ class WorkorderCompletionTest {
 
     @Test
     void testCompleteWorkorder_AuditEventCreated() throws Exception {
-        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(testWorkorder));
+        when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
+        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
-        stateMachine.completeWorkorder(1L, userId, "Completion notes");
+        stateMachine.completeWorkorder(testWorkorderId, userId, "Completion notes");
 
         ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
         verify(auditEventRepository).save(auditCaptor.capture());
 
         AuditEvent auditEvent = auditCaptor.getValue();
         assertEquals("Workorder", auditEvent.getEntityType());
-        assertEquals(1L, auditEvent.getEntityId());
+        assertEquals(testWorkorderId, auditEvent.getEntityId());
         assertEquals("StateTransition", auditEvent.getEventType());
         assertEquals(userId, auditEvent.getUserId());
         assertTrue(auditEvent.getDetails().contains("WORK_IN_PROGRESS"));
@@ -187,13 +209,15 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_EventEmission() throws Exception {
         testWorkorder.setStatus(WorkorderStatus.WORK_IN_PROGRESS);
-        when(workOrderRepository.findById(1L))
+        when(workOrderRepository.findById(testWorkorderId))
                 .thenReturn(Optional.of(testWorkorder)) // First call by completeWorkorder in service
                 .thenReturn(Optional.of(testWorkorder)); // Second call after completion
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
+        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
         // Simulate what happens when completeWorkorder is called
-        WorkCompletedEvent event = workOrderService.completeWorkorder(1L, userId, "Work done");
+        WorkCompletedEvent event = workOrderService.completeWorkorder(testWorkorderId, userId, "Work done");
 
         // Verify the event was created correctly
         assertNotNull(event);
@@ -201,10 +225,10 @@ class WorkorderCompletionTest {
         assertEquals("workexec", event.getSourceDomain());
         assertNotNull(event.getEventId());
         assertNotNull(event.getIdempotencyKey());
-        assertTrue(event.getIdempotencyKey().contains(String.valueOf(1L)));
+        assertTrue(event.getIdempotencyKey().contains(testWorkorderId.toString()));
 
         WorkCompletedEvent.WorkCompletedPayload payload = event.getPayload();
-        assertEquals(1L, payload.getWorkorderId());
+        assertEquals(testWorkorderId, payload.getWorkorderId());
         assertEquals(userId, payload.getCompletedBy());
         assertNotNull(payload.getCompletedAt());
         assertNotNull(payload.getFinalBillableScope());

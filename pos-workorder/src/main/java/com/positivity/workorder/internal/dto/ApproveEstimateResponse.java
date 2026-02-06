@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,13 +18,13 @@ import java.time.LocalDateTime;
 public class ApproveEstimateResponse {
 
     @Schema(description = "Estimate ID", example = "123")
-    private Long estimateId;
+    private UUID estimateId;
 
     @Schema(description = "Estimate number", example = "EST-2024-1001")
     private String estimateNumber;
 
     @Schema(description = "Customer ID who approved", example = "12345")
-    private Long customerId;
+    private UUID customerId;
 
     @Schema(description = "Current status of estimate", example = "APPROVED")
     private String status;

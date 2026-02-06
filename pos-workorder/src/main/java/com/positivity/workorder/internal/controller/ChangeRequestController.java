@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.ApproveChangeRequestDTO;
+import com.positivity.workorder.internal.dto.ChangeRequestResponse;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.dto.DeclineChangeRequestDTO;
 import com.positivity.workorder.internal.dto.EmergencyOverrideDTO;
@@ -34,13 +35,13 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Work order not found")
     @PostMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_CREATE", apiVersion = "1")
-    public ResponseEntity<ChangeRequest> createChangeRequest(
+    public ResponseEntity<ChangeRequestResponse> createChangeRequest(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @Parameter(description = "Change request details including items") @RequestBody CreateChangeRequestDTO dto) {
         try {
             dto.setWorkorderId(workorderId);
             ChangeRequest created = changeRequestService.createChangeRequest(dto);
-            return ResponseEntity.ok(created);
+            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(created));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -54,13 +55,13 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @PostMapping("/changeRequests/{changeId}/approve")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_APPROVE", apiVersion = "1")
-    public ResponseEntity<ChangeRequest> approveChangeRequest(
+    public ResponseEntity<ChangeRequestResponse> approveChangeRequest(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Approval details including user ID and note") @RequestBody ApproveChangeRequestDTO dto) {
         try {
             ChangeRequest approved = changeRequestService.approveChangeRequest(
                     changeId, dto.getApprovedBy(), dto.getApprovalNote());
-            return ResponseEntity.ok(approved);
+            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(approved));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -74,12 +75,12 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @PostMapping("/changeRequests/{changeId}/decline")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DECLINE", apiVersion = "1")
-    public ResponseEntity<ChangeRequest> declineChangeRequest(
+    public ResponseEntity<ChangeRequestResponse> declineChangeRequest(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Decline details including note") @RequestBody DeclineChangeRequestDTO dto) {
         try {
             ChangeRequest declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
-            return ResponseEntity.ok(declined);
+            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(declined));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -113,14 +114,14 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @PostMapping("/changeRequests/{changeId}/emergency-override")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE", apiVersion = "1")
-    public ResponseEntity<ChangeRequest> applyEmergencyOverride(
+    public ResponseEntity<ChangeRequestResponse> applyEmergencyOverride(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Emergency override details including manager ID and reason") @RequestBody EmergencyOverrideDTO dto) {
         try {
             // TODO: Add role-based authorization check for Manager role
             ChangeRequest overridden = changeRequestService.applyEmergencyOverride(
                     changeId, dto.getManagerId(), dto.getExceptionReason());
-            return ResponseEntity.ok(overridden);
+            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(overridden));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -130,11 +131,11 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "Change request found")
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @GetMapping("/changeRequests/{changeId}")
-    public ResponseEntity<ChangeRequest> getChangeRequestById(
+    public ResponseEntity<ChangeRequestResponse> getChangeRequestById(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
         try {
             ChangeRequest changeRequest = changeRequestService.getChangeRequestById(changeId);
-            return ResponseEntity.ok(changeRequest);
+            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(changeRequest));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }
@@ -144,10 +145,10 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "List of change requests returned")
     @GetMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_LIST", apiVersion = "1")
-    public ResponseEntity<List<ChangeRequest>> getChangeRequestsByWorkorder(
+    public ResponseEntity<List<ChangeRequestResponse>> getChangeRequestsByWorkorder(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         List<ChangeRequest> changeRequests = changeRequestService.getChangeRequestsByWorkorder(workorderId);
-        return ResponseEntity.ok(changeRequests);
+        return ResponseEntity.ok(changeRequests.stream().map(ChangeRequestResponse::fromEntity).toList());
     }
 
     @Operation(summary = "Check if work order can be closed", description = "Verify all declined emergency/safety items have customer denial acknowledgment")

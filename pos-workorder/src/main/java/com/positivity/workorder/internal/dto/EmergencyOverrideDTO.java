@@ -1,9 +1,11 @@
 package com.positivity.workorder.internal.dto;
 
+import java.util.UUID;
+
 import lombok.Data;
 
 @Data
 public class EmergencyOverrideDTO {
-    private Long managerId;
+    private UUID managerId;
     private String exceptionReason;
 }

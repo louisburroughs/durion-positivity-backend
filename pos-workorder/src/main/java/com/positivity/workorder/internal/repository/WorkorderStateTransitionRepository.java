@@ -9,5 +9,5 @@ import java.util.UUID;
 
 @Repository
 public interface WorkorderStateTransitionRepository extends JpaRepository<WorkorderStateTransition, UUID> {
-    List<WorkorderStateTransition> findByWorkorderIdOrderByTransitionedAtDesc(Long workorderId);
+    List<WorkorderStateTransition> findByWorkorderIdOrderByTransitionedAtDesc(UUID workorderId);
 }

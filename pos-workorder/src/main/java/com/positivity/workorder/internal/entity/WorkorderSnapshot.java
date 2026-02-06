@@ -17,7 +17,7 @@ public class WorkorderSnapshot {
     private UUID id;
 
     @Column(nullable = false)
-    private Long workorderId;
+    private UUID workorderId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -27,7 +27,7 @@ public class WorkorderSnapshot {
     private Instant capturedAt;
 
     @Column(nullable = false)
-    private Long capturedBy;
+    private UUID capturedBy;
 
     @Column(nullable = false)
     private String snapshotType;

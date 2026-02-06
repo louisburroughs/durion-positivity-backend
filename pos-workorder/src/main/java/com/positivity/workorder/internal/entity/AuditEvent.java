@@ -20,7 +20,7 @@ public class AuditEvent {
     private String entityType;
 
     @Column(nullable = false)
-    private Long entityId;
+    private UUID entityId;
 
     @Column(nullable = false)
     private String eventType;
@@ -29,7 +29,7 @@ public class AuditEvent {
     private Instant eventTimestamp;
 
     @Column(nullable = false)
-    private Long userId;
+    private UUID userId;
 
     @Column(columnDefinition = "TEXT")
     private String details;

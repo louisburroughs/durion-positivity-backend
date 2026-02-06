@@ -17,7 +17,7 @@ public class WorkorderStateTransition {
     private UUID id;
 
     @Column(nullable = false)
-    private Long workorderId;
+    private UUID workorderId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -31,7 +31,7 @@ public class WorkorderStateTransition {
     private Instant transitionedAt;
 
     @Column(nullable = false)
-    private Long transitionedBy;
+    private UUID transitionedBy;
 
     @Column(columnDefinition = "TEXT")
     private String reason;

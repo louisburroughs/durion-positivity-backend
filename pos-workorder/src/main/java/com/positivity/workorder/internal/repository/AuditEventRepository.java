@@ -9,5 +9,5 @@ import java.util.UUID;
 
 @Repository
 public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
-    List<AuditEvent> findByEntityTypeAndEntityIdOrderByEventTimestampDesc(String entityType, Long entityId);
+    List<AuditEvent> findByEntityTypeAndEntityIdOrderByEventTimestampDesc(String entityType, UUID entityId);
 }

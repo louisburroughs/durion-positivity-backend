@@ -15,10 +15,10 @@ public class ApprovalConfiguration {
     private UUID id;
 
     // Location ID - if null, applies to all locations
-    private Long locationId;
+    private UUID locationId;
 
     // Customer ID - if null, applies to all customers at the location
-    private Long customerId;
+    private UUID customerId;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

@@ -25,10 +25,10 @@ public class ApprovalRecord {
     private UUID id;
 
     @Column(nullable = false)
-    private Long changeRequestId;
+    private UUID changeRequestId;
 
     @Column(nullable = false)
-    private Long workorderId;
+    private UUID workorderId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -38,7 +38,7 @@ public class ApprovalRecord {
     private LocalDateTime resolvedAt;
 
     @Column(nullable = false)
-    private Long resolvedBy;
+    private UUID resolvedBy;
 
     @Column(columnDefinition = "TEXT")
     private String exceptionReason;

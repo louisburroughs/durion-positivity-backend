@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Event published when an Estimate's financial total changes,
@@ -23,12 +24,12 @@ public class EstimateRevisedEvent {
     /**
      * ID of the Estimate that was revised
      */
-    private Long estimateId;
+    private UUID estimateId;
 
     /**
      * ID of the Workorder associated with this Estimate (if any)
      */
-    private Long workorderId;
+    private UUID workorderId;
 
     /**
      * Previous total amount before revision
@@ -43,7 +44,7 @@ public class EstimateRevisedEvent {
     /**
      * ID of the user who made the change
      */
-    private Long changedBy;
+    private UUID changedBy;
 
     /**
      * Timestamp when the revision occurred

@@ -48,6 +48,16 @@ public class WorkorderService {
     }
 
     @Transactional
+    public Workorder createWorkorder(UUID estimateId, UUID customerId) {
+        Workorder workorder = Workorder.builder()
+                .estimateId(estimateId)
+                .customerId(customerId)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        return createWorkorder(workorder);
+    }
+
+    @Transactional
     public Workorder createWorkorder(Workorder workorder) {
         // Check customer requirements from pos-customer
         if (!checkCustomerRequirements(workorder.getCustomerId())) {
@@ -77,11 +87,11 @@ public class WorkorderService {
         return workorderRepository.save(workorder);
     }
 
-    public void deleteWorkorder(Long id) {
+    public void deleteWorkorder(UUID id) {
         workorderRepository.deleteById(id);
     }
 
-    private boolean checkCustomerRequirements(Long customerId) {
+    private boolean checkCustomerRequirements(UUID customerId) {
         try {
             Boolean result = restClient.get()
                     .uri(customerServiceUrl + "/" + customerId + "/requirements-met")
@@ -94,7 +104,7 @@ public class WorkorderService {
         }
     }
 
-    private boolean checkCustomerApproval(Long approvalId) {
+    private boolean checkCustomerApproval(UUID approvalId) {
         try {
             Boolean result = restClient.get()
                     .uri(customerApprovalServiceUrl + "/" + approvalId + "/is-approved")
@@ -108,12 +118,12 @@ public class WorkorderService {
     }
 
     @Transactional
-    public void startWorkorder(Long workorderId, Long userId, String reason) {
+    public void startWorkorder(UUID workorderId, UUID userId, String reason) {
         stateMachine.startWorkorder(workorderId, userId, reason);
     }
 
     @Transactional
-    public Workorder approveWorkorder(Long workorderId, Long customerId, String signatureData,
+    public Workorder approveWorkorder(UUID workorderId, UUID customerId, String signatureData,
             String signatureMimeType, String signerName, String notes) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
@@ -144,21 +154,21 @@ public class WorkorderService {
     }
 
     @Transactional
-    public void transitionWorkorder(Long workorderId, WorkorderStatus toStatus, Long userId, String reason) {
+    public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason) {
         stateMachine.transitionWorkorder(workorderId, toStatus, userId, reason);
     }
 
     public List<com.positivity.workorder.internal.entity.WorkorderStateTransition> getTransitionHistory(
-            Long workorderId) {
+            UUID workorderId) {
         return stateMachine.getTransitionHistory(workorderId);
     }
 
-    public List<com.positivity.workorder.internal.entity.WorkorderSnapshot> getSnapshotHistory(Long workorderId) {
+    public List<com.positivity.workorder.internal.entity.WorkorderSnapshot> getSnapshotHistory(UUID workorderId) {
         return stateMachine.getSnapshotHistory(workorderId);
     }
 
     @Transactional
-    public WorkCompletedEvent completeWorkorder(Long workorderId, Long userId, String completionNotes) {
+    public WorkCompletedEvent completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
         // Perform the completion logic
         stateMachine.completeWorkorder(workorderId, userId, completionNotes);
 
@@ -172,7 +182,7 @@ public class WorkorderService {
 
         // Create and return the event
         String eventId = UUID.randomUUID().toString();
-        String idempotencyKey = String.format("%d:completion_%s", workorderId,
+        String idempotencyKey = String.format("%s:completion_%s", workorderId,
                 workorder.getCompletedAt().toEpochMilli());
 
         WorkCompletedEvent.WorkCompletedPayload payload = WorkCompletedEvent.WorkCompletedPayload.builder()
@@ -268,7 +278,7 @@ public class WorkorderService {
                 .details(String.format(
                         "Approval invalidated due to estimate revision. " +
                                 "Previous status: %s, New status: %s, " +
-                                "EstimateId: %d, Old total: %s, New total: %s, Change: %s",
+                                "EstimateId: %s, Old total: %s, New total: %s, Change: %s",
                         oldStatus.name(),
                         WorkorderStatus.AWAITING_APPROVAL.name(),
                         event.getEstimateId(),
