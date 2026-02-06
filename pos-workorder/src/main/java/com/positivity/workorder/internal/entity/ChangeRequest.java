@@ -16,10 +16,10 @@ public class ChangeRequest {
     private UUID id;
 
     @Column(nullable = false)
-    private Long workorderId;
+    private UUID workorderId;
 
     @Column(nullable = false)
-    private Long requestedByUserId;
+    private UUID requestedByUserId;
 
     @Column(nullable = false)
     private LocalDateTime requestedAt;
@@ -48,7 +48,7 @@ public class ChangeRequest {
     private Long supplementalEstimatePdfId;
 
     private LocalDateTime approvedAt;
-    private Long approvedBy;
+    private UUID approvedBy;
 
     private LocalDateTime declinedAt;
 

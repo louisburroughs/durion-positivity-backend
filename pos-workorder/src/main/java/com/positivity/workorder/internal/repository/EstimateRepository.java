@@ -12,15 +12,15 @@ import java.util.UUID;
 
 @Repository
 public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
-    List<Estimate> findByCustomerId(Long customerId);
+    List<Estimate> findByCustomerId(UUID customerId);
 
     @Deprecated
     @Query("SELECT e FROM Estimate e WHERE e.locationId = ?1")
-    List<Estimate> findByShopId(Long locationId);
+    List<Estimate> findByShopId(UUID locationId);
 
-    List<Estimate> findByLocationId(Long locationId);
+    List<Estimate> findByLocationId(UUID locationId);
 
     List<Estimate> findByStatus(EstimateStatus status);
 
-    boolean existsByLocationIdAndEstimateNumber(Long locationId, String estimateNumber);
+    boolean existsByLocationIdAndEstimateNumber(UUID locationId, String estimateNumber);
 }

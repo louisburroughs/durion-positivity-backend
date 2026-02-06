@@ -4,12 +4,15 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderResponse;
+import com.positivity.workorder.internal.dto.CreateWorkorderRequest;
 import com.positivity.workorder.internal.dto.StartWorkorderRequest;
 import com.positivity.workorder.internal.dto.StartWorkorderResponse;
+import com.positivity.workorder.internal.dto.WorkorderResponse;
+import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
+import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.entity.WorkorderSnapshot;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -21,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Tag(name = "Work Order API", description = "Endpoints for work order management")
 @RestController
@@ -33,17 +37,21 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "List of work orders returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_LIST", apiVersion = "1")
-    public List<Workorder> getAllWorkorders() {
-        return workorderService.getAllWorkorders();
+    public List<WorkorderResponse> getAllWorkorders() {
+        return workorderService.getAllWorkorders()
+                .stream()
+                .map(WorkorderResponse::fromEntity)
+                .toList();
     }
 
     @Operation(summary = "Get work order by ID", description = "Retrieve a work order by its unique ID.")
     @ApiResponse(responseCode = "200", description = "Work order found and returned.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @GetMapping("/{workorderId}")
-    public ResponseEntity<Workorder> getWorkorderById(
-            @Parameter(description = "ID of the work order to retrieve", example = "1") @PathVariable Long workorderId) {
+    public ResponseEntity<WorkorderResponse> getWorkorderById(
+            @Parameter(description = "ID of the work order to retrieve", example = "1") @PathVariable UUID workorderId) {
         return workorderService.getWorkorderById(workorderId)
+                .map(WorkorderResponse::fromEntity)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -52,10 +60,11 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Work order created successfully.")
     @PostMapping
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
-    public ResponseEntity<Workorder> createWorkorder(
-            @Parameter(description = "Work order object to be created") @RequestBody Workorder workorder) {
-        Workorder created = workorderService.createWorkorder(workorder);
-        return ResponseEntity.ok(created);
+    public ResponseEntity<WorkorderResponse> createWorkorder(
+            @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request) {
+        // Service handles entity creation internally
+        Workorder created = workorderService.createWorkorder(request.getEstimateId(), request.getCustomerId());
+        return ResponseEntity.ok(WorkorderResponse.fromEntity(created));
     }
 
     @Operation(summary = "Delete a work order", description = "Delete a work order by its unique ID.")
@@ -64,7 +73,7 @@ public class WorkorderController {
     @DeleteMapping("/{workorderId}")
     @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteWorkorder(
-            @Parameter(description = "ID of the work order to delete", example = "1") @PathVariable Long workorderId) {
+            @Parameter(description = "ID of the work order to delete", example = "1") @PathVariable UUID workorderId) {
         workorderService.deleteWorkorder(workorderId);
         return ResponseEntity.noContent().build();
     }
@@ -76,20 +85,14 @@ public class WorkorderController {
     @PostMapping("/{workorderId}/start")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     public ResponseEntity<StartWorkorderResponse> startWorkorder(
-            @Parameter(description = "ID of the work order to start", example = "1") @PathVariable Long workorderId,
+            @Parameter(description = "ID of the work order to start", example = "1") @PathVariable UUID workorderId,
             @RequestBody StartWorkorderRequest request) {
         try {
-            Workorder workorder = workorderService.getWorkorderById(workorderId)
-                    .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
-
-            WorkorderStatus previousStatus = workorder.getStatus();
-
             workorderService.startWorkorder(workorderId, request.getUserId(), request.getReason());
 
             StartWorkorderResponse response = StartWorkorderResponse.builder()
                     .workorderId(workorderId)
-                    .previousStatus(previousStatus)
-                    .currentStatus(WorkorderStatus.WORK_IN_PROGRESS)
+                    .currentStatus("WORK_IN_PROGRESS")
                     .transitionedAt(Instant.now())
                     .message("Work order started successfully")
                     .build();
@@ -107,19 +110,23 @@ public class WorkorderController {
     @Operation(summary = "Get transition history", description = "Retrieve the state transition history for a work order.")
     @ApiResponse(responseCode = "200", description = "Transition history returned successfully.")
     @GetMapping("/{workorderId}/transitions")
-    public ResponseEntity<List<WorkorderStateTransition>> getTransitionHistory(
-            @Parameter(description = "ID of the work order", example = "1") @PathVariable Long workorderId) {
+    public ResponseEntity<List<WorkorderStateTransitionResponse>> getTransitionHistory(
+            @Parameter(description = "ID of the work order", example = "1") @PathVariable UUID workorderId) {
         List<WorkorderStateTransition> history = workorderService.getTransitionHistory(workorderId);
-        return ResponseEntity.ok(history);
+        return ResponseEntity.ok(history.stream()
+                .map(WorkorderStateTransitionResponse::fromEntity)
+                .toList());
     }
 
     @Operation(summary = "Get snapshot history", description = "Retrieve the snapshot history for a work order.")
     @ApiResponse(responseCode = "200", description = "Snapshot history returned successfully.")
     @GetMapping("/{workorderId}/snapshots")
-    public ResponseEntity<List<WorkorderSnapshot>> getSnapshotHistory(
-            @Parameter(description = "ID of the work order", example = "1") @PathVariable Long workorderId) {
+    public ResponseEntity<List<WorkorderSnapshotResponse>> getSnapshotHistory(
+            @Parameter(description = "ID of the work order", example = "1") @PathVariable UUID workorderId) {
         List<WorkorderSnapshot> history = workorderService.getSnapshotHistory(workorderId);
-        return ResponseEntity.ok(history);
+        return ResponseEntity.ok(history.stream()
+                .map(WorkorderSnapshotResponse::fromEntity)
+                .toList());
     }
 
     @Operation(summary = "Approve a work order with customer signature", description = "Transition work order to APPROVED status with customer signature capture. "
@@ -131,8 +138,8 @@ public class WorkorderController {
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @PostMapping("/{workorderId}/approval")
     @EmitEvent(id = "WORKORDER_APPROVE", apiVersion = "1")
-    public ResponseEntity<Workorder> approveWorkorder(
-            @Parameter(description = "ID of the work order to approve", example = "1") @PathVariable Long workorderId,
+    public ResponseEntity<WorkorderResponse> approveWorkorder(
+            @Parameter(description = "ID of the work order to approve", example = "1") @PathVariable UUID workorderId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveWorkorderRequest request) {
         try {
             Workorder approved = workorderService.approveWorkorder(
@@ -142,7 +149,7 @@ public class WorkorderController {
                     request.getSignatureMimeType(),
                     request.getSignerName(),
                     request.getNotes());
-            return ResponseEntity.ok(approved);
+            return ResponseEntity.ok(WorkorderResponse.fromEntity(approved));
         } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -155,27 +162,15 @@ public class WorkorderController {
     @PostMapping("/{workorderId}/complete")
     @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
     public ResponseEntity<CompleteWorkorderResponse> completeWorkorder(
-            @Parameter(description = "ID of the work order to complete", example = "1") @PathVariable Long workorderId,
+            @Parameter(description = "ID of the work order to complete", example = "1") @PathVariable UUID workorderId,
             @RequestBody CompleteWorkorderRequest request) {
         try {
-            Workorder workorder = workorderService.getWorkorderById(workorderId)
-                    .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
-
-            WorkorderStatus previousStatus = workorder.getStatus();
-
             // Complete the work order (this will also emit the event)
             workorderService.completeWorkorder(workorderId, request.getUserId(), request.getCompletionNotes());
 
-            // Fetch the updated work order
-            Workorder completedWorkorder = workorderService.getWorkorderById(workorderId)
-                    .orElseThrow(
-                            () -> new IllegalArgumentException("Workorder not found after completion: " + workorderId));
-
             CompleteWorkorderResponse response = CompleteWorkorderResponse.builder()
                     .workorderId(workorderId)
-                    .previousStatus(previousStatus)
-                    .currentStatus(WorkorderStatus.COMPLETED)
-                    .completedAt(completedWorkorder.getCompletedAt())
+                    .currentStatus("COMPLETED")
                     .message("Work order completed successfully")
                     .build();
 

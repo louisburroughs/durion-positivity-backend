@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.ApproveEstimateRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateResponse;
+import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Tag(name = "Estimate API", description = "Endpoints for estimate management and approval workflow")
 @RestController
@@ -32,17 +34,21 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_ESTIMATE_LIST", apiVersion = "1")
-    public List<Estimate> getAllEstimates() {
-        return estimateService.getAllEstimates();
+    public List<EstimateResponse> getAllEstimates() {
+        return estimateService.getAllEstimates()
+                .stream()
+                .map(EstimateResponse::fromEntity)
+                .toList();
     }
 
     @Operation(summary = "Get estimate by ID", description = "Retrieve an estimate by its unique ID.")
     @ApiResponse(responseCode = "200", description = "Estimate found and returned.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @GetMapping("/{estimateId}")
-    public ResponseEntity<Estimate> getEstimateById(
+    public ResponseEntity<EstimateResponse> getEstimateById(
             @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         return estimateService.getEstimateById(estimateId)
+                .map(EstimateResponse::fromEntity)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -51,27 +57,36 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/customer/{customerId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER", apiVersion = "1")
-    public List<Estimate> getEstimatesByCustomer(
-            @Parameter(description = "ID of the customer", example = "1") @PathVariable Long customerId) {
-        return estimateService.getEstimatesByCustomer(customerId);
+    public List<EstimateResponse> getEstimatesByCustomer(
+            @Parameter(description = "ID of the customer", example = "1") @PathVariable UUID customerId) {
+        return estimateService.getEstimatesByCustomer(customerId)
+                .stream()
+                .map(EstimateResponse::fromEntity)
+                .toList();
     }
 
     @Operation(summary = "Get estimates by shop", description = "Retrieve all estimates for a specific shop.")
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/shop/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_SHOP", apiVersion = "1")
-    public List<Estimate> getEstimatesByShop(
-            @Parameter(description = "ID of the shop", example = "1") @PathVariable Long locationId) {
-        return estimateService.getEstimatesByLocation(locationId);
+    public List<EstimateResponse> getEstimatesByShop(
+            @Parameter(description = "ID of the shop", example = "1") @PathVariable UUID locationId) {
+        return estimateService.getEstimatesByLocation(locationId)
+                .stream()
+                .map(EstimateResponse::fromEntity)
+                .toList();
     }
 
     @Operation(summary = "Get estimates by location", description = "Retrieve all estimates for a specific location.")
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/location/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_LOCATION", apiVersion = "1")
-    public List<Estimate> getEstimatesByLocation(
-            @Parameter(description = "ID of the location", example = "1") @PathVariable Long locationId) {
-        return estimateService.getEstimatesByLocation(locationId);
+    public List<EstimateResponse> getEstimatesByLocation(
+            @Parameter(description = "ID of the location", example = "1") @PathVariable UUID locationId) {
+        return estimateService.getEstimatesByLocation(locationId)
+                .stream()
+                .map(EstimateResponse::fromEntity)
+                .toList();
     }
 
     @Operation(summary = "Create a new draft estimate", description = "Create a new estimate in DRAFT status for a customer and vehicle. "
@@ -86,7 +101,7 @@ public class EstimateController {
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
     public ResponseEntity<?> createEstimate(
             @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request,
-            @Parameter(description = "ID of the user creating the estimate", example = "1") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "1") Long userId) {
+            @Parameter(description = "ID of the user creating the estimate", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
 
         try {
             log.info("Received create estimate request for customerId={}, vehicleId={}",
@@ -96,10 +111,10 @@ public class EstimateController {
             // For now, we'll assume the user has permission
 
             Estimate estimate = estimateService.createEstimate(request, userId);
-            CreateEstimateResponse response = CreateEstimateResponse.fromEntity(estimate);
+            EstimateResponse response = EstimateResponse.fromEntity(estimate);
 
             log.info("Estimate created successfully: id={}, number={}",
-                    estimate.getId(), estimate.getEstimateNumber());
+                    response.getId(), response.getEstimateNumber());
 
             return ResponseEntity.ok(response);
 
@@ -127,12 +142,12 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/decline")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DECLINE", apiVersion = "1")
-    public ResponseEntity<Estimate> declineEstimate(
+    public ResponseEntity<EstimateResponse> declineEstimate(
             @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Reason for decline") @RequestParam(required = false) String reason) {
         try {
             Estimate declined = estimateService.declineEstimate(estimateId, reason);
-            return ResponseEntity.ok(declined);
+            return ResponseEntity.ok(EstimateResponse.fromEntity(declined));
         } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -144,11 +159,11 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/reopen")
     @EmitEvent(id = "WORKORDER_ESTIMATE_REOPEN", apiVersion = "1")
-    public ResponseEntity<Estimate> reopenEstimate(
+    public ResponseEntity<EstimateResponse> reopenEstimate(
             @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
             Estimate reopened = estimateService.reopenEstimate(estimateId);
-            return ResponseEntity.ok(reopened);
+            return ResponseEntity.ok(EstimateResponse.fromEntity(reopened));
         } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -164,7 +179,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_APPROVE", apiVersion = "1")
-    public ResponseEntity<Estimate> approveEstimate(
+    public ResponseEntity<EstimateResponse> approveEstimate(
             @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveEstimateRequest request) {
         try {
@@ -176,7 +191,7 @@ public class EstimateController {
                     request.getSignerName(),
                     request.getNotes(),
                     request.getPurchaseOrderNumber());
-            return ResponseEntity.ok(approved);
+            return ResponseEntity.ok(EstimateResponse.fromEntity(approved));
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();

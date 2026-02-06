@@ -1,7 +1,8 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.workorder.internal.entity.ApprovalConfiguration;
+import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
+import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.service.ApprovalConfigurationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -25,7 +26,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "List of configurations returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_LIST", apiVersion = "1")
-    public List<ApprovalConfiguration> getAllConfigurations() {
+    public List<ApprovalConfigurationResponse> getAllConfigurations() {
         return approvalConfigurationService.getAllConfigurations();
     }
 
@@ -33,7 +34,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @GetMapping("/approvalConfigurations/{approvalId}")
-    public ResponseEntity<ApprovalConfiguration> getConfigurationById(
+    public ResponseEntity<ApprovalConfigurationResponse> getConfigurationById(
             @Parameter(description = "ID of the configuration to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId) {
         return approvalConfigurationService.getConfigurationById(approvalId)
                 .map(ResponseEntity::ok)
@@ -44,9 +45,9 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "No configuration found (default will be used).")
     @GetMapping("/approvalConfigurations/applicable")
-    public ResponseEntity<ApprovalConfiguration> getApplicableConfiguration(
-            @Parameter(description = "Location ID") @RequestParam(required = false) Long locationId,
-            @Parameter(description = "Customer ID") @RequestParam(required = false) Long customerId) {
+    public ResponseEntity<ApprovalConfigurationResponse> getApplicableConfiguration(
+            @Parameter(description = "Location ID") @RequestParam(required = false) UUID locationId,
+            @Parameter(description = "Customer ID") @RequestParam(required = false) UUID customerId) {
         return approvalConfigurationService.getApplicableConfiguration(locationId, customerId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -56,9 +57,9 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
     @PostMapping("/approvalConfigurations")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_CREATE", apiVersion = "1")
-    public ResponseEntity<ApprovalConfiguration> createConfiguration(
-            @Parameter(description = "Configuration object to be created") @RequestBody ApprovalConfiguration configuration) {
-        ApprovalConfiguration created = approvalConfigurationService.createConfiguration(configuration);
+    public ResponseEntity<ApprovalConfigurationResponse> createConfiguration(
+            @Parameter(description = "Configuration object to be created") @RequestBody ApprovalConfigurationRequest request) {
+        ApprovalConfigurationResponse created = approvalConfigurationService.createConfiguration(request);
         return ResponseEntity.ok(created);
     }
 
@@ -67,11 +68,12 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @PutMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_UPDATE", apiVersion = "1")
-    public ResponseEntity<ApprovalConfiguration> updateConfiguration(
+    public ResponseEntity<ApprovalConfigurationResponse> updateConfiguration(
             @Parameter(description = "ID of the configuration to update", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId,
-            @Parameter(description = "Updated configuration object") @RequestBody ApprovalConfiguration configuration) {
+            @Parameter(description = "Updated configuration object") @RequestBody ApprovalConfigurationRequest request) {
         try {
-            ApprovalConfiguration updated = approvalConfigurationService.updateConfiguration(approvalId, configuration);
+            ApprovalConfigurationResponse updated = approvalConfigurationService.updateConfiguration(approvalId,
+                    request);
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();

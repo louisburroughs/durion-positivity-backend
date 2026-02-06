@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import java.util.UUID;
+
 import lombok.*;
 
 @Data
@@ -7,6 +9,6 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class ApproveChangeRequestDTO {
-    private Long approvedBy;
+    private UUID approvedBy;
     private String approvalNote;
 }

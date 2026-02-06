@@ -1,5 +1,7 @@
 package com.positivity.workorder.service;
 
+import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
+import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,31 +19,46 @@ import java.util.UUID;
 public class ApprovalConfigurationService {
     private final ApprovalConfigurationRepository approvalConfigurationRepository;
 
-    public List<ApprovalConfiguration> getAllConfigurations() {
-        return approvalConfigurationRepository.findAll();
+    public List<ApprovalConfigurationResponse> getAllConfigurations() {
+        return approvalConfigurationRepository.findAll()
+                .stream()
+                .map(this::entityToResponse)
+                .toList();
     }
 
-    public Optional<ApprovalConfiguration> getConfigurationById(UUID id) {
-        return approvalConfigurationRepository.findById(id);
+    public Optional<ApprovalConfigurationResponse> getConfigurationById(UUID id) {
+        return approvalConfigurationRepository.findById(id)
+                .map(this::entityToResponse);
     }
 
     @Transactional
-    public ApprovalConfiguration createConfiguration(ApprovalConfiguration configuration) {
-        return approvalConfigurationRepository.save(configuration);
+    public ApprovalConfigurationResponse createConfiguration(ApprovalConfigurationRequest request) {
+        ApprovalConfiguration configuration = new ApprovalConfiguration();
+        configuration.setLocationId(request.getLocationId());
+        configuration.setCustomerId(request.getCustomerId());
+        configuration.setApprovalMethod(ApprovalConfiguration.ApprovalMethod.valueOf(request.getApprovalMethod()));
+        configuration.setDeclineExpiryDays(request.getDeclineExpiryDays());
+        configuration.setRequireSignature(request.getRequireSignature());
+        configuration.setPriority(request.getPriority());
+
+        ApprovalConfiguration saved = approvalConfigurationRepository.save(configuration);
+        return entityToResponse(saved);
     }
 
     @Transactional
-    public ApprovalConfiguration updateConfiguration(UUID id, ApprovalConfiguration updatedConfig) {
+    public ApprovalConfigurationResponse updateConfiguration(UUID id, ApprovalConfigurationRequest request) {
         ApprovalConfiguration existing = approvalConfigurationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Configuration not found: " + id));
 
-        existing.setLocationId(updatedConfig.getLocationId());
-        existing.setCustomerId(updatedConfig.getCustomerId());
-        existing.setApprovalMethod(updatedConfig.getApprovalMethod());
-        existing.setDeclineExpiryDays(updatedConfig.getDeclineExpiryDays());
-        existing.setRequireSignature(updatedConfig.getRequireSignature());
+        existing.setLocationId(request.getLocationId());
+        existing.setCustomerId(request.getCustomerId());
+        existing.setApprovalMethod(ApprovalConfiguration.ApprovalMethod.valueOf(request.getApprovalMethod()));
+        existing.setDeclineExpiryDays(request.getDeclineExpiryDays());
+        existing.setRequireSignature(request.getRequireSignature());
+        existing.setPriority(request.getPriority());
 
-        return approvalConfigurationRepository.save(existing);
+        ApprovalConfiguration updated = approvalConfigurationRepository.save(existing);
+        return entityToResponse(updated);
     }
 
     public void deleteConfiguration(UUID id) {
@@ -51,13 +68,13 @@ public class ApprovalConfigurationService {
     /**
      * Get the most specific configuration for a location and customer
      */
-    public Optional<ApprovalConfiguration> getApplicableConfiguration(Long locationId, Long customerId) {
+    public Optional<ApprovalConfigurationResponse> getApplicableConfiguration(UUID locationId, UUID customerId) {
         // Try customer-specific first
         if (customerId != null) {
             Optional<ApprovalConfiguration> config = approvalConfigurationRepository
                     .findByLocationIdAndCustomerId(locationId, customerId);
             if (config.isPresent()) {
-                return config;
+                return config.map(this::entityToResponse);
             }
         }
 
@@ -66,11 +83,27 @@ public class ApprovalConfigurationService {
             Optional<ApprovalConfiguration> config = approvalConfigurationRepository
                     .findByLocationIdAndCustomerIdIsNull(locationId);
             if (config.isPresent()) {
-                return config;
+                return config.map(this::entityToResponse);
             }
         }
 
         // Fall back to default
-        return approvalConfigurationRepository.findByLocationIdIsNullAndCustomerIdIsNull();
+        return approvalConfigurationRepository.findByLocationIdIsNullAndCustomerIdIsNull()
+                .map(this::entityToResponse);
+    }
+
+    /**
+     * Convert entity to response DTO
+     */
+    private ApprovalConfigurationResponse entityToResponse(ApprovalConfiguration entity) {
+        return ApprovalConfigurationResponse.builder()
+                .id(entity.getId())
+                .locationId(entity.getLocationId())
+                .customerId(entity.getCustomerId())
+                .approvalMethod(entity.getApprovalMethod().name())
+                .declineExpiryDays(entity.getDeclineExpiryDays())
+                .requireSignature(entity.getRequireSignature())
+                .priority(entity.getPriority())
+                .build();
     }
 }

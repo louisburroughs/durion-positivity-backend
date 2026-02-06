@@ -18,8 +18,8 @@ public class WorkorderPart {
     @JoinColumn(name = "work_order_service_id")
     private WorkorderService workOrderService;
 
-    private Long productEntityId; // Reference to ProductEntity in pos-catalog
-    private Long nonInventoryProductEntityId; // Reference to NonInventoryProductEntity in pos-catalog
+    private UUID productEntityId; // Reference to ProductEntity in pos-catalog
+    private UUID nonInventoryProductEntityId; // Reference to NonInventoryProductEntity in pos-catalog
     private Integer quantity;
 
     // Flag to indicate this part was declined by customer during estimate approval
@@ -32,7 +32,7 @@ public class WorkorderPart {
     private WorkorderItemStatus status = WorkorderItemStatus.OPEN;
 
     // Reference to the change request that added this item
-    private Long changeRequestId;
+    private UUID changeRequestId;
 
     // Emergency/Safety flags and documentation
     @Builder.Default

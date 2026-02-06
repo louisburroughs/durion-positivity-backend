@@ -20,18 +20,18 @@ public class Estimate {
     @Column(unique = false) // Uniqueness enforced at DB level with composite constraint
     private String estimateNumber; // Human-readable identifier (e.g., EST-2024-1001)
 
-    private Long locationId; // Reference to Location (previously shopId)
-    private Long vehicleId; // Reference to Vehicle
-    private Long customerId; // Reference to Customer
+    private UUID locationId; // Reference to Location (previously shopId)
+    private UUID vehicleId; // Reference to Vehicle
+    private UUID customerId; // Reference to Customer
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private EstimateStatus status = EstimateStatus.DRAFT;
 
     private String currencyUomId; // Currency code (e.g., 'USD')
-    private Long taxRegionId; // Reference to tax region
+    private UUID taxRegionId; // Reference to tax region
 
-    private Long createdByUserId; // User who created the estimate
+    private UUID createdByUserId; // User who created the estimate
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -40,16 +40,15 @@ public class Estimate {
     private LocalDateTime expiresAt;
 
     @Column(nullable = false, updatable = false)
-    private Long createdById; // User who created the estimate
-
+    private UUID createdById; // User who created the estimate
     // Configuration reference for approval method
-    private Long approvalConfigurationId;
+    private UUID approvalConfigurationId;
 
     // Notes or reason for decline
     private String declineReason;
 
     // Approved by (service advisor or system user ID)
-    private Long approvedBy;
+    private UUID approvedBy;
 
     // Customer signature capture for approval
     @Column(length = 100000)
@@ -85,22 +84,6 @@ public class Estimate {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
-    }
-
-    /**
-     * Backward compatibility - shopId is now locationId
-     */
-    @Deprecated
-    public Long getShopId() {
-        return locationId;
-    }
-
-    /**
-     * Backward compatibility - shopId is now locationId
-     */
-    @Deprecated
-    public void setShopId(Long shopId) {
-        this.locationId = shopId;
     }
 
     /**

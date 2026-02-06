@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -19,7 +20,7 @@ public class ApproveWorkorderRequest {
 
     @NotNull(message = "customerId is required")
     @Schema(description = "Customer ID who is approving the work order", example = "12345", requiredMode = RequiredMode.REQUIRED)
-    private Long customerId;
+    private UUID customerId;
 
     @Schema(description = "Base64-encoded signature image data (PNG format recommended)", example = "data:image/png;base64,iVBORw0KGgoAAAANS...")
     private String signatureData;

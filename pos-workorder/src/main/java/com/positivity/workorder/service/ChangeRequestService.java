@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -96,7 +97,7 @@ public class ChangeRequestService {
      * Approve a change request and move items to OPEN/READY_TO_EXECUTE status
      */
     @Transactional
-    public ChangeRequest approveChangeRequest(Long changeRequestId, Long approvedBy, String approvalNote) {
+    public ChangeRequest approveChangeRequest(UUID changeRequestId, UUID approvedBy, String approvalNote) {
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -139,7 +140,7 @@ public class ChangeRequestService {
      * Decline a change request and move items to CANCELLED status
      */
     @Transactional
-    public ChangeRequest declineChangeRequest(Long changeRequestId, String approvalNote) {
+    public ChangeRequest declineChangeRequest(UUID changeRequestId, String approvalNote) {
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -181,7 +182,7 @@ public class ChangeRequestService {
      * Restricted to users with Manager role or equivalent permission.
      */
     @Transactional
-    public ChangeRequest applyEmergencyOverride(Long changeRequestId, Long managerId, String exceptionReason) {
+    public ChangeRequest applyEmergencyOverride(UUID changeRequestId, UUID managerId, String exceptionReason) {
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -225,7 +226,7 @@ public class ChangeRequestService {
      * Record customer denial acknowledgment for emergency/safety items
      */
     @Transactional
-    public void recordCustomerDenialAcknowledgment(Long changeRequestId) {
+    public void recordCustomerDenialAcknowledgment(UUID changeRequestId) {
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -262,7 +263,7 @@ public class ChangeRequestService {
      * Check if work order can be closed (all emergency items must be acknowledged
      * if declined)
      */
-    public boolean canCloseWorkorder(Long workorderId) {
+    public boolean canCloseWorkorder(UUID workorderId) {
         List<ChangeRequest> emergencyRequests = changeRequestRepository.findByWorkorderIdAndStatus(
                 workorderId, ChangeRequestStatus.DECLINED);
 
@@ -295,7 +296,7 @@ public class ChangeRequestService {
      * Check if work order has any pending approval-gated change requests.
      * Returns true if there are unresolved change requests blocking completion.
      */
-    public boolean hasPendingApprovalGatedRequests(Long workorderId) {
+    public boolean hasPendingApprovalGatedRequests(UUID workorderId) {
         List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorderIdAndStatus(
                 workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
@@ -307,7 +308,7 @@ public class ChangeRequestService {
     /**
      * Get all pending approval-gated change requests for a work order.
      */
-    public List<ChangeRequest> getPendingApprovalGatedRequests(Long workorderId) {
+    public List<ChangeRequest> getPendingApprovalGatedRequests(UUID workorderId) {
         List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorderIdAndStatus(
                 workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
@@ -317,7 +318,7 @@ public class ChangeRequestService {
                 .toList();
     }
 
-    public List<ChangeRequest> getChangeRequestsByWorkorder(Long workorderId) {
+    public List<ChangeRequest> getChangeRequestsByWorkorder(UUID workorderId) {
         return changeRequestRepository.findByWorkorderId(workorderId);
     }
 
@@ -400,7 +401,7 @@ public class ChangeRequestService {
                 .build();
     }
 
-    private void updateItemsStatus(Long changeRequestId, WorkorderItemStatus newStatus) {
+    private void updateItemsStatus(UUID changeRequestId, WorkorderItemStatus newStatus) {
         // Update services
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workOrderServiceRepository
                 .findByChangeRequestId(changeRequestId);

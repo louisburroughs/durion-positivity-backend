@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -34,8 +35,14 @@ public class EstimateService {
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
-    private static final Long DEFAULT_TAX_REGION_ID = 1L; // TODO: Get from configuration
-    private static final Long DEFAULT_LOCATION_ID = 1L; // TODO: Get from user session
+    private static final UUID DEFAULT_TAX_REGION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001"); // TODO:
+                                                                                                               // Get
+                                                                                                               // from
+                                                                                                               // configuration
+    private static final UUID DEFAULT_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001"); // TODO:
+                                                                                                             // Get from
+                                                                                                             // user
+                                                                                                             // session
 
     public List<Estimate> getAllEstimates() {
         return estimateRepository.findAll();
@@ -45,16 +52,11 @@ public class EstimateService {
         return estimateRepository.findById(id);
     }
 
-    public List<Estimate> getEstimatesByCustomer(Long customerId) {
+    public List<Estimate> getEstimatesByCustomer(UUID customerId) {
         return estimateRepository.findByCustomerId(customerId);
     }
 
-    // @Deprecated
-    // public List<Estimate> getEstimatesByShop(Long shopId) {
-    // return getEstimatesByLocation(shopId);
-    // }
-
-    public List<Estimate> getEstimatesByLocation(Long locationId) {
+    public List<Estimate> getEstimatesByLocation(UUID locationId) {
         return estimateRepository.findByLocationId(locationId);
     }
 
@@ -68,7 +70,7 @@ public class EstimateService {
      * @throws IllegalArgumentException if validation fails
      */
     @Transactional
-    public Estimate createEstimate(CreateEstimateRequest request, Long createdByUserId) {
+    public Estimate createEstimate(CreateEstimateRequest request, UUID createdByUserId) {
         log.info("Creating new estimate for customer {} and vehicle {}",
                 request.getCustomerId(), request.getVehicleId());
 
@@ -83,13 +85,13 @@ public class EstimateService {
         }
 
         // Apply defaults
-        Long locationId = request.getLocationId() != null
+        UUID locationId = request.getLocationId() != null
                 ? request.getLocationId()
                 : DEFAULT_LOCATION_ID;
         String currencyUomId = request.getCurrencyUomId() != null
                 ? request.getCurrencyUomId()
                 : DEFAULT_CURRENCY;
-        Long taxRegionId = request.getTaxRegionId() != null
+        UUID taxRegionId = request.getTaxRegionId() != null
                 ? request.getTaxRegionId()
                 : DEFAULT_TAX_REGION_ID;
 
@@ -135,9 +137,7 @@ public class EstimateService {
         estimate.setCreatedAt(LocalDateTime.now());
 
         // Get approval configuration for this customer/location
-        Long locationId = estimate.getLocationId() != null
-                ? estimate.getLocationId()
-                : estimate.getShopId();
+        UUID locationId = estimate.getLocationId();
         ApprovalConfiguration config = getApprovalConfiguration(locationId, estimate.getCustomerId());
         estimate.setApprovalConfigurationId(config.getId());
 
@@ -153,7 +153,7 @@ public class EstimateService {
      * Generate a unique estimate number for a location
      * Format: EST-YYYY-NNNN where YYYY is the year and NNNN is a sequential number
      */
-    private String generateEstimateNumber(Long locationId) {
+    private String generateEstimateNumber(UUID locationId) {
         int year = Year.now().getValue();
         String prefix = String.format("EST-%d-", year);
 
@@ -169,7 +169,7 @@ public class EstimateService {
     }
 
     @Transactional
-    public Estimate approveEstimate(Long estimateId, Long approvedByUserId) {
+    public Estimate approveEstimate(UUID estimateId, UUID approvedByUserId) {
         Estimate estimate = estimateRepository.findById(estimateId)
                 .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
 
@@ -186,7 +186,7 @@ public class EstimateService {
     }
 
     @Transactional
-    public Estimate approveEstimate(Long estimateId, Long customerId, String signatureData,
+    public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
             String signatureMimeType, String signerName, String notes) {
         return approveEstimate(estimateId, customerId, signatureData, signatureMimeType,
                 signerName, notes, null);
@@ -206,7 +206,7 @@ public class EstimateService {
      * @return approved estimate
      */
     @Transactional
-    public Estimate approveEstimate(Long estimateId, Long customerId, String signatureData,
+    public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
             String signatureMimeType, String signerName, String notes,
             @Nullable String purchaseOrderNumber) {
         Estimate estimate = estimateRepository.findById(estimateId)
@@ -249,7 +249,7 @@ public class EstimateService {
     }
 
     @Transactional
-    public Estimate declineEstimate(Long estimateId, String reason) {
+    public Estimate declineEstimate(UUID estimateId, String reason) {
         Estimate estimate = estimateRepository.findById(estimateId)
                 .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
 
@@ -270,7 +270,7 @@ public class EstimateService {
     }
 
     @Transactional
-    public Estimate reopenEstimate(Long estimateId) {
+    public Estimate reopenEstimate(UUID estimateId) {
         Estimate estimate = estimateRepository.findById(estimateId)
                 .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
 
@@ -294,7 +294,7 @@ public class EstimateService {
      * Get the most specific approval configuration for a location and customer.
      * Returns default configuration if none found.
      */
-    public ApprovalConfiguration getApprovalConfiguration(Long locationId, Long customerId) {
+    public ApprovalConfiguration getApprovalConfiguration(UUID locationId, UUID customerId) {
         List<ApprovalConfiguration> configs = approvalConfigurationRepository
                 .findApplicableConfigurations(locationId, customerId);
 
@@ -312,7 +312,7 @@ public class EstimateService {
         return configs.get(0);
     }
 
-    private ApprovalConfiguration getApprovalConfigurationById(Long configId) {
+    private ApprovalConfiguration getApprovalConfigurationById(UUID configId) {
         if (configId == null) {
             return ApprovalConfiguration.builder()
                     .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
@@ -325,7 +325,7 @@ public class EstimateService {
                 .orElseThrow(() -> new IllegalArgumentException("Approval configuration not found: " + configId));
     }
 
-    public void deleteEstimate(Long id) {
+    public void deleteEstimate(UUID id) {
         estimateRepository.deleteById(id);
     }
 
@@ -342,9 +342,9 @@ public class EstimateService {
      * @return the updated estimate
      */
     @Transactional
-    public Estimate updateEstimateFinancials(Long estimateId, BigDecimal subtotal,
+    public Estimate updateEstimateFinancials(UUID estimateId, BigDecimal subtotal,
             BigDecimal taxAmount, BigDecimal total,
-            Long userId) {
+            UUID userId) {
         Estimate estimate = estimateRepository.findById(estimateId)
                 .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
 
@@ -384,7 +384,7 @@ public class EstimateService {
      * This enables event-driven invalidation of approvals.
      */
     private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal,
-            BigDecimal newTotal, Long userId) {
+            BigDecimal newTotal, UUID userId) {
         List<Workorder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
 
         log.info("Publishing EstimateRevisedEvent for {} Workorders linked to estimate {}",

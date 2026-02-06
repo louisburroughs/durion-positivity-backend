@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -25,9 +26,9 @@ public class WorkCompletedEvent {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class WorkCompletedPayload {
-        private Long workorderId;
+        private UUID workorderId;
         private Instant completedAt;
-        private Long completedBy;
+        private UUID completedBy;
         private Map<String, Object> finalBillableScope;
     }
 }

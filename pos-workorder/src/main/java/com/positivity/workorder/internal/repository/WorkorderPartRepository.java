@@ -9,5 +9,5 @@ import java.util.UUID;
 
 @Repository
 public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UUID> {
-    List<WorkorderPart> findByChangeRequestId(Long changeRequestId);
+    List<WorkorderPart> findByChangeRequestId(UUID changeRequestId);
 }

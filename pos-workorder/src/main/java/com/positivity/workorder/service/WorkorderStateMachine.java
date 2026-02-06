@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class WorkorderStateMachine {
             WorkorderStatus.READY_FOR_PICKUP);
 
     @Transactional
-    public void transitionWorkorder(Long workorderId, WorkorderStatus toStatus, Long userId, String reason) {
+    public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
@@ -43,7 +44,7 @@ public class WorkorderStateMachine {
 
         if (!fromStatus.canTransitionTo(toStatus)) {
             throw new IllegalStateException(
-                    String.format("Invalid state transition from %s to %s for Workorder %d",
+                    String.format("Invalid state transition from %s to %s for Workorder %s",
                             fromStatus, toStatus, workorderId));
         }
 
@@ -64,13 +65,13 @@ public class WorkorderStateMachine {
      * Validate that work order meets all requirements for completion.
      * Throws IllegalStateException if requirements are not met.
      */
-    private void validateCompletionRequirements(Long workorderId) {
+    private void validateCompletionRequirements(UUID workorderId) {
         // Check for pending approval-gated change requests
         if (changeRequestService.hasPendingApprovalGatedRequests(workorderId)) {
             List<ChangeRequest> pendingRequests = changeRequestService.getPendingApprovalGatedRequests(workorderId);
             throw new IllegalStateException(
                     String.format(
-                            "Workorder %d cannot be completed. There are %d unresolved approval-gated change request(s) pending approval",
+                            "Workorder %s cannot be completed. There are %s unresolved approval-gated change request(s) pending approval",
                             workorderId, pendingRequests.size()));
         }
 
@@ -78,7 +79,7 @@ public class WorkorderStateMachine {
         if (!changeRequestService.canCloseWorkorder(workorderId)) {
             throw new IllegalStateException(
                     String.format(
-                            "Workorder %d cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
+                            "Workorder %s cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
                             workorderId));
         }
     }
@@ -91,13 +92,13 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
-    public void startWorkorder(Long workorderId, Long userId, String reason) {
+    public void startWorkorder(UUID workorderId, UUID userId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
         if (!WorkorderStatus.getStartEligibleStatuses().contains(workorder.getStatus())) {
             throw new IllegalStateException(
-                    String.format("Workorder %d cannot be started from status %s. Must be one of: %s",
+                    String.format("Workorder %s cannot be started from status %s. Must be one of: %s",
                             workorderId, workorder.getStatus(), WorkorderStatus.getStartEligibleStatuses()));
         }
 
@@ -107,7 +108,7 @@ public class WorkorderStateMachine {
         if (!pendingApprovalRequests.isEmpty()) {
             throw new IllegalStateException(
                     String.format(
-                            "Workorder %d cannot be started. There are %d pending change request(s) awaiting approval",
+                            "Workorder %s cannot be started. There are %s pending change request(s) awaiting approval",
                             workorderId, pendingApprovalRequests.size()));
         }
 
@@ -117,7 +118,7 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
-    public void completeWorkorder(Long workorderId, Long userId, String completionNotes) {
+    public void completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
 
@@ -126,17 +127,17 @@ public class WorkorderStateMachine {
         // Validate the work order is in a completable state
         if (currentStatus == WorkorderStatus.COMPLETED) {
             throw new IllegalStateException(
-                    String.format("Workorder %d is already completed", workorderId));
+                    String.format("Workorder %s is already completed", workorderId));
         }
 
         if (currentStatus == WorkorderStatus.CANCELLED) {
             throw new IllegalStateException(
-                    String.format("Workorder %d is cancelled and cannot be completed", workorderId));
+                    String.format("Workorder %s is cancelled and cannot be completed", workorderId));
         }
 
         if (!COMPLETION_ELIGIBLE_STATUSES.contains(currentStatus)) {
             throw new IllegalStateException(
-                    String.format("Workorder %d cannot be completed from status %s. Must be one of: %s",
+                    String.format("Workorder %s cannot be completed from status %s. Must be one of: %s",
                             workorderId, currentStatus, COMPLETION_ELIGIBLE_STATUSES));
         }
 
@@ -160,7 +161,7 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
-    public void captureSnapshot(Workorder workorder, Long userId, String snapshotType, String reason) {
+    public void captureSnapshot(Workorder workorder, UUID userId, String snapshotType, String reason) {
         try {
             String snapshotData = objectMapper.writeValueAsString(workorder);
 
@@ -183,8 +184,8 @@ public class WorkorderStateMachine {
         }
     }
 
-    private void recordTransition(Long workorderId, WorkorderStatus fromStatus, WorkorderStatus toStatus,
-            Long userId, String reason) {
+    private void recordTransition(UUID workorderId, WorkorderStatus fromStatus, WorkorderStatus toStatus,
+            UUID userId, String reason) {
         WorkorderStateTransition transition = WorkorderStateTransition.builder()
                 .workorderId(workorderId)
                 .fromStatus(fromStatus)
@@ -197,15 +198,15 @@ public class WorkorderStateMachine {
         transitionRepository.save(transition);
     }
 
-    public List<WorkorderStateTransition> getTransitionHistory(Long workorderId) {
+    public List<WorkorderStateTransition> getTransitionHistory(UUID workorderId) {
         return transitionRepository.findByWorkorderIdOrderByTransitionedAtDesc(workorderId);
     }
 
-    public List<WorkorderSnapshot> getSnapshotHistory(Long workorderId) {
+    public List<WorkorderSnapshot> getSnapshotHistory(UUID workorderId) {
         return snapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(workorderId);
     }
 
-    private void createAuditEvent(Long workorderId, Long userId, String eventType, String details) {
+    private void createAuditEvent(UUID workorderId, UUID userId, String eventType, String details) {
         AuditEvent auditEvent = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorderId)
@@ -219,7 +220,7 @@ public class WorkorderStateMachine {
         log.debug("Created audit event for Workorder {}: {}", workorderId, eventType);
     }
 
-    public List<AuditEvent> getAuditHistory(Long workorderId) {
+    public List<AuditEvent> getAuditHistory(UUID workorderId) {
         return auditEventRepository.findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workorderId);
     }
 }

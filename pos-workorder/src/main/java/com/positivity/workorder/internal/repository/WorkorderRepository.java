@@ -15,5 +15,5 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * @param estimateId the ID of the estimate
      * @return list of WorkOrders linked to this estimate
      */
-    List<Workorder> findByEstimateId(Long estimateId);
+    List<Workorder> findByEstimateId(UUID estimateId);
 }

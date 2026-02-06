@@ -1,5 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
+import java.util.UUID;
+
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,12 +14,12 @@ import lombok.NoArgsConstructor;
 @Builder
 public class CreateEstimateRequest {
     @NotNull(message = "customerId is required")
-    private Long customerId;
-    
+    private UUID customerId;
+
     @NotNull(message = "vehicleId is required")
-    private Long vehicleId;
-    
-    private Long locationId; // Optional - will use default from session if not provided
+    private UUID vehicleId;
+
+    private UUID locationId; // Optional - will use default from session if not provided
     private String currencyUomId; // Optional - will use default if not provided
-    private Long taxRegionId; // Optional - will use default if not provided
+    private UUID taxRegionId; // Optional - will use default if not provided
 }

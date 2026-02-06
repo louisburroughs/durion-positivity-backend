@@ -22,12 +22,12 @@ public interface ApprovalConfigurationRepository extends JpaRepository<ApprovalC
             "WHERE (ac.customerId = :customerId OR ac.locationId = :locationId OR (ac.customerId IS NULL AND ac.locationId IS NULL)) "
             +
             "ORDER BY ac.priority DESC")
-    List<ApprovalConfiguration> findApplicableConfigurations(@Param("locationId") Long locationId,
-            @Param("customerId") Long customerId);
+    List<ApprovalConfiguration> findApplicableConfigurations(@Param("locationId") UUID locationId,
+            @Param("customerId") UUID customerId);
 
-    Optional<ApprovalConfiguration> findByLocationIdAndCustomerId(Long locationId, Long customerId);
+    Optional<ApprovalConfiguration> findByLocationIdAndCustomerId(UUID locationId, UUID customerId);
 
-    Optional<ApprovalConfiguration> findByLocationIdAndCustomerIdIsNull(Long locationId);
+    Optional<ApprovalConfiguration> findByLocationIdAndCustomerIdIsNull(UUID locationId);
 
     Optional<ApprovalConfiguration> findByLocationIdIsNullAndCustomerIdIsNull();
 }

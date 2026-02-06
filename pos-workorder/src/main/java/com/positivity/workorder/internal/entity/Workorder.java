@@ -16,12 +16,11 @@ public class Workorder {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    private Long shopId; // Reference to Shop
-    private Long vehicleId; // Reference to Vehicle
-    private Long customerId; // Reference to Customer
-    private Long approvalId; // Reference to CustomerApproval (from pos-customer-approval)
-    private Long estimateId; // Reference to Estimate - work order created from approved estimate
-
+    private UUID shopId; // Reference to Shop
+    private UUID vehicleId; // Reference to Vehicle
+    private UUID customerId; // Reference to Customer
+    private UUID approvalId; // Reference to CustomerApproval (from pos-customer-approval)
+    private UUID estimateId; // Reference to Estimate - work order created from approved estimate
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private WorkorderStatus status = WorkorderStatus.DRAFT;
@@ -31,7 +30,7 @@ public class Workorder {
 
     // Approval-related fields
     private Instant approvedAt;
-    private Long approvedBy;
+    private UUID approvedBy;
 
     // Customer signature capture for approval
     @Column(length = 100000)
@@ -42,7 +41,7 @@ public class Workorder {
 
     // Completion-related fields
     private Instant completedAt;
-    private Long completedBy;
+    private UUID completedBy;
 
     @Column(columnDefinition = "TEXT")
     private String completionNotes;

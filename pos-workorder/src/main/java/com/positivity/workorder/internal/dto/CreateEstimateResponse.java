@@ -7,23 +7,24 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class CreateEstimateResponse {
-    private Long estimateId;
+    private UUID estimateId;
     private String estimateNumber;
     private String status;
-    private Long customerId;
-    private Long vehicleId;
-    private Long locationId;
+    private UUID customerId;
+    private UUID vehicleId;
+    private UUID locationId;
     private String currencyUomId;
-    private Long taxRegionId;
-    private Long createdByUserId;
+    private UUID taxRegionId;
+    private UUID createdByUserId;
     private LocalDateTime createdAt;
-    
+
     public static CreateEstimateResponse fromEntity(Estimate estimate) {
         return CreateEstimateResponse.builder()
                 .estimateId(estimate.getId())

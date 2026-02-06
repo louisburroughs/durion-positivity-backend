@@ -19,8 +19,8 @@ public class WorkorderService {
     @JoinColumn(name = "work_order_id")
     private Workorder workOrder;
 
-    private Long serviceEntityId; // Reference to ServiceEntity in pos-catalog
-    private Long technicianId; // Reference to Technician
+    private UUID serviceEntityId; // Reference to ServiceEntity in pos-catalog
+    private UUID technicianId; // Reference to Technician
 
     // Flag to indicate this service was declined by customer during estimate
     // approval
@@ -33,7 +33,7 @@ public class WorkorderService {
     private WorkorderItemStatus status = WorkorderItemStatus.OPEN;
 
     // Reference to the change request that added this item
-    private Long changeRequestId;
+    private UUID changeRequestId;
 
     // Emergency/Safety flags and documentation
     @Builder.Default
