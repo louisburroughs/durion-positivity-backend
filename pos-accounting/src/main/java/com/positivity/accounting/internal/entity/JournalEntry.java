@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -45,9 +46,15 @@ public class JournalEntry {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "journal_entry_id", nullable = false)
+    @Column(name = "journal_entry_id", nullable = false, columnDefinition = "UUID")
     private UUID journalEntryId;
+
+    @PrePersist
+    public void generateId() {
+        if (journalEntryId == null) {
+            journalEntryId = UUIDv7Generator.generate();
+        }
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)

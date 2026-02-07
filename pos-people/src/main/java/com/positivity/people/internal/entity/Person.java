@@ -1,8 +1,10 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -11,8 +13,15 @@ import java.util.List;
 @Builder
 public class Person {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     private String firstName;
     private String lastName;
@@ -25,4 +34,3 @@ public class Person {
 
     private String username; // Optional, validated externally
 }
-

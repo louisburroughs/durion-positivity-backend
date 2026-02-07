@@ -1,8 +1,10 @@
 package com.positivity.poseventreceiver.internal.entity;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.Data;
 
 /**
@@ -14,8 +16,15 @@ import lombok.Data;
 @Table(name = "emitted_event")
 public class EmittedEvent {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long eventId;
+    @Column(columnDefinition = "UUID")
+    private UUID eventId;
+
+    @PrePersist
+    public void generateId() {
+        if (eventId == null) {
+            eventId = UUIDv7Generator.generate();
+        }
+    }
 
     /** The event type identifier (e.g., ORDER_ORDER_CREATE) */
     private final String id;

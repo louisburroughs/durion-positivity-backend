@@ -1,9 +1,11 @@
 package com.positivity.catalog.internal.model;
 
-public interface CatalogItem {
-    Long getId();
+import java.util.UUID;
 
-    void setId(Long id);
+public interface CatalogItem {
+    UUID getId();
+
+    void setId(UUID id);
 
     String getName();
 

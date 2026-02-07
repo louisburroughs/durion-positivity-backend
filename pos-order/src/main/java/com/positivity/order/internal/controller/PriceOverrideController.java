@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * REST controller for price override operations.
@@ -87,7 +88,7 @@ public class PriceOverrideController {
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_APPROVE + "')")
     @EmitEvent(id = "ORDER_PRICE_OVERRIDE_APPROVE", apiVersion = "1")
     public ResponseEntity<PriceOverride> approvePriceOverride(
-            @Parameter(description = "Price override ID", required = true) @PathVariable Long overrideId,
+            @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId,
             @Valid @RequestBody ApprovePriceOverrideRequest request,
             Authentication authentication) {
 
@@ -97,7 +98,7 @@ public class PriceOverrideController {
         log.info("User {} ({}) approving price override {}", userId, role, overrideId);
 
         PriceOverride override = priceOverrideService.approvePriceOverride(
-                overrideId, request, userId, role);
+                overrideId, request, UUID.fromString(userId), role);
 
         return ResponseEntity.ok(override);
     }
@@ -117,7 +118,7 @@ public class PriceOverrideController {
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_REJECT + "')")
     @EmitEvent(id = "ORDER_PRICE_OVERRIDE_REJECT", apiVersion = "1")
     public ResponseEntity<PriceOverride> rejectPriceOverride(
-            @Parameter(description = "Price override ID", required = true) @PathVariable Long overrideId,
+            @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId,
             @Valid @RequestBody RejectPriceOverrideRequest request,
             Authentication authentication) {
 
@@ -127,7 +128,7 @@ public class PriceOverrideController {
         log.info("User {} ({}) rejecting price override {}", userId, role, overrideId);
 
         PriceOverride override = priceOverrideService.rejectPriceOverride(
-                overrideId, request, userId, role);
+                overrideId, request, UUID.fromString(userId), role);
 
         return ResponseEntity.ok(override);
     }
@@ -144,7 +145,7 @@ public class PriceOverrideController {
     @GetMapping("/{overrideId}")
     @PreAuthorize("hasAuthority('" + PriceOverridePermissions.PRICE_OVERRIDE_VIEW + "')")
     public ResponseEntity<PriceOverride> getOverride(
-            @Parameter(description = "Price override ID", required = true) @PathVariable Long overrideId) {
+            @Parameter(description = "Price override ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID overrideId) {
         PriceOverride override = priceOverrideService.getOverrideById(overrideId);
         return ResponseEntity.ok(override);
     }
@@ -170,7 +171,7 @@ public class PriceOverrideController {
         List<PriceOverride> overrides;
 
         if (orderId != null) {
-            overrides = priceOverrideService.getOverridesByOrderId(orderId);
+            overrides = priceOverrideService.getOverridesByOrderId(UUID.fromString(orderId));
         } else if (status != null) {
             overrides = priceOverrideService.getOverridesByStatus(status);
         } else if (startDate != null && endDate != null) {

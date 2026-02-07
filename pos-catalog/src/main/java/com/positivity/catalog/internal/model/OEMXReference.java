@@ -1,9 +1,12 @@
 package com.positivity.catalog.internal.model;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -12,10 +15,18 @@ import lombok.Setter;
 public class OEMXReference {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
+
     @ManyToOne
-    private  ProductEntity part; // Reference to the product
+    private ProductEntity part; // Reference to the product
     @ManyToOne
-    private  ProductEntity oemPart; // Reference to the OEM product that matches
+    private ProductEntity oemPart; // Reference to the OEM product that matches
 }

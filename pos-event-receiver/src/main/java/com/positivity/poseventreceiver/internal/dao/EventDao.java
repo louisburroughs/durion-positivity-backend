@@ -2,6 +2,7 @@ package com.positivity.poseventreceiver.internal.dao;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 
@@ -19,7 +20,7 @@ public interface EventDao {
     // EventType operations
     EventType saveEventType(@NonNull EventType eventType);
 
-    Optional<EventType> getEventType(@NonNull Long id);
+    Optional<EventType> getEventType(@NonNull UUID id);
 
     Optional<EventType> getEventTypeByCode(@NonNull String typeCode);
 
@@ -27,7 +28,7 @@ public interface EventDao {
 
     List<EventType> getActiveEventTypes();
 
-    void deleteEventType(@NonNull Long id);
+    void deleteEventType(@NonNull UUID id);
 
-    boolean eventTypeExists(@NonNull Long id);
+    boolean eventTypeExists(@NonNull UUID id);
 }

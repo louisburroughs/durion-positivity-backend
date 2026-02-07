@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Implementation of PriceOverrideService.
@@ -59,22 +60,22 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
                 // Create price override record
                 PriceOverride override = PriceOverride.builder()
-                                .orderId(request.getOrderId())
-                                .orderLineId(request.getOrderLineId())
-                                .productId(request.getProductId())
+                                .orderId(UUID.fromString(request.getOrderId()))
+                                .orderLineId(UUID.fromString(request.getOrderLineId()))
+                                .productId(UUID.fromString(request.getProductId()))
                                 .originalPrice(request.getOriginalPrice())
                                 .overridePrice(request.getOverridePrice())
                                 .reasonCode(request.getReasonCode())
                                 .justification(request.getJustification())
                                 .status(initialStatus)
                                 .requiresApproval(requiresApproval)
-                                .requestedByUserId(userId)
+                                .requestedByUserId(UUID.fromString(userId))
                                 .build();
 
                 // Auto-approve if no approval required
                 if (!requiresApproval) {
                         override.setApprovedAt(Instant.now());
-                        override.setApprovedByUserId(userId); // Self-approved within authority
+                        override.setApprovedByUserId(UUID.fromString(userId)); // Self-approved within authority
                 }
 
                 override = priceOverrideRepository.save(override);
@@ -88,9 +89,9 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
                 return ApplyPriceOverrideResponse.builder()
                                 .overrideId(override.getOverrideId())
-                                .orderId(override.getOrderId())
-                                .orderLineId(override.getOrderLineId())
-                                .productId(override.getProductId())
+                                .orderId(override.getOrderId().toString())
+                                .orderLineId(override.getOrderLineId().toString())
+                                .productId(override.getProductId().toString())
                                 .originalPrice(override.getOriginalPrice())
                                 .overridePrice(override.getOverridePrice())
                                 .discountAmount(discountAmount)
@@ -107,8 +108,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
         @Override
         @Transactional
-        public PriceOverride approvePriceOverride(Long overrideId, ApprovePriceOverrideRequest request,
-                        String approverUserId, String approverRole) {
+        public PriceOverride approvePriceOverride(UUID overrideId, ApprovePriceOverrideRequest request,
+                        UUID approverUserId, String approverRole) {
                 log.info("Approving price override {} by user {} with role {}",
                                 overrideId, approverUserId, approverRole);
 
@@ -145,8 +146,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
         @Override
         @Transactional
-        public PriceOverride rejectPriceOverride(Long overrideId, RejectPriceOverrideRequest request,
-                        String reviewerUserId, String reviewerRole) {
+        public PriceOverride rejectPriceOverride(UUID overrideId, RejectPriceOverrideRequest request,
+                        UUID reviewerUserId, String reviewerRole) {
                 log.info("Rejecting price override {} by user {} with role {}",
                                 overrideId, reviewerUserId, reviewerRole);
 
@@ -185,14 +186,14 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
         @Override
         @Transactional(readOnly = true)
-        public PriceOverride getOverrideById(Long overrideId) {
+        public PriceOverride getOverrideById(UUID overrideId) {
                 return priceOverrideRepository.findById(overrideId)
                                 .orElseThrow(() -> new PriceOverrideNotFoundException(overrideId));
         }
 
         @Override
         @Transactional(readOnly = true)
-        public List<PriceOverride> getOverridesByOrderId(String orderId) {
+        public List<PriceOverride> getOverridesByOrderId(UUID orderId) {
                 return priceOverrideRepository.findByOrderId(orderId);
         }
 

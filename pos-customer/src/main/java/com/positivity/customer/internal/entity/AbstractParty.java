@@ -11,6 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -30,9 +31,15 @@ import java.util.UUID;
 @Schema(description = "Abstract base class for an individual customer (person). Use CommercialParty for organizations.")
 public abstract class AbstractParty implements Party {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "customer_id", updatable = false, nullable = false)
+    @Column(name = "customer_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID partyId;
+
+    @PrePersist
+    public void generateId() {
+        if (partyId == null) {
+            partyId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(unique = true, nullable = false)
     @Schema(description = "Unique customer number", example = "CUST-1001")

@@ -1,11 +1,13 @@
 package com.positivity.catalog.internal.model;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.util.List;
+import java.util.UUID;
 
 @Setter
 @Getter
@@ -15,9 +17,16 @@ import java.util.List;
 public class ProductEntity implements CatalogItem {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    @Schema(description = "Unique identifier of the product", example = "1")
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    @Schema(description = "Unique identifier of the product", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+    private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     @Schema(description = "Name of the product", example = "Heavy Duty Wrench")
     private String name;
@@ -55,7 +64,7 @@ public class ProductEntity implements CatalogItem {
     }
 
     @Override
-    public void setId(Long id) {
+    public void setId(UUID id) {
         this.id = id;
     }
 

@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
@@ -37,9 +38,15 @@ public class JournalEntryLine {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "line_id", nullable = false)
+    @Column(name = "line_id", nullable = false, columnDefinition = "UUID")
     private UUID lineId;
+
+    @PrePersist
+    public void generateId() {
+        if (lineId == null) {
+            lineId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "journal_entry_id", nullable = false)
     private UUID journalEntryId;

@@ -1,11 +1,13 @@
 package com.positivity.catalog.internal.model;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.UUID;
 
 @Slf4j
 @Data
@@ -16,8 +18,15 @@ import lombok.extern.slf4j.Slf4j;
 public class DimensionEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     @Enumerated(EnumType.STRING)
     private DimensionType dimensionType;

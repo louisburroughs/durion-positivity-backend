@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Tag(name = "People API", description = "Operations related to people records")
@@ -37,7 +38,7 @@ public class PersonController {
     })
     @GetMapping("/{personId}")
     public ResponseEntity<Person> getPersonById(
-            @Parameter(description = "ID of the person to retrieve", example = "1") @PathVariable Long personId) {
+            @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
         return personService.getPersonById(personId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -61,7 +62,7 @@ public class PersonController {
     @EmitEvent(id = "PEOPLE_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
     public ResponseEntity<Person> updatePerson(
-            @Parameter(description = "ID of the person to update", example = "1") @PathVariable Long personId,
+            @Parameter(description = "ID of the person to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId,
             @Parameter(description = "Updated person object") @RequestBody Person person) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -78,7 +79,7 @@ public class PersonController {
     })
     @DeleteMapping("/{personId}")
     public ResponseEntity<Void> deletePerson(
-            @Parameter(description = "ID of the person to delete", example = "1") @PathVariable Long personId) {
+            @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
         if (personService.getPersonById(personId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }

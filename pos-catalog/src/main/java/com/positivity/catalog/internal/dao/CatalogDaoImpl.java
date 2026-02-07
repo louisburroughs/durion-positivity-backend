@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Repository
@@ -25,27 +26,31 @@ public class CatalogDaoImpl implements CatalogDao {
 
     // Product methods
     @Override
-    public Optional<ProductEntity> findProductById(Long id) {
+    public Optional<ProductEntity> findProductById(UUID id) {
         return productRepo.findById(id);
     }
+
     @Override
     public List<ProductEntity> findProductByName(String name) {
         return productRepo.findByName(name);
     }
+
     @Override
     public ProductEntity saveProduct(ProductEntity product) {
         return productRepo.save(product);
     }
+
     @Override
-    public ProductEntity updateProduct(Long id, ProductEntity product) {
+    public ProductEntity updateProduct(UUID id, ProductEntity product) {
         if (productRepo.existsById(id)) {
             product.setId(id); // Ensure ID is set for update
             return productRepo.save(product);
         }
         return null; // Or throw exception
     }
+
     @Override
-    public boolean deleteProduct(Long id) {
+    public boolean deleteProduct(UUID id) {
         if (productRepo.existsById(id)) {
             productRepo.deleteById(id);
             return true;
@@ -55,27 +60,31 @@ public class CatalogDaoImpl implements CatalogDao {
 
     // Service methods
     @Override
-    public Optional<ServiceEntity> findServiceById(Long id) {
+    public Optional<ServiceEntity> findServiceById(UUID id) {
         return serviceRepo.findById(id);
     }
+
     @Override
     public List<ServiceEntity> findServiceByName(String name) {
         return serviceRepo.findByName(name);
     }
+
     @Override
     public ServiceEntity saveService(ServiceEntity service) {
         return serviceRepo.save(service);
     }
+
     @Override
-    public ServiceEntity updateService(Long id, ServiceEntity service) {
+    public ServiceEntity updateService(UUID id, ServiceEntity service) {
         if (serviceRepo.existsById(id)) {
             service.setId(id); // Ensure ID is set for update
             return serviceRepo.save(service);
         }
         return null; // Or throw exception
     }
+
     @Override
-    public boolean deleteService(Long id) {
+    public boolean deleteService(UUID id) {
         if (serviceRepo.existsById(id)) {
             serviceRepo.deleteById(id);
             return true;
@@ -85,27 +94,31 @@ public class CatalogDaoImpl implements CatalogDao {
 
     // NonInventoryProduct methods
     @Override
-    public Optional<NonInventoryProductEntity> findNonInventoryProductById(Long id) {
+    public Optional<NonInventoryProductEntity> findNonInventoryProductById(UUID id) {
         return nonInventoryProductRepo.findById(id);
     }
+
     @Override
     public List<NonInventoryProductEntity> findNonInventoryProductByName(String name) {
         return nonInventoryProductRepo.findByName(name);
     }
+
     @Override
     public NonInventoryProductEntity saveNonInventoryProduct(NonInventoryProductEntity nonInventoryProduct) {
         return nonInventoryProductRepo.save(nonInventoryProduct);
     }
+
     @Override
-    public NonInventoryProductEntity updateNonInventoryProduct(Long id, NonInventoryProductEntity nonInventoryProduct) {
+    public NonInventoryProductEntity updateNonInventoryProduct(UUID id, NonInventoryProductEntity nonInventoryProduct) {
         if (nonInventoryProductRepo.existsById(id)) {
             nonInventoryProduct.setId(id); // Ensure ID is set for update
             return nonInventoryProductRepo.save(nonInventoryProduct);
         }
         return null; // Or throw exception
     }
+
     @Override
-    public boolean deleteNonInventoryProduct(Long id) {
+    public boolean deleteNonInventoryProduct(UUID id) {
         if (nonInventoryProductRepo.existsById(id)) {
             nonInventoryProductRepo.deleteById(id);
             return true;
@@ -115,24 +128,27 @@ public class CatalogDaoImpl implements CatalogDao {
 
     // Catalog methods
     @Override
-    public Optional<CatalogEntity> findCatalogById(Long id) {
+    public Optional<CatalogEntity> findCatalogById(UUID id) {
         return catalogRepository.findById(id);
     }
+
     @Override
     public List<CatalogEntity> findCatalogByName(String name) {
         return catalogRepository.findByNameContainingIgnoreCase(name);
     }
+
     @Override
     public List<CatalogEntity> findAllCatalogs() {
         return catalogRepository.findAll();
     }
+
     @Override
     public CatalogEntity saveCatalog(CatalogEntity catalog) {
         return catalogRepository.save(catalog);
     }
 
     @Override
-    public CatalogEntity updateCatalog(Long id, CatalogEntity catalog) {
+    public CatalogEntity updateCatalog(UUID id, CatalogEntity catalog) {
         if (catalogRepository.existsById(id)) {
             catalog.setId(id);
             return catalogRepository.save(catalog);
@@ -141,7 +157,7 @@ public class CatalogDaoImpl implements CatalogDao {
     }
 
     @Override
-    public boolean deleteCatalog(Long id) {
+    public boolean deleteCatalog(UUID id) {
         if (catalogRepository.existsById(id)) {
             catalogRepository.deleteById(id);
             return true;

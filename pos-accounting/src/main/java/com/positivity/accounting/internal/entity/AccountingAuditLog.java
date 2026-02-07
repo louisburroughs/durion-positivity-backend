@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -39,9 +40,15 @@ public class AccountingAuditLog {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "audit_log_id", nullable = false)
+    @Column(name = "audit_log_id", nullable = false, columnDefinition = "UUID")
     private UUID auditLogId;
+
+    @PrePersist
+    public void generateId() {
+        if (auditLogId == null) {
+            auditLogId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "entity_type", length = 50, nullable = false)
     private String entityType;

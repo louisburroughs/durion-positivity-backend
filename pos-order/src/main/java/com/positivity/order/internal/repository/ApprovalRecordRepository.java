@@ -1,23 +1,24 @@
 package com.positivity.order.internal.repository;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import com.positivity.order.internal.entity.ApprovalRecord;
 
-import java.time.Instant;
-import java.util.List;
-
 /**
  * Repository for ApprovalRecord entity operations.
  */
 @Repository
-public interface ApprovalRecordRepository extends JpaRepository<ApprovalRecord, Long> {
+public interface ApprovalRecordRepository extends JpaRepository<ApprovalRecord, UUID> {
 
     /**
      * Find all approval records for a specific price override.
      */
-    List<ApprovalRecord> findByPriceOverrideId(Long priceOverrideId);
+    List<ApprovalRecord> findByPriceOverrideId(UUID priceOverrideId);
 
     /**
      * Find all approval actions by a specific reviewer.

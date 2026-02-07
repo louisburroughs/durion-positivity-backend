@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
@@ -13,8 +14,15 @@ import java.util.UUID;
 @Builder
 public class Workorder {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID")
     private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     private UUID shopId; // Reference to Shop
     private UUID vehicleId; // Reference to Vehicle

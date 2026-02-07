@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Tag(name = "Location API", description = "Operations related to locations and their relationships")
@@ -40,7 +41,7 @@ public class LocationController {
     })
     @GetMapping("/{locationId}")
     public ResponseEntity<Location> getLocationById(
-            @Parameter(description = "ID of the location to retrieve", example = "1") @PathVariable Long locationId) {
+            @Parameter(description = "ID of the location to retrieve", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
         return locationService.getLocationById(locationId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -64,7 +65,7 @@ public class LocationController {
     @EmitEvent(id = "LOCATION_LOCATION_UPDATE", apiVersion = "1")
     @PutMapping("/{locationId}")
     public ResponseEntity<Location> updateLocation(
-            @Parameter(description = "ID of the location to update", example = "1") @PathVariable Long locationId,
+            @Parameter(description = "ID of the location to update", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId,
             @Parameter(description = "Updated location object") @RequestBody Location location) {
         if (!locationService.getLocationById(locationId).isPresent()) {
             return ResponseEntity.notFound().build();
@@ -81,7 +82,7 @@ public class LocationController {
     })
     @DeleteMapping("/{locationId}")
     public ResponseEntity<Void> deleteLocation(
-            @Parameter(description = "ID of the location to delete", example = "1") @PathVariable Long locationId) {
+            @Parameter(description = "ID of the location to delete", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
         if (!locationService.getLocationById(locationId).isPresent()) {
             return ResponseEntity.notFound().build();
         }
@@ -94,8 +95,8 @@ public class LocationController {
     @EmitEvent(id = "LOCATION_PARENT_ADD", apiVersion = "1")
     @PostMapping("/{childId}/parents/{parentId}")
     public ResponseEntity<LocationParent> addParent(
-            @Parameter(description = "ID of the child location", example = "2") @PathVariable Long childId,
-            @Parameter(description = "ID of the parent location", example = "1") @PathVariable Long parentId,
+            @Parameter(description = "ID of the child location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID childId,
+            @Parameter(description = "ID of the parent location", example = "018e1c9f-0000-7890-abcd-1234567890ab") @PathVariable UUID parentId,
             @Parameter(description = "Type of the parent relationship") @RequestParam ParentType parentType) {
         LocationParent parent = locationService.addParent(childId, parentId, parentType);
         return ResponseEntity.ok(parent);
@@ -115,7 +116,7 @@ public class LocationController {
     })
     @GetMapping("/{locationId}/responsible-person")
     public ResponseEntity<PersonDTO> getResponsiblePerson(
-            @Parameter(description = "ID of the location", example = "1") @PathVariable Long locationId) {
+            @Parameter(description = "ID of the location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
         PersonDTO person = locationService.getResponsiblePerson(locationId);
         if (person == null) {
             return ResponseEntity.notFound().build();

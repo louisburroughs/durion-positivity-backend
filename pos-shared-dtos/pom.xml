@@ -26,6 +26,12 @@
             <groupId>org.jspecify</groupId>
             <artifactId>jspecify</artifactId>
         </dependency>
+
+        <!-- UUID v7 Generator (ADR-0013) -->
+        <dependency>
+            <groupId>com.github.f4b6a3</groupId>
+            <artifactId>uuid-creator</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

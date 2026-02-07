@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -19,20 +20,21 @@ public class PersonService {
         return personRepository.findAll();
     }
 
-    public Optional<Person> getPersonById(Long id) {
+    public Optional<Person> getPersonById(UUID id) {
         return personRepository.findById(id);
     }
 
     @Transactional
     public Person savePerson(Person person) {
-        if (person.getUsername() != null && !person.getUsername().isBlank() && !validateUsernameWithSecurityService(person.getUsername())) {
-                throw new IllegalArgumentException("Username is not valid or does not exist in security service");
-            }
+        if (person.getUsername() != null && !person.getUsername().isBlank()
+                && !validateUsernameWithSecurityService(person.getUsername())) {
+            throw new IllegalArgumentException("Username is not valid or does not exist in security service");
+        }
 
         return personRepository.save(person);
     }
 
-    public void deletePerson(Long id) {
+    public void deletePerson(UUID id) {
         personRepository.deleteById(id);
     }
 
@@ -43,4 +45,3 @@ public class PersonService {
         return !personRepository.existsByUsername(username);
     }
 }
-

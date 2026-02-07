@@ -3,6 +3,7 @@ package com.positivity.order.internal.config;
 import com.positivity.security.common.PermissionDefinition;
 import com.positivity.security.common.PermissionRegistrationSupport;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -14,6 +15,7 @@ import static com.positivity.order.internal.security.PriceOverridePermissions.*;
  * Registers order permissions with pos-security-service at startup.
  */
 @Component
+@Profile("!test")
 public class OrderPermissionRegistration extends PermissionRegistrationSupport {
 
     public OrderPermissionRegistration(

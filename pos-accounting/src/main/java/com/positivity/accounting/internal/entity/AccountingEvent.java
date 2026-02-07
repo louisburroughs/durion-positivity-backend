@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import org.hibernate.annotations.JdbcTypeCode;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import org.hibernate.type.SqlTypes;
 
 import lombok.EqualsAndHashCode;
@@ -41,9 +42,15 @@ public class AccountingEvent {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "event_id", nullable = false)
+    @Column(name = "event_id", nullable = false, columnDefinition = "UUID")
     private UUID eventId;
+
+    @PrePersist
+    public void generateId() {
+        if (eventId == null) {
+            eventId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "event_type", length = 100, nullable = false)
     private String eventType;

@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.UUID;
@@ -11,8 +12,16 @@ import java.util.UUID;
 @Builder
 public class Vehicle {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID")
     private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
+
     private String vin;
     private String make;
     private String model;

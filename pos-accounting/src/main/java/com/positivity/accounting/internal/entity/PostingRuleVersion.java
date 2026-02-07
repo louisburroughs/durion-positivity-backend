@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -42,9 +43,15 @@ public class PostingRuleVersion {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "version_id", nullable = false)
+    @Column(name = "version_id", nullable = false, columnDefinition = "UUID")
     private UUID versionId;
+
+    @PrePersist
+    public void generateId() {
+        if (versionId == null) {
+            versionId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "posting_rule_set_id", nullable = false)
     private UUID postingRuleSetId;

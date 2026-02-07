@@ -60,6 +60,10 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-security-common</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+        </dependency>
 
         <!-- Spring AOP for aspect-based features (replaces spring-boot-starter-aop in Spring Boot 4.0) -->
         <dependency>

@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +37,15 @@ public class PostingRuleSet {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "posting_rule_set_id", nullable = false)
+    @Column(name = "posting_rule_set_id", nullable = false, columnDefinition = "UUID")
     private UUID postingRuleSetId;
+
+    @PrePersist
+    public void generateId() {
+        if (postingRuleSetId == null) {
+            postingRuleSetId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "name", length = 100, nullable = false)
     private String name;

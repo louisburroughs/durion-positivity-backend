@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.audit.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -24,9 +25,15 @@ import java.util.UUID;
 public class OverridePolicyThreshold {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "policy_id", updatable = false, nullable = false)
+    @Column(name = "policy_id", updatable = false, nullable = false, columnDefinition = "UUID")
     private UUID policyId;
+
+    @PrePersist
+    public void generateId() {
+        if (policyId == null) {
+            policyId = UUIDv7Generator.generate();
+        }
+    }
     
     /**
      * Role this policy applies to (e.g., SERVICE_WRITER, MANAGER, GLOBAL_ADMIN).

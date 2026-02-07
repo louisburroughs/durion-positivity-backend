@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -58,7 +59,7 @@ public class TimeEntryAdjustmentController {
         }
         try {
             java.util.Optional<com.positivity.people.internal.entity.TimeEntry> entryOpt = timeEntryRepository
-                    .findById(req.getTimeEntryId());
+                    .findById(UUID.fromString(req.getTimeEntryId()));
             if (entryOpt.isEmpty()) {
                 com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                         "NOT_FOUND",

@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -42,9 +43,15 @@ public class VendorBill {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "vendor_bill_id", nullable = false)
+    @Column(name = "vendor_bill_id", nullable = false, columnDefinition = "UUID")
     private UUID vendorBillId;
+
+    @PrePersist
+    public void generateId() {
+        if (vendorBillId == null) {
+            vendorBillId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "vendor_id", nullable = false)
     private UUID vendorId;

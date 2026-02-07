@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -29,9 +30,15 @@ import java.util.UUID;
 public class CycleCountTask {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "task_id", updatable = false, nullable = false)
     private UUID taskId;
+
+    @PrePersist
+    public void generateId() {
+        if (taskId == null) {
+            taskId = UUIDv7Generator.generate();
+        }
+    }
     
     /**
      * Storage bin location identifier.

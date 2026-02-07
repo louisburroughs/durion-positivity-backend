@@ -1,15 +1,26 @@
 package com.positivity.catalog.internal.model;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
+
+import java.util.UUID;
 
 @Data
 @Entity
 @Table(name = "service")
 public class ServiceEntity implements CatalogItem {
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
+
     private String name;
     private String longDescription;
     private String shortDescription;
@@ -20,7 +31,7 @@ public class ServiceEntity implements CatalogItem {
     }
 
     @Override
-    public void setId(Long id) {
+    public void setId(UUID id) {
         this.id = id;
     }
 }

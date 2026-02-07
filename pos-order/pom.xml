@@ -89,6 +89,10 @@
             <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.f4b6a3</groupId>
+            <artifactId>uuid-creator</artifactId>
+        </dependency>
 
         <!-- OpenAPI / Swagger UI -->
         <dependency>
