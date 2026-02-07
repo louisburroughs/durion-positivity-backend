@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +28,7 @@ public class LocationService {
         return locationRepository.findAll();
     }
 
-    public Optional<Location> getLocationById(Long id) {
+    public Optional<Location> getLocationById(UUID id) {
         return locationRepository.findById(id);
     }
 
@@ -36,12 +37,12 @@ public class LocationService {
         return locationRepository.save(location);
     }
 
-    public void deleteLocation(Long id) {
+    public void deleteLocation(UUID id) {
         locationRepository.deleteById(id);
     }
 
     @Transactional
-    public LocationParent addParent(Long childId, Long parentId, ParentType parentType) {
+    public LocationParent addParent(UUID childId, UUID parentId, ParentType parentType) {
         Location child = locationRepository.findById(childId).orElseThrow();
         Location parent = locationRepository.findById(parentId).orElseThrow();
         LocationParent locationParent = LocationParent.builder()
@@ -56,9 +57,10 @@ public class LocationService {
         return locationParentRepository.findAll();
     }
 
-    public PersonDTO getResponsiblePerson(Long locationId) {
+    public PersonDTO getResponsiblePerson(UUID locationId) {
         Location location = locationRepository.findById(locationId).orElseThrow();
-        if (location.getResponsiblePersonId() == null) return null;
+        if (location.getResponsiblePersonId() == null)
+            return null;
         return personClient.getPersonById(location.getResponsiblePersonId());
     }
 }

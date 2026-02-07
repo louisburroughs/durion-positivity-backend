@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.List;
@@ -12,8 +13,15 @@ import java.util.UUID;
 @Builder
 public class WorkorderService {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID")
     private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "work_order_id")

@@ -2,6 +2,7 @@ package com.positivity.vehicle.internal.entity;
 
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,9 +38,15 @@ import java.util.UUID;
 public class EventProcessingLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "log_id", updatable = false, nullable = false)
     private UUID logId;
+
+    @PrePersist
+    public void generateId() {
+        if (logId == null) {
+            logId = UUIDv7Generator.generate();
+        }
+    }
 
     @NonNull
     @Column(name = "event_id", nullable = false, unique = true)

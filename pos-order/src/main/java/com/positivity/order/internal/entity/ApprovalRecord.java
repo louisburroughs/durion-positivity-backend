@@ -1,5 +1,6 @@
 package com.positivity.order.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -7,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Represents an approval or rejection record for a price override.
@@ -24,20 +26,20 @@ import java.time.Instant;
 public class ApprovalRecord {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long recordId;
+    @Column(columnDefinition = "UUID")
+    private UUID recordId;
 
     /**
      * Reference to the price override being approved/rejected.
      */
     @Column(nullable = false)
-    private Long priceOverrideId;
+    private UUID priceOverrideId;
 
     /**
      * User ID of the approver/rejecter.
      */
     @Column(nullable = false)
-    private String reviewerUserId;
+    private UUID reviewerUserId;
 
     /**
      * Role of the reviewer (for audit trail).
@@ -69,7 +71,12 @@ public class ApprovalRecord {
     private String reviewerIpAddress;
 
     @PrePersist
-    protected void onCreate() {
-        actionTimestamp = Instant.now();
+    protected void prePersist() {
+        if (recordId == null) {
+            recordId = UUIDv7Generator.generate();
+        }
+        if (actionTimestamp == null) {
+            actionTimestamp = Instant.now();
+        }
     }
 }

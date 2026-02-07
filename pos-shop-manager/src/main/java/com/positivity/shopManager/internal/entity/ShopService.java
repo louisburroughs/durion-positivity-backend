@@ -1,6 +1,7 @@
 package com.positivity.shopManager.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
 
 @Entity
@@ -10,8 +11,15 @@ import lombok.*;
 @Builder
 public class ShopService {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     // Reference to ServiceEntity in pos-catalog
     private Long serviceEntityId;

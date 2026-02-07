@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * REST controller for managing EventTypes used by PreregisteredEvents.
@@ -77,7 +78,7 @@ public class EventTypeController {
                         @ApiResponse(responseCode = "404", description = "Event type not found")
         })
         public ResponseEntity<EventType> getEventTypeById(
-                        @Parameter(description = "EventType ID", required = true, example = "1") @PathVariable Long id) {
+                        @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
                 log.info("Fetching event type with id: {}", id);
                 return eventDao.getEventType(id)
                                 .map(ResponseEntity::ok)
@@ -244,7 +245,7 @@ public class EventTypeController {
                         @ApiResponse(responseCode = "404", description = "Event type not found")
         })
         public ResponseEntity<EventType> updateEventType(
-                        @Parameter(description = "EventType ID", required = true, example = "1") @PathVariable Long id,
+                        @Parameter(description = "EventType ID", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id,
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated event type details", required = true, content = @Content(schema = @Schema(implementation = EventTypeRequest.class))) @RequestBody EventTypeRequest request) {
                 log.info("Updating event type: id={}", id);
 
@@ -292,7 +293,7 @@ public class EventTypeController {
                         @ApiResponse(responseCode = "404", description = "Event type not found")
         })
         public ResponseEntity<Void> deleteEventType(
-                        @Parameter(description = "EventType ID to delete", required = true, example = "1") @PathVariable Long id) {
+                        @Parameter(description = "EventType ID to delete", required = true, example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID id) {
                 log.info("Deleting event type: id={}", id);
 
                 if (!eventDao.eventTypeExists(id)) {

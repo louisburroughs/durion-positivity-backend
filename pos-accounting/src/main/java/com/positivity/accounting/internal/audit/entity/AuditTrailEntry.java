@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.audit.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -32,9 +33,15 @@ import java.util.UUID;
 public class AuditTrailEntry {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "audit_id", updatable = false, nullable = false)
+    @Column(name = "audit_id", updatable = false, nullable = false, columnDefinition = "UUID")
     private UUID auditId;
+
+    @PrePersist
+    public void generateId() {
+        if (auditId == null) {
+            auditId = UUIDv7Generator.generate();
+        }
+    }
 
     /**
      * Type of financial exception.

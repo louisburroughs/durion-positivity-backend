@@ -1,10 +1,13 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
 import com.positivity.people.internal.model.TimeEntryStatus;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
@@ -14,8 +17,15 @@ import jakarta.persistence.EnumType;
 public class TimeEntry {
 
     @Id
-    @Column(name = "time_entry_id", nullable = false, length = 64)
-    private String timeEntryId;
+    @Column(name = "time_entry_id", columnDefinition = "UUID", nullable = false)
+    private UUID timeEntryId;
+
+    @PrePersist
+    public void generateId() {
+        if (timeEntryId == null) {
+            timeEntryId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "person_id")
     private String personId;
@@ -42,11 +52,11 @@ public class TimeEntry {
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
 
-    public String getTimeEntryId() {
+    public UUID getTimeEntryId() {
         return timeEntryId;
     }
 
-    public void setTimeEntryId(String timeEntryId) {
+    public void setTimeEntryId(UUID timeEntryId) {
         this.timeEntryId = timeEntryId;
     }
 

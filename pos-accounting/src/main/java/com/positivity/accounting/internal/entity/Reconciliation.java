@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -45,9 +46,15 @@ public class Reconciliation {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "reconciliation_id", nullable = false)
+    @Column(name = "reconciliation_id", nullable = false, columnDefinition = "UUID")
     private UUID reconciliationId;
+
+    @PrePersist
+    public void generateId() {
+        if (reconciliationId == null) {
+            reconciliationId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "gl_account_id", nullable = false)
     private UUID glAccountId;

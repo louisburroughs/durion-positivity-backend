@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.UUID;
@@ -11,8 +12,15 @@ import java.util.UUID;
 @Builder
 public class ApprovalConfiguration {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID")
     private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     // Location ID - if null, applies to all locations
     private UUID locationId;

@@ -56,6 +56,12 @@
             <artifactId>pos-events</artifactId>
         </dependency>
 
+        <!-- Shared DTOs for UUIDv7Generator -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+        </dependency>
+
 
 
         <!-- OpenAPI/Swagger documentation -->

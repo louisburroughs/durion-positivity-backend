@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -14,8 +15,15 @@ import java.util.UUID;
 @Builder
 public class Estimate {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID")
     private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(unique = false) // Uniqueness enforced at DB level with composite constraint
     private String estimateNumber; // Human-readable identifier (e.g., EST-2024-1001)

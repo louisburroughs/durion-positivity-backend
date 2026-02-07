@@ -1,5 +1,6 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
 import com.positivity.people.internal.model.ExceptionStatus;
@@ -14,8 +15,7 @@ import java.util.UUID;
 public class TimeEntryException {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "exception_id", updatable = false, nullable = false)
+    @Column(name = "exception_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID exceptionId;
 
     @Column(name = "employee_id", nullable = false)
@@ -51,9 +51,13 @@ public class TimeEntryException {
     private Instant resolvedAt;
 
     @PrePersist
-    public void prePersist() {
-        if (detectedAt == null)
+    public void generateIdAndTimestamp() {
+        if (exceptionId == null) {
+            exceptionId = UUIDv7Generator.generate();
+        }
+        if (detectedAt == null) {
             detectedAt = Instant.now();
+        }
     }
 
     // Getters and setters

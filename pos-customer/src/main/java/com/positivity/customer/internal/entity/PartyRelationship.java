@@ -1,20 +1,36 @@
 package com.positivity.customer.internal.entity;
 
-import com.positivity.customer.internal.dto.PartyRelationshipRole;
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.*;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import com.positivity.customer.internal.dto.PartyRelationshipRole;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * Party relationship entity representing the association between a commercial
@@ -45,10 +61,16 @@ import java.util.UUID;
 public class PartyRelationship {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "party_relationship_id", updatable = false, nullable = false)
+    @Column(name = "party_relationship_id", columnDefinition = "UUID", updatable = false, nullable = false)
     @Schema(description = "Unique identifier for the party relationship")
     private UUID partyRelationshipId;
+
+    @PrePersist
+    public void generateId() {
+        if (partyRelationshipId == null) {
+            partyRelationshipId = UUIDv7Generator.generate();
+        }
+    }
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "from_party_id", nullable = false)

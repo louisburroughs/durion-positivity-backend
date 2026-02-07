@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.AccountType;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;

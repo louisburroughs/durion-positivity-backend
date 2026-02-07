@@ -46,6 +46,11 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- pos-shared-dtos for UUID v7 generator -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+        </dependency>
         <!-- JSpecify for null safety -->
         <dependency>
             <groupId>org.jspecify</groupId>

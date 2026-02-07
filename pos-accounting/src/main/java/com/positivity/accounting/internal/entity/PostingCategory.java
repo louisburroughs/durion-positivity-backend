@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,9 +33,15 @@ public class PostingCategory {
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "posting_category_id", nullable = false)
+    @Column(name = "posting_category_id", nullable = false, columnDefinition = "UUID")
     private UUID postingCategoryId;
+
+    @PrePersist
+    public void generateId() {
+        if (postingCategoryId == null) {
+            postingCategoryId = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "category_name", length = 100, nullable = false)
     private String categoryName;

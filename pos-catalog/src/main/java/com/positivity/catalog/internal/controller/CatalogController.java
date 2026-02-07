@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Controller for managing catalog-related operations.
@@ -59,7 +60,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "404", description = "Product not found")
     })
     public ResponseEntity<ProductEntity> getProductById(
-            @Parameter(description = "ID of the product to be obtained") @PathVariable Long productId) {
+            @Parameter(description = "ID of the product to be obtained") @PathVariable UUID productId) {
         Optional<ProductEntity> product = catalogDao.findProductById(productId);
         return product.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -105,13 +106,13 @@ public class CatalogController {
             @ApiResponse(responseCode = "503", description = "Required service unavailable (Product Catalog)")
     })
     public ResponseEntity<ProductDetailView> getProductDetailView(
-            @Parameter(description = "ID of the product", required = true) @PathVariable Long productId,
-            @Parameter(description = "Location/store ID for location-specific data", required = true) @RequestParam(name = "location_id") String locationId) {
+            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
+            @Parameter(description = "Location/store ID for location-specific data", required = true) @RequestParam(name = "location_id") UUID locationId) {
 
         log.info("Product detail view requested: productId={}, locationId={}", productId, locationId);
 
         // Validate location_id (basic validation)
-        if (locationId == null || locationId.trim().isEmpty()) {
+        if (locationId == null) {
             log.warn("Invalid location_id provided: {}", locationId);
             return ResponseEntity.badRequest().build();
         }
@@ -144,7 +145,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "404", description = "Service not found")
     })
     public ResponseEntity<ServiceEntity> getServiceById(
-            @Parameter(description = "ID of the service to be obtained") @PathVariable Long serviceId) {
+            @Parameter(description = "ID of the service to be obtained") @PathVariable UUID serviceId) {
         Optional<ServiceEntity> service = catalogDao.findServiceById(serviceId);
         return service.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -181,7 +182,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "404", description = "Non-inventory product not found")
     })
     public ResponseEntity<NonInventoryProductEntity> getNonInventoryProductById(
-            @Parameter(description = "ID of the non-inventory product to be obtained") @PathVariable Long productId) {
+            @Parameter(description = "ID of the non-inventory product to be obtained") @PathVariable UUID productId) {
         Optional<NonInventoryProductEntity> item = catalogDao.findNonInventoryProductById(productId);
         return item.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -217,7 +218,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "404", description = "Catalog not found")
     })
     public ResponseEntity<CatalogEntity> getCatalogById(
-            @Parameter(description = "ID of the catalog to be obtained") @PathVariable Long catalogId) {
+            @Parameter(description = "ID of the catalog to be obtained") @PathVariable UUID catalogId) {
         Optional<CatalogEntity> catalog = catalogDao.findCatalogById(catalogId);
         return catalog.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -303,8 +304,8 @@ public class CatalogController {
     @EmitEvent(id = "CATALOG_ITEM_UPDATE", apiVersion = "1")
     public ResponseEntity<?> updateCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
-            @Parameter(description = "ID of the catalog item to update") @PathVariable Long catalogId, // Changed to
-                                                                                                       // Long
+            @Parameter(description = "ID of the catalog item to update") @PathVariable UUID catalogId, // Changed to
+                                                                                                       // UUID
             @RequestBody CatalogItem item) { // Swapped order
         switch (type.toLowerCase()) {
             case PRODUCT:
@@ -353,8 +354,8 @@ public class CatalogController {
     })
     public ResponseEntity<Void> deleteCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
-            @Parameter(description = "ID of the catalog item to delete") @PathVariable Long catalogId) { // Changed to
-                                                                                                         // Long
+            @Parameter(description = "ID of the catalog item to delete") @PathVariable UUID catalogId) { // Changed to
+                                                                                                         // UUID
         boolean deleted;
         switch (type.toLowerCase()) {
             case PRODUCT:
@@ -410,7 +411,7 @@ public class CatalogController {
     })
     @EmitEvent(id = "CATALOG_CATALOG_UPDATE", apiVersion = "1")
     public ResponseEntity<CatalogEntity> updateCatalog(
-            @Parameter(description = "ID of the catalog to update") @PathVariable Long catalogId,
+            @Parameter(description = "ID of the catalog to update") @PathVariable UUID catalogId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated catalog object", required = true, content = @Content(schema = @Schema(implementation = CatalogEntity.class))) @RequestBody CatalogEntity catalogEntity) {
         CatalogEntity updatedCatalog = catalogDao.updateCatalog(catalogId, catalogEntity);
         return updatedCatalog != null ? ResponseEntity.ok(updatedCatalog) : ResponseEntity.notFound().build();
@@ -430,7 +431,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "404", description = "Catalog not found")
     })
     public ResponseEntity<Void> deleteCatalog(
-            @Parameter(description = "ID of the catalog to delete") @PathVariable Long catalogId) {
+            @Parameter(description = "ID of the catalog to delete") @PathVariable UUID catalogId) {
         boolean deleted = catalogDao.deleteCatalog(catalogId);
         return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
@@ -442,7 +443,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "501", description = "Not implemented")
     })
     public ResponseEntity<List<ProductEntity>> getPartSubstitutes(
-            @Parameter(description = "ID of the product", required = true) @PathVariable Long productId) {
+            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
         log.warn("Substitutes endpoint not implemented yet: productId={}", productId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }

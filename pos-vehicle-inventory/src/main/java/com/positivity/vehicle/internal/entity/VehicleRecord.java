@@ -2,6 +2,7 @@ package com.positivity.vehicle.internal.entity;
 
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -33,9 +34,15 @@ import java.util.UUID;
 public class VehicleRecord {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "vehicle_id", updatable = false, nullable = false)
     private UUID vehicleId;
+
+    @PrePersist
+    public void generateId() {
+        if (vehicleId == null) {
+            vehicleId = UUIDv7Generator.generate();
+        }
+    }
 
     @NonNull
     @Column(name = "account_id", nullable = false)

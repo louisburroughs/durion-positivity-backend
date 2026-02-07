@@ -1,5 +1,6 @@
 package com.positivity.order.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -8,6 +9,7 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Represents a price override applied to an order line item.
@@ -26,26 +28,26 @@ import java.time.Instant;
 public class PriceOverride {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long overrideId;
+    @Column(columnDefinition = "UUID")
+    private UUID overrideId;
 
     /**
      * Order identifier this override applies to.
      */
-    @Column(nullable = false)
-    private String orderId;
+    @Column(nullable = false, columnDefinition = "UUID")
+    private UUID orderId;
 
     /**
      * Order line item identifier this override applies to.
      */
-    @Column(nullable = false)
-    private String orderLineId;
+    @Column(nullable = false, columnDefinition = "UUID")
+    private UUID orderLineId;
 
     /**
      * SKU or product identifier for the line item.
      */
-    @Column(nullable = false)
-    private String productId;
+    @Column(nullable = false, columnDefinition = "UUID")
+    private UUID productId;
 
     /**
      * Original/baseline price from pricing service.
@@ -82,20 +84,22 @@ public class PriceOverride {
     /**
      * User ID who requested the override (Service Advisor).
      */
-    @Column(nullable = false)
-    private String requestedByUserId;
+    @Column(nullable = false, columnDefinition = "UUID")
+    private UUID requestedByUserId;
 
     /**
      * User ID who approved the override (Manager).
      * Null if not yet approved or if auto-approved.
      */
-    private String approvedByUserId;
+    @Column(columnDefinition = "UUID")
+    private UUID approvedByUserId;
 
     /**
      * User ID who rejected the override.
      * Null if not rejected.
      */
-    private String rejectedByUserId;
+    @Column(columnDefinition = "UUID")
+    private UUID rejectedByUserId;
 
     /**
      * Reason provided for rejection.
@@ -137,10 +141,17 @@ public class PriceOverride {
     private Boolean requiresApproval;
 
     @PrePersist
-    protected void onCreate() {
+    protected void prePersist() {
+        if (overrideId == null) {
+            overrideId = UUIDv7Generator.generate();
+        }
         Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        if (updatedAt == null) {
+            updatedAt = now;
+        }
     }
 
     @PreUpdate

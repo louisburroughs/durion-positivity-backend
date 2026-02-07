@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -29,9 +30,15 @@ import java.util.UUID;
 public class CountEntry {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "count_entry_id", updatable = false, nullable = false)
     private UUID countEntryId;
+
+    @PrePersist
+    public void generateId() {
+        if (countEntryId == null) {
+            countEntryId = UUIDv7Generator.generate();
+        }
+    }
     
     /**
      * Reference to the cycle count task this entry belongs to.

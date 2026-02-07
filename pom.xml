@@ -136,6 +136,13 @@
 				<optional>true</optional>
 			</dependency>
 
+			<!-- UUID v7 Generator Library (ADR-0013) -->
+			<dependency>
+				<groupId>com.github.f4b6a3</groupId>
+				<artifactId>uuid-creator</artifactId>
+				<version>${uuid-creator.version}</version>
+			</dependency>
+
 			<!-- JACKSON 3.0 (for JSON serialization/deserialization) -->
 			<dependency>
 				<groupId>tools.jackson.core</groupId>
@@ -248,6 +255,8 @@
 		<swagger-annotations.version>2.2.22</swagger-annotations.version>
 		<!-- OpenTelemetry -->
 		<opentelemetry.version>1.44.1</opentelemetry.version>
+		<!-- UUID v7 Generator -->
+		<uuid-creator.version>5.3.7</uuid-creator.version>
 		<!-- Resilience4j for Retry Patterns and Vavr for Functional Programming -->
 		<resilience4j.version>2.2.0</resilience4j.version>
 		<vavr.version>0.10.4</vavr.version>

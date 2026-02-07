@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.audit.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
 
 import java.time.Instant;
@@ -21,9 +22,15 @@ import java.util.UUID;
 public class RefundPolicyConfig {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "config_id", updatable = false, nullable = false)
+    @Column(name = "config_id", updatable = false, nullable = false, columnDefinition = "UUID")
     private UUID configId;
+
+    @PrePersist
+    public void generateId() {
+        if (configId == null) {
+            configId = UUIDv7Generator.generate();
+        }
+    }
     
     /**
      * Whether refund requires separate authorization from original sale.

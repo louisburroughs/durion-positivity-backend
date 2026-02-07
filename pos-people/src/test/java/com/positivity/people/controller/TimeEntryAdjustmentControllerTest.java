@@ -32,12 +32,13 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void listForTimeEntry_returnsList() {
+        UUID timeEntryId = UUID.randomUUID();
         TimeEntryAdjustment a = new TimeEntryAdjustment();
         a.setAdjustmentId(UUID.randomUUID());
-        a.setTimeEntryId("T1");
-        when(repo.findByTimeEntryId("T1")).thenReturn(List.of(a));
+        a.setTimeEntryId(timeEntryId.toString());
+        when(repo.findByTimeEntryId(timeEntryId.toString())).thenReturn(List.of(a));
 
-        ResponseEntity<List<TimeEntryAdjustment>> resp = controller.listForTimeEntry("T1");
+        ResponseEntity<List<TimeEntryAdjustment>> resp = controller.listForTimeEntry(timeEntryId.toString());
         assertEquals(200, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertEquals(1, resp.getBody().size());
@@ -46,10 +47,11 @@ public class TimeEntryAdjustmentControllerTest {
     @Test
     public void createAdjustment_withMinutesDelta_succeeds() {
         // Mock time entry lookup
+        UUID timeEntryId = UUID.randomUUID();
         com.positivity.people.internal.entity.TimeEntry te = new com.positivity.people.internal.entity.TimeEntry();
-        te.setTimeEntryId("T1");
+        te.setTimeEntryId(timeEntryId);
         te.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
-        when(timeEntryRepo.findById("T1")).thenReturn(java.util.Optional.of(te));
+        when(timeEntryRepo.findById(timeEntryId)).thenReturn(java.util.Optional.of(te));
 
         when(repo.save(any())).thenAnswer(inv -> {
             TimeEntryAdjustment in = inv.getArgument(0);
@@ -58,7 +60,7 @@ public class TimeEntryAdjustmentControllerTest {
         });
 
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("T1");
+        req.setTimeEntryId(timeEntryId.toString());
         req.setReasonCode("RC1");
         req.setMinutesDelta(15);
         req.setCreatedBy("tester");
@@ -74,10 +76,11 @@ public class TimeEntryAdjustmentControllerTest {
     @Test
     public void createAdjustment_withProposedTimes_succeeds() {
         // Mock time entry lookup
+        UUID timeEntryId = UUID.randomUUID();
         com.positivity.people.internal.entity.TimeEntry te = new com.positivity.people.internal.entity.TimeEntry();
-        te.setTimeEntryId("T2");
+        te.setTimeEntryId(timeEntryId);
         te.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
-        when(timeEntryRepo.findById("T2")).thenReturn(java.util.Optional.of(te));
+        when(timeEntryRepo.findById(timeEntryId)).thenReturn(java.util.Optional.of(te));
 
         when(repo.save(any())).thenAnswer(inv -> {
             TimeEntryAdjustment in = inv.getArgument(0);
@@ -86,7 +89,7 @@ public class TimeEntryAdjustmentControllerTest {
         });
 
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("T2");
+        req.setTimeEntryId(timeEntryId.toString());
         req.setReasonCode("RC2");
         req.setProposedStartAt(OffsetDateTime.now());
         req.setProposedEndAt(OffsetDateTime.now().plusMinutes(30));
@@ -102,13 +105,14 @@ public class TimeEntryAdjustmentControllerTest {
     @Test
     public void createAdjustment_withBothMinutesAndTimes_returnsBadRequest() {
         // Mock time entry lookup
+        UUID timeEntryId = UUID.randomUUID();
         com.positivity.people.internal.entity.TimeEntry te = new com.positivity.people.internal.entity.TimeEntry();
-        te.setTimeEntryId("T3");
+        te.setTimeEntryId(timeEntryId);
         te.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
-        when(timeEntryRepo.findById("T3")).thenReturn(java.util.Optional.of(te));
+        when(timeEntryRepo.findById(timeEntryId)).thenReturn(java.util.Optional.of(te));
 
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("T3");
+        req.setTimeEntryId(timeEntryId.toString());
         req.setReasonCode("RC3");
         req.setMinutesDelta(10);
         req.setProposedStartAt(OffsetDateTime.now());
@@ -124,13 +128,14 @@ public class TimeEntryAdjustmentControllerTest {
     @Test
     public void createAdjustment_withNeitherMinutesNorTimes_returnsBadRequest() {
         // Mock time entry lookup
+        UUID timeEntryId = UUID.randomUUID();
         com.positivity.people.internal.entity.TimeEntry te = new com.positivity.people.internal.entity.TimeEntry();
-        te.setTimeEntryId("T4");
+        te.setTimeEntryId(timeEntryId);
         te.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
-        when(timeEntryRepo.findById("T4")).thenReturn(java.util.Optional.of(te));
+        when(timeEntryRepo.findById(timeEntryId)).thenReturn(java.util.Optional.of(te));
 
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("T4");
+        req.setTimeEntryId(timeEntryId.toString());
         req.setReasonCode("RC4");
 
         ResponseEntity<com.positivity.people.internal.dto.TimeEntryAdjustmentResponse> resp = controller
@@ -142,10 +147,11 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void createAdjustment_withNonexistentTimeEntry_returnsNotFound() {
-        when(timeEntryRepo.findById("NONEXISTENT")).thenReturn(java.util.Optional.empty());
+        UUID nonExistentId = UUID.randomUUID();
+        when(timeEntryRepo.findById(nonExistentId)).thenReturn(java.util.Optional.empty());
 
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("NONEXISTENT");
+        req.setTimeEntryId(nonExistentId.toString());
         req.setReasonCode("RC5");
         req.setMinutesDelta(10);
 
@@ -157,13 +163,14 @@ public class TimeEntryAdjustmentControllerTest {
     @Test
     public void createAdjustment_withNonPendingApprovalStatus_returnsInvalidState() {
         // Mock time entry with APPROVED status (not PENDING_APPROVAL)
+        UUID timeEntryId = UUID.randomUUID();
         com.positivity.people.internal.entity.TimeEntry te = new com.positivity.people.internal.entity.TimeEntry();
-        te.setTimeEntryId("T5");
+        te.setTimeEntryId(timeEntryId);
         te.setStatus(com.positivity.people.internal.model.TimeEntryStatus.APPROVED);
-        when(timeEntryRepo.findById("T5")).thenReturn(java.util.Optional.of(te));
+        when(timeEntryRepo.findById(timeEntryId)).thenReturn(java.util.Optional.of(te));
 
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("T5");
+        req.setTimeEntryId(timeEntryId.toString());
         req.setReasonCode("RC6");
         req.setMinutesDelta(10);
 
@@ -176,8 +183,9 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void createAdjustment_withoutReasonCode_returnsBadRequest() {
+        UUID timeEntryId = UUID.randomUUID();
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("T5");
+        req.setTimeEntryId(timeEntryId.toString());
         req.setMinutesDelta(10);
         req.setCreatedBy("tester");
 
@@ -190,8 +198,9 @@ public class TimeEntryAdjustmentControllerTest {
 
     @Test
     public void createAdjustment_withBlankReasonCode_returnsBadRequest() {
+        UUID timeEntryId = UUID.randomUUID();
         com.positivity.people.internal.dto.TimeEntryAdjustmentRequest req = new com.positivity.people.internal.dto.TimeEntryAdjustmentRequest();
-        req.setTimeEntryId("T6");
+        req.setTimeEntryId(timeEntryId.toString());
         req.setReasonCode("   ");
         req.setMinutesDelta(10);
         req.setCreatedBy("tester");

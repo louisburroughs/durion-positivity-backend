@@ -34,8 +34,8 @@ public class TimeEntryBatchIntegrationTest {
 
     @Test
     public void approveTimeEntries_withValidEntries_succeeds() {
-        String entryId1 = "T1";
-        String entryId2 = "T2";
+        java.util.UUID entryId1 = java.util.UUID.randomUUID();
+        java.util.UUID entryId2 = java.util.UUID.randomUUID();
 
         TimeEntry entry1 = new TimeEntry();
         entry1.setTimeEntryId(entryId1);
@@ -51,9 +51,9 @@ public class TimeEntryBatchIntegrationTest {
 
         TimeEntryDecisionBatchRequest request = new TimeEntryDecisionBatchRequest();
         TimeEntryDecisionBatchRequest.Decision d1 = new TimeEntryDecisionBatchRequest.Decision();
-        d1.setTimeEntryId(entryId1);
+        d1.setTimeEntryId(entryId1.toString());
         TimeEntryDecisionBatchRequest.Decision d2 = new TimeEntryDecisionBatchRequest.Decision();
-        d2.setTimeEntryId(entryId2);
+        d2.setTimeEntryId(entryId2.toString());
         request.setDecisions(Arrays.asList(d1, d2));
 
         ResponseEntity<?> response = controller.approveTimeEntries(request, "approver1", null, "cid-001");
@@ -64,7 +64,7 @@ public class TimeEntryBatchIntegrationTest {
     public void rejectTimeEntries_withoutReasonForEntry_returnsBadRequest() {
         TimeEntryDecisionBatchRequest request = new TimeEntryDecisionBatchRequest();
         TimeEntryDecisionBatchRequest.Decision d1 = new TimeEntryDecisionBatchRequest.Decision();
-        d1.setTimeEntryId("T1");
+        d1.setTimeEntryId(java.util.UUID.randomUUID().toString());
         d1.setRejectionReason(null);
         request.setDecisions(Arrays.asList(d1));
 
@@ -74,7 +74,7 @@ public class TimeEntryBatchIntegrationTest {
 
     @Test
     public void rejectTimeEntries_withValidReasons_succeeds() {
-        String entryId = "T3";
+        java.util.UUID entryId = java.util.UUID.randomUUID();
         TimeEntry entry = new TimeEntry();
         entry.setTimeEntryId(entryId);
         entry.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
@@ -84,7 +84,7 @@ public class TimeEntryBatchIntegrationTest {
 
         TimeEntryDecisionBatchRequest request = new TimeEntryDecisionBatchRequest();
         TimeEntryDecisionBatchRequest.Decision d1 = new TimeEntryDecisionBatchRequest.Decision();
-        d1.setTimeEntryId(entryId);
+        d1.setTimeEntryId(entryId.toString());
         d1.setRejectionReason("Time discrepancy");
         request.setDecisions(Arrays.asList(d1));
 

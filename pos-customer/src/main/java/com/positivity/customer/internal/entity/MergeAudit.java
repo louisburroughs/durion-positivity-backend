@@ -1,15 +1,23 @@
 package com.positivity.customer.internal.entity;
 
+import java.time.Instant;
+import java.util.UUID;
+
+import org.hibernate.annotations.CreationTimestamp;
+
+import com.positivity.shared.id.UUIDv7Generator;
+
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Audit record for party merge operations.
@@ -32,10 +40,16 @@ import java.util.UUID;
 public class MergeAudit {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "merge_audit_id", updatable = false, nullable = false)
+    @Column(name = "merge_audit_id", columnDefinition = "UUID", updatable = false, nullable = false)
     @Schema(description = "Unique identifier for the merge audit record")
     private UUID mergeAuditId;
+
+    @PrePersist
+    public void generateId() {
+        if (mergeAuditId == null) {
+            mergeAuditId = UUIDv7Generator.generate();
+        }
+    }
 
     @NotNull
     @Column(name = "survivor_party_id", nullable = false)

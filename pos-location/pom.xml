@@ -71,6 +71,12 @@
         </dependency>
 
 
+        <!-- Shared DTOs for UUIDv7Generator -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

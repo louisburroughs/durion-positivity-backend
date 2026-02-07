@@ -1,5 +1,6 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -9,8 +10,7 @@ import java.util.UUID;
 public class TimeEntryAudit {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "audit_id", updatable = false, nullable = false)
+    @Column(name = "audit_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID auditId;
 
     @Column(name = "time_entry_id", nullable = false)
@@ -32,9 +32,13 @@ public class TimeEntryAudit {
     private String details;
 
     @PrePersist
-    public void prePersist() {
-        if (timestamp == null)
+    public void generateIdAndTimestamp() {
+        if (auditId == null) {
+            auditId = UUIDv7Generator.generate();
+        }
+        if (timestamp == null) {
             timestamp = Instant.now();
+        }
     }
 
     // getters/setters

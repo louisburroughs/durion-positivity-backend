@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,8 +33,14 @@ public class TimeEntryService {
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
 
-        List<TimeEntry> entries = repository.findByTimeEntryIdIn(timeEntryIds);
-        Map<String, TimeEntry> byId = entries.stream().collect(Collectors.toMap(TimeEntry::getTimeEntryId, e -> e));
+        // Convert String IDs to UUIDs for repository query
+        List<UUID> uuidIds = timeEntryIds.stream()
+                .map(UUID::fromString)
+                .collect(Collectors.toList());
+        List<TimeEntry> entries = repository.findByTimeEntryIdIn(uuidIds);
+        // Map by String representation for lookup
+        Map<String, TimeEntry> byId = entries.stream()
+                .collect(Collectors.toMap(e -> e.getTimeEntryId().toString(), e -> e));
 
         for (String id : timeEntryIds) {
             TimeEntry e = byId.get(id);
@@ -119,8 +126,14 @@ public class TimeEntryService {
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
 
-        List<TimeEntry> entries = repository.findByTimeEntryIdIn(timeEntryIds);
-        Map<String, TimeEntry> byId = entries.stream().collect(Collectors.toMap(TimeEntry::getTimeEntryId, e -> e));
+        // Convert String IDs to UUIDs for repository query
+        List<UUID> uuidIds = timeEntryIds.stream()
+                .map(UUID::fromString)
+                .collect(Collectors.toList());
+        List<TimeEntry> entries = repository.findByTimeEntryIdIn(uuidIds);
+        // Map by String representation for lookup
+        Map<String, TimeEntry> byId = entries.stream()
+                .collect(Collectors.toMap(e -> e.getTimeEntryId().toString(), e -> e));
 
         for (String id : timeEntryIds) {
             TimeEntry e = byId.get(id);

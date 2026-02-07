@@ -1,5 +1,6 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
 import com.positivity.people.internal.model.AdjustmentStatus;
@@ -12,8 +13,7 @@ import java.util.UUID;
 public class TimeEntryAdjustment {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "adjustment_id", updatable = false, nullable = false)
+    @Column(name = "adjustment_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID adjustmentId;
 
     @Column(name = "time_entry_id", nullable = false)
@@ -51,9 +51,13 @@ public class TimeEntryAdjustment {
     private Instant decidedAt;
 
     @PrePersist
-    public void prePersist() {
-        if (createdAt == null)
+    public void generateIdAndTimestamp() {
+        if (adjustmentId == null) {
+            adjustmentId = UUIDv7Generator.generate();
+        }
+        if (createdAt == null) {
             createdAt = Instant.now();
+        }
     }
 
     // Getters and setters

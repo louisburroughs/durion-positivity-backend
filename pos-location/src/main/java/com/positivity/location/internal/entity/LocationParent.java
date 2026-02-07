@@ -1,7 +1,9 @@
 package com.positivity.location.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -9,12 +11,19 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @Table(uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"parent_id", "child_id", "parentType"})
+        @UniqueConstraint(columnNames = { "parent_id", "child_id", "parentType" })
 })
 public class LocationParent {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
@@ -27,4 +36,3 @@ public class LocationParent {
     @Enumerated(EnumType.STRING)
     private ParentType parentType;
 }
-

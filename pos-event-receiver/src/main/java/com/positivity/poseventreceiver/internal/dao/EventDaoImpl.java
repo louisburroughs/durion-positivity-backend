@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Slf4j
@@ -95,7 +96,7 @@ public class EventDaoImpl implements EventDao {
     }
 
     @Override
-    public Optional<EventType> getEventType(@NonNull Long id) {
+    public Optional<EventType> getEventType(@NonNull UUID id) {
         return eventTypeRepo.findById(id);
     }
 
@@ -115,12 +116,12 @@ public class EventDaoImpl implements EventDao {
     }
 
     @Override
-    public void deleteEventType(@NonNull Long id) {
+    public void deleteEventType(@NonNull UUID id) {
         eventTypeRepo.deleteById(id);
     }
 
     @Override
-    public boolean eventTypeExists(@NonNull Long id) {
+    public boolean eventTypeExists(@NonNull UUID id) {
         return eventTypeRepo.existsById(id);
     }
 }

@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.customer.internal.dto.PreferredContactMethod;
+import com.positivity.shared.id.UUIDv7Generator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -41,10 +42,16 @@ import java.util.UUID;
 public class Person {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "person_id", updatable = false, nullable = false)
+    @Column(name = "person_id", columnDefinition = "UUID", updatable = false, nullable = false)
     @Schema(description = "Unique identifier for the person", example = "550e8400-e29b-41d4-a716-446655440000")
     private UUID personId;
+
+    @PrePersist
+    public void generateId() {
+        if (personId == null) {
+            personId = UUIDv7Generator.generate();
+        }
+    }
 
     @NotBlank
     @Column(name = "first_name", nullable = false, length = 100)

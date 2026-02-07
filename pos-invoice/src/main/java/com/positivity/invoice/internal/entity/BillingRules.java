@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.entity;
 
 import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -16,14 +17,20 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "billing_rules", indexes = {
-    @Index(name = "idx_billing_rules_party_id", columnList = "party_id", unique = true)
+        @Index(name = "idx_billing_rules_party_id", columnList = "party_id", unique = true)
 })
 public class BillingRules {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", nullable = false, updatable = false)
+    @Column(name = "id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID id;
+
+    @PrePersist
+    public void generateId() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 
     @Column(name = "party_id", nullable = false, unique = true, length = 36)
     private String partyId;

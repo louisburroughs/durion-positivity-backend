@@ -1,11 +1,13 @@
 package com.positivity.vehiclefitment.internal.entity;
 
 import jakarta.persistence.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,8 +23,15 @@ import java.util.List;
 public class VehicleApplicabilityHint {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long hintId;
+    @Column(columnDefinition = "UUID")
+    private UUID hintId;
+
+    @PrePersist
+    public void generateId() {
+        if (hintId == null) {
+            hintId = UUIDv7Generator.generate();
+        }
+    }
     
     @Column(nullable = false)
     private Long productId;
