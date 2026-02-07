@@ -104,7 +104,9 @@ public class VehicleFitmentService {
             manufacturerRepository.deleteAll();
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
-                m.setId(node.path("Mfr_ID").asLong());
+                // Generate UUID from NHTSA ID for consistency
+                long nhtsaId = node.path("Mfr_ID").asLong();
+                m.setId(java.util.UUID.nameUUIDFromBytes(("manufacturer-" + nhtsaId).getBytes()));
                 m.setName(node.path("Mfr_CommonName").asString(""));
                 m.setCacheTimestamp(LocalDateTime.now());
                 manufacturerRepository.save(m);
@@ -133,7 +135,9 @@ public class VehicleFitmentService {
             makeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Make make = new Make();
-                make.setId(node.path("Make_ID").asLong());
+                // Generate UUID from NHTSA ID for consistency
+                long nhtsaId = node.path("Make_ID").asLong();
+                make.setId(java.util.UUID.nameUUIDFromBytes(("make-" + nhtsaId).getBytes()));
                 make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
                 make.setCacheTimestamp(LocalDateTime.now());
@@ -163,7 +167,9 @@ public class VehicleFitmentService {
             modelRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Model model = new Model();
-                model.setId(node.path("Model_ID").asLong());
+                // Generate UUID from NHTSA ID for consistency
+                long nhtsaId = node.path("Model_ID").asLong();
+                model.setId(java.util.UUID.nameUUIDFromBytes(("model-" + nhtsaId).getBytes()));
                 model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
                 model.setCacheTimestamp(LocalDateTime.now());

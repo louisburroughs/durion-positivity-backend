@@ -13,6 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -57,7 +58,7 @@ public class VehicleReferenceService {
         return vehicleVariableRepository.findAll();
     }
 
-    public List<VehicleVariableValue> getVehicleVariableValues(Long variableId) {
+    public List<VehicleVariableValue> getVehicleVariableValues(UUID variableId) {
         List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariableId(variableId);
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
@@ -101,7 +102,9 @@ public class VehicleReferenceService {
             manufacturerRepository.deleteAll();
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
-                m.setId(node.path("Mfr_ID").asLong());
+                // Generate UUID from NHTSA ID for consistency
+                long nhtsaId = node.path("Mfr_ID").asLong();
+                m.setId(java.util.UUID.nameUUIDFromBytes(("manufacturer-" + nhtsaId).getBytes()));
                 m.setName(node.path("Mfr_CommonName").asString(""));
                 m.setCacheTimestamp(LocalDateTime.now());
                 manufacturerRepository.save(m);
@@ -112,7 +115,7 @@ public class VehicleReferenceService {
         return manufacturerRepository.findAll();
     }
 
-    public List<Make> getMakesByManufacturer(Long manufacturerId) {
+    public List<Make> getMakesByManufacturer(UUID manufacturerId) {
         Manufacturer manufacturer = manufacturerRepository.findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
@@ -130,7 +133,9 @@ public class VehicleReferenceService {
             makeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Make make = new Make();
-                make.setId(node.path("Make_ID").asLong());
+                // Generate UUID from NHTSA ID for consistency
+                long nhtsaId = node.path("Make_ID").asLong();
+                make.setId(java.util.UUID.nameUUIDFromBytes(("make-" + nhtsaId).getBytes()));
                 make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
                 make.setCacheTimestamp(LocalDateTime.now());
@@ -142,7 +147,7 @@ public class VehicleReferenceService {
         return makeRepository.findByManufacturerId(manufacturerId);
     }
 
-    public List<Model> getModelsByMake(Long makeId) {
+    public List<Model> getModelsByMake(UUID makeId) {
         Make make = makeRepository.findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<Model> cached = modelRepository.findByMakeId(makeId);
@@ -160,7 +165,9 @@ public class VehicleReferenceService {
             modelRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Model model = new Model();
-                model.setId(node.path("Model_ID").asLong());
+                // Generate UUID from NHTSA ID for consistency
+                long nhtsaId = node.path("Model_ID").asLong();
+                model.setId(java.util.UUID.nameUUIDFromBytes(("model-" + nhtsaId).getBytes()));
                 model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
                 model.setCacheTimestamp(LocalDateTime.now());
@@ -172,7 +179,7 @@ public class VehicleReferenceService {
         return modelRepository.findByMakeId(makeId);
     }
 
-    public List<VehicleType> getVehicleTypesForMake(Long makeId) {
+    public List<VehicleType> getVehicleTypesForMake(UUID makeId) {
         Make make = makeRepository.findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);

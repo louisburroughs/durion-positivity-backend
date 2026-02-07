@@ -13,6 +13,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FilterProductsResponse {
-    private List<Long> productIds;
+    private List<String> productIds;
     private int count;
 }

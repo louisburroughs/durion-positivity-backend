@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -59,7 +60,7 @@ public class VehicleReferenceService {
         }
     }
 
-    public List<CarApiModel> getModelsByMakeId(String makeId) {
+    public List<CarApiModel> getModelsByMakeId(UUID makeId) {
         List<CarApiModel> cached = modelRepository.findByMakeId(makeId);
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
@@ -76,7 +77,7 @@ public class VehicleReferenceService {
             List<CarApiModel> models = new ArrayList<>();
             for (JsonNode node : results) {
                 CarApiModel model = new CarApiModel();
-                model.setModelId(node.path("id").asString(""));
+                model.setModelId(UUID.fromString(node.path("id").asString()));
                 model.setModelName(node.path("name").asString(""));
                 model.setMakeId(makeId);
                 model.setCacheTimestamp(LocalDateTime.now());
