@@ -36,6 +36,13 @@
 				<scope>import</scope>
 			</dependency>
 
+			<!-- Shared DTOs -->
+			<dependency>
+				<groupId>com.positivity</groupId>
+				<artifactId>pos-shared-dtos</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
 			<!-- TEST DEPENDENCIES - JUnit managed by Spring Boot 4.0.2 (6.0.2) -->
 			<dependency>
 				<groupId>org.mockito</groupId>
@@ -174,6 +181,7 @@
 
 	<modules>
 		<module>pos-dependencies</module>
+		<module>pos-shared-dtos</module>
 		<module>pos-security-common</module>
 		<module>pos-archunit</module>
 		<module>pos-agent-framework</module>

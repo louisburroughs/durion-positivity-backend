@@ -1,13 +1,27 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.accounting.internal.dto.AccountingEventMapper;
+import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
+import com.positivity.accounting.internal.dto.JournalEntryMapper;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
+import com.positivity.accounting.internal.dto.PagedResponse;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.service.EventIngestionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +32,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * REST Controller for Accounting Event Ingestion.
@@ -30,6 +47,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class EventIngestionController {
 
         private static final Logger log = LoggerFactory.getLogger(EventIngestionController.class);
+        private final EventIngestionService eventIngestionService;
+
+        public EventIngestionController(@NonNull EventIngestionService eventIngestionService) {
+                this.eventIngestionService = eventIngestionService;
+        }
 
         @GetMapping
         @PreAuthorize("hasAuthority('accounting:events:view')")
@@ -39,13 +61,25 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "403", description = "Forbidden")
         })
         @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
-        public ResponseEntity<Void> listEvents(
+        public ResponseEntity<PagedResponse<AccountingEventResponse>> listEvents(
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Filter by event type") @RequestParam(required = false) String eventType,
                         @Parameter(description = "Filter by processing status") @RequestParam(required = false) String status) {
-                log.info("Stub listEvents page={}, size={}, eventType={}, status={}", page, size, eventType, status);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+                log.debug("Listing accounting events: page={}, size={}, eventType={}, status={}", page, size, eventType,
+                                status);
+
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+                Page<JournalEntry> eventPage = eventIngestionService.listEvents(eventType, status, pageable);
+
+                PagedResponse<AccountingEventResponse> response = new PagedResponse<AccountingEventResponse>(
+                                eventPage.getContent().stream()
+                                                .map(AccountingEventMapper::toEventResponse).toList(),
+                                eventPage.getNumber(),
+                                eventPage.getSize(),
+                                eventPage.getTotalElements());
+
+                return ResponseEntity.ok(response);
         }
 
         @GetMapping("/{eventId}")
@@ -55,10 +89,16 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "200", description = "Event returned"),
                         @ApiResponse(responseCode = "404", description = "Event not found")
         })
-        public ResponseEntity<Void> getEvent(
-                        @Parameter(description = "Event identifier") @PathVariable String eventId) {
-                log.info("Stub getEvent eventId={}", eventId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        public ResponseEntity<AccountingEventResponse> getEvent(
+                        @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
+                log.debug("Getting accounting event: {}", eventId);
+                JournalEntry entry = eventIngestionService.getEventById(eventId);
+                // Convert to event response (simplified for now)
+                AccountingEventResponse response = new AccountingEventResponse();
+                response.setEventId(entry.getSourceEventId());
+                response.setEventType(entry.getSourceEventType());
+                response.setStatus("PROCESSED");
+                return ResponseEntity.ok(response);
         }
 
         @PostMapping
@@ -69,9 +109,12 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "400", description = "Invalid request")
         })
         @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
-        public ResponseEntity<Void> submitEvent(@RequestBody(required = false) Object request) {
-                log.info("Stub submitEvent");
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        public ResponseEntity<JournalEntryResponse> submitEvent(
+                        @Valid @RequestBody AccountingEventSubmitRequest request) {
+                log.info("Submitting accounting event: type={}, org={}", request.getEventType(),
+                                request.getOrganizationId());
+                JournalEntry entry = eventIngestionService.submitEvent(request.toMap());
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(JournalEntryMapper.toResponse(entry));
         }
 
         @PostMapping("/{eventId}/retry")
@@ -82,11 +125,12 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "404", description = "Event not found")
         })
         @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
-        public ResponseEntity<Void> retryEventProcessing(
-                        @Parameter(description = "Event identifier") @PathVariable String eventId,
+        public ResponseEntity<JournalEntryResponse> retryEventProcessing(
+                        @Parameter(description = "Event identifier") @PathVariable UUID eventId,
                         @RequestBody(required = false) Object request) {
-                log.info("Stub retryEventProcessing eventId={}", eventId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+                log.info("Retrying event processing: {}", eventId);
+                JournalEntry entry = eventIngestionService.retryEvent(eventId);
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(JournalEntryMapper.toResponse(entry));
         }
 
         @GetMapping("/{eventId}/processing-log")
@@ -96,9 +140,10 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "200", description = "Processing log returned"),
                         @ApiResponse(responseCode = "404", description = "Event not found")
         })
-        public ResponseEntity<Void> getEventProcessingLog(
-                        @Parameter(description = "Event identifier") @PathVariable String eventId) {
-                log.info("Stub getEventProcessingLog eventId={}", eventId);
-                return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        public ResponseEntity<String> getEventProcessingLog(
+                        @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
+                log.debug("Getting processing log for event: {}", eventId);
+                String processingLog = eventIngestionService.getProcessingLog(eventId);
+                return ResponseEntity.ok(processingLog);
         }
 }

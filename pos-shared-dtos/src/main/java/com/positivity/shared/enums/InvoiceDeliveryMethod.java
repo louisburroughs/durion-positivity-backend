@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.enums;
+package com.positivity.shared.enums;
 
 /**
  * Invoice delivery methods for billing rules.

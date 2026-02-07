@@ -55,8 +55,8 @@ public class JournalEntryService {
      */
     public JournalEntry createJournalEntry(JournalEntry entry) {
         // Generate ID if not present
-        if (entry.getJournalEntryId() == null || entry.getJournalEntryId().isBlank()) {
-            entry.setJournalEntryId(UUID.randomUUID().toString());
+        if (entry.getJournalEntryId() == null) {
+            entry.setJournalEntryId(UUID.randomUUID());
         }
 
         // Validate balance
@@ -83,7 +83,7 @@ public class JournalEntryService {
      * Retrieves an existing journal entry by ID.
      */
     @Transactional(readOnly = true)
-    public JournalEntry getJournalEntry(String journalEntryId) {
+    public JournalEntry getJournalEntry(UUID journalEntryId) {
         return journalEntryRepository.findById(journalEntryId)
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
     }
@@ -97,7 +97,7 @@ public class JournalEntryService {
      * @return updated entry
      * @throws IllegalStateException if entry is not in DRAFT status
      */
-    public JournalEntry updateJournalEntry(String journalEntryId, JournalEntry updates) {
+    public JournalEntry updateJournalEntry(UUID journalEntryId, JournalEntry updates) {
         JournalEntry entry = getJournalEntry(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
@@ -131,7 +131,7 @@ public class JournalEntryService {
      * @throws IllegalStateException if entry is not in DRAFT status or is
      *                               unbalanced
      */
-    public JournalEntry postJournalEntry(String journalEntryId) {
+    public JournalEntry postJournalEntry(UUID journalEntryId) {
         JournalEntry entry = getJournalEntry(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
@@ -167,7 +167,7 @@ public class JournalEntryService {
      * @return reversal journal entry
      * @throws IllegalArgumentException if original entry not found or not POSTED
      */
-    public JournalEntry reverseJournalEntry(String originalEntryId, String reversalReason) {
+    public JournalEntry reverseJournalEntry(UUID originalEntryId, String reversalReason) {
         JournalEntry original = getJournalEntry(originalEntryId);
 
         if (original.getStatus() != JournalEntryStatus.POSTED) {
@@ -178,7 +178,7 @@ public class JournalEntryService {
 
         // Create reversal entry with inverted debits/credits
         JournalEntry reversal = new JournalEntry();
-        reversal.setJournalEntryId(UUID.randomUUID().toString());
+        reversal.setJournalEntryId(UUID.randomUUID());
         reversal.setTransactionDate(LocalDateTime.now());
         reversal.setDescription("Reversal of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
         reversal.setSourceEventId(original.getSourceEventId());
@@ -191,13 +191,12 @@ public class JournalEntryService {
         List<JournalEntryLine> reversalLines = new java.util.ArrayList<>();
         for (JournalEntryLine line : original.getLines()) {
             JournalEntryLine reversalLine = new JournalEntryLine();
-            reversalLine.setLineId(UUID.randomUUID().toString());
+            reversalLine.setLineId(UUID.randomUUID());
             reversalLine.setJournalEntryId(reversal.getJournalEntryId());
             reversalLine.setGlAccountId(line.getGlAccountId());
             reversalLine.setDebitAmount(line.getCreditAmount()); // Swap
             reversalLine.setCreditAmount(line.getDebitAmount()); // Swap
             reversalLine.setDescription("Reversal of line " + line.getLineId());
-            reversalLine.setCreatedAt(Instant.now());
             reversalLines.add(reversalLine);
         }
         reversal.setLines(reversalLines);

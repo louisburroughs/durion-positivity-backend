@@ -8,16 +8,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for Journal Entry entity.
  * Supports CRUD, status queries, and transaction date range searches.
  */
 @Repository
-public interface JournalEntryRepository extends JpaRepository<JournalEntry, String> {
+public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID> {
 
     /**
      * Find journal entries by status (DRAFT, POSTED, REVERSED).
@@ -33,7 +34,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Stri
      * Find journal entries for a transaction date range.
      */
     @Query("SELECT je FROM JournalEntry je WHERE je.transactionDate >= :startDate AND je.transactionDate <= :endDate ORDER BY je.transactionDate DESC")
-    List<JournalEntry> findByTransactionDateRange(LocalDate startDate, LocalDate endDate);
+    List<JournalEntry> findByTransactionDateRange(LocalDateTime startDate, LocalDateTime endDate);
 
     /**
      * Find posted journal entries with pagination.
@@ -45,13 +46,13 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Stri
      * Find journal entries by source event (for traceability).
      */
     @Query("SELECT je FROM JournalEntry je WHERE je.sourceEventId = :sourceEventId")
-    List<JournalEntry> findBySourceEvent(String sourceEventId);
+    List<JournalEntry> findBySourceEvent(UUID sourceEventId);
 
     /**
      * Find journal entries reversed by another entry.
      */
     @Query("SELECT je FROM JournalEntry je WHERE je.reversalJournalEntryId = :reversalId")
-    Optional<JournalEntry> findByReversalReference(String reversalId);
+    Optional<JournalEntry> findByReversalReference(UUID reversalId);
 
     /**
      * Find draft entries for an organization (for editing).

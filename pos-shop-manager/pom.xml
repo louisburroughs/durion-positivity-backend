@@ -113,10 +113,16 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- pos-security-common for gateway authentication -->
+        <!-- POS Security Common for authentication/authorization -->
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-security-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Shared DTOs -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

@@ -6,6 +6,13 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * Journal Entry Line - individual GL account posting within a JournalEntry.
@@ -16,6 +23,11 @@ import java.util.Map;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Journal Entry</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 @Entity
 @Table(name = "journal_entry_line", indexes = {
         @Index(name = "idx_journal_entry_line_je", columnList = "journal_entry_id"),
@@ -23,18 +35,20 @@ import java.util.Map;
 })
 public class JournalEntryLine {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "line_id", length = 50, nullable = false)
-    private String lineId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "line_id", nullable = false)
+    private UUID lineId;
 
-    @Column(name = "journal_entry_id", length = 50, nullable = false)
-    private String journalEntryId;
+    @Column(name = "journal_entry_id", nullable = false)
+    private UUID journalEntryId;
 
     @Column(name = "line_number", nullable = false)
     private Integer lineNumber;
 
-    @Column(name = "gl_account_id", length = 50, nullable = false)
-    private String glAccountId;
+    @Column(name = "gl_account_id", nullable = false)
+    private UUID glAccountId;
 
     @Column(name = "account_code", length = 20)
     private String accountCode;
@@ -60,93 +74,4 @@ public class JournalEntryLine {
     @Column(name = "dimensions")
     private Map<String, String> dimensions;
 
-    // Constructors
-    public JournalEntryLine() {
-    }
-
-    // Getters and Setters
-    public String getLineId() {
-        return lineId;
-    }
-
-    public void setLineId(String lineId) {
-        this.lineId = lineId;
-    }
-
-    public String getJournalEntryId() {
-        return journalEntryId;
-    }
-
-    public void setJournalEntryId(String journalEntryId) {
-        this.journalEntryId = journalEntryId;
-    }
-
-    public Integer getLineNumber() {
-        return lineNumber;
-    }
-
-    public void setLineNumber(Integer lineNumber) {
-        this.lineNumber = lineNumber;
-    }
-
-    public String getGlAccountId() {
-        return glAccountId;
-    }
-
-    public void setGlAccountId(String glAccountId) {
-        this.glAccountId = glAccountId;
-    }
-
-    public String getAccountCode() {
-        return accountCode;
-    }
-
-    public void setAccountCode(String accountCode) {
-        this.accountCode = accountCode;
-    }
-
-    public String getAccountName() {
-        return accountName;
-    }
-
-    public void setAccountName(String accountName) {
-        this.accountName = accountName;
-    }
-
-    public BigDecimal getDebitAmount() {
-        return debitAmount;
-    }
-
-    public void setDebitAmount(BigDecimal debitAmount) {
-        this.debitAmount = debitAmount;
-    }
-
-    public BigDecimal getCreditAmount() {
-        return creditAmount;
-    }
-
-    public void setCreditAmount(BigDecimal creditAmount) {
-        this.creditAmount = creditAmount;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Map<String, String> getDimensions() {
-        return dimensions;
-    }
-
-    public void setDimensions(Map<String, String> dimensions) {
-        this.dimensions = dimensions;
-    }
-
-    public void setCreatedAt(Instant now) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setCreatedAt'");
-    }
 }

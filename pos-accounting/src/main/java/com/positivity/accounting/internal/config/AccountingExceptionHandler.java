@@ -17,13 +17,19 @@ public class AccountingExceptionHandler {
 
     @ExceptionHandler({ AuthenticationException.class, AuthenticationCredentialsNotFoundException.class })
     public ResponseEntity<ErrorResponse> handleAuth(AuthenticationException ex) {
-        ErrorResponse body = new ErrorResponse("UNAUTHENTICATED", "Authentication required");
+        ErrorResponse body = ErrorResponse.builder()
+                .errorCode("UNAUTHENTICATED")
+                .message("Authentication required")
+                .build();
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
-        ErrorResponse body = new ErrorResponse("FORBIDDEN", "Access denied");
+        ErrorResponse body = ErrorResponse.builder()
+                .errorCode("FORBIDDEN")
+                .message("Access denied")
+                .build();
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 }

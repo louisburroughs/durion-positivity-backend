@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for GL Mapping entity.
@@ -15,7 +16,7 @@ import java.util.Optional;
  * detection.
  */
 @Repository
-public interface GLMappingRepository extends JpaRepository<GLMapping, String> {
+public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
 
         /**
          * Find all mappings for a source system.
@@ -40,6 +41,19 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, String> {
                         LocalDateTime transactionDate);
 
         /**
+         * Find GL mapping by posting category and mapping key effective at a specific
+         * date.
+         * Supports effective-dated lookups for GL account resolution by category/key.
+         */
+        @Query("SELECT glm FROM GLMapping glm " +
+                        "WHERE glm.postingCategoryId = :postingCategoryId " +
+                        "AND glm.mappingKeyId = :mappingKeyId " +
+                        "AND glm.effectiveStartDate <= :transactionDate " +
+                        "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > :transactionDate)")
+        Optional<GLMapping> findEffectiveMapping(UUID postingCategoryId, UUID mappingKeyId,
+                        LocalDateTime transactionDate);
+
+        /**
          * Find all active mappings (no end date or end date in future).
          */
         @Query("SELECT glm FROM GLMapping glm WHERE glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP")
@@ -56,12 +70,12 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, String> {
                         "AND glm.effectiveStartDate <= :endDate " +
                         "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > :startDate)")
         List<GLMapping> findOverlappingMappings(String sourceSystem, String externalCode,
-                        LocalDateTime startDate, LocalDateTime endDate, String excludeId);
+                        LocalDateTime startDate, LocalDateTime endDate, UUID excludeId);
 
         /**
          * Find all mappings for a GL account.
          */
-        List<GLMapping> findByGlAccountId(String glAccountId);
+        List<GLMapping> findByGlAccountId(UUID glAccountId);
 
-        List<GLMapping> findByPostingCategoryId(String postingCategoryId);
+        List<GLMapping> findByPostingCategoryId(UUID postingCategoryId);
 }

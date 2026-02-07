@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.UUID;
+
 /**
  * REST Controller for invoice payment operations.
  * Provides endpoints for applying payments and querying invoice status.
@@ -55,12 +57,12 @@ public class InvoicePaymentController {
     })
     @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
     public ResponseEntity<InvoiceStatusResponse> applyPayment(
-            @Parameter(description = "Payment identifier") @PathVariable String paymentId,
+            @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
             @Valid @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Payment application payload", required = true, content = @Content(schema = @Schema(implementation = PaymentAppliedRequest.class))) PaymentAppliedRequest request) {
 
         log.info("Received payment application for invoice {}", request.getInvoiceId());
 
-        if (!paymentId.equals(request.getTransactionReference())) {
+        if (!paymentId.toString().equals(request.getTransactionReference())) {
             log.warn(
                     "paymentId path param does not match transactionReference in body (paymentId={}, transactionReference={})",
                     paymentId,
@@ -96,7 +98,7 @@ public class InvoicePaymentController {
             @ApiResponse(responseCode = "500", description = "Error retrieving invoice status")
     })
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
-            @Parameter(description = "Invoice identifier") @PathVariable String invoiceId) {
+            @Parameter(description = "Invoice identifier") @PathVariable UUID invoiceId) {
 
         log.info("Querying status for invoice {}", invoiceId);
 
@@ -136,7 +138,7 @@ public class InvoicePaymentController {
             @ApiResponse(responseCode = "404", description = "Customer not found")
     })
     public ResponseEntity<Void> getBillingRules(
-            @Parameter(description = "Customer identifier") @PathVariable String customerId) {
+            @Parameter(description = "Customer identifier") @PathVariable UUID customerId) {
         log.info("Stub getBillingRules customerId={}", customerId);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }

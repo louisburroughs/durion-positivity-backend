@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Service for GL Mapping resolution.
@@ -51,19 +52,19 @@ public class GLMappingResolver {
      *
      * @param postingCategoryId posting category identifier
      * @param mappingKeyId      mapping key to resolve
-     * @param transactionDate   effective date for resolution (LocalDate)
+     * @param transactionDate   effective date for resolution (LocalDateTime)
      * @param dimensionContext  dimensional context (businessUnitId, locationId,
      *                          etc.)
      * @return GL account ID for posting
      * @throws IllegalArgumentException if no valid mapping found
      */
-    public String resolveGLAccount(String postingCategoryId, String mappingKeyId,
+    public UUID resolveGLAccount(UUID postingCategoryId, UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
 
         // Attempt resolution in order of specificity
         // 1. Try exact dimensional match
-        Optional<String> exactMatch = resolveWithDimensions(
+        Optional<UUID> exactMatch = resolveWithDimensions(
                 postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
         if (exactMatch.isPresent()) {
             log.debug("GL mapping resolved: {}/{} -> {} [exact dimensional match]",
@@ -72,7 +73,7 @@ public class GLMappingResolver {
         }
 
         // 2. Try progressive dimensional fallback (remove least specific dimensions)
-        Optional<String> partialMatch = resolveFallback(
+        Optional<UUID> partialMatch = resolveFallback(
                 postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
         if (partialMatch.isPresent()) {
             log.debug("GL mapping resolved: {}/{} -> {} [partial dimensional match]",
@@ -100,7 +101,7 @@ public class GLMappingResolver {
      * Attempt resolution with exact dimensional matching.
      * All dimensions in context must match dimensions in mapping.
      */
-    private Optional<String> resolveWithDimensions(String postingCategoryId, String mappingKeyId,
+    private Optional<UUID> resolveWithDimensions(UUID postingCategoryId, UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
@@ -118,7 +119,7 @@ public class GLMappingResolver {
      * Attempt resolution with dimensional fallback.
      * Try progressively less specific dimensional combinations until match found.
      */
-    private Optional<String> resolveFallback(String postingCategoryId, String mappingKeyId,
+    private Optional<UUID> resolveFallback(UUID postingCategoryId, UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
         if (dimensionContext == null || dimensionContext.isEmpty()) {
@@ -146,13 +147,13 @@ public class GLMappingResolver {
      * @throws IllegalArgumentException if mapping is invalid
      */
     public boolean validateMapping(GLMapping mapping) {
-        if (mapping.getPostingCategoryId() == null || mapping.getPostingCategoryId().isBlank()) {
+        if (mapping.getPostingCategoryId() == null) {
             throw new IllegalArgumentException("Posting category ID is required");
         }
-        if (mapping.getMappingKeyId() == null || mapping.getMappingKeyId().isBlank()) {
+        if (mapping.getMappingKeyId() == null) {
             throw new IllegalArgumentException("Mapping key ID is required");
         }
-        if (mapping.getGlAccountId() == null || mapping.getGlAccountId().isBlank()) {
+        if (mapping.getGlAccountId() == null) {
             throw new IllegalArgumentException("GL account ID is required");
         }
         if (mapping.getEffectiveStartDate() == null) {
@@ -174,7 +175,7 @@ public class GLMappingResolver {
                 mapping.getExternalCode(),
                 mapping.getEffectiveStartDate(),
                 mapping.getEffectiveEndDate(),
-                mapping.getGlMappingId() != null ? mapping.getGlMappingId() : "");
+                mapping.getGlMappingId() != null ? mapping.getGlMappingId() : new UUID(0L, 0L));
 
         if (!overlaps.isEmpty()) {
             String msg = String.format(
@@ -206,10 +207,10 @@ public class GLMappingResolver {
      *
      * @param postingCategoryId posting category ID
      * @param mappingKeyId      mapping key ID
-     * @param transactionDate   effective date (LocalDate)
+     * @param transactionDate   effective date (LocalDateTime)
      * @return effective GL account ID
      */
-    public String getEffectiveAccount(String postingCategoryId, String mappingKeyId,
+    public UUID getEffectiveAccount(UUID postingCategoryId, UUID mappingKeyId,
             LocalDateTime transactionDate) {
         return mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
                 .map(GLMapping::getGlAccountId)
@@ -226,7 +227,7 @@ public class GLMappingResolver {
      * @param mappingKeyId      mapping key ID
      * @return list of all historical mappings sorted by effective date
      */
-    public java.util.List<GLMapping> getMappingHistory(String postingCategoryId, String mappingKeyId) {
+    public java.util.List<GLMapping> getMappingHistory(UUID postingCategoryId, UUID mappingKeyId) {
         return mappingRepository.findByPostingCategoryId(postingCategoryId)
                 .stream()
                 .filter(m -> mappingKeyId.equals(m.getMappingKeyId()))

@@ -1,6 +1,7 @@
 package com.positivity.accounting.service;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +28,7 @@ public class GLAccountService {
     /**
      * Retrieves a GL account by ID with current status (derived from dates).
      */
-    public void getGLAccount(String glAccountId) {
+    public void getGLAccount(UUID glAccountId) {
         log.info("Stub: getGLAccount glAccountId={}", glAccountId);
     }
 
@@ -35,7 +36,7 @@ public class GLAccountService {
      * Updates GL account properties (name, description).
      * Account type and number are immutable after creation or first posting.
      */
-    public void updateGLAccount(String glAccountId, Object request) {
+    public void updateGLAccount(UUID glAccountId, Object request) {
         log.info("Stub: updateGLAccount glAccountId={}", glAccountId);
     }
 
@@ -43,7 +44,7 @@ public class GLAccountService {
      * Activates a GL account, making it available for posting.
      * Sets activatedAt timestamp.
      */
-    public void activateGLAccount(String glAccountId, Object request) {
+    public void activateGLAccount(UUID glAccountId, Object request) {
         log.info("Stub: activateGLAccount glAccountId={}", glAccountId);
     }
 
@@ -52,7 +53,7 @@ public class GLAccountService {
      * Requires account balance to be zero.
      * Sets deactivatedAt timestamp.
      */
-    public void deactivateGLAccount(String glAccountId, Object request) {
+    public void deactivateGLAccount(UUID glAccountId, Object request) {
         log.info("Stub: deactivateGLAccount glAccountId={}", glAccountId);
     }
 
@@ -61,14 +62,14 @@ public class GLAccountService {
      * Can only archive accounts with INACTIVE status.
      * Sets archivedAt timestamp.
      */
-    public void archiveGLAccount(String glAccountId, Object request) {
+    public void archiveGLAccount(UUID glAccountId, Object request) {
         log.info("Stub: archiveGLAccount glAccountId={}", glAccountId);
     }
 
     /**
      * Retrieves current balance (sum of posted debit/credit lines) for account.
      */
-    public void getAccountBalance(String glAccountId) {
+    public void getAccountBalance(UUID glAccountId) {
         log.info("Stub: getAccountBalance glAccountId={}", glAccountId);
     }
 
@@ -87,7 +88,7 @@ public class GLAccountService {
         log.info("Stub: validateGLAccount");
     }
 
-    public void validateAccountForPosting(String glAccountId, LocalDateTime transactionDate) {
+    public void validateAccountForPosting(UUID glAccountId, LocalDateTime transactionDate) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'validateAccountForPosting'");
     }

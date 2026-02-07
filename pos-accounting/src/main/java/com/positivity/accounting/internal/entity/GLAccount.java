@@ -3,7 +3,14 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.AccountType;
 import jakarta.persistence.*;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * General Ledger Account entity.
@@ -17,6 +24,11 @@ import java.time.LocalDate;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GLAccount</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 @Entity
 @Table(name = "gl_account", indexes = {
         @Index(name = "idx_account_code", columnList = "account_code", unique = true),
@@ -26,9 +38,11 @@ import java.time.LocalDate;
 })
 public class GLAccount {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "gl_account_id", length = 50, nullable = false)
-    private String glAccountId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "gl_account_id", nullable = false)
+    private UUID glAccountId;
 
     @Column(name = "account_code", length = 20, nullable = false, unique = true)
     private String accountCode;
@@ -43,14 +57,14 @@ public class GLAccount {
     @Column(name = "description", length = 500)
     private String description;
 
-    @Column(name = "parent_account_id", length = 50)
-    private String parentAccountId;
+    @Column(name = "parent_account_id")
+    private UUID parentAccountId;
 
     @Column(name = "activation_date")
-    private LocalDate activationDate;
+    private LocalDateTime activationDate;
 
     @Column(name = "deactivation_date")
-    private LocalDate deactivationDate;
+    private LocalDateTime deactivationDate;
 
     // Audit fields
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -70,115 +84,6 @@ public class GLAccount {
     @Column(name = "version")
     private Integer version;
 
-    // Constructors
-    public GLAccount() {
-    }
-
-    // Getters and Setters
-    public String getGlAccountId() {
-        return glAccountId;
-    }
-
-    public void setGlAccountId(String glAccountId) {
-        this.glAccountId = glAccountId;
-    }
-
-    public String getAccountCode() {
-        return accountCode;
-    }
-
-    public void setAccountCode(String accountCode) {
-        this.accountCode = accountCode;
-    }
-
-    public String getAccountName() {
-        return accountName;
-    }
-
-    public void setAccountName(String accountName) {
-        this.accountName = accountName;
-    }
-
-    public AccountType getAccountType() {
-        return accountType;
-    }
-
-    public void setAccountType(AccountType accountType) {
-        this.accountType = accountType;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getParentAccountId() {
-        return parentAccountId;
-    }
-
-    public void setParentAccountId(String parentAccountId) {
-        this.parentAccountId = parentAccountId;
-    }
-
-    public LocalDate getActivationDate() {
-        return activationDate;
-    }
-
-    public void setActivationDate(LocalDate activationDate) {
-        this.activationDate = activationDate;
-    }
-
-    public LocalDate getDeactivationDate() {
-        return deactivationDate;
-    }
-
-    public void setDeactivationDate(LocalDate deactivationDate) {
-        this.deactivationDate = deactivationDate;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public Instant getModifiedAt() {
-        return modifiedAt;
-    }
-
-    public void setModifiedAt(Instant modifiedAt) {
-        this.modifiedAt = modifiedAt;
-    }
-
-    public String getModifiedBy() {
-        return modifiedBy;
-    }
-
-    public void setModifiedBy(String modifiedBy) {
-        this.modifiedBy = modifiedBy;
-    }
-
-    public Integer getVersion() {
-        return version;
-    }
-
-    public void setVersion(Integer version) {
-        this.version = version;
-    }
-
     // Lifecycle callbacks
     @PrePersist
     protected void onCreate() {
@@ -186,7 +91,7 @@ public class GLAccount {
         this.createdAt = now;
         this.modifiedAt = now;
         if (this.activationDate == null) {
-            this.activationDate = LocalDate.now();
+            this.activationDate = LocalDateTime.now();
         }
     }
 
@@ -202,7 +107,7 @@ public class GLAccount {
      */
     @Transient
     public String getDerivedStatus() {
-        LocalDate today = LocalDate.now();
+        LocalDateTime today = LocalDateTime.now();
 
         if (activationDate != null && activationDate.isAfter(today)) {
             return "NOT_YET_ACTIVE";

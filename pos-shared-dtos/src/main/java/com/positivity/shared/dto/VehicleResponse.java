@@ -1,4 +1,4 @@
-package com.positivity.vehicle.internal.dto;
+package com.positivity.shared.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,12 +25,10 @@ public class VehicleResponse {
     private String description;
     private String licensePlate;
     private String licensePlateJurisdiction;
-
     private Integer year;
     private String make;
     private String model;
     private String trim;
-
     private Boolean isActive;
     private Instant createdAt;
     private Instant updatedAt;

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for Posting Rule Set entity.
@@ -14,7 +15,7 @@ import java.util.Optional;
  * PostingRuleVersionRepository.
  */
 @Repository
-public interface PostingRuleSetRepository extends JpaRepository<PostingRuleSet, String> {
+public interface PostingRuleSetRepository extends JpaRepository<PostingRuleSet, UUID> {
 
         /**
          * Find all rule sets by event type.

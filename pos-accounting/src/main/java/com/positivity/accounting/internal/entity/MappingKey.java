@@ -2,6 +2,13 @@ package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.UUID;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * Mapping Key - second level of GL mapping taxonomy hierarchy.
@@ -12,6 +19,11 @@ import java.time.Instant;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GL Mapping</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 @Entity
 @Table(name = "mapping_key", indexes = {
         @Index(name = "idx_mapping_key_category", columnList = "posting_category_id"),
@@ -19,12 +31,14 @@ import java.time.Instant;
 })
 public class MappingKey {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "mapping_key_id", length = 50, nullable = false)
-    private String mappingKeyId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "mapping_key_id", nullable = false)
+    private UUID mappingKeyId;
 
-    @Column(name = "posting_category_id", length = 50, nullable = false)
-    private String postingCategoryId;
+    @Column(name = "posting_category_id", nullable = false)
+    private UUID postingCategoryId;
 
     @Column(name = "key_name", length = 100, nullable = false)
     private String keyName;
@@ -47,83 +61,6 @@ public class MappingKey {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
-
-    // Constructors
-    public MappingKey() {
-    }
-
-    // Getters and Setters
-    public String getMappingKeyId() {
-        return mappingKeyId;
-    }
-
-    public void setMappingKeyId(String mappingKeyId) {
-        this.mappingKeyId = mappingKeyId;
-    }
-
-    public String getPostingCategoryId() {
-        return postingCategoryId;
-    }
-
-    public void setPostingCategoryId(String postingCategoryId) {
-        this.postingCategoryId = postingCategoryId;
-    }
-
-    public String getKeyName() {
-        return keyName;
-    }
-
-    public void setKeyName(String keyName) {
-        this.keyName = keyName;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Boolean getIsActive() {
-        return isActive;
-    }
-
-    public void setIsActive(Boolean isActive) {
-        this.isActive = isActive;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public Instant getModifiedAt() {
-        return modifiedAt;
-    }
-
-    public void setModifiedAt(Instant modifiedAt) {
-        this.modifiedAt = modifiedAt;
-    }
-
-    public String getModifiedBy() {
-        return modifiedBy;
-    }
-
-    public void setModifiedBy(String modifiedBy) {
-        this.modifiedBy = modifiedBy;
-    }
 
     @PrePersist
     protected void onCreate() {

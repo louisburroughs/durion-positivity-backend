@@ -1,7 +1,7 @@
 package com.positivity.customer.internal.client;
 
-import com.positivity.vehicle.internal.dto.CreateVehicleRequest;
-import com.positivity.vehicle.internal.dto.VehicleResponse;
+import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.VehicleResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;

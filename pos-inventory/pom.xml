@@ -91,10 +91,21 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Event emission support -->
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- POS Security Common for authentication/authorization -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-security-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Shared DTOs -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
 

@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.UUID;
+
 /**
  * REST Controller for Posting Rule Set operations.
  * Handles creation, publishing, and archival of posting rules that drive
@@ -55,7 +57,7 @@ public class PostingRuleController {
                         @ApiResponse(responseCode = "404", description = "Posting rule set not found")
         })
         public ResponseEntity<Void> getPostingRuleSet(
-                        @Parameter(description = "Posting rule set identifier") @PathVariable String postingRuleSetId) {
+                        @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
                 log.info("Stub getPostingRuleSet postingRuleSetId={}", postingRuleSetId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
         }
@@ -82,7 +84,7 @@ public class PostingRuleController {
         })
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_PUBLISH", apiVersion = "1")
         public ResponseEntity<Void> publishPostingRuleSet(
-                        @Parameter(description = "Posting rule set identifier") @PathVariable String postingRuleSetId,
+                        @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @RequestBody(required = false) Object request) {
                 log.info("Stub publishPostingRuleSet postingRuleSetId={}", postingRuleSetId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -97,7 +99,7 @@ public class PostingRuleController {
         })
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_ARCHIVE", apiVersion = "1")
         public ResponseEntity<Void> archivePostingRuleSet(
-                        @Parameter(description = "Posting rule set identifier") @PathVariable String postingRuleSetId,
+                        @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @RequestBody(required = false) Object request) {
                 log.info("Stub archivePostingRuleSet postingRuleSetId={}", postingRuleSetId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -111,7 +113,7 @@ public class PostingRuleController {
                         @ApiResponse(responseCode = "404", description = "Posting rule set not found")
         })
         public ResponseEntity<Void> listPostingRuleVersions(
-                        @Parameter(description = "Posting rule set identifier") @PathVariable String postingRuleSetId,
+                        @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size) {
                 log.info("Stub listPostingRuleVersions postingRuleSetId={}", postingRuleSetId);

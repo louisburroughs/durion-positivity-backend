@@ -72,12 +72,26 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- POS Events for event emission -->
+        <!-- POS Dependencies for shared dependencies -->
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- POS Security Common for authentication/authorization -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-security-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Shared DTOs -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Shared DTOs -->
+
         <!-- Hypersistence Utils for JSONB support -->
         <dependency>
             <groupId>io.hypersistence</groupId>
