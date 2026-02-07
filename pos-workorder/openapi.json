@@ -1,78 +1,572 @@
 {
-  "openapi": "3.0.1",
+  "openapi": "3.1.0",
   "info": {
-    "title": "Workorder Service API",
-    "description": "API for managing workorders, estimates, change requests, and approval configurations",
+    "title": "Positivity Work Order API",
+    "description": "Comprehensive API for managing estimates, work orders, change requests, and approval configurations. Supports signature capture, purchase order enforcement, state machine workflows, and emergency overrides.",
     "version": "1.0.0",
     "contact": {
-      "name": "Durion Platform",
-      "url": "https://github.com/louisburroughs/durion-positivity-backend"
+      "name": "Positivity API Support"
     }
   },
   "servers": [
     {
-      "url": "http://localhost:8080",
-      "description": "Local API Gateway"
-    },
-    {
-      "url": "http://localhost:8087",
-      "description": "Local Workorder Service"
+      "url": "http://api-gateway.local/api/workorder",
+      "description": "API Gateway endpoint for work order services"
     }
   ],
   "tags": [
     {
-      "name": "Estimates",
-      "description": "Endpoints for managing repair estimates"
+      "name": "Work Order API",
+      "description": "Operations for managing work orders including lifecycle state transitions, approvals, completions, and history tracking"
     },
     {
-      "name": "Change Requests",
-      "description": "Endpoints for managing additional work requests and approvals"
+      "name": "Estimate API",
+      "description": "Operations for managing estimates including creation, approval with signature capture, decline/reopen workflows, and purchase order enforcement"
     },
     {
-      "name": "Approval Configuration",
-      "description": "Endpoints for managing approval configurations by location and customer"
+      "name": "Change Request API",
+      "description": "Operations for managing change requests during work order execution including technician requests, advisor approvals, emergency overrides, and pre-close validations"
+    },
+    {
+      "name": "Approval Configuration API",
+      "description": "Operations for managing approval configurations with hierarchical resolution by location and customer"
     }
   ],
   "paths": {
-    "/v1/estimates": {
+    "/v1/workorders": {
       "get": {
-        "tags": ["Estimates"],
-        "summary": "Get all estimates",
-        "description": "Retrieve a list of all estimates",
-        "operationId": "getAllEstimates",
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "List all work orders",
+        "description": "Retrieve a list of all work orders in the system",
+        "operationId": "listWorkorders",
         "responses": {
           "200": {
-            "description": "List of estimates returned successfully",
+            "description": "List of work orders retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Estimate"
+                    "$ref": "#/components/schemas/WorkorderResponse"
                   }
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "post": {
-        "tags": ["Estimates"],
-        "summary": "Create a new draft estimate",
-        "description": "Create a new estimate in DRAFT status for a customer and vehicle",
-        "operationId": "createEstimate",
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Create work order from estimate",
+        "description": "Create a new work order from an approved estimate. Workorder starts in DRAFT state.",
+        "operationId": "createWorkorder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Workorder created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkorderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/{workorderId}": {
+      "get": {
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Get work order by ID",
+        "description": "Retrieve a specific work order by its unique identifier",
+        "operationId": "getWorkorderById",
         "parameters": [
           {
-            "name": "X-User-Id",
-            "in": "header",
-            "description": "ID of the user creating the estimate",
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order",
             "schema": {
-              "type": "integer",
-              "format": "int64",
-              "default": 1
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Workorder retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkorderResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Delete work order",
+        "description": "Delete a work order by its unique identifier. Only work orders in DRAFT state can be deleted.",
+        "operationId": "deleteWorkorder",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order to delete",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Workorder deleted successfully"
+          },
+          "400": {
+            "description": "Cannot delete workorder in current state"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/{workorderId}/start": {
+      "post": {
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Start work order",
+        "description": "Transition work order from DRAFT to WORK_IN_PROGRESS state. Records the user and reason for starting work.",
+        "operationId": "startWorkorder",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order to start",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workorder started successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartWorkorderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state transition"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/{workorderId}/transitions": {
+      "get": {
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Get state transition history",
+        "description": "Retrieve the complete history of state transitions for a work order",
+        "operationId": "getWorkorderTransitions",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transition history retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkorderStateTransitionResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/{workorderId}/snapshots": {
+      "get": {
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Get snapshot history",
+        "description": "Retrieve the complete history of workorder snapshots for temporal queries",
+        "operationId": "getWorkorderSnapshots",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot history retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkorderSnapshotResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/{workorderId}/approval": {
+      "post": {
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Approve work order with signature",
+        "description": "Approve a work order with customer signature. Supports base64-encoded signature capture and line item-level approval/rejection.",
+        "operationId": "approveWorkorder",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order to approve",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveWorkorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workorder approved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkorderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid approval request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/{workorderId}/complete": {
+      "post": {
+        "tags": [
+          "Work Order API"
+        ],
+        "summary": "Complete work order",
+        "description": "Mark a work order as completed. Validates all required approvals and change request acknowledgments.",
+        "operationId": "completeWorkorder",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order to complete",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteWorkorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workorder completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteWorkorderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot complete workorder - validation failed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/estimates": {
+      "get": {
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "List all estimates",
+        "description": "Retrieve a list of all estimates in the system",
+        "operationId": "listEstimates",
+        "responses": {
+          "200": {
+            "description": "List of estimates retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EstimateResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "Create draft estimate",
+        "description": "Create a new estimate in DRAFT state. Requires ESTIMATE_CREATE permission.",
+        "operationId": "createEstimate",
         "requestBody": {
           "required": true,
           "content": {
@@ -84,7 +578,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Estimate created successfully",
             "content": {
               "application/json": {
@@ -95,29 +589,39 @@
             }
           },
           "400": {
-            "description": "Invalid request - missing required fields"
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden - user does not have ESTIMATE_CREATE permission"
+            "description": "Forbidden - requires ESTIMATE_CREATE permission"
           },
           "500": {
-            "description": "Internal server error - estimate creation failed"
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/v1/estimates/{estimateId}": {
+    "/v1/workorders/estimates/{estimateId}": {
       "get": {
-        "tags": ["Estimates"],
+        "tags": [
+          "Estimate API"
+        ],
         "summary": "Get estimate by ID",
-        "description": "Retrieve an estimate by its unique ID",
+        "description": "Retrieve a specific estimate by its unique identifier",
         "operationId": "getEstimateById",
         "parameters": [
           {
             "name": "estimateId",
             "in": "path",
             "required": true,
-            "description": "ID of the estimate to retrieve",
+            "description": "UUID of the estimate",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -127,52 +631,41 @@
         ],
         "responses": {
           "200": {
-            "description": "Estimate found and returned",
+            "description": "Estimate retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Estimate"
+                  "$ref": "#/components/schemas/EstimateResponse"
                 }
               }
             }
           },
-          "404": {
-            "description": "Estimate not found"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Estimates"],
-        "summary": "Delete an estimate",
-        "description": "Delete an estimate by its unique ID",
-        "operationId": "deleteEstimate",
-        "parameters": [
-          {
-            "name": "estimateId",
-            "in": "path",
-            "required": true,
-            "description": "ID of the estimate to delete",
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "example": "550e8400-e29b-41d4-a716-446655440000"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Estimate deleted successfully"
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Estimate not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/v1/estimates/customer/{customerId}": {
+    "/v1/workorders/estimates/customer/{customerId}": {
       "get": {
-        "tags": ["Estimates"],
-        "summary": "Get estimates by customer",
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "Search estimates by customer",
         "description": "Retrieve all estimates for a specific customer",
         "operationId": "getEstimatesByCustomer",
         "parameters": [
@@ -180,35 +673,103 @@
             "name": "customerId",
             "in": "path",
             "required": true,
-            "description": "ID of the customer",
+            "description": "UUID of the customer",
             "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 1
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440001"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of estimates returned successfully",
+            "description": "Estimates retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Estimate"
+                    "$ref": "#/components/schemas/EstimateResponse"
                   }
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/v1/estimates/location/{locationId}": {
+    "/v1/workorders/estimates/shop/{locationId}": {
       "get": {
-        "tags": ["Estimates"],
-        "summary": "Get estimates by location",
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "Search estimates by shop",
+        "description": "Retrieve all estimates for a specific shop location",
+        "operationId": "getEstimatesByShop",
+        "parameters": [
+          {
+            "name": "locationId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the shop location",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440003"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estimates retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EstimateResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workorders/estimates/location/{locationId}": {
+      "get": {
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "Search estimates by location",
         "description": "Retrieve all estimates for a specific location",
         "operationId": "getEstimatesByLocation",
         "parameters": [
@@ -216,56 +777,63 @@
             "name": "locationId",
             "in": "path",
             "required": true,
-            "description": "ID of the location",
+            "description": "UUID of the location",
             "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 1
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440003"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "List of estimates returned successfully",
+            "description": "Estimates retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Estimate"
+                    "$ref": "#/components/schemas/EstimateResponse"
                   }
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/v1/estimates/{estimateId}/decline": {
+    "/v1/workorders/estimates/{estimateId}/decline": {
       "post": {
-        "tags": ["Estimates"],
-        "summary": "Decline an estimate",
-        "description": "Transition estimate to declined state",
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "Decline estimate",
+        "description": "Decline an estimate. The estimate can be reopened within the configured expiry period.",
         "operationId": "declineEstimate",
         "parameters": [
           {
             "name": "estimateId",
             "in": "path",
             "required": true,
-            "description": "ID of the estimate to decline",
+            "description": "UUID of the estimate to decline",
             "schema": {
               "type": "string",
               "format": "uuid",
               "example": "550e8400-e29b-41d4-a716-446655440000"
-            }
-          },
-          {
-            "name": "reason",
-            "in": "query",
-            "required": false,
-            "description": "Reason for decline",
-            "schema": {
-              "type": "string"
             }
           }
         ],
@@ -275,32 +843,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Estimate"
+                  "$ref": "#/components/schemas/EstimateResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Estimate cannot be declined in current state"
+            "description": "Cannot decline estimate in current state"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Estimate not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/v1/estimates/{estimateId}/reopen": {
+    "/v1/workorders/estimates/{estimateId}/reopen": {
       "post": {
-        "tags": ["Estimates"],
-        "summary": "Reopen a declined estimate",
-        "description": "Transition a declined estimate back to DRAFT state",
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "Reopen declined estimate",
+        "description": "Reopen a declined estimate if still within the configured expiry period.",
         "operationId": "reopenEstimate",
         "parameters": [
           {
             "name": "estimateId",
             "in": "path",
             "required": true,
-            "description": "ID of the estimate to reopen",
+            "description": "UUID of the estimate to reopen",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -314,32 +898,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Estimate"
+                  "$ref": "#/components/schemas/EstimateResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Estimate cannot be reopened"
+            "description": "Cannot reopen estimate - expiry period exceeded or invalid state"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Estimate not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/v1/estimates/{estimateId}/approval": {
+    "/v1/workorders/estimates/{estimateId}/approval": {
       "post": {
-        "tags": ["Estimates"],
-        "summary": "Approve an estimate with customer signature",
-        "description": "Transition estimate to approved state with customer signature capture",
+        "tags": [
+          "Estimate API"
+        ],
+        "summary": "Approve estimate with signature",
+        "description": "Approve an estimate with customer signature. Supports base64-encoded signature capture, line item-level approval/rejection, and purchase order enforcement (CAP:092 Story #98). For commercial accounts with PO enforcement enabled, purchaseOrderNumber is required.",
         "operationId": "approveEstimate",
         "parameters": [
           {
             "name": "estimateId",
             "in": "path",
             "required": true,
-            "description": "ID of the estimate to approve",
+            "description": "UUID of the estimate to approve",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -363,32 +963,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Estimate"
+                  "$ref": "#/components/schemas/ApproveEstimateResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Estimate cannot be approved in current state or PO required but not provided"
+            "description": "Invalid approval request or missing PO number"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Estimate not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/workorders/{workorderId}/changeRequests": {
       "get": {
-        "tags": ["Change Requests"],
-        "summary": "Get all change requests for a work order",
-        "description": "Retrieve all change requests associated with a specific work order",
-        "operationId": "getChangeRequestsByWorkorder",
+        "tags": [
+          "Change Request API"
+        ],
+        "summary": "List change requests for workorder",
+        "description": "Retrieve all change requests associated with a work order",
+        "operationId": "listChangeRequests",
         "parameters": [
           {
             "name": "workorderId",
             "in": "path",
             "required": true,
-            "description": "ID of the work order",
+            "description": "UUID of the work order",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -398,31 +1014,50 @@
         ],
         "responses": {
           "200": {
-            "description": "List of change requests returned",
+            "description": "Change requests retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ChangeRequest"
+                    "$ref": "#/components/schemas/ChangeRequestResponse"
                   }
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "post": {
-        "tags": ["Change Requests"],
-        "summary": "Create a change request",
-        "description": "Technician creates a request for additional work beyond authorized scope",
+        "tags": [
+          "Change Request API"
+        ],
+        "summary": "Create change request",
+        "description": "Create a new change request for additional work discovered during workorder execution. Technicians can flag items as emergency/safety-critical.",
         "operationId": "createChangeRequest",
         "parameters": [
           {
             "name": "workorderId",
             "in": "path",
             "required": true,
-            "description": "ID of the work order",
+            "description": "UUID of the work order",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -441,12 +1076,12 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Change request created successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChangeRequest"
+                  "$ref": "#/components/schemas/ChangeRequestResponse"
                 }
               }
             }
@@ -454,57 +1089,40 @@
           "400": {
             "description": "Invalid request"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
-            "description": "Work order not found"
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
-      }
-    },
-    "/v1/workorders/{workorderId}/canClose": {
-      "get": {
-        "tags": ["Change Requests"],
-        "summary": "Check if work order can be closed",
-        "description": "Verify all declined emergency/safety items have customer denial acknowledgment",
-        "operationId": "canCloseWorkorder",
-        "parameters": [
+        },
+        "security": [
           {
-            "name": "workorderId",
-            "in": "path",
-            "required": true,
-            "description": "ID of the work order",
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "example": "550e8400-e29b-41d4-a716-446655440000"
-            }
+            "bearerAuth": []
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "Returns true if work order can be closed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "boolean"
-                }
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/v1/workorders/changeRequests/{changeId}": {
       "get": {
-        "tags": ["Change Requests"],
+        "tags": [
+          "Change Request API"
+        ],
         "summary": "Get change request by ID",
-        "description": "Retrieve details of a specific change request",
+        "description": "Retrieve a specific change request by its unique identifier",
         "operationId": "getChangeRequestById",
         "parameters": [
           {
             "name": "changeId",
             "in": "path",
             "required": true,
-            "description": "ID of the change request",
+            "description": "UUID of the change request",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -514,33 +1132,49 @@
         ],
         "responses": {
           "200": {
-            "description": "Change request found",
+            "description": "Change request retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChangeRequest"
+                  "$ref": "#/components/schemas/ChangeRequestResponse"
                 }
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
             "description": "Change request not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/workorders/changeRequests/{changeId}/approve": {
       "post": {
-        "tags": ["Change Requests"],
-        "summary": "Approve a change request",
-        "description": "Service Advisor approves the change request",
+        "tags": [
+          "Change Request API"
+        ],
+        "summary": "Approve change request",
+        "description": "Advisor approves a change request, transitioning it from PENDING_APPROVAL to READY_TO_EXECUTE state",
         "operationId": "approveChangeRequest",
         "parameters": [
           {
             "name": "changeId",
             "in": "path",
             "required": true,
-            "description": "ID of the change request",
+            "description": "UUID of the change request to approve",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -564,32 +1198,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChangeRequest"
+                  "$ref": "#/components/schemas/ChangeRequestResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Cannot approve - invalid state"
+            "description": "Invalid state transition"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Change request not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/workorders/changeRequests/{changeId}/decline": {
       "post": {
-        "tags": ["Change Requests"],
-        "summary": "Decline a change request",
-        "description": "Service Advisor declines the change request",
+        "tags": [
+          "Change Request API"
+        ],
+        "summary": "Decline change request",
+        "description": "Advisor declines a change request, transitioning it from PENDING_APPROVAL to CANCELLED state. Emergency/safety items require customer acknowledgment of denial.",
         "operationId": "declineChangeRequest",
         "parameters": [
           {
             "name": "changeId",
             "in": "path",
             "required": true,
-            "description": "ID of the change request",
+            "description": "UUID of the change request to decline",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -613,32 +1263,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChangeRequest"
+                  "$ref": "#/components/schemas/ChangeRequestResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Cannot decline - invalid state"
+            "description": "Invalid state transition"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Change request not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/workorders/changeRequests/{changeId}/acknowledgeDenial": {
       "post": {
-        "tags": ["Change Requests"],
-        "summary": "Record customer denial acknowledgment",
-        "description": "For declined emergency/safety items, record that customer acknowledged the denial",
-        "operationId": "recordCustomerDenialAcknowledgment",
+        "tags": [
+          "Change Request API"
+        ],
+        "summary": "Acknowledge customer denial",
+        "description": "Record customer acknowledgment of a declined emergency/safety item. Required before workorder can be closed if emergency items were declined.",
+        "operationId": "acknowledgeChangeRequestDenial",
         "parameters": [
           {
             "name": "changeId",
             "in": "path",
             "required": true,
-            "description": "ID of the change request",
+            "description": "UUID of the change request",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -647,30 +1313,53 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "Acknowledgment recorded successfully"
+          "200": {
+            "description": "Customer denial acknowledged successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestResponse"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Not an emergency request or invalid state"
+            "description": "Invalid request - not an emergency item or not declined"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Change request not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/workorders/changeRequests/{changeId}/emergency-override": {
       "post": {
-        "tags": ["Change Requests"],
+        "tags": [
+          "Change Request API"
+        ],
         "summary": "Apply emergency override",
-        "description": "Manager applies emergency override to approve a change request with exception",
+        "description": "Manager applies emergency override to immediately approve a change request. Requires Manager role.",
         "operationId": "applyEmergencyOverride",
         "parameters": [
           {
             "name": "changeId",
             "in": "path",
             "required": true,
-            "description": "ID of the change request",
+            "description": "UUID of the change request",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -694,86 +1383,202 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChangeRequest"
+                  "$ref": "#/components/schemas/ChangeRequestResponse"
                 }
               }
             }
           },
-          "400": {
-            "description": "Cannot apply override"
+          "401": {
+            "description": "Unauthorized"
           },
           "403": {
-            "description": "Insufficient permissions - Manager role required"
+            "description": "Forbidden - requires Manager role"
           },
           "404": {
             "description": "Change request not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
-    "/v1/workexec/approvalConfigurations": {
+    "/v1/workorders/{workorderId}/canClose": {
       "get": {
-        "tags": ["Approval Configuration"],
-        "summary": "Get all approval configurations",
-        "description": "Retrieve a list of all approval configurations",
-        "operationId": "getAllConfigurations",
+        "tags": [
+          "Change Request API"
+        ],
+        "summary": "Check if workorder can be closed",
+        "description": "Validate whether a workorder can be closed. Checks for unacknowledged emergency item denials.",
+        "operationId": "canCloseWorkorder",
+        "parameters": [
+          {
+            "name": "workorderId",
+            "in": "path",
+            "required": true,
+            "description": "UUID of the work order",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "List of configurations returned successfully",
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "canClose": {
+                      "type": "boolean",
+                      "description": "Whether the workorder can be closed",
+                      "example": true
+                    },
+                    "blockers": {
+                      "type": "array",
+                      "description": "List of reasons preventing closure",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "Emergency item denial not acknowledged"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Workorder not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workexec": {
+      "get": {
+        "tags": [
+          "Approval Configuration API"
+        ],
+        "summary": "List all approval configurations",
+        "description": "Retrieve a list of all approval configurations",
+        "operationId": "listApprovalConfigurations",
+        "responses": {
+          "200": {
+            "description": "List of approval configurations retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ApprovalConfiguration"
+                    "$ref": "#/components/schemas/ApprovalConfigurationResponse"
                   }
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
-      },
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workexec/approvalConfigurations": {
       "post": {
-        "tags": ["Approval Configuration"],
-        "summary": "Create a new approval configuration",
-        "description": "Add a new approval configuration",
-        "operationId": "createConfiguration",
+        "tags": [
+          "Approval Configuration API"
+        ],
+        "summary": "Create approval configuration",
+        "description": "Create a new approval configuration. Supports location and customer-specific settings with hierarchical priority.",
+        "operationId": "createApprovalConfiguration",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ApprovalConfiguration"
+                "$ref": "#/components/schemas/ApprovalConfigurationRequest"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Configuration created successfully",
+          "201": {
+            "description": "Approval configuration created successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                  "$ref": "#/components/schemas/ApprovalConfigurationResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/workexec/approvalConfigurations/{approvalId}": {
       "get": {
-        "tags": ["Approval Configuration"],
-        "summary": "Get configuration by ID",
-        "description": "Retrieve an approval configuration by its unique ID",
-        "operationId": "getConfigurationById",
+        "tags": [
+          "Approval Configuration API"
+        ],
+        "summary": "Get approval configuration by ID",
+        "description": "Retrieve a specific approval configuration by its unique identifier",
+        "operationId": "getApprovalConfigurationById",
         "parameters": [
           {
             "name": "approvalId",
             "in": "path",
             "required": true,
-            "description": "ID of the configuration to retrieve",
+            "description": "UUID of the approval configuration",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -783,31 +1588,47 @@
         ],
         "responses": {
           "200": {
-            "description": "Configuration found and returned",
+            "description": "Approval configuration retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                  "$ref": "#/components/schemas/ApprovalConfigurationResponse"
                 }
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
-            "description": "Configuration not found"
+            "description": "Approval configuration not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "put": {
-        "tags": ["Approval Configuration"],
-        "summary": "Update an approval configuration",
+        "tags": [
+          "Approval Configuration API"
+        ],
+        "summary": "Update approval configuration",
         "description": "Update an existing approval configuration",
-        "operationId": "updateConfiguration",
+        "operationId": "updateApprovalConfiguration",
         "parameters": [
           {
             "name": "approvalId",
             "in": "path",
             "required": true,
-            "description": "ID of the configuration to update",
+            "description": "UUID of the approval configuration",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -820,38 +1641,57 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ApprovalConfiguration"
+                "$ref": "#/components/schemas/ApprovalConfigurationRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Configuration updated successfully",
+            "description": "Approval configuration updated successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                  "$ref": "#/components/schemas/ApprovalConfigurationResponse"
                 }
               }
             }
           },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
-            "description": "Configuration not found"
+            "description": "Approval configuration not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
-        "tags": ["Approval Configuration"],
-        "summary": "Delete an approval configuration",
-        "description": "Delete a configuration by its unique ID",
-        "operationId": "deleteConfiguration",
+        "tags": [
+          "Approval Configuration API"
+        ],
+        "summary": "Delete approval configuration",
+        "description": "Delete an approval configuration",
+        "operationId": "deleteApprovalConfiguration",
         "parameters": [
           {
             "name": "approvalId",
             "in": "path",
             "required": true,
-            "description": "ID of the configuration to delete",
+            "description": "UUID of the approval configuration to delete",
             "schema": {
               "type": "string",
               "format": "uuid",
@@ -861,63 +1701,378 @@
         ],
         "responses": {
           "204": {
-            "description": "Configuration deleted successfully"
+            "description": "Approval configuration deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
-            "description": "Configuration not found"
+            "description": "Approval configuration not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/workexec/approvalConfigurations/applicable": {
       "get": {
-        "tags": ["Approval Configuration"],
-        "summary": "Get applicable configuration",
-        "description": "Get the most specific configuration for a location and customer",
-        "operationId": "getApplicableConfiguration",
+        "tags": [
+          "Approval Configuration API"
+        ],
+        "summary": "Get applicable approval configuration",
+        "description": "Get the most specific approval configuration using hierarchical resolution. Priority order: customer+location > location-only > customer-only > default.",
+        "operationId": "getApplicableApprovalConfiguration",
         "parameters": [
           {
             "name": "locationId",
             "in": "query",
             "required": false,
-            "description": "Location ID",
+            "description": "Location ID for configuration lookup",
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440003"
             }
           },
           {
             "name": "customerId",
             "in": "query",
             "required": false,
-            "description": "Customer ID",
+            "description": "Customer ID for configuration lookup",
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440001"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Configuration found and returned",
+            "description": "Applicable approval configuration retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalConfiguration"
+                  "$ref": "#/components/schemas/ApprovalConfigurationResponse"
                 }
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
-            "description": "No configuration found"
+            "description": "No applicable configuration found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   },
   "components": {
     "schemas": {
-      "Estimate": {
+      "CreateWorkorderRequest": {
+        "type": "object",
+        "required": [
+          "estimateId",
+          "customerId"
+        ],
+        "properties": {
+          "estimateId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Estimate ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          }
+        }
+      },
+      "WorkorderResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the workorder",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "estimateId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Estimate ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "shopId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Shop ID",
+            "example": "550e8400-e29b-41d4-a716-446655440003"
+          },
+          "vehicleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Vehicle ID",
+            "example": "550e8400-e29b-41d4-a716-446655440004"
+          },
+          "status": {
+            "type": "string",
+            "description": "Workorder status (DRAFT, WORK_IN_PROGRESS, COMPLETED, CANCELLED)",
+            "example": "DRAFT"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time the workorder was approved"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time the workorder was completed"
+          }
+        }
+      },
+      "StartWorkorderRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID starting the work",
+            "example": "550e8400-e29b-41d4-a716-446655440005"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for starting work",
+            "example": "Beginning scheduled repairs"
+          }
+        }
+      },
+      "StartWorkorderResponse": {
+        "type": "object",
+        "properties": {
+          "workorderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Workorder ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "status": {
+            "type": "string",
+            "description": "New status",
+            "example": "WORK_IN_PROGRESS"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when work was started"
+          }
+        }
+      },
+      "ApproveWorkorderRequest": {
+        "type": "object",
+        "required": [
+          "customerId"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer ID who is approving the work order",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "signatureData": {
+            "type": "string",
+            "description": "Base64-encoded signature image data (PNG format recommended)",
+            "example": "data:image/png;base64,iVBORw0KGgoAAAANS..."
+          },
+          "signatureMimeType": {
+            "type": "string",
+            "description": "MIME type of signature (e.g., image/png, image/jpeg)",
+            "example": "image/png",
+            "default": "image/png"
+          },
+          "signerName": {
+            "type": "string",
+            "description": "Name of person providing signature",
+            "example": "John Doe"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes or comments",
+            "example": "Approved after reviewing repair details"
+          },
+          "lineItemApprovals": {
+            "type": "array",
+            "description": "Individual line item approvals/rejections. If omitted, all items are considered approved.",
+            "items": {
+              "$ref": "#/components/schemas/LineItemApprovalDto"
+            }
+          }
+        }
+      },
+      "CompleteWorkorderRequest": {
+        "type": "object",
+        "properties": {
+          "completionNotes": {
+            "type": "string",
+            "description": "Notes about work completion",
+            "example": "All repairs completed successfully"
+          }
+        }
+      },
+      "CompleteWorkorderResponse": {
+        "type": "object",
+        "properties": {
+          "workorderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Workorder ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "status": {
+            "type": "string",
+            "description": "Final status",
+            "example": "COMPLETED"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when work was completed"
+          }
+        }
+      },
+      "WorkorderStateTransitionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Transition ID",
+            "example": "550e8400-e29b-41d4-a716-446655440010"
+          },
+          "workorderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Workorder ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "fromState": {
+            "type": "string",
+            "description": "Previous state",
+            "example": "DRAFT"
+          },
+          "toState": {
+            "type": "string",
+            "description": "New state",
+            "example": "WORK_IN_PROGRESS"
+          },
+          "transitionedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When transition occurred"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User who triggered transition",
+            "example": "550e8400-e29b-41d4-a716-446655440005"
+          }
+        }
+      },
+      "WorkorderSnapshotResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Snapshot ID",
+            "example": "550e8400-e29b-41d4-a716-446655440020"
+          },
+          "workorderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Workorder ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "snapshotData": {
+            "type": "object",
+            "description": "JSON snapshot of workorder state at this point in time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When snapshot was created"
+          }
+        }
+      },
+      "CreateEstimateRequest": {
+        "type": "object",
+        "required": [
+          "customerId",
+          "vehicleId"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "vehicleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Vehicle ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "locationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Location ID (optional - will use default from session if not provided)",
+            "example": "550e8400-e29b-41d4-a716-446655440003"
+          },
+          "currencyUomId": {
+            "type": "string",
+            "description": "Currency UOM ID (optional - will use default if not provided)",
+            "example": "USD"
+          },
+          "taxRegionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Tax region ID (optional - will use default if not provided)",
+            "example": "550e8400-e29b-41d4-a716-446655440004"
+          }
+        }
+      },
+      "EstimateResponse": {
         "type": "object",
         "properties": {
           "id": {
@@ -928,117 +2083,53 @@
           },
           "estimateNumber": {
             "type": "string",
-            "description": "Human-readable estimate number",
-            "example": "EST-2024-1001"
-          },
-          "locationId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Reference to Location"
-          },
-          "vehicleId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Reference to Vehicle"
+            "description": "Estimate number",
+            "example": "EST-2024-1000"
           },
           "customerId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Reference to Customer"
-          },
-          "status": {
             "type": "string",
-            "enum": ["DRAFT", "APPROVED", "DECLINED", "EXPIRED"],
-            "description": "Current status of the estimate"
+            "format": "uuid",
+            "description": "Customer ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "vehicleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Vehicle ID",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "locationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Location ID",
+            "example": "550e8400-e29b-41d4-a716-446655440003"
           },
           "currencyUomId": {
             "type": "string",
-            "description": "Currency code",
+            "description": "Currency UOM ID",
             "example": "USD"
           },
           "taxRegionId": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "uuid",
+            "description": "Tax region ID",
+            "example": "550e8400-e29b-41d4-a716-446655440004"
           },
-          "createdById": {
-            "type": "integer",
-            "format": "int64",
-            "description": "User who created the estimate"
+          "status": {
+            "type": "string",
+            "description": "Estimate status (DRAFT, APPROVED, DECLINED)",
+            "example": "DRAFT"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID who created the estimate",
+            "example": "550e8400-e29b-41d4-a716-446655440005"
           },
           "createdAt": {
             "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "approvedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "declinedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "approvalConfigurationId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "declineReason": {
-            "type": "string"
-          },
-          "approvedBy": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "signatureData": {
-            "type": "string",
-            "description": "Base64-encoded signature image"
-          },
-          "signatureMimeType": {
-            "type": "string",
-            "example": "image/png"
-          },
-          "signerName": {
-            "type": "string"
-          },
-          "approvalNotes": {
-            "type": "string"
-          },
-          "purchaseOrderNumber": {
-            "type": "string",
-            "description": "Purchase order number for commercial accounts (CAP:092)"
-          }
-        }
-      },
-      "CreateEstimateRequest": {
-        "type": "object",
-        "required": ["customerId", "vehicleId"],
-        "properties": {
-          "customerId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "vehicleId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "locationId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "currencyUomId": {
-            "type": "string",
-            "default": "USD"
-          },
-          "taxRegionId": {
-            "type": "integer",
-            "format": "int64"
+            "format": "date-time",
+            "description": "Date and time the estimate was created"
           }
         }
       },
@@ -1047,122 +2138,155 @@
         "properties": {
           "estimateId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Created estimate ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "estimateNumber": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "description": "Generated estimate number",
+            "example": "EST-2024-1000"
           }
         }
       },
       "ApproveEstimateRequest": {
         "type": "object",
-        "required": ["customerId", "signatureData", "signatureMimeType", "signerName"],
+        "required": [
+          "customerId"
+        ],
         "properties": {
           "customerId": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer ID who is approving the estimate",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
           },
           "signatureData": {
             "type": "string",
-            "description": "Base64-encoded signature image"
+            "description": "Base64-encoded signature image data (PNG format recommended)",
+            "example": "data:image/png;base64,iVBORw0KGgoAAAANS..."
           },
           "signatureMimeType": {
             "type": "string",
-            "example": "image/png"
+            "description": "MIME type of signature (e.g., image/png, image/jpeg)",
+            "example": "image/png",
+            "default": "image/png"
           },
           "signerName": {
-            "type": "string"
+            "type": "string",
+            "description": "Name of person providing signature",
+            "example": "John Doe"
           },
           "notes": {
-            "type": "string"
+            "type": "string",
+            "description": "Additional notes or comments",
+            "example": "Approved with customer present"
+          },
+          "lineItemApprovals": {
+            "type": "array",
+            "description": "Individual line item approvals/rejections. If omitted, all items are considered approved.",
+            "items": {
+              "$ref": "#/components/schemas/LineItemApprovalDto"
+            }
           },
           "purchaseOrderNumber": {
             "type": "string",
-            "description": "Required for commercial accounts with PO enforcement (CAP:092)"
+            "description": "Purchase order number (required when PO enforcement is enabled for the account - CAP:092 Story #98)",
+            "example": "PO-2024-12345"
           }
         }
       },
-      "ChangeRequest": {
+      "ApproveEstimateResponse": {
         "type": "object",
         "properties": {
-          "id": {
+          "estimateId": {
             "type": "string",
             "format": "uuid",
-            "description": "Unique identifier for the change request",
+            "description": "Approved estimate ID",
             "example": "550e8400-e29b-41d4-a716-446655440000"
-          },
-          "workorderId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "requestedByUserId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "requestedAt": {
-            "type": "string",
-            "format": "date-time"
           },
           "status": {
             "type": "string",
-            "enum": ["PENDING_APPROVAL", "APPROVED", "DECLINED", "CANCELLED"],
-            "description": "Current status of the change request"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description of additional work required"
-          },
-          "isApprovalGated": {
-            "type": "boolean",
-            "description": "Whether this request requires explicit approval"
-          },
-          "approvedBy": {
-            "type": "integer",
-            "format": "int64"
+            "description": "New status",
+            "example": "APPROVED"
           },
           "approvedAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when estimate was approved"
+          }
+        }
+      },
+      "LineItemApprovalDto": {
+        "type": "object",
+        "required": [
+          "lineItemId",
+          "approved"
+        ],
+        "properties": {
+          "lineItemId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "ID of the line item (service/product) being approved or rejected",
+            "example": 123
           },
-          "approvalNote": {
-            "type": "string"
+          "approved": {
+            "type": "boolean",
+            "description": "Whether this line item is approved (true) or rejected (false)",
+            "example": true
           },
-          "customerDenialAcknowledgedAt": {
+          "rejectionReason": {
             "type": "string",
-            "format": "date-time"
+            "description": "Reason for rejection (required if approved=false)",
+            "example": "Customer declined optional service"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes about this line item decision",
+            "example": "Customer wants to get second opinion"
           }
         }
       },
       "CreateChangeRequestDTO": {
         "type": "object",
-        "required": ["description"],
         "properties": {
           "workorderId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "description": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid",
+            "description": "Workorder ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "requestedByUserId": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID requesting the change (typically technician)",
+            "example": "550e8400-e29b-41d4-a716-446655440005"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of additional work needed",
+            "example": "Brake pads worn beyond safe threshold"
+          },
+          "isEmergencyException": {
+            "type": "boolean",
+            "description": "Whether this is an emergency exception",
+            "example": false
+          },
+          "exceptionReason": {
+            "type": "string",
+            "description": "Reason for exception if applicable",
+            "example": "Safety critical item"
           },
           "services": {
             "type": "array",
+            "description": "List of service items",
             "items": {
               "$ref": "#/components/schemas/WorkorderItemDTO"
             }
           },
           "parts": {
             "type": "array",
+            "description": "List of part items",
             "items": {
               "$ref": "#/components/schemas/WorkorderItemDTO"
             }
@@ -1173,60 +2297,203 @@
         "type": "object",
         "properties": {
           "serviceEntityId": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "uuid",
+            "description": "Service entity ID",
+            "example": "550e8400-e29b-41d4-a716-446655440010"
           },
           "productEntityId": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "uuid",
+            "description": "Product entity ID",
+            "example": "550e8400-e29b-41d4-a716-446655440011"
+          },
+          "nonInventoryProductEntityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Non-inventory product entity ID",
+            "example": "550e8400-e29b-41d4-a716-446655440012"
           },
           "quantity": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Quantity",
+            "example": 2
           },
           "isEmergencySafety": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether this is an emergency/safety-critical item",
+            "example": true
           },
-          "emergencyReason": {
-            "type": "string"
+          "photoEvidenceUrl": {
+            "type": "string",
+            "description": "URL to photo evidence",
+            "example": "https://example.com/photos/brake-issue.jpg"
+          },
+          "emergencyNotes": {
+            "type": "string",
+            "description": "Notes explaining emergency/safety concern",
+            "example": "Brake pad at 1mm thickness, below safe minimum"
+          },
+          "photoNotPossible": {
+            "type": "boolean",
+            "description": "Flag indicating photo evidence is not possible",
+            "example": false
+          }
+        }
+      },
+      "ChangeRequestResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the change request",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "workorderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Workorder ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "requestedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID who requested the change",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time the change was requested"
+          },
+          "status": {
+            "type": "string",
+            "description": "Change request status (PENDING_APPROVAL, READY_TO_EXECUTE, CANCELLED)",
+            "example": "PENDING_APPROVAL"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the change request",
+            "example": "Additional brake work required"
+          },
+          "isEmergencyException": {
+            "type": "boolean",
+            "description": "Whether this is an emergency exception",
+            "example": false
+          },
+          "exceptionReason": {
+            "type": "string",
+            "description": "Reason for the exception if applicable",
+            "example": "Safety critical repair"
+          },
+          "approvalNote": {
+            "type": "string",
+            "description": "Approval notes",
+            "example": "Approved by service advisor"
+          },
+          "isApprovalGated": {
+            "type": "boolean",
+            "description": "Whether approval is gated",
+            "example": true
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time the change was approved"
+          },
+          "approvedBy": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID who approved the change",
+            "example": "550e8400-e29b-41d4-a716-446655440006"
+          },
+          "declinedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date and time the change was declined"
           }
         }
       },
       "ApproveChangeRequestDTO": {
         "type": "object",
-        "required": ["approvedBy", "approvalNote"],
         "properties": {
-          "approvedBy": {
-            "type": "integer",
-            "format": "int64"
-          },
           "approvalNote": {
-            "type": "string"
+            "type": "string",
+            "description": "Approval notes",
+            "example": "Approved by service advisor after customer consultation"
           }
         }
       },
       "DeclineChangeRequestDTO": {
         "type": "object",
-        "required": ["approvalNote"],
         "properties": {
-          "approvalNote": {
-            "type": "string"
+          "declineReason": {
+            "type": "string",
+            "description": "Reason for declining",
+            "example": "Customer declined additional work due to budget constraints"
           }
         }
       },
       "EmergencyOverrideDTO": {
         "type": "object",
-        "required": ["managerId", "exceptionReason"],
         "properties": {
-          "managerId": {
-            "type": "integer",
-            "format": "int64"
+          "overrideReason": {
+            "type": "string",
+            "description": "Reason for emergency override (requires Manager role)",
+            "example": "Safety-critical repair required immediately"
           },
-          "exceptionReason": {
-            "type": "string"
+          "managerUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Manager user ID applying override",
+            "example": "550e8400-e29b-41d4-a716-446655440007"
           }
         }
       },
-      "ApprovalConfiguration": {
+      "ApprovalConfigurationRequest": {
+        "type": "object",
+        "required": [
+          "approvalMethod"
+        ],
+        "properties": {
+          "locationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Location ID for this configuration (null = applies to all locations)",
+            "example": "550e8400-e29b-41d4-a716-446655440003"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer ID for this configuration (null = applies to all customers)",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "approvalMethod": {
+            "type": "string",
+            "description": "Approval method (CLICK_CONFIRM, SIGNATURE_REQUIRED)",
+            "example": "CLICK_CONFIRM"
+          },
+          "declineExpiryDays": {
+            "type": "integer",
+            "description": "Number of days a declined estimate can be reopened",
+            "example": 30,
+            "minimum": 0
+          },
+          "requireSignature": {
+            "type": "boolean",
+            "description": "Whether signature is required",
+            "example": false
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)",
+            "example": 0,
+            "minimum": 0
+          }
+        }
+      },
+      "ApprovalConfigurationResponse": {
         "type": "object",
         "properties": {
           "id": {
@@ -1236,31 +2503,52 @@
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "locationId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "If null, applies to all locations"
+            "type": "string",
+            "format": "uuid",
+            "description": "Location ID for this configuration (null = applies to all locations)",
+            "example": "550e8400-e29b-41d4-a716-446655440003"
           },
           "customerId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "If null, applies to all customers at the location"
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer ID for this configuration (null = applies to all customers)",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
           },
           "approvalMethod": {
             "type": "string",
-            "enum": ["CLICK_CONFIRM", "SIGNATURE", "BIOMETRIC"],
-            "default": "CLICK_CONFIRM"
+            "description": "Approval method",
+            "example": "CLICK_CONFIRM"
           },
           "declineExpiryDays": {
             "type": "integer",
-            "default": 30,
-            "description": "Number of days a declined estimate can be reopened"
+            "description": "Number of days a declined estimate can be reopened",
+            "example": 30
           },
           "requireSignature": {
             "type": "boolean",
-            "default": false
+            "description": "Whether signature is required",
+            "example": false
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Priority for configuration matching (0=default, 1=location-specific, 2=customer-specific)",
+            "example": 0
           }
         }
       }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer token authentication"
+      }
     }
-  }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
 }

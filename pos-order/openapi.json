@@ -1,0 +1,641 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Positivity Order API",
+    "description": "REST API for order management operations including price override management with approval workflow",
+    "version": "v1",
+    "contact": {
+      "name": "Durion Platform Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://api-gateway.local/api/order",
+      "description": "API Gateway"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Price Overrides",
+      "description": "Price override management with approval workflow"
+    }
+  ],
+  "paths": {
+    "/v1/orders/price-overrides": {
+      "post": {
+        "tags": [
+          "Price Overrides"
+        ],
+        "summary": "Apply price override",
+        "description": "Apply a price override to an order line. May require approval based on override amount. Requires PRICE_OVERRIDE_APPLY permission.",
+        "operationId": "applyPriceOverride",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyPriceOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Override applied and auto-approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyPriceOverrideResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Override applied, pending approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyPriceOverrideResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Insufficient permissions"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Price Overrides"
+        ],
+        "summary": "Get price overrides",
+        "description": "Retrieve price overrides by order ID, status, or date range. At least one filter parameter is required. Requires PRICE_OVERRIDE_VIEW permission.",
+        "operationId": "getOverrides",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "query",
+            "description": "Order ID filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Override status filter",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_APPROVAL",
+                "APPROVED",
+                "REJECTED",
+                "APPLIED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Start date for date range filter",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "End date for date range filter",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Overrides retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PriceOverride"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No filter parameter provided"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/orders/price-overrides/{overrideId}": {
+      "get": {
+        "tags": [
+          "Price Overrides"
+        ],
+        "summary": "Get price override",
+        "description": "Retrieve a specific price override by ID. Requires PRICE_OVERRIDE_VIEW permission.",
+        "operationId": "getOverride",
+        "parameters": [
+          {
+            "name": "overrideId",
+            "in": "path",
+            "description": "Price override ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "018e1c9f-6b5a-7890-abcd-1234567890ab"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Override found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceOverride"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Override not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/orders/price-overrides/{overrideId}/approve": {
+      "post": {
+        "tags": [
+          "Price Overrides"
+        ],
+        "summary": "Approve price override",
+        "description": "Approve a pending price override. Validates approver permission level. Requires PRICE_OVERRIDE_APPROVE permission.",
+        "operationId": "approvePriceOverride",
+        "parameters": [
+          {
+            "name": "overrideId",
+            "in": "path",
+            "description": "Price override ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "018e1c9f-6b5a-7890-abcd-1234567890ab"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovePriceOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Override approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceOverride"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or override not in pending state"
+          },
+          "403": {
+            "description": "Insufficient approval permissions"
+          },
+          "404": {
+            "description": "Override not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/orders/price-overrides/{overrideId}/reject": {
+      "post": {
+        "tags": [
+          "Price Overrides"
+        ],
+        "summary": "Reject price override",
+        "description": "Reject a pending price override with a reason. Requires PRICE_OVERRIDE_REJECT permission.",
+        "operationId": "rejectPriceOverride",
+        "parameters": [
+          {
+            "name": "overrideId",
+            "in": "path",
+            "description": "Price override ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "018e1c9f-6b5a-7890-abcd-1234567890ab"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectPriceOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Override rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceOverride"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or override not in pending state"
+          },
+          "403": {
+            "description": "Insufficient rejection permissions"
+          },
+          "404": {
+            "description": "Override not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/orders/price-overrides/pending": {
+      "get": {
+        "tags": [
+          "Price Overrides"
+        ],
+        "summary": "Get pending approvals",
+        "description": "Retrieve all price overrides awaiting approval. Requires PRICE_OVERRIDE_APPROVE permission.",
+        "operationId": "getPendingApprovals",
+        "responses": {
+          "200": {
+            "description": "Pending overrides retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PriceOverride"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApplyPriceOverrideRequest": {
+        "type": "object",
+        "description": "Request to apply a price override to an order line",
+        "required": [
+          "orderId",
+          "orderLineId",
+          "productId",
+          "originalPrice",
+          "overridePrice",
+          "reasonCode"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Order ID"
+          },
+          "orderLineId": {
+            "type": "string",
+            "description": "Order line ID"
+          },
+          "productId": {
+            "type": "string",
+            "description": "Product ID"
+          },
+          "originalPrice": {
+            "type": "number",
+            "format": "decimal",
+            "minimum": 0.01,
+            "description": "Original price from pricing service"
+          },
+          "overridePrice": {
+            "type": "number",
+            "format": "decimal",
+            "minimum": 0,
+            "description": "Override price to be applied"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "CUSTOMER_LOYALTY",
+              "PRICE_MATCH",
+              "PROMOTIONAL_PRICING",
+              "PRICING_ERROR_CORRECTION",
+              "VOLUME_DISCOUNT",
+              "GOODWILL_ADJUSTMENT",
+              "MANAGER_DISCRETION",
+              "OTHER"
+            ],
+            "description": "Reason code for the override"
+          },
+          "justification": {
+            "type": "string",
+            "description": "Optional detailed justification (required if reasonCode is OTHER)"
+          }
+        }
+      },
+      "ApplyPriceOverrideResponse": {
+        "type": "object",
+        "description": "Response after applying a price override",
+        "properties": {
+          "overrideId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the override (UUID v7)"
+          },
+          "orderId": {
+            "type": "string",
+            "description": "Order ID"
+          },
+          "orderLineId": {
+            "type": "string",
+            "description": "Order line ID"
+          },
+          "productId": {
+            "type": "string",
+            "description": "Product ID"
+          },
+          "originalPrice": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Original price"
+          },
+          "overridePrice": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Override price"
+          },
+          "discountAmount": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Calculated discount amount"
+          },
+          "discountPercentage": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Calculated discount percentage"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "CUSTOMER_LOYALTY",
+              "PRICE_MATCH",
+              "PROMOTIONAL_PRICING",
+              "PRICING_ERROR_CORRECTION",
+              "VOLUME_DISCOUNT",
+              "GOODWILL_ADJUSTMENT",
+              "MANAGER_DISCRETION",
+              "OTHER"
+            ]
+          },
+          "justification": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "APPLIED",
+              "CANCELLED"
+            ]
+          },
+          "requiresApproval": {
+            "type": "boolean",
+            "description": "Whether this override requires manager approval"
+          },
+          "requestedByUserId": {
+            "type": "string",
+            "description": "User ID who requested the override"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the override was created"
+          },
+          "message": {
+            "type": "string",
+            "description": "Response message"
+          }
+        }
+      },
+      "ApprovePriceOverrideRequest": {
+        "type": "object",
+        "description": "Request to approve a price override",
+        "properties": {
+          "comments": {
+            "type": "string",
+            "description": "Optional comments for approval"
+          }
+        }
+      },
+      "RejectPriceOverrideRequest": {
+        "type": "object",
+        "description": "Request to reject a price override",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Rejection reason"
+          },
+          "comments": {
+            "type": "string",
+            "description": "Optional additional comments"
+          }
+        }
+      },
+      "PriceOverride": {
+        "type": "object",
+        "description": "Price override entity representing the complete lifecycle from request through approval to application",
+        "properties": {
+          "overrideId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the override (UUID v7)"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Order identifier this override applies to"
+          },
+          "orderLineId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Order line item identifier this override applies to"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "SKU or product identifier for the line item"
+          },
+          "originalPrice": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Original/baseline price from pricing service"
+          },
+          "overridePrice": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Override price to be applied"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "CUSTOMER_LOYALTY",
+              "PRICE_MATCH",
+              "PROMOTIONAL_PRICING",
+              "PRICING_ERROR_CORRECTION",
+              "VOLUME_DISCOUNT",
+              "GOODWILL_ADJUSTMENT",
+              "MANAGER_DISCRETION",
+              "OTHER"
+            ],
+            "description": "Reason code for the override"
+          },
+          "justification": {
+            "type": "string",
+            "description": "Optional detailed justification for the override"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "APPLIED",
+              "CANCELLED"
+            ],
+            "description": "Current status of the override in its lifecycle"
+          },
+          "requestedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID who requested the override (Service Advisor)"
+          },
+          "approvedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID who approved the override (Manager). Null if not yet approved or if auto-approved."
+          },
+          "rejectedByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID who rejected the override. Null if not rejected."
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Reason provided for rejection"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the override was created"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the override was last updated"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the override was approved"
+          },
+          "rejectedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the override was rejected"
+          },
+          "appliedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the override was applied to the order"
+          },
+          "requiresApproval": {
+            "type": "boolean",
+            "description": "Whether this override required manager approval"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer token authentication"
+      }
+    }
+  }
+}

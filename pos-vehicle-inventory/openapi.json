@@ -2,64 +2,60 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Positivity Vehicle Inventory API",
-    "description": "Endpoints for vehicle CRUD, search, and care preferences management (CAP:091)",
+    "description": "REST API for vehicle inventory management including vehicle CRUD, search, and care preferences (CAP:091)",
+    "version": "v1",
     "contact": {
-      "name": "Durion Team",
-      "email": "louis.burroughs@gmail.com"
-    },
-    "version": "v1"
+      "name": "Durion Platform Team"
+    }
   },
   "servers": [
     {
       "url": "http://api-gateway.local/api/vehicle-inventory",
       "description": "API Gateway"
-    },
-    {
-      "url": "http://localhost:8080",
-      "description": "Development server (direct)"
     }
   ],
   "tags": [
     {
       "name": "Vehicle Registry",
-      "description": "Vehicle CRUD and management operations for CAP:091"
+      "description": "Vehicle CRUD and management operations (CAP:091 Story #105)"
     },
     {
       "name": "Vehicle Search",
-      "description": "Search and discover vehicles with ranking-based results"
+      "description": "Search and discover vehicles with ranking-based results (CAP:091 Story #103)"
     },
     {
       "name": "Vehicle Preferences",
-      "description": "Manage vehicle care preferences with flexible schema support"
+      "description": "Manage vehicle care preferences with flexible JSONB schema (CAP:091 Story #102)"
     },
     {
-      "name": "Vehicle API",
-      "description": "Legacy endpoints for vehicle CRUD and VIN-based operations"
+      "name": "Vehicle API (Legacy)",
+      "description": "Legacy vehicle CRUD endpoints for backward compatibility"
     }
   ],
   "paths": {
     "/v1/vehicles": {
       "post": {
-        "tags": ["Vehicle Registry"],
+        "tags": [
+          "Vehicle Registry"
+        ],
         "summary": "Create a new vehicle",
-        "description": "Creates a new vehicle record with VIN validation and normalization. VIN must be globally unique across all active vehicles. Story #105 / Issue #105.",
+        "description": "Creates a new vehicle record with VIN validation and normalization. VIN must be globally unique across all active vehicles. Story #105 / Issue #105. Emits VEHICLE_CREATE event.",
         "operationId": "createVehicle",
         "requestBody": {
-          "description": "Vehicle creation request with VIN, unit number, and description",
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateVehicleRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
             "description": "Vehicle created successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleResponse"
                 }
@@ -72,14 +68,21 @@
           "409": {
             "description": "Conflict - VIN already exists for another active vehicle"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/vehicles/{vehicleId}": {
       "get": {
-        "tags": ["Vehicle Registry"],
+        "tags": [
+          "Vehicle Registry"
+        ],
         "summary": "Get vehicle by ID",
-        "description": "Retrieves a vehicle by its unique ID. Story #105.",
+        "description": "Retrieves a vehicle by its unique UUID. Story #105.",
         "operationId": "getVehicle",
         "parameters": [
           {
@@ -97,7 +100,7 @@
           "200": {
             "description": "Vehicle found",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleResponse"
                 }
@@ -107,12 +110,19 @@
           "404": {
             "description": "Vehicle not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "put": {
-        "tags": ["Vehicle Registry"],
+        "tags": [
+          "Vehicle Registry"
+        ],
         "summary": "Update vehicle",
-        "description": "Updates an existing vehicle's details. VIN cannot be changed. Story #105.",
+        "description": "Updates an existing vehicle's details. VIN cannot be changed. Story #105. Emits VEHICLE_UPDATE event.",
         "operationId": "updateVehicle",
         "parameters": [
           {
@@ -127,37 +137,43 @@
           }
         ],
         "requestBody": {
-          "description": "Vehicle update request",
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateVehicleRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
             "description": "Vehicle updated successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleResponse"
                 }
               }
             }
           },
-          "404": {
-            "description": "Vehicle not found"
-          },
           "400": {
             "description": "Invalid request"
+          },
+          "404": {
+            "description": "Vehicle not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
-        "tags": ["Vehicle Registry"],
+        "tags": [
+          "Vehicle Registry"
+        ],
         "summary": "Delete vehicle",
         "description": "Soft-deletes (deactivates) a vehicle. Story #105.",
         "operationId": "deleteVehicle",
@@ -180,12 +196,19 @@
           "404": {
             "description": "Vehicle not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/vehicles/vin/{vin}": {
       "get": {
-        "tags": ["Vehicle Registry"],
+        "tags": [
+          "Vehicle Registry"
+        ],
         "summary": "Get vehicle by VIN",
         "description": "Retrieves a vehicle by its VIN (normalized lookup). Story #105.",
         "operationId": "getVehicleByVin",
@@ -196,7 +219,8 @@
             "description": "Vehicle VIN (17 characters)",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[A-HJ-NPR-Z0-9]{17}$"
             },
             "example": "1HGCM82633A004352"
           }
@@ -205,7 +229,7 @@
           "200": {
             "description": "Vehicle found",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleResponse"
                 }
@@ -215,30 +239,37 @@
           "404": {
             "description": "Vehicle not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/vehicles/search": {
       "post": {
-        "tags": ["Vehicle Search"],
+        "tags": [
+          "Vehicle Search"
+        ],
         "summary": "Search vehicles",
-        "description": "Search for vehicles by VIN, license plate, unit number, or description. Results are ranked by relevance: exact match > prefix match > contains match.",
-        "operationId": "search",
+        "description": "Search for vehicles by VIN, license plate, unit number, or description. Results are ranked by relevance: exact match > prefix match > contains match. Story #103. Emits VEHICLE_SEARCH event.",
+        "operationId": "searchVehicles",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SearchVehiclesRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
             "description": "Search results returned",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SearchVehiclesResponse"
                 }
@@ -248,13 +279,20 @@
           "400": {
             "description": "Invalid search query"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "get": {
-        "tags": ["Vehicle Search"],
+        "tags": [
+          "Vehicle Search"
+        ],
         "summary": "Search vehicles (query parameter)",
-        "description": "Alternative search endpoint using query parameters. Useful for browser-based queries.",
-        "operationId": "searchByQuery",
+        "description": "Alternative search endpoint using query parameters. Useful for browser-based queries. Story #103. Emits VEHICLE_SEARCH event.",
+        "operationId": "searchVehiclesByQuery",
         "parameters": [
           {
             "name": "q",
@@ -272,7 +310,9 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 25
+              "default": 25,
+              "minimum": 1,
+              "maximum": 50
             }
           },
           {
@@ -290,7 +330,7 @@
           "200": {
             "description": "Search results returned",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SearchVehiclesResponse"
                 }
@@ -300,20 +340,27 @@
           "400": {
             "description": "Invalid search query"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/vehicles/{vehicleId}/preferences": {
       "get": {
-        "tags": ["Vehicle Preferences"],
+        "tags": [
+          "Vehicle Preferences"
+        ],
         "summary": "Get vehicle care preferences",
-        "description": "Retrieves the care preferences for a vehicle. Returns 404 if no preferences exist.",
+        "description": "Retrieves the care preferences for a vehicle. Returns 404 if no preferences exist. Story #102.",
         "operationId": "getPreferences",
         "parameters": [
           {
             "name": "vehicleId",
             "in": "path",
-            "description": "Vehicle ID",
+            "description": "Vehicle UUID",
             "required": true,
             "schema": {
               "type": "string",
@@ -325,7 +372,7 @@
           "200": {
             "description": "Preferences found and returned",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleCarePreference"
                 }
@@ -335,18 +382,25 @@
           "404": {
             "description": "No preferences found for this vehicle"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "put": {
-        "tags": ["Vehicle Preferences"],
+        "tags": [
+          "Vehicle Preferences"
+        ],
         "summary": "Create or update vehicle care preferences",
-        "description": "Upserts preferences for a vehicle. If preferences exist, replaces them entirely. Use PATCH for partial updates.",
+        "description": "Upserts preferences for a vehicle. If preferences exist, replaces them entirely. Use PATCH for partial updates. Story #102. Emits VEHICLE_PREFERENCES_UPSERT event.",
         "operationId": "upsertPreferences",
         "parameters": [
           {
             "name": "vehicleId",
             "in": "path",
-            "description": "Vehicle ID",
+            "description": "Vehicle UUID",
             "required": true,
             "schema": {
               "type": "string",
@@ -355,20 +409,20 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PreferencesUpsertDto"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
             "description": "Preferences updated successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleCarePreference"
                 }
@@ -378,31 +432,38 @@
           "201": {
             "description": "Preferences created successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleCarePreference"
                 }
               }
             }
           },
-          "404": {
-            "description": "Vehicle not found"
-          },
           "400": {
             "description": "Invalid preference data"
+          },
+          "404": {
+            "description": "Vehicle not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "patch": {
-        "tags": ["Vehicle Preferences"],
+        "tags": [
+          "Vehicle Preferences"
+        ],
         "summary": "Partially update vehicle care preferences",
-        "description": "Merges provided preference fields into existing preferences without replacing the entire map",
+        "description": "Merges provided preference fields into existing preferences without replacing the entire map. Story #102. Emits VEHICLE_PREFERENCES_MERGE event.",
         "operationId": "mergePreferences",
         "parameters": [
           {
             "name": "vehicleId",
             "in": "path",
-            "description": "Vehicle ID",
+            "description": "Vehicle UUID",
             "required": true,
             "schema": {
               "type": "string",
@@ -411,20 +472,20 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PreferencesMergeDto"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
             "description": "Preferences merged successfully",
             "content": {
-              "*/*": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleCarePreference"
                 }
@@ -434,18 +495,25 @@
           "404": {
             "description": "No existing preferences to merge into"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
-        "tags": ["Vehicle Preferences"],
+        "tags": [
+          "Vehicle Preferences"
+        ],
         "summary": "Delete vehicle care preferences",
-        "description": "Removes all preferences for a vehicle",
+        "description": "Removes all preferences for a vehicle. Story #102. Emits VEHICLE_PREFERENCES_DELETE event.",
         "operationId": "deletePreferences",
         "parameters": [
           {
             "name": "vehicleId",
             "in": "path",
-            "description": "Vehicle ID",
+            "description": "Vehicle UUID",
             "required": true,
             "schema": {
               "type": "string",
@@ -460,303 +528,12 @@
           "404": {
             "description": "No preferences found to delete"
           }
-        }
-      }
-    },
-    "/v1/vehicles-legacy": {
-      "get": {
-        "tags": ["Vehicle API"],
-        "summary": "Get all vehicles (legacy)",
-        "description": "Retrieve a list of all vehicles in the inventory.",
-        "operationId": "getAllVehicles",
-        "responses": {
-          "200": {
-            "description": "List of vehicles returned successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/VehicleEntity"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["Vehicle API"],
-        "summary": "Create a new vehicle (legacy)",
-        "description": "Add a new vehicle to the inventory.",
-        "operationId": "createVehicleLegacy",
-        "requestBody": {
-          "description": "Vehicle object to be created",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VehicleEntity"
-              }
-            }
-          },
-          "required": true
         },
-        "responses": {
-          "200": {
-            "description": "Vehicle created successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VehicleEntity"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/vehicles-legacy/{id}": {
-      "get": {
-        "tags": ["Vehicle API"],
-        "summary": "Get vehicle by ID (legacy)",
-        "description": "Retrieve a vehicle by its unique ID.",
-        "operationId": "getVehicleLegacy",
-        "parameters": [
+        "security": [
           {
-            "name": "id",
-            "in": "path",
-            "description": "ID of the vehicle to retrieve",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 1
-            }
+            "bearerAuth": []
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "Vehicle found and returned.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VehicleEntity"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Vehicle not found."
-          }
-        }
-      },
-      "put": {
-        "tags": ["Vehicle API"],
-        "summary": "Update vehicle by ID (legacy)",
-        "description": "Update an existing vehicle's details by its ID.",
-        "operationId": "updateVehicleLegacy",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of the vehicle to update",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 1
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Updated vehicle object",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VehicleEntity"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Vehicle updated successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VehicleEntity"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Vehicle not found."
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Vehicle API"],
-        "summary": "Delete vehicle by ID (legacy)",
-        "description": "Delete a vehicle from the inventory by its ID.",
-        "operationId": "deleteVehicleLegacy",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of the vehicle to delete",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 1
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Vehicle deleted successfully."
-          },
-          "404": {
-            "description": "Vehicle not found."
-          }
-        }
-      }
-    },
-    "/v1/vehicles-legacy/vin/{vin}": {
-      "get": {
-        "tags": ["Vehicle API"],
-        "summary": "Get vehicle by VIN (legacy)",
-        "description": "Retrieve a vehicle by its VIN.",
-        "operationId": "getVehicleByVINLegacy",
-        "parameters": [
-          {
-            "name": "vin",
-            "in": "path",
-            "description": "VIN of the vehicle to retrieve",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "1HGCM82633A004352"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Vehicle found and returned.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VehicleEntity"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Vehicle not found."
-          }
-        }
-      },
-      "put": {
-        "tags": ["Vehicle API"],
-        "summary": "Update vehicle by VIN (legacy)",
-        "description": "Update an existing vehicle's details by its VIN.",
-        "operationId": "updateVehicleByVINLegacy",
-        "parameters": [
-          {
-            "name": "vin",
-            "in": "path",
-            "description": "VIN of the vehicle to update",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "1HGCM82633A004352"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Updated vehicle object",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VehicleEntity"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Vehicle updated successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VehicleEntity"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Vehicle not found."
-          }
-        }
-      },
-      "delete": {
-        "tags": ["Vehicle API"],
-        "summary": "Delete vehicle by VIN (legacy)",
-        "description": "Delete a vehicle from the inventory by its VIN.",
-        "operationId": "deleteVehicleByVINLegacy",
-        "parameters": [
-          {
-            "name": "vin",
-            "in": "path",
-            "description": "VIN of the vehicle to delete",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "1HGCM82633A004352"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Vehicle deleted successfully."
-          },
-          "404": {
-            "description": "Vehicle not found."
-          }
-        }
-      }
-    },
-    "/v1/vehicles-legacy/vin": {
-      "post": {
-        "tags": ["Vehicle API"],
-        "summary": "Create vehicle by VIN (legacy)",
-        "description": "Add a new vehicle to the inventory using its VIN.",
-        "operationId": "createVehicleByVINLegacy",
-        "requestBody": {
-          "description": "Vehicle object to be created (must include vin)",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VehicleEntity"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Vehicle created successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VehicleEntity"
-                }
-              }
-            }
-          }
-        }
+        ]
       }
     }
   },
@@ -765,57 +542,54 @@
       "CreateVehicleRequest": {
         "type": "object",
         "description": "Request DTO for creating a vehicle - CAP:091 Story #105",
-        "required": ["accountId", "vin", "unitNumber", "description"],
+        "required": [
+          "accountId",
+          "vin",
+          "unitNumber",
+          "description"
+        ],
         "properties": {
           "accountId": {
             "type": "string",
             "format": "uuid",
-            "description": "Account/party ID that owns this vehicle"
+            "description": "Account ID that owns this vehicle"
           },
           "vin": {
             "type": "string",
-            "description": "Vehicle Identification Number (17 characters)",
-            "example": "1HGCM82633A004352"
+            "pattern": "^[A-HJ-NPR-Z0-9]{17}$",
+            "description": "Vehicle Identification Number (17 characters, excludes I, O, Q)"
           },
           "unitNumber": {
             "type": "string",
-            "description": "Internal unit number for the vehicle",
-            "example": "UNIT-001"
+            "description": "Internal unit number for the vehicle"
           },
           "description": {
             "type": "string",
-            "description": "Description of the vehicle",
-            "example": "2019 Honda Accord Sedan"
+            "description": "Human-readable description of the vehicle"
           },
           "licensePlate": {
             "type": "string",
-            "description": "License plate number",
-            "example": "ABC-1234"
+            "description": "License plate number"
           },
           "licensePlateJurisdiction": {
             "type": "string",
-            "description": "Jurisdiction where license plate is registered",
-            "example": "CA"
+            "description": "State/province of license plate registration"
           },
           "year": {
             "type": "integer",
-            "description": "Manufacturing year of the vehicle",
-            "example": 2019
+            "description": "Vehicle year"
           },
           "make": {
             "type": "string",
-            "description": "Vehicle manufacturer",
-            "example": "Honda"
+            "description": "Vehicle make/manufacturer"
           },
           "model": {
             "type": "string",
-            "description": "Vehicle model name",
-            "example": "Accord"
+            "description": "Vehicle model"
           },
           "trim": {
             "type": "string",
-            "description": "Vehicle trim level",
-            "example": "EX-L"
+            "description": "Vehicle trim level"
           }
         }
       },
@@ -826,20 +600,20 @@
           "vehicleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Unique vehicle identifier"
+            "description": "Unique vehicle identifier (UUID v7)"
           },
           "accountId": {
             "type": "string",
             "format": "uuid",
-            "description": "Account/party ID that owns this vehicle"
+            "description": "Account ID that owns this vehicle"
           },
           "vin": {
             "type": "string",
-            "description": "Vehicle Identification Number (original format)"
+            "description": "Original VIN as provided"
           },
           "vinNormalized": {
             "type": "string",
-            "description": "Normalized VIN (uppercase, no spaces/dashes)"
+            "description": "Normalized VIN (uppercase, no spaces) for uniqueness checks"
           },
           "unitNumber": {
             "type": "string",
@@ -847,7 +621,7 @@
           },
           "description": {
             "type": "string",
-            "description": "Vehicle description"
+            "description": "Human-readable description"
           },
           "licensePlate": {
             "type": "string",
@@ -855,15 +629,15 @@
           },
           "licensePlateJurisdiction": {
             "type": "string",
-            "description": "License plate jurisdiction"
+            "description": "State/province of license plate"
           },
           "year": {
             "type": "integer",
-            "description": "Manufacturing year"
+            "description": "Vehicle year"
           },
           "make": {
             "type": "string",
-            "description": "Vehicle manufacturer"
+            "description": "Vehicle make"
           },
           "model": {
             "type": "string",
@@ -871,11 +645,11 @@
           },
           "trim": {
             "type": "string",
-            "description": "Vehicle trim level"
+            "description": "Vehicle trim"
           },
           "isActive": {
             "type": "boolean",
-            "description": "Whether vehicle is active (not soft-deleted)"
+            "description": "Whether the vehicle is active (not soft-deleted)"
           },
           "createdAt": {
             "type": "string",
@@ -896,8 +670,10 @@
       },
       "SearchVehiclesRequest": {
         "type": "object",
-        "description": "Request DTO for searching vehicles (CAP:091 Story #103)",
-        "required": ["query"],
+        "description": "Request DTO for searching vehicles - CAP:091 Story #103",
+        "required": [
+          "query"
+        ],
         "properties": {
           "query": {
             "type": "string",
@@ -905,183 +681,193 @@
           },
           "limit": {
             "type": "integer",
-            "description": "Result limit (default 25, max 50)",
-            "default": 25
+            "default": 25,
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Result limit (default 25, max 50)"
           },
           "cursor": {
             "type": "string",
-            "description": "Pagination cursor (reserved for future use)",
-            "nullable": true
+            "description": "Pagination cursor (reserved for future use)"
           },
           "enableContainsMatching": {
             "type": "boolean",
-            "description": "Enable contains matching (default false for strict matching)",
-            "default": false
+            "default": false,
+            "description": "Enable contains matching (default false for strict matching)"
           }
         }
       },
       "SearchVehiclesResponse": {
         "type": "object",
-        "description": "Search results response (CAP:091 Story #103)",
+        "description": "Search results response - CAP:091 Story #103",
         "properties": {
           "results": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/VehicleSummary"
-            }
+            },
+            "description": "List of matching vehicles"
           },
           "totalCount": {
             "type": "integer",
-            "description": "Total number of results found"
+            "description": "Total number of results"
           },
           "hasMore": {
             "type": "boolean",
-            "description": "Whether there are more results available"
+            "description": "Whether more results are available"
           },
           "query": {
             "type": "string",
-            "description": "Original query string"
+            "description": "Original search query"
           }
         }
       },
       "VehicleSummary": {
         "type": "object",
-        "description": "Vehicle summary for search results (CAP:091 Story #103)",
+        "description": "Vehicle summary for search results - CAP:091 Story #103",
         "properties": {
           "vehicleId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Vehicle UUID"
           },
           "vin": {
-            "type": "string"
+            "type": "string",
+            "description": "Vehicle VIN"
           },
           "unitNumber": {
-            "type": "string"
+            "type": "string",
+            "description": "Internal unit number"
           },
           "licensePlate": {
-            "type": "string"
+            "type": "string",
+            "description": "License plate number"
           },
           "description": {
-            "type": "string"
+            "type": "string",
+            "description": "Vehicle description"
           },
           "year": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Vehicle year"
           },
           "make": {
-            "type": "string"
+            "type": "string",
+            "description": "Vehicle make"
           },
           "model": {
-            "type": "string"
+            "type": "string",
+            "description": "Vehicle model"
           }
         }
       },
       "VehicleCarePreference": {
         "type": "object",
-        "description": "Vehicle care preference entity with flexible JSONB preferences",
+        "description": "Vehicle care preferences entity - CAP:091 Story #102. Stores structured and unstructured vehicle care preferences using JSONB.",
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "Preference record ID"
+            "description": "Preference record UUID (UUID v7)"
           },
           "vehicleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Associated vehicle ID"
+            "description": "Vehicle UUID"
           },
           "preferences": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Flexible key-value map of preferences (stored as JSONB)"
+            "description": "Flexible JSONB preference map (supports arbitrary key-value pairs)"
           },
           "serviceNotes": {
             "type": "string",
-            "description": "General service notes for the vehicle"
+            "description": "Free-text service notes"
           },
           "createdByUserId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "User who created the preferences"
           },
           "updatedByUserId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "User who last updated the preferences"
           },
           "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Creation timestamp"
           },
           "updatedAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Last update timestamp"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Optimistic locking version"
           }
         }
       },
       "PreferencesUpsertDto": {
         "type": "object",
-        "description": "DTO for upserting preferences",
-        "required": ["preferences"],
+        "description": "DTO for upserting vehicle care preferences",
+        "required": [
+          "preferences",
+          "createdByUserId",
+          "updatedByUserId"
+        ],
         "properties": {
           "preferences": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Complete preference map (replaces existing)"
+            "description": "Complete preference map (replaces existing preferences)"
           },
           "serviceNotes": {
-            "type": "string"
+            "type": "string",
+            "description": "Service notes"
           },
           "createdByUserId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "User creating the preferences (for new records)"
           },
           "updatedByUserId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "User updating the preferences"
           }
         }
       },
       "PreferencesMergeDto": {
         "type": "object",
-        "description": "DTO for merging preferences",
-        "required": ["partialPreferences"],
+        "description": "DTO for merging vehicle care preferences",
+        "required": [
+          "partialPreferences",
+          "updatedByUserId"
+        ],
         "properties": {
           "partialPreferences": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Partial preference map to merge with existing"
+            "description": "Partial preference map to merge (does not replace existing keys)"
           },
           "updatedByUserId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "User updating the preferences"
           }
         }
-      },
-      "VehicleEntity": {
-        "type": "object",
-        "description": "Legacy vehicle entity (for backward compatibility)",
-        "required": ["make", "model", "year", "vin"],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Unique identifier for the vehicle"
-          },
-          "make": {
-            "type": "string",
-            "description": "Vehicle manufacturer (e.g., Toyota, Honda)"
-          },
-          "model": {
-            "type": "string",
-            "description": "Vehicle model name"
-          },
-          "year": {
-            "type": "integer",
-            "description": "Manufacturing year of the vehicle"
-          },
-          "vin": {
-            "type": "string",
-            "description": "Vehicle Identification Number"
-          }
-        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer token authentication"
       }
     }
   }

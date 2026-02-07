@@ -1,0 +1,1363 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Positivity Accounting API",
+        "description": "API documentation for the Accounting service, accessible via the API Gateway. Provides journal entry management, GL accounts, posting rules, invoice payments, and accounting event ingestion.",
+        "contact": {
+            "name": "Durion Team",
+            "email": "louis.burroughs@gmail.com"
+        },
+        "version": "v1"
+    },
+    "servers": [
+        {
+            "url": "http://api-gateway.local/api/accounting",
+            "description": "API Gateway"
+        }
+    ],
+    "tags": [
+        {
+            "name": "Journal Entries",
+            "description": "Manage journal entries including posting and reversal"
+        },
+        {
+            "name": "GL Accounts",
+            "description": "Manage chart of accounts including lifecycle actions"
+        },
+        {
+            "name": "Posting Rules",
+            "description": "Manage posting rule sets and their lifecycle"
+        },
+        {
+            "name": "Invoice Payments",
+            "description": "Apply payments and query invoice status"
+        },
+        {
+            "name": "Accounting Events",
+            "description": "Ingest and manage accounting events for journal processing"
+        },
+        {
+            "name": "Accounting",
+            "description": "Miscellaneous accounting endpoints for traceability and payments"
+        }
+    ],
+    "paths": {
+        "/v1/accounting/journal-entries": {
+            "get": {
+                "tags": ["Journal Entries"],
+                "summary": "List journal entries",
+                "description": "Retrieve paginated journal entries",
+                "operationId": "listJournalEntries",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page index (0-based)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Page size",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Sort field",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "createdAt"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Journal entries listed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PagedJournalEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:je:view"]
+                    }
+                ]
+            },
+            "post": {
+                "tags": ["Journal Entries"],
+                "summary": "Create journal entry",
+                "description": "Create a new journal entry",
+                "operationId": "createJournalEntry",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/JournalEntryCreateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Journal entry created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:je:create"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/journal-entries/{journalEntryId}": {
+            "get": {
+                "tags": ["Journal Entries"],
+                "summary": "Get journal entry",
+                "description": "Retrieve a journal entry by identifier",
+                "operationId": "getJournalEntry",
+                "parameters": [
+                    {
+                        "name": "journalEntryId",
+                        "in": "path",
+                        "description": "Journal entry identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Journal entry returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Journal entry not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:je:view"]
+                    }
+                ]
+            },
+            "put": {
+                "tags": ["Journal Entries"],
+                "summary": "Update journal entry",
+                "description": "Update an existing journal entry",
+                "operationId": "updateJournalEntry",
+                "parameters": [
+                    {
+                        "name": "journalEntryId",
+                        "in": "path",
+                        "description": "Journal entry identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/JournalEntryCreateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Journal entry updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Journal entry not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:je:create"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/journal-entries/{journalEntryId}/post": {
+            "post": {
+                "tags": ["Journal Entries"],
+                "summary": "Post journal entry",
+                "description": "Post a draft journal entry to the ledger",
+                "operationId": "postJournalEntry",
+                "parameters": [
+                    {
+                        "name": "journalEntryId",
+                        "in": "path",
+                        "description": "Journal entry identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Journal entry posted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Journal entry not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:je:post"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/journal-entries/{journalEntryId}/reverse": {
+            "post": {
+                "tags": ["Journal Entries"],
+                "summary": "Reverse journal entry",
+                "description": "Reverse a posted journal entry",
+                "operationId": "reverseJournalEntry",
+                "parameters": [
+                    {
+                        "name": "journalEntryId",
+                        "in": "path",
+                        "description": "Journal entry identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/JournalEntryReversalRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Journal entry reversed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/JournalEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Journal entry not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:je:reverse"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/gl-accounts": {
+            "get": {
+                "tags": ["GL Accounts"],
+                "summary": "List GL accounts",
+                "description": "Retrieve paginated GL accounts filtered by status and sorted by a field",
+                "operationId": "listGLAccounts",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page index (0-based)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Page size",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Sort field",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "accountNumber"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter by account status",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "GL accounts listed"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:coa:view"]
+                    }
+                ]
+            },
+            "post": {
+                "tags": ["GL Accounts"],
+                "summary": "Create GL account",
+                "description": "Create a new GL account in the chart of accounts",
+                "operationId": "createGLAccount",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "GL account created"
+                    },
+                    "400": {
+                        "description": "Invalid request"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:coa:create"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/gl-accounts/{accountId}": {
+            "get": {
+                "tags": ["GL Accounts"],
+                "summary": "Get GL account",
+                "description": "Retrieve a specific GL account by identifier",
+                "operationId": "getGLAccount",
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "description": "GL account identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "GL account returned"
+                    },
+                    "404": {
+                        "description": "GL account not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:coa:view"]
+                    }
+                ]
+            },
+            "put": {
+                "tags": ["GL Accounts"],
+                "summary": "Update GL account",
+                "description": "Update an existing GL account",
+                "operationId": "updateGLAccount",
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "description": "GL account identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "GL account updated"
+                    },
+                    "404": {
+                        "description": "GL account not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:coa:create"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/gl-accounts/{accountId}/activate": {
+            "post": {
+                "tags": ["GL Accounts"],
+                "summary": "Activate GL account",
+                "description": "Activate a GL account for use",
+                "operationId": "activateGLAccount",
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "description": "GL account identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "GL account activated"
+                    },
+                    "404": {
+                        "description": "GL account not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:coa:activate"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/gl-accounts/{accountId}/deactivate": {
+            "post": {
+                "tags": ["GL Accounts"],
+                "summary": "Deactivate GL account",
+                "description": "Deactivate a GL account (prevent new entries)",
+                "operationId": "deactivateGLAccount",
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "description": "GL account identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "GL account deactivated"
+                    },
+                    "404": {
+                        "description": "GL account not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:coa:deactivate"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/gl-accounts/{accountId}/archive": {
+            "post": {
+                "tags": ["GL Accounts"],
+                "summary": "Archive GL account",
+                "description": "Archive a GL account (mark as deleted)",
+                "operationId": "archiveGLAccount",
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "description": "GL account identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "GL account archived"
+                    },
+                    "404": {
+                        "description": "GL account not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:coa:archive"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/posting-rules": {
+            "get": {
+                "tags": ["Posting Rules"],
+                "summary": "List posting rule sets",
+                "description": "Retrieve paginated posting rule sets",
+                "operationId": "listPostingRuleSets",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page index (0-based)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Page size",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Sort field",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "createdAt"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Posting rule sets listed"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:posting_rules:view"]
+                    }
+                ]
+            },
+            "post": {
+                "tags": ["Posting Rules"],
+                "summary": "Create posting rule set",
+                "description": "Create a new posting rule set",
+                "operationId": "createPostingRuleSet",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Posting rule set created"
+                    },
+                    "400": {
+                        "description": "Invalid request"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:posting_rules:create"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/posting-rules/{ruleSetId}": {
+            "get": {
+                "tags": ["Posting Rules"],
+                "summary": "Get posting rule set",
+                "description": "Retrieve a specific posting rule set by identifier",
+                "operationId": "getPostingRuleSet",
+                "parameters": [
+                    {
+                        "name": "ruleSetId",
+                        "in": "path",
+                        "description": "Posting rule set identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Posting rule set returned"
+                    },
+                    "404": {
+                        "description": "Posting rule set not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:posting_rules:view"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/posting-rules/{ruleSetId}/publish": {
+            "post": {
+                "tags": ["Posting Rules"],
+                "summary": "Publish posting rule set",
+                "description": "Publish a posting rule set to make it active",
+                "operationId": "publishPostingRuleSet",
+                "parameters": [
+                    {
+                        "name": "ruleSetId",
+                        "in": "path",
+                        "description": "Posting rule set identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Posting rule set published"
+                    },
+                    "404": {
+                        "description": "Posting rule set not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:posting_rules:publish"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/posting-rules/{ruleSetId}/archive": {
+            "post": {
+                "tags": ["Posting Rules"],
+                "summary": "Archive posting rule set",
+                "description": "Archive a posting rule set (mark as deleted)",
+                "operationId": "archivePostingRuleSet",
+                "parameters": [
+                    {
+                        "name": "ruleSetId",
+                        "in": "path",
+                        "description": "Posting rule set identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Posting rule set archived"
+                    },
+                    "404": {
+                        "description": "Posting rule set not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:posting_rules:archive"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/events": {
+            "get": {
+                "tags": ["Accounting Events"],
+                "summary": "List accounting events",
+                "description": "Retrieve paginated accounting events",
+                "operationId": "listAccountingEvents",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page index (0-based)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Page size",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Sort field",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "createdAt"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Accounting events listed"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:events:view"]
+                    }
+                ]
+            },
+            "post": {
+                "tags": ["Accounting Events"],
+                "summary": "Submit accounting event",
+                "description": "Submit a new accounting event for processing",
+                "operationId": "submitAccountingEvent",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AccountingEventSubmitRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "Event accepted for processing",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:events:submit"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/events/{eventId}": {
+            "get": {
+                "tags": ["Accounting Events"],
+                "summary": "Get accounting event",
+                "description": "Retrieve an accounting event by identifier",
+                "operationId": "getAccountingEvent",
+                "parameters": [
+                    {
+                        "name": "eventId",
+                        "in": "path",
+                        "description": "Event identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:events:view"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/events/{eventId}/journal-entries": {
+            "get": {
+                "tags": ["Accounting Events"],
+                "summary": "List journal entries for event",
+                "description": "Retrieve journal entries generated from an accounting event",
+                "operationId": "getJournalEntriesForEvent",
+                "parameters": [
+                    {
+                        "name": "eventId",
+                        "in": "path",
+                        "description": "Event identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Journal entries returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/JournalEntryResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:events:view"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/events/{eventId}/retry": {
+            "post": {
+                "tags": ["Accounting Events"],
+                "summary": "Retry accounting event",
+                "description": "Retry processing a failed accounting event",
+                "operationId": "retryAccountingEvent",
+                "parameters": [
+                    {
+                        "name": "eventId",
+                        "in": "path",
+                        "description": "Event identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Event retry accepted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:events:retry"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/payments/{paymentId}/applications": {
+            "post": {
+                "tags": ["Invoice Payments"],
+                "summary": "Apply payment to invoice",
+                "description": "Apply a payment to an invoice and update status",
+                "operationId": "applyPayment",
+                "parameters": [
+                    {
+                        "name": "paymentId",
+                        "in": "path",
+                        "description": "Payment identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PaymentAppliedRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment applied successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvoiceStatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:ar:apply_payment"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/invoices/{invoiceId}/status": {
+            "get": {
+                "tags": ["Invoice Payments"],
+                "summary": "Get invoice status",
+                "description": "Retrieve the current payment status of an invoice",
+                "operationId": "getInvoiceStatus",
+                "parameters": [
+                    {
+                        "name": "invoiceId",
+                        "in": "path",
+                        "description": "Invoice identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Invoice status returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvoiceStatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Invoice not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:ar:view"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/traceability/{journalEntryId}": {
+            "get": {
+                "tags": ["Accounting"],
+                "summary": "Get journal traceability",
+                "description": "Trace a journal entry across related records",
+                "operationId": "getJournalTraceability",
+                "parameters": [
+                    {
+                        "name": "journalEntryId",
+                        "in": "path",
+                        "description": "Journal entry identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Traceability returned"
+                    },
+                    "404": {
+                        "description": "Journal entry not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:je:view"]
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/payments/{paymentId}/status": {
+            "get": {
+                "tags": ["Accounting"],
+                "summary": "Get payment status",
+                "description": "Retrieve the status of a payment",
+                "operationId": "getPaymentStatus",
+                "parameters": [
+                    {
+                        "name": "paymentId",
+                        "in": "path",
+                        "description": "Payment identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment status returned"
+                    },
+                    "404": {
+                        "description": "Payment not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": ["accounting:ap:view"]
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "JournalEntryResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Journal entry identifier"
+                    },
+                    "entryDate": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Entry date"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Status (DRAFT, POSTED, REVERSED)",
+                        "enum": ["DRAFT", "POSTED", "REVERSED"]
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/JournalEntryLineResponse"
+                        }
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "JournalEntryLineResponse": {
+                "type": "object",
+                "properties": {
+                    "accountId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "debit": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "credit": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            },
+            "JournalEntryCreateRequest": {
+                "type": "object",
+                "required": ["entryDate", "description", "lines"],
+                "properties": {
+                    "entryDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/JournalEntryLineRequest"
+                        }
+                    }
+                }
+            },
+            "JournalEntryLineRequest": {
+                "type": "object",
+                "required": ["accountId"],
+                "properties": {
+                    "accountId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "debit": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "credit": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            },
+            "JournalEntryReversalRequest": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for reversal"
+                    }
+                }
+            },
+            "PagedJournalEntryResponse": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/JournalEntryResponse"
+                        }
+                    },
+                    "page": {
+                        "type": "integer"
+                    },
+                    "size": {
+                        "type": "integer"
+                    },
+                    "totalElements": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "AccountingEventResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "eventType": {
+                        "type": "string"
+                    },
+                    "sourceSystem": {
+                        "type": "string"
+                    },
+                    "eventData": {
+                        "type": "object"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["PENDING", "PROCESSED", "FAILED"]
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "AccountingEventSubmitRequest": {
+                "type": "object",
+                "required": ["eventType", "sourceSystem", "eventData"],
+                "properties": {
+                    "eventType": {
+                        "type": "string",
+                        "description": "Type of accounting event"
+                    },
+                    "sourceSystem": {
+                        "type": "string",
+                        "description": "Source system generating the event"
+                    },
+                    "eventData": {
+                        "type": "object",
+                        "description": "Event payload data"
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "description": "Idempotency key to prevent duplicate processing"
+                    }
+                }
+            },
+            "PaymentAppliedRequest": {
+                "type": "object",
+                "required": ["invoiceId", "amount", "idempotencyKey"],
+                "properties": {
+                    "invoiceId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "amount": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "idempotencyKey": {
+                        "type": "string"
+                    }
+                }
+            },
+            "InvoiceStatusResponse": {
+                "type": "object",
+                "properties": {
+                    "invoiceId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "totalAmount": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "paidAmount": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "balanceDue": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["UNPAID", "PARTIALLY_PAID", "PAID", "OVERDUE"]
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    }
+}
