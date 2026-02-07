@@ -1,0 +1,218 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Positivity Invoice API",
+    "description": "REST API for invoice and billing rules management for commercial accounts",
+    "version": "v1",
+    "contact": {
+      "name": "Durion Platform Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://api-gateway.local/api/invoice",
+      "description": "API Gateway"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Billing Rules",
+      "description": "Manage billing rules for commercial accounts"
+    }
+  ],
+  "paths": {
+    "/v1/billing/rules/{partyId}": {
+      "get": {
+        "tags": [
+          "Billing Rules"
+        ],
+        "summary": "Get billing rules for a party/customer",
+        "description": "Retrieve the current billing rules configuration for a commercial account",
+        "operationId": "getBillingRules",
+        "parameters": [
+          {
+            "name": "partyId",
+            "in": "path",
+            "description": "Party/Customer ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Billing rules found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingRulesDTO"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No billing rules configured for this party"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Billing Rules"
+        ],
+        "summary": "Create or update billing rules",
+        "description": "Idempotent upsert of billing rules for a commercial account",
+        "operationId": "upsertBillingRules",
+        "parameters": [
+          {
+            "name": "partyId",
+            "in": "path",
+            "description": "Party/Customer ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "description": "User ID performing the operation",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "api-user"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillingRulesDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Billing rules updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingRulesDTO"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Billing rules created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingRulesDTO"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid billing rules data"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BillingRulesDTO": {
+        "type": "object",
+        "description": "Billing rules configuration for a commercial account (CAP:092)",
+        "required": [
+          "partyId",
+          "paymentTermsCode",
+          "invoiceDeliveryMethod",
+          "invoiceGroupingStrategy"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the billing rules",
+            "nullable": true
+          },
+          "partyId": {
+            "type": "string",
+            "description": "Party/Customer ID these rules apply to"
+          },
+          "purchaseOrderRequired": {
+            "type": "boolean",
+            "description": "Whether a purchase order is required for invoicing",
+            "default": false
+          },
+          "paymentTermsCode": {
+            "type": "string",
+            "description": "Payment terms code (e.g., NET30, NET60, DUE_ON_RECEIPT)"
+          },
+          "invoiceDeliveryMethod": {
+            "type": "string",
+            "description": "How invoices should be delivered to the customer",
+            "enum": [
+              "EMAIL",
+              "PORTAL",
+              "MAIL"
+            ]
+          },
+          "invoiceGroupingStrategy": {
+            "type": "string",
+            "description": "How to group charges into invoices",
+            "enum": [
+              "PER_WORKORDER",
+              "PER_VEHICLE",
+              "SINGLE_INVOICE"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "description": "Optimistic locking version number",
+            "readOnly": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the rules were created",
+            "readOnly": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the rules were last updated",
+            "readOnly": true
+          },
+          "updatedBy": {
+            "type": "string",
+            "description": "User ID who last updated the rules",
+            "readOnly": true
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer token authentication"
+      }
+    }
+  }
+}

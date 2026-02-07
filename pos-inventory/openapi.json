@@ -1,0 +1,1217 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Positivity Inventory API",
+    "description": "REST API for inventory management operations including cycle counts, adjustments, availability queries, picking lists, and location management",
+    "version": "v1",
+    "contact": {
+      "name": "Durion Platform Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://api-gateway.local/api/inventory",
+      "description": "API Gateway"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Cycle Count API",
+      "description": "API for cycle count operations and variance tracking"
+    },
+    {
+      "name": "Cycle Count Operations",
+      "description": "Submit counts and recounts"
+    },
+    {
+      "name": "Cycle Count Query",
+      "description": "Query cycle count tasks and history"
+    },
+    {
+      "name": "Cycle Count Adjustments",
+      "description": "Manage inventory adjustments from cycle counts"
+    },
+    {
+      "name": "Inventory Availability",
+      "description": "Inventory availability read/write endpoints"
+    },
+    {
+      "name": "Picking Lists",
+      "description": "Picking list command endpoints"
+    },
+    {
+      "name": "Inventory Sites",
+      "description": "Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory."
+    },
+    {
+      "name": "Inventory Management",
+      "description": "Operations related to inventory location management"
+    }
+  ],
+  "paths": {
+    "/api/inventory/cycleCount/submit": {
+      "post": {
+        "tags": [
+          "Cycle Count Operations"
+        ],
+        "summary": "Submit a count for a cycle count task",
+        "description": "Records the actual quantity counted by an auditor. Calculates variance and updates task status.",
+        "operationId": "submitCount",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitCountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Count submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or quantity"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/inventory/cycleCount/recount": {
+      "post": {
+        "tags": [
+          "Cycle Count Operations"
+        ],
+        "summary": "Submit a recount for a cycle count task",
+        "description": "Records a recount with permission validation and limit enforcement. Maximum 2 recounts allowed (3 total counts).",
+        "operationId": "submitRecount",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitRecountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recount submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or recount limit exceeded"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/inventory/cycleCount/task/{taskId}": {
+      "get": {
+        "tags": [
+          "Cycle Count Query"
+        ],
+        "summary": "Get cycle count task details",
+        "description": "Retrieves details of a specific cycle count task.",
+        "operationId": "getTask",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "Task ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleCountTask"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/inventory/cycleCount/task/{taskId}/history": {
+      "get": {
+        "tags": [
+          "Cycle Count Query"
+        ],
+        "summary": "Get count history for a task",
+        "description": "Retrieves all count entries (original + recounts) for a task, ordered by sequence.",
+        "operationId": "getCountHistory",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "Task ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "History retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CountEntry"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/inventory/cycleCount/auditor/{auditorId}/tasks": {
+      "get": {
+        "tags": [
+          "Cycle Count Query"
+        ],
+        "summary": "Get tasks assigned to an auditor",
+        "description": "Retrieves all cycle count tasks assigned to a specific auditor.",
+        "operationId": "getAuditorTasks",
+        "parameters": [
+          {
+            "name": "auditorId",
+            "in": "path",
+            "description": "Auditor ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tasks retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CycleCountTask"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/cycleCountAdjustments": {
+      "post": {
+        "tags": [
+          "Cycle Count Adjustments"
+        ],
+        "summary": "Create cycle count adjustment",
+        "description": "Creates a new adjustment from a cycle count. Automatically evaluates against approval thresholds.",
+        "operationId": "createAdjustment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAdjustmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Adjustment created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdjustmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or no variance detected"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Cycle Count Adjustments"
+        ],
+        "summary": "List adjustments by status",
+        "description": "Lists all adjustments matching the specified status",
+        "operationId": "listAdjustments",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by adjustment status",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_APPROVAL",
+                "APPROVED",
+                "REJECTED",
+                "POSTED",
+                "ERROR"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adjustments retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdjustmentResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/cycleCountAdjustments/{adjustmentId}": {
+      "get": {
+        "tags": [
+          "Cycle Count Adjustments"
+        ],
+        "summary": "Get adjustment details",
+        "description": "Retrieves details of a specific cycle count adjustment",
+        "operationId": "getAdjustment",
+        "parameters": [
+          {
+            "name": "adjustmentId",
+            "in": "path",
+            "description": "Adjustment ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adjustment found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdjustmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Adjustment not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve": {
+      "post": {
+        "tags": [
+          "Cycle Count Adjustments"
+        ],
+        "summary": "Approve adjustment",
+        "description": "Approves a pending adjustment and posts it to the inventory ledger",
+        "operationId": "approveAdjustment",
+        "parameters": [
+          {
+            "name": "adjustmentId",
+            "in": "path",
+            "description": "Adjustment ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveAdjustmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adjustment approved and posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdjustmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Adjustment not found or not in approvable state"
+          },
+          "403": {
+            "description": "User lacks required approval permission"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/cycleCountAdjustments/{adjustmentId}/reject": {
+      "post": {
+        "tags": [
+          "Cycle Count Adjustments"
+        ],
+        "summary": "Reject adjustment",
+        "description": "Rejects a pending adjustment with a reason. No inventory changes are made.",
+        "operationId": "rejectAdjustment",
+        "parameters": [
+          {
+            "name": "adjustmentId",
+            "in": "path",
+            "description": "Adjustment ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectAdjustmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Adjustment rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdjustmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Adjustment not found or not in rejectable state"
+          },
+          "403": {
+            "description": "User lacks required approval permission"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/cycleCountAdjustments/pending": {
+      "get": {
+        "tags": [
+          "Cycle Count Adjustments"
+        ],
+        "summary": "List pending approvals",
+        "description": "Lists all adjustments awaiting approval",
+        "operationId": "listPendingApprovals",
+        "responses": {
+          "200": {
+            "description": "Pending adjustments retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdjustmentResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/inventory/cycleCountAdjustments/pending/count": {
+      "get": {
+        "tags": [
+          "Cycle Count Adjustments"
+        ],
+        "summary": "Count pending approvals",
+        "description": "Returns the count of adjustments awaiting approval",
+        "operationId": "countPendingApprovals",
+        "responses": {
+          "200": {
+            "description": "Count retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/availability/{productId}": {
+      "get": {
+        "tags": [
+          "Inventory Availability"
+        ],
+        "summary": "Query inventory availability",
+        "description": "Returns availability for a product. Stub implementation.",
+        "operationId": "queryInventoryAvailability",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "description": "Product identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not implemented"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Inventory Availability"
+        ],
+        "summary": "Update inventory availability",
+        "description": "Updates availability for a product. Stub implementation.",
+        "operationId": "updateInventoryAvailability",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "description": "Product identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Availability updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not implemented"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/pickingLists/{id}/confirm": {
+      "post": {
+        "tags": [
+          "Picking Lists"
+        ],
+        "summary": "Confirm picking list",
+        "description": "Confirms a picking list and commits consumption. Stub implementation.",
+        "operationId": "confirmPickingList",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Picking list identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Picking list confirmed"
+          },
+          "501": {
+            "description": "Not implemented"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/sites/{siteId}/defaultLocations": {
+      "get": {
+        "tags": [
+          "Inventory Sites"
+        ],
+        "summary": "Get site default locations",
+        "description": "Returns configured default locations for a site. Stub implementation.",
+        "operationId": "getSiteDefaultLocations",
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "path",
+            "description": "Site identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default locations returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Not implemented"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Inventory Sites"
+        ],
+        "summary": "Replace site default locations",
+        "description": "Replaces the configured default locations for a site. Stub implementation.",
+        "operationId": "putSiteDefaultLocations",
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "path",
+            "description": "Site identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default locations replaced"
+          },
+          "501": {
+            "description": "Not implemented"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/inventory/locations/{locationId}/deactivate": {
+      "post": {
+        "tags": [
+          "Inventory Management"
+        ],
+        "summary": "Deactivate a storage location",
+        "description": "Deactivate a storage location with atomic stock transfer to a destination location (Option B). If the location contains active inventory, a destination location must be specified.",
+        "operationId": "deactivateLocation",
+        "parameters": [
+          {
+            "name": "locationId",
+            "in": "path",
+            "description": "Location ID to deactivate",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeactivateLocationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Deactivation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeactivateLocationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters or destination required"
+          },
+          "404": {
+            "description": "Location not found"
+          },
+          "409": {
+            "description": "Conflict - business rule violation"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SubmitCountRequest": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "auditorId",
+          "actualQuantity"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task ID"
+          },
+          "auditorId": {
+            "type": "string",
+            "description": "Auditor ID"
+          },
+          "actualQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Actual quantity counted"
+          }
+        }
+      },
+      "SubmitRecountRequest": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "auditorId",
+          "actualQuantity",
+          "permission"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task ID"
+          },
+          "auditorId": {
+            "type": "string",
+            "description": "Auditor ID"
+          },
+          "actualQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Actual quantity on recount"
+          },
+          "permission": {
+            "type": "string",
+            "description": "Recount permission"
+          }
+        }
+      },
+      "CountResponse": {
+        "type": "object",
+        "properties": {
+          "countEntryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actualQuantity": {
+            "type": "integer"
+          },
+          "expectedQuantity": {
+            "type": "integer"
+          },
+          "variance": {
+            "type": "integer"
+          },
+          "recountSequenceNumber": {
+            "type": "integer"
+          },
+          "taskStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "REJECTED"
+            ]
+          },
+          "countedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "limitExceeded": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "CycleCountTask": {
+        "type": "object",
+        "description": "Cycle count task entity"
+      },
+      "CountEntry": {
+        "type": "object",
+        "description": "Count entry entity"
+      },
+      "CreateAdjustmentRequest": {
+        "type": "object",
+        "required": [
+          "stockItemId",
+          "reasonCode",
+          "countedQuantity",
+          "quantityOnHandBefore",
+          "costAtTimeOfAdjustment",
+          "createdByUserId"
+        ],
+        "properties": {
+          "stockItemId": {
+            "type": "string",
+            "description": "Stock item ID"
+          },
+          "reasonCode": {
+            "type": "string",
+            "description": "Reason code for adjustment"
+          },
+          "countedQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Counted quantity"
+          },
+          "quantityOnHandBefore": {
+            "type": "integer",
+            "description": "Quantity on-hand before count"
+          },
+          "costAtTimeOfAdjustment": {
+            "type": "number",
+            "format": "decimal",
+            "minimum": 0,
+            "description": "Cost at time of adjustment"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "description": "User ID creating the adjustment"
+          }
+        }
+      },
+      "AdjustmentResponse": {
+        "type": "object",
+        "properties": {
+          "adjustmentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stockItemId": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "quantityChange": {
+            "type": "integer"
+          },
+          "costAtTimeOfAdjustment": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "quantityOnHandBefore": {
+            "type": "integer"
+          },
+          "countedQuantity": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "POSTED",
+              "ERROR"
+            ]
+          },
+          "requiredApprovalTier": {
+            "type": "string"
+          },
+          "createdByUserId": {
+            "type": "string"
+          },
+          "approvedByUserId": {
+            "type": "string"
+          },
+          "rejectedByUserId": {
+            "type": "string"
+          },
+          "rejectionReason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rejectedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "postedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ledgerEntryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errorMessage": {
+            "type": "string"
+          },
+          "varianceValue": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "variancePercentage": {
+            "type": "number",
+            "format": "decimal"
+          }
+        }
+      },
+      "ApproveAdjustmentRequest": {
+        "type": "object",
+        "required": [
+          "approvedByUserId"
+        ],
+        "properties": {
+          "approvedByUserId": {
+            "type": "string",
+            "description": "User ID approving the adjustment"
+          }
+        }
+      },
+      "RejectAdjustmentRequest": {
+        "type": "object",
+        "required": [
+          "rejectedByUserId",
+          "rejectionReason"
+        ],
+        "properties": {
+          "rejectedByUserId": {
+            "type": "string",
+            "description": "User ID rejecting the adjustment"
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Reason for rejection"
+          }
+        }
+      },
+      "InventoryAvailabilityResponse": {
+        "type": "object",
+        "description": "Inventory availability response including on-hand, allocations, and ATP",
+        "required": [
+          "productId",
+          "locationId",
+          "onHandQty",
+          "allocatedQty"
+        ],
+        "properties": {
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Product identifier"
+          },
+          "locationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Location identifier"
+          },
+          "onHandQty": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Physical on-hand quantity (net sum of ledger events)"
+          },
+          "allocatedQty": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Total quantity allocated (hard commitments)"
+          },
+          "atpQty": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Available-to-promise quantity (onHand - allocated)"
+          },
+          "asOfDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the availability snapshot"
+          }
+        }
+      },
+      "DeactivateLocationRequest": {
+        "type": "object",
+        "properties": {
+          "destinationLocationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Destination location for inventory transfer"
+          }
+        }
+      },
+      "DeactivateLocationResponse": {
+        "type": "object",
+        "properties": {
+          "sourceLocationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "destinationLocationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "description": "Location status after deactivation"
+          },
+          "transfer": {
+            "type": "object",
+            "properties": {
+              "movedItems": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "itemId": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "number",
+                      "format": "double"
+                    }
+                  }
+                }
+              },
+              "movedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer token authentication"
+      }
+    }
+  }
+}

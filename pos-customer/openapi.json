@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "Positivity Customer API",
-        "description": "API documentation for the Customer service, accessible via the API Gateway.",
+        "description": "API documentation for the Customer service, accessible via the API Gateway. Provides CRM functionality including customer management, party relationships, accounts, contacts, preferences, vehicles, and snapshots.",
         "contact": {
             "name": "Durion Team",
             "email": "louis.burroughs@gmail.com"
@@ -17,1009 +17,255 @@
     ],
     "tags": [
         {
-            "name": "CRM Vehicles",
-            "description": "Vehicle management operations for customers (stub endpoints)"
-        },
-        {
             "name": "Customer API",
-            "description": "Operations related to customers"
-        },
-        {
-            "name": "CRM Contacts",
-            "description": "Contact point and role management for parties (stub endpoints)"
-        },
-        {
-            "name": "CRM Communication Preferences",
-            "description": "Communication preferences and consent flag management (stub endpoints)"
+            "description": "Basic customer CRUD operations"
         },
         {
             "name": "CRM Accounts",
             "description": "Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations"
+        },
+        {
+            "name": "CRM Persons",
+            "description": "Individual person management APIs"
+        },
+        {
+            "name": "CRM Party Relationships",
+            "description": "Commercial account relationship management APIs"
+        },
+        {
+            "name": "CRM Contacts",
+            "description": "Contact point and role management for parties"
+        },
+        {
+            "name": "CRM Communication Preferences",
+            "description": "Communication preferences and consent flag management"
+        },
+        {
+            "name": "CRM Vehicles",
+            "description": "Vehicle management operations for customers"
+        },
+        {
+            "name": "CRM Snapshots",
+            "description": "Consolidated CRM data snapshots"
         }
     ],
     "paths": {
-        "/v1/crm/{id}": {
-            "get": {
-                "tags": [
-                    "Customer API"
-                ],
-                "summary": "Get customer by ID",
-                "description": "Retrieve a customer by their unique ID.",
-                "operationId": "getCustomerById",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "description": "ID of the customer to retrieve",
-                        "required": true,
-                        "schema": {
-                            "type": "integer",
-                            "format": "int64"
-                        },
-                        "example": 1
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Customer found and returned.",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AbstractCustomer"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Customer not found.",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AbstractCustomer"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "put": {
-                "tags": [
-                    "Customer API"
-                ],
-                "summary": "Update an existing customer",
-                "description": "Update the details of an existing customer.",
-                "operationId": "updateCustomer",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "description": "ID of the customer to update",
-                        "required": true,
-                        "schema": {
-                            "type": "integer",
-                            "format": "int64"
-                        },
-                        "example": 1
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/AbstractCustomer"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Customer updated successfully.",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AbstractCustomer"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Customer not found.",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AbstractCustomer"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "tags": [
-                    "Customer API"
-                ],
-                "summary": "Delete a customer",
-                "description": "Delete a customer by their unique ID.",
-                "operationId": "deleteCustomer",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "description": "ID of the customer to delete",
-                        "required": true,
-                        "schema": {
-                            "type": "integer",
-                            "format": "int64"
-                        },
-                        "example": 1
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "Customer deleted successfully."
-                    },
-                    "404": {
-                        "description": "Customer not found."
-                    }
-                }
-            }
-        },
-        "/v1/crm/{customerId}/vehicles": {
-            "put": {
-                "tags": [
-                    "CRM Vehicles"
-                ],
-                "summary": "Update vehicle",
-                "description": "Update vehicle information for a customer (stub endpoint)",
-                "operationId": "updateVehicles",
-                "parameters": [
-                    {
-                        "name": "customerId",
-                        "in": "path",
-                        "description": "Customer ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "description": "Vehicle update request"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            },
-            "post": {
-                "tags": [
-                    "CRM Vehicles"
-                ],
-                "summary": "Create vehicle",
-                "description": "Create a new vehicle for a customer (stub endpoint)",
-                "operationId": "createVehicles",
-                "parameters": [
-                    {
-                        "name": "customerId",
-                        "in": "path",
-                        "description": "Customer ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "description": "Vehicle creation request"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/{customerId}/vehicles/{vehicleId}/transfer": {
-            "put": {
-                "tags": [
-                    "CRM Vehicles"
-                ],
-                "summary": "Transfer vehicle",
-                "description": "Transfer vehicle ownership between customers (stub endpoint)",
-                "operationId": "transferVehicles",
-                "parameters": [
-                    {
-                        "name": "customerId",
-                        "in": "path",
-                        "description": "Source customer ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "vehicleId",
-                        "in": "path",
-                        "description": "Vehicle ID to transfer",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "description": "Transfer request with target customer"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/parties/{partyId}/contacts/{contactId}/roles": {
-            "put": {
-                "tags": [
-                    "CRM Contacts"
-                ],
-                "summary": "Update contact roles",
-                "description": "Assign or update role assignments for a specific contact within a party (stub endpoint)",
-                "operationId": "updateContactRoles",
-                "parameters": [
-                    {
-                        "name": "partyId",
-                        "in": "path",
-                        "description": "Party ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "contactId",
-                        "in": "path",
-                        "description": "Contact ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "description": "Role assignment request"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles": {
-            "put": {
-                "tags": [
-                    "CRM Accounts"
-                ],
-                "summary": "Update contact roles",
-                "description": "Assign or update role assignments for a specific contact within a party",
-                "operationId": "updateContactRoles_1",
-                "parameters": [
-                    {
-                        "name": "partyId",
-                        "in": "path",
-                        "description": "Party ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "contactId",
-                        "in": "path",
-                        "description": "Contact ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/UpdateContactRolesRequest"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "404": {
-                        "description": "Party or contact not found"
-                    },
-                    "200": {
-                        "description": "Roles updated successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UpdateContactRolesResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    },
-                    "400": {
-                        "description": "Invalid role assignment"
-                    }
-                }
-            }
-        },
         "/v1/crm": {
             "get": {
                 "tags": [
                     "Customer API"
                 ],
                 "summary": "Get all customers",
-                "description": "Retrieve a list of all customers.",
+                "description": "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.",
                 "operationId": "getAllCustomers",
-                "responses": {
-                    "200": {
-                        "description": "List of customers returned successfully.",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AbstractCustomer"
-                                    }
-                                }
-                            }
+                "parameters": [
+                    {
+                        "name": "customerType",
+                        "in": "query",
+                        "description": "Customer type filter: PERSON or COMMERCIAL",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "PERSON",
+                            "enum": [
+                                "PERSON",
+                                "COMMERCIAL"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page index (0-based)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Page size",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
                         }
                     }
-                }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page of customers returned successfully"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": [
+                            "crm:party:view"
+                        ]
+                    }
+                ]
             },
             "post": {
                 "tags": [
                     "Customer API"
                 ],
                 "summary": "Create a new customer",
-                "description": "Add a new customer to the system.",
                 "operationId": "createCustomer",
                 "requestBody": {
+                    "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/AbstractCustomer"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "Customer created successfully.",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AbstractCustomer"
-                                }
+                                "$ref": "#/components/schemas/CustomerDTO"
                             }
                         }
                     }
-                }
-            }
-        },
-        "/v1/crm/parties/{partyId}/communicationPreferences": {
-            "get": {
-                "tags": [
-                    "CRM Communication Preferences"
-                ],
-                "summary": "Get communication preferences",
-                "description": "Retrieve communication preferences and consent flags for a party (stub endpoint)",
-                "operationId": "getCommunicationPreferences",
-                "parameters": [
-                    {
-                        "name": "partyId",
-                        "in": "path",
-                        "description": "Party ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            },
-            "post": {
-                "tags": [
-                    "CRM Communication Preferences"
-                ],
-                "summary": "Create or update communication preferences",
-                "description": "Set or update communication preferences and consent flags for a party (stub endpoint)",
-                "operationId": "upsertCommunicationPreferences",
-                "parameters": [
-                    {
-                        "name": "partyId",
-                        "in": "path",
-                        "description": "Party ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "description": "Communication preferences to set"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/accounts/tierResolve": {
-            "post": {
-                "tags": [
-                    "CRM Accounts"
-                ],
-                "summary": "Resolve account tier",
-                "description": "Resolve or compute the account tier based on business rules",
-                "operationId": "resolveAccountTier",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ResolveAccountTierRequest"
-                            }
-                        }
-                    },
-                    "required": true
                 },
                 "responses": {
                     "200": {
-                        "description": "Tier resolved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ResolveAccountTierResponse"
-                                }
-                            }
-                        }
+                        "description": "Customer created successfully"
                     },
                     "400": {
                         "description": "Invalid request"
-                    },
-                    "404": {
-                        "description": "Account not found"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/accounts/parties": {
-            "post": {
-                "tags": [
-                    "CRM Accounts"
-                ],
-                "summary": "Create commercial account",
-                "description": "Create a new commercial party/account in the CRM system",
-                "operationId": "createCommercialAccount",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateCommercialAccountRequest"
-                            }
-                        }
                     }
                 },
-                "responses": {
-                    "201": {
-                        "description": "Account created successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/CreateCommercialAccountResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/accounts/parties/{partyId}/vehicles": {
-            "post": {
-                "tags": [
-                    "CRM Accounts"
-                ],
-                "summary": "Create vehicle for party",
-                "description": "Associate a new vehicle with a party/customer",
-                "operationId": "createVehicleForParty",
-                "parameters": [
+                "security": [
                     {
-                        "name": "partyId",
-                        "in": "path",
-                        "description": "Party ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
+                        "bearerAuth": [
+                            "crm:party:create"
+                        ]
                     }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreateVehicleForPartyRequest"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "400": {
-                        "description": "Invalid vehicle data"
-                    },
-                    "201": {
-                        "description": "Vehicle created successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/CreateVehicleForPartyResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    },
-                    "404": {
-                        "description": "Party not found"
-                    }
-                }
+                ]
             }
         },
-        "/v1/crm/accounts/parties/{partyId}/merge": {
-            "post": {
-                "tags": [
-                    "CRM Accounts"
-                ],
-                "summary": "Merge parties",
-                "description": "Merge multiple parties into a single party record",
-                "operationId": "mergeParties",
-                "parameters": [
-                    {
-                        "name": "partyId",
-                        "in": "path",
-                        "description": "Target party ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/MergePartiesRequest"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Parties merged successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/MergePartiesResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid merge request"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    },
-                    "404": {
-                        "description": "Party not found"
-                    }
-                }
-            }
-        },
-        "/v1/crm/accounts/parties/{partyId}/communicationPreferences": {
+        "/v1/crm/{id}": {
             "get": {
                 "tags": [
-                    "CRM Accounts"
+                    "Customer API"
                 ],
-                "summary": "Get communication preferences",
-                "description": "Retrieve communication preferences and consent flags for a party",
-                "operationId": "getCommunicationPreferences_1",
+                "summary": "Get customer by ID",
+                "operationId": "getCustomerById",
                 "parameters": [
                     {
-                        "name": "partyId",
+                        "name": "id",
                         "in": "path",
-                        "description": "Party ID",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Preferences retrieved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GetCommunicationPreferencesResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
+                        "description": "Customer found"
                     },
                     "404": {
-                        "description": "Party not found"
+                        "description": "Customer not found"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "bearerAuth": [
+                            "crm:party:view"
+                        ]
+                    }
+                ]
             },
-            "post": {
+            "put": {
                 "tags": [
-                    "CRM Accounts"
+                    "Customer API"
                 ],
-                "summary": "Create or update communication preferences",
-                "description": "Set or update communication preferences and consent flags for a party",
-                "operationId": "upsertCommunicationPreferences_1",
+                "summary": "Update an existing customer",
+                "operationId": "updateCustomer",
                 "parameters": [
                     {
-                        "name": "partyId",
+                        "name": "id",
                         "in": "path",
-                        "description": "Party ID",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
                 "requestBody": {
+                    "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/UpsertCommunicationPreferencesRequest"
+                                "$ref": "#/components/schemas/CustomerDTO"
                             }
                         }
                     }
                 },
                 "responses": {
                     "200": {
-                        "description": "Preferences updated successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UpsertCommunicationPreferencesResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid preference data"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
+                        "description": "Customer updated"
                     },
                     "404": {
-                        "description": "Party not found"
-                    }
-                }
-            }
-        },
-        "/v1/crm/accounts/parties/search": {
-            "post": {
-                "tags": [
-                    "CRM Accounts"
-                ],
-                "summary": "Search parties",
-                "description": "Search for parties based on various criteria",
-                "operationId": "searchParties",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/SearchPartiesRequest"
-                            }
-                        }
+                        "description": "Customer not found"
                     }
                 },
-                "responses": {
-                    "400": {
-                        "description": "Invalid search criteria"
-                    },
-                    "200": {
-                        "description": "Search results returned",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/SearchPartiesResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/{customerId}/vehicles/{vehicleId}": {
-            "get": {
-                "tags": [
-                    "CRM Vehicles"
-                ],
-                "summary": "Get vehicle for customer",
-                "description": "Retrieve a specific vehicle for a given customer (stub endpoint)",
-                "operationId": "getVehiclesForCustomer",
-                "parameters": [
+                "security": [
                     {
-                        "name": "customerId",
-                        "in": "path",
-                        "description": "Customer ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "vehicleId",
-                        "in": "path",
-                        "description": "Vehicle ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
+                        "bearerAuth": [
+                            "crm:party:edit"
+                        ]
                     }
-                ],
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
+                ]
             },
             "delete": {
                 "tags": [
-                    "CRM Vehicles"
+                    "Customer API"
                 ],
-                "summary": "Delete vehicle",
-                "description": "Delete or deactivate a vehicle for a customer (stub endpoint)",
-                "operationId": "deleteVehicle",
+                "summary": "Delete a customer",
+                "operationId": "deleteCustomer",
                 "parameters": [
                     {
-                        "name": "customerId",
+                        "name": "id",
                         "in": "path",
-                        "description": "Customer ID",
                         "required": true,
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "vehicleId",
-                        "in": "path",
-                        "description": "Vehicle ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
                 "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/vehicles": {
-            "get": {
-                "tags": [
-                    "CRM Vehicles"
-                ],
-                "summary": "Search vehicles",
-                "description": "Search and filter vehicles across all customers (stub endpoint)",
-                "operationId": "getAllVehiclesFiltered",
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/vehicles/{vehicleId}": {
-            "get": {
-                "tags": [
-                    "CRM Vehicles"
-                ],
-                "summary": "Get vehicle by ID",
-                "description": "Retrieve vehicle details by vehicle ID (stub endpoint)",
-                "operationId": "getVehicle",
-                "parameters": [
-                    {
-                        "name": "vehicleId",
-                        "in": "path",
-                        "description": "Vehicle ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/parties/{partyId}/contacts": {
-            "get": {
-                "tags": [
-                    "CRM Contacts"
-                ],
-                "summary": "Get contacts with roles",
-                "description": "Retrieve all contact points for a party with their role assignments (stub endpoint)",
-                "operationId": "getContactsWithRoles",
-                "parameters": [
-                    {
-                        "name": "partyId",
-                        "in": "path",
-                        "description": "Party ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "501": {
-                        "description": "Not implemented"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
-                    }
-                }
-            }
-        },
-        "/v1/crm/accounts/{accountId}/tier": {
-            "get": {
-                "tags": [
-                    "CRM Accounts"
-                ],
-                "summary": "Get account tier",
-                "description": "Retrieve the tier level for a specific account",
-                "operationId": "getAccountTier",
-                "parameters": [
-                    {
-                        "name": "accountId",
-                        "in": "path",
-                        "description": "Account ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Tier retrieved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GetAccountTierResponse"
-                                }
-                            }
-                        }
+                    "204": {
+                        "description": "Customer deleted"
                     },
                     "404": {
-                        "description": "Account not found"
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
+                        "description": "Customer not found"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "bearerAuth": [
+                            "crm:party:deactivate"
+                        ]
+                    }
+                ]
             }
         },
-        "/v1/crm/accounts/parties/{partyId}": {
+        "/v1/crm/snapshot/party/{partyId}": {
             "get": {
                 "tags": [
-                    "CRM Accounts"
+                    "CRM Snapshots"
                 ],
-                "summary": "Get party details",
-                "description": "Retrieve details for a specific party by ID",
-                "operationId": "getParty",
+                "summary": "Fetch snapshot by party",
+                "description": "Returns complete party snapshot with accounts, contacts, vehicles",
+                "operationId": "fetchByParty",
                 "parameters": [
                     {
                         "name": "partyId",
                         "in": "path",
-                        "description": "Party ID",
                         "required": true,
                         "schema": {
                             "type": "string"
@@ -1028,37 +274,33 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Party details retrieved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GetPartyResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
+                        "description": "Success"
                     },
                     "404": {
                         "description": "Party not found"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "bearerAuth": [
+                            "crm:party:view"
+                        ]
+                    }
+                ]
             }
         },
-        "/v1/crm/accounts/parties/{partyId}/contacts": {
+        "/v1/crm/snapshot/vehicle/{vehicleId}": {
             "get": {
                 "tags": [
-                    "CRM Accounts"
+                    "CRM Snapshots"
                 ],
-                "summary": "Get contacts with roles",
-                "description": "Retrieve all contacts for a party including their role assignments",
-                "operationId": "getContactsWithRoles_1",
+                "summary": "Fetch snapshot by vehicle",
+                "description": "Returns party snapshot based on vehicle ownership",
+                "operationId": "fetchByVehicle",
                 "parameters": [
                     {
-                        "name": "partyId",
+                        "name": "vehicleId",
                         "in": "path",
-                        "description": "Party ID",
                         "required": true,
                         "schema": {
                             "type": "string"
@@ -1067,675 +309,51 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Contacts retrieved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GetContactsWithRolesResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions"
+                        "description": "Success"
                     },
                     "404": {
-                        "description": "Party not found"
+                        "description": "Vehicle or owner not found"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "bearerAuth": [
+                            "crm:party:view"
+                        ]
+                    }
+                ]
             }
         }
     },
     "components": {
         "schemas": {
-            "AbstractCustomer": {
+            "CustomerDTO": {
                 "type": "object",
-                "description": "Customer object to be created",
                 "properties": {
                     "id": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Unique identifier of the customer",
-                        "example": 1
-                    },
-                    "customerNumber": {
                         "type": "string",
-                        "description": "Unique customer number",
-                        "example": "CUST-1001"
-                    },
-                    "lastName": {
-                        "type": "string",
-                        "description": "Last name of the customer",
-                        "example": "Doe"
+                        "format": "uuid"
                     },
                     "firstName": {
-                        "type": "string",
-                        "description": "First name of the customer",
-                        "example": "John"
+                        "type": "string"
+                    },
+                    "lastName": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
                     },
                     "phoneNumber": {
-                        "type": "string",
-                        "description": "Phone number of the customer",
-                        "example": "+1-555-1234"
-                    },
-                    "email": {
-                        "type": "string",
-                        "description": "Email address of the customer",
-                        "example": "john.doe@example.com"
-                    },
-                    "primaryAddress": {
-                        "type": "string",
-                        "description": "Primary address label or identifier for the customer",
-                        "example": "123"
-                    },
-                    "vehicleVins": {
-                        "type": "array",
-                        "description": "List of vehicle VINs associated with the customer",
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "required": [
-                    "firstName",
-                    "lastName"
-                ]
-            },
-            "RoleAssignment": {
-                "type": "object",
-                "properties": {
-                    "roleCode": {
-                        "type": "string"
-                    },
-                    "isPrimary": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "UpdateContactRolesRequest": {
-                "type": "object",
-                "description": "Role update request",
-                "properties": {
-                    "version": {
-                        "type": "string"
-                    },
-                    "roles": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/RoleAssignment"
-                        }
-                    }
-                }
-            },
-            "UpdateContactRolesResponse": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "contactId": {
-                        "type": "string"
-                    },
-                    "version": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "updatedAt": {
                         "type": "string"
                     }
                 }
-            },
-            "CreateCommercialAccountRequest": {
-                "type": "object",
-                "description": "Commercial account creation request",
-                "properties": {
-                    "legalName": {
-                        "type": "string"
-                    },
-                    "displayName": {
-                        "type": "string"
-                    },
-                    "taxId": {
-                        "type": "string"
-                    },
-                    "partyType": {
-                        "type": "string"
-                    },
-                    "billingTermsId": {
-                        "type": "string"
-                    },
-                    "externalIdentifiers": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "string"
-                        }
-                    },
-                    "email": {
-                        "type": "string"
-                    },
-                    "phone": {
-                        "type": "string"
-                    }
-                }
-            },
-            "CreateCommercialAccountResponse": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "legalName": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "createdAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "duplicateCandidates": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/DuplicateCandidate"
-                        }
-                    }
-                }
-            },
-            "DuplicateCandidate": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "legalName": {
-                        "type": "string"
-                    },
-                    "matchReason": {
-                        "type": "string"
-                    }
-                }
-            },
-            "CreateVehicleForPartyRequest": {
-                "type": "object",
-                "description": "Vehicle creation request",
-                "properties": {
-                    "vinNumber": {
-                        "type": "string"
-                    },
-                    "unitNumber": {
-                        "type": "string"
-                    },
-                    "description": {
-                        "type": "string"
-                    },
-                    "licensePlate": {
-                        "type": "string"
-                    },
-                    "licensePlateRegion": {
-                        "type": "string"
-                    }
-                }
-            },
-            "CreateVehicleForPartyResponse": {
-                "type": "object",
-                "properties": {
-                    "vehicleId": {
-                        "type": "string"
-                    },
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "vinNumber": {
-                        "type": "string"
-                    },
-                    "unitNumber": {
-                        "type": "string"
-                    },
-                    "description": {
-                        "type": "string"
-                    },
-                    "licensePlate": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "createdAt": {
-                        "type": "string"
-                    }
-                }
-            },
-            "MergePartiesRequest": {
-                "type": "object",
-                "description": "Merge request with source party IDs",
-                "properties": {
-                    "survivorPartyId": {
-                        "type": "string"
-                    },
-                    "losingPartyId": {
-                        "type": "string"
-                    },
-                    "justification": {
-                        "type": "string"
-                    }
-                }
-            },
-            "MergePartiesResponse": {
-                "type": "object",
-                "properties": {
-                    "mergeAuditId": {
-                        "type": "string"
-                    },
-                    "survivorPartyId": {
-                        "type": "string"
-                    },
-                    "losingPartyId": {
-                        "type": "string"
-                    },
-                    "mergedPartyAlias": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "completedAt": {
-                        "type": "string"
-                    }
-                }
-            },
-            "UpsertCommunicationPreferencesRequest": {
-                "type": "object",
-                "description": "Communication preferences to set",
-                "properties": {
-                    "version": {
-                        "type": "string"
-                    },
-                    "emailPreference": {
-                        "type": "string"
-                    },
-                    "smsPreference": {
-                        "type": "string"
-                    },
-                    "phonePreference": {
-                        "type": "string"
-                    },
-                    "marketingPreference": {
-                        "type": "string"
-                    },
-                    "consentFlags": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "boolean"
-                        }
-                    },
-                    "preferencesNote": {
-                        "type": "string"
-                    },
-                    "updateSource": {
-                        "type": "string"
-                    }
-                }
-            },
-            "UpsertCommunicationPreferencesResponse": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "version": {
-                        "type": "string"
-                    },
-                    "operationType": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "updatedAt": {
-                        "type": "string"
-                    }
-                }
-            },
-            "SearchPartiesRequest": {
-                "type": "object",
-                "description": "Search criteria",
-                "properties": {
-                    "name": {
-                        "type": "string"
-                    },
-                    "email": {
-                        "type": "string"
-                    },
-                    "phone": {
-                        "type": "string"
-                    },
-                    "taxId": {
-                        "type": "string"
-                    },
-                    "partyType": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "includeMerged": {
-                        "type": "boolean"
-                    },
-                    "pageNumber": {
-                        "type": "integer",
-                        "format": "int32"
-                    },
-                    "pageSize": {
-                        "type": "integer",
-                        "format": "int32"
-                    },
-                    "sortField": {
-                        "type": "string"
-                    },
-                    "sortOrder": {
-                        "type": "string"
-                    }
-                }
-            },
-            "PartySummary": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "legalName": {
-                        "type": "string"
-                    },
-                    "displayName": {
-                        "type": "string"
-                    },
-                    "partyType": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "createdAt": {
-                        "type": "string"
-                    }
-                }
-            },
-            "SearchPartiesResponse": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/PartySummary"
-                        }
-                    },
-                    "totalCount": {
-                        "type": "integer",
-                        "format": "int32"
-                    },
-                    "pageNumber": {
-                        "type": "integer",
-                        "format": "int32"
-                    },
-                    "pageSize": {
-                        "type": "integer",
-                        "format": "int32"
-                    }
-                }
-            },
-            "GetPartyResponse": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "partyType": {
-                        "type": "string"
-                    },
-                    "legalName": {
-                        "type": "string"
-                    },
-                    "displayName": {
-                        "type": "string"
-                    },
-                    "taxId": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "string"
-                    },
-                    "billingTermsId": {
-                        "type": "string"
-                    },
-                    "createdAt": {
-                        "type": "string"
-                    },
-                    "modifiedAt": {
-                        "type": "string"
-                    }
-                }
-            },
-            "AssignedRole": {
-                "type": "object",
-                "properties": {
-                    "roleCode": {
-                        "type": "string"
-                    },
-                    "roleLabel": {
-                        "type": "string"
-                    },
-                    "isPrimary": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "ContactWithRoles": {
-                "type": "object",
-                "properties": {
-                    "contactId": {
-                        "type": "string"
-                    },
-                    "contactName": {
-                        "type": "string"
-                    },
-                    "email": {
-                        "type": "string"
-                    },
-                    "phone": {
-                        "type": "string"
-                    },
-                    "hasPrimaryEmail": {
-                        "type": "boolean"
-                    },
-                    "roles": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/AssignedRole"
-                        }
-                    },
-                    "invoiceDeliveryMethod": {
-                        "type": "string"
-                    }
-                }
-            },
-            "GetContactsWithRolesResponse": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "contacts": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/ContactWithRoles"
-                        }
-                    }
-                }
-            },
-            "GetCommunicationPreferencesResponse": {
-                "type": "object",
-                "properties": {
-                    "partyId": {
-                        "type": "string"
-                    },
-                    "version": {
-                        "type": "string"
-                    },
-                    "emailPreference": {
-                        "type": "string"
-                    },
-                    "smsPreference": {
-                        "type": "string"
-                    },
-                    "phonePreference": {
-                        "type": "string"
-                    },
-                    "marketingPreference": {
-                        "type": "string"
-                    },
-                    "consentFlags": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "boolean"
-                        }
-                    },
-                    "preferencesNote": {
-                        "type": "string"
-                    },
-                    "updatedAt": {
-                        "type": "string"
-                    },
-                    "updateSource": {
-                        "type": "string"
-                    }
-                }
-            },
-            "GetAccountTierResponse": {
-                "type": "object",
-                "description": "Account tier information response",
-                "required": ["accountId", "tier", "tierDisplayName"],
-                "properties": {
-                    "accountId": {
-                        "type": "string",
-                        "description": "Account/party identifier",
-                        "example": "123e4567-e89b-12d3-a456-426614174000"
-                    },
-                    "tier": {
-                        "type": "string",
-                        "description": "Current tier level",
-                        "enum": ["STANDARD", "BRONZE", "SILVER", "GOLD", "PLATINUM", "ENTERPRISE"],
-                        "example": "GOLD"
-                    },
-                    "tierDisplayName": {
-                        "type": "string",
-                        "description": "Display name of the tier",
-                        "example": "Gold"
-                    },
-                    "tierAssignedAt": {
-                        "type": "string",
-                        "format": "date-time",
-                        "description": "When the tier was last assigned or updated",
-                        "nullable": true
-                    },
-                    "tierAssignedBy": {
-                        "type": "string",
-                        "description": "Who assigned or last modified the tier",
-                        "nullable": true
-                    },
-                    "notes": {
-                        "type": "string",
-                        "description": "Optional notes about tier assignment or status",
-                        "nullable": true
-                    },
-                    "manualOverride": {
-                        "type": "boolean",
-                        "description": "Whether tier was manually assigned or auto-calculated"
-                    }
-                }
-            },
-            "ResolveAccountTierRequest": {
-                "type": "object",
-                "description": "Request to compute account tier based on business rules",
-                "required": ["accountId"],
-                "properties": {
-                    "accountId": {
-                        "type": "string",
-                        "description": "Account/party identifier",
-                        "example": "123e4567-e89b-12d3-a456-426614174000"
-                    },
-                    "annualRevenue": {
-                        "type": "number",
-                        "format": "decimal",
-                        "description": "Annual revenue or spending for tier calculation",
-                        "example": 125000.00,
-                        "nullable": true
-                    },
-                    "activeContractCount": {
-                        "type": "integer",
-                        "description": "Number of active contracts or subscriptions",
-                        "nullable": true
-                    },
-                    "accountAgeMonths": {
-                        "type": "integer",
-                        "description": "Account age in months",
-                        "nullable": true
-                    },
-                    "applyTier": {
-                        "type": "boolean",
-                        "description": "Whether to apply the resolved tier or just return the recommendation",
-                        "default": false
-                    },
-                    "forceRecalculation": {
-                        "type": "boolean",
-                        "description": "Force recalculation even if tier was manually set",
-                        "default": false
-                    }
-                }
-            },
-            "ResolveAccountTierResponse": {
-                "type": "object",
-                "description": "Account tier resolution result",
-                "required": ["accountId", "currentTier", "recommendedTier"],
-                "properties": {
-                    "accountId": {
-                        "type": "string",
-                        "description": "Account/party identifier",
-                        "example": "123e4567-e89b-12d3-a456-426614174000"
-                    },
-                    "currentTier": {
-                        "type": "string",
-                        "description": "Currently assigned tier (before resolution)",
-                        "enum": ["STANDARD", "BRONZE", "SILVER", "GOLD", "PLATINUM", "ENTERPRISE"],
-                        "example": "SILVER"
-                    },
-                    "recommendedTier": {
-                        "type": "string",
-                        "description": "Recommended/resolved tier based on business rules",
-                        "enum": ["STANDARD", "BRONZE", "SILVER", "GOLD", "PLATINUM", "ENTERPRISE"],
-                        "example": "GOLD"
-                    },
-                    "tierApplied": {
-                        "type": "boolean",
-                        "description": "Whether the tier was applied to the account"
-                    },
-                    "manualOverrideActive": {
-                        "type": "boolean",
-                        "description": "Whether the current tier was manually set and blocked auto-update"
-                    },
-                    "resolutionReason": {
-                        "type": "string",
-                        "description": "Explanation of why this tier was recommended",
-                        "nullable": true
-                    },
-                    "tierScore": {
-                        "type": "integer",
-                        "description": "Score or metric used for tier calculation",
-                        "nullable": true
-                    }
-                }
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
             }
         }
     }
