@@ -6,13 +6,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for Posting Category entity.
  * Supports looking up categories by name.
  */
 @Repository
-public interface PostingCategoryRepository extends JpaRepository<PostingCategory, String> {
+public interface PostingCategoryRepository extends JpaRepository<PostingCategory, UUID> {
 
     /**
      * Find a category by name.

@@ -1,7 +1,7 @@
 package com.positivity.workorder.internal.dto;
 
-import com.positivity.workorder.internal.enums.InvoiceDeliveryMethod;
-import com.positivity.workorder.internal.enums.InvoiceGroupingStrategy;
+import com.positivity.shared.enums.InvoiceDeliveryMethod;
+import com.positivity.shared.enums.InvoiceGroupingStrategy;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 

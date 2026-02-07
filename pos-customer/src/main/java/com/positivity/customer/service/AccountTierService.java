@@ -232,6 +232,6 @@ public class AccountTierService {
     /**
      * Internal record for tier calculation results.
      */
-    private record TierCalculation(AccountTier tier, int score, String reason) {
+    public record TierCalculation(AccountTier tier, int score, String reason) {
     }
 }

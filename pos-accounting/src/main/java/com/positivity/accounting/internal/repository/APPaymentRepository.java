@@ -7,8 +7,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Repository for AP Payment entities.
@@ -16,41 +17,41 @@ import java.util.List;
  * @see APPayment
  */
 @Repository
-public interface APPaymentRepository extends JpaRepository<APPayment, String> {
+public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
 
-    /**
-     * Find all payments for a vendor bill.
-     */
-    List<APPayment> findByVendorBillId(String vendorBillId);
+        /**
+         * Find all payments for a vendor bill.
+         */
+        List<APPayment> findByVendorBillId(UUID vendorBillId);
 
-    /**
-     * Find all payments for a vendor.
-     */
-    List<APPayment> findByVendorId(String vendorId);
+        /**
+         * Find all payments for a vendor.
+         */
+        List<APPayment> findByVendorId(UUID vendorId);
 
-    /**
-     * Find payments by status.
-     */
-    List<APPayment> findByStatus(APPaymentStatus status);
+        /**
+         * Find payments by status.
+         */
+        List<APPayment> findByStatus(APPaymentStatus status);
 
-    /**
-     * Find payments scheduled for a specific date.
-     */
-    List<APPayment> findByPaymentDate(LocalDate paymentDate);
+        /**
+         * Find payments scheduled for a specific date.
+         */
+        List<APPayment> findByPaymentDate(LocalDateTime paymentDate);
 
-    /**
-     * Find payments scheduled between dates.
-     */
-    @Query("SELECT p FROM APPayment p WHERE p.paymentDate BETWEEN :startDate AND :endDate")
-    List<APPayment> findPaymentsByDateRange(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate);
+        /**
+         * Find payments scheduled between dates.
+         */
+        @Query("SELECT p FROM APPayment p WHERE p.paymentDate BETWEEN :startDate AND :endDate")
+        List<APPayment> findPaymentsByDateRange(
+                        @Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate);
 
-    /**
-     * Find pending approvals requiring high-threshold authorization.
-     */
-    @Query("SELECT p FROM APPayment p WHERE p.status = :status AND p.approvalLevel = :approvalLevel")
-    List<APPayment> findPendingByApprovalLevel(
-            @Param("status") APPaymentStatus status,
-            @Param("approvalLevel") String approvalLevel);
+        /**
+         * Find pending approvals requiring high-threshold authorization.
+         */
+        @Query("SELECT p FROM APPayment p WHERE p.status = :status AND p.approvalLevel = :approvalLevel")
+        List<APPayment> findPendingByApprovalLevel(
+                        @Param("status") APPaymentStatus status,
+                        @Param("approvalLevel") String approvalLevel);
 }

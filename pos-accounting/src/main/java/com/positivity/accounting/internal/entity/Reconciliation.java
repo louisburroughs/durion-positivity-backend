@@ -5,11 +5,18 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Reconciliation entity - manages bank/cash reconciliation sessions.
@@ -23,6 +30,11 @@ import java.util.List;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Reconciliation</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = { "statementLines", "glTransactions", "adjustments" })
 @Entity
 @Table(name = "reconciliation", indexes = {
         @Index(name = "idx_reconciliation_account", columnList = "gl_account_id"),
@@ -31,12 +43,14 @@ import java.util.List;
 })
 public class Reconciliation {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "reconciliation_id", length = 50, nullable = false)
-    private String reconciliationId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "reconciliation_id", nullable = false)
+    private UUID reconciliationId;
 
-    @Column(name = "gl_account_id", length = 50, nullable = false)
-    private String glAccountId;
+    @Column(name = "gl_account_id", nullable = false)
+    private UUID glAccountId;
 
     @Column(name = "account_code", length = 20)
     private String accountCode;
@@ -45,13 +59,13 @@ public class Reconciliation {
     private String accountName;
 
     @Column(name = "period_start_date", nullable = false)
-    private LocalDate periodStartDate;
+    private LocalDateTime periodStartDate;
 
     @Column(name = "period_end_date", nullable = false)
-    private LocalDate periodEndDate;
+    private LocalDateTime periodEndDate;
 
     @Column(name = "statement_date", nullable = false)
-    private LocalDate statementDate;
+    private LocalDateTime statementDate;
 
     @Column(name = "statement_ending_balance", precision = 19, scale = 4, nullable = false)
     private BigDecimal statementEndingBalance;
@@ -92,349 +106,46 @@ public class Reconciliation {
     private String finalizedBy;
 
     // Nested classes for JSONB storage
+    @Getter
+    @Setter
+    @NoArgsConstructor
     public static class StatementLine {
         private String lineId;
         private Integer lineNumber;
-        private LocalDate transactionDate;
+        private LocalDateTime transactionDate;
         private String description;
         private BigDecimal amount;
         private String referenceNumber;
         private List<String> matchedGLTransactionIds = new ArrayList<>();
         private String matchStatus;
-
-        // Getters and setters
-        public String getLineId() {
-            return lineId;
-        }
-
-        public void setLineId(String lineId) {
-            this.lineId = lineId;
-        }
-
-        public Integer getLineNumber() {
-            return lineNumber;
-        }
-
-        public void setLineNumber(Integer lineNumber) {
-            this.lineNumber = lineNumber;
-        }
-
-        public LocalDate getTransactionDate() {
-            return transactionDate;
-        }
-
-        public void setTransactionDate(LocalDate transactionDate) {
-            this.transactionDate = transactionDate;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        public void setDescription(String description) {
-            this.description = description;
-        }
-
-        public BigDecimal getAmount() {
-            return amount;
-        }
-
-        public void setAmount(BigDecimal amount) {
-            this.amount = amount;
-        }
-
-        public String getReferenceNumber() {
-            return referenceNumber;
-        }
-
-        public void setReferenceNumber(String referenceNumber) {
-            this.referenceNumber = referenceNumber;
-        }
-
-        public List<String> getMatchedGLTransactionIds() {
-            return matchedGLTransactionIds;
-        }
-
-        public void setMatchedGLTransactionIds(List<String> matchedGLTransactionIds) {
-            this.matchedGLTransactionIds = matchedGLTransactionIds;
-        }
-
-        public String getMatchStatus() {
-            return matchStatus;
-        }
-
-        public void setMatchStatus(String matchStatus) {
-            this.matchStatus = matchStatus;
-        }
     }
 
+    @Getter
+    @Setter
+    @NoArgsConstructor
     public static class GLTransaction {
         private String glTransactionId;
         private String journalEntryId;
-        private LocalDate transactionDate;
+        private LocalDateTime transactionDate;
         private String description;
         private BigDecimal amount;
         private List<String> matchedStatementLineIds = new ArrayList<>();
         private String matchStatus;
-
-        // Getters and setters
-        public String getGlTransactionId() {
-            return glTransactionId;
-        }
-
-        public void setGlTransactionId(String glTransactionId) {
-            this.glTransactionId = glTransactionId;
-        }
-
-        public String getJournalEntryId() {
-            return journalEntryId;
-        }
-
-        public void setJournalEntryId(String journalEntryId) {
-            this.journalEntryId = journalEntryId;
-        }
-
-        public LocalDate getTransactionDate() {
-            return transactionDate;
-        }
-
-        public void setTransactionDate(LocalDate transactionDate) {
-            this.transactionDate = transactionDate;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        public void setDescription(String description) {
-            this.description = description;
-        }
-
-        public BigDecimal getAmount() {
-            return amount;
-        }
-
-        public void setAmount(BigDecimal amount) {
-            this.amount = amount;
-        }
-
-        public List<String> getMatchedStatementLineIds() {
-            return matchedStatementLineIds;
-        }
-
-        public void setMatchedStatementLineIds(List<String> matchedStatementLineIds) {
-            this.matchedStatementLineIds = matchedStatementLineIds;
-        }
-
-        public String getMatchStatus() {
-            return matchStatus;
-        }
-
-        public void setMatchStatus(String matchStatus) {
-            this.matchStatus = matchStatus;
-        }
     }
 
+    @Getter
+    @Setter
+    @NoArgsConstructor
     public static class Adjustment {
         private String adjustmentId;
         private String journalEntryId;
         private String adjustmentType;
         private BigDecimal amount;
         private String description;
-
-        // Getters and setters
-        public String getAdjustmentId() {
-            return adjustmentId;
-        }
-
-        public void setAdjustmentId(String adjustmentId) {
-            this.adjustmentId = adjustmentId;
-        }
-
-        public String getJournalEntryId() {
-            return journalEntryId;
-        }
-
-        public void setJournalEntryId(String journalEntryId) {
-            this.journalEntryId = journalEntryId;
-        }
-
-        public String getAdjustmentType() {
-            return adjustmentType;
-        }
-
-        public void setAdjustmentType(String adjustmentType) {
-            this.adjustmentType = adjustmentType;
-        }
-
-        public BigDecimal getAmount() {
-            return amount;
-        }
-
-        public void setAmount(BigDecimal amount) {
-            this.amount = amount;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        public void setDescription(String description) {
-            this.description = description;
-        }
     }
 
-    // Constructors
-    public Reconciliation() {
-    }
-
-    public Reconciliation(String reconciliationId) {
+    public Reconciliation(UUID reconciliationId) {
         this.reconciliationId = reconciliationId;
-    }
-
-    // Getters and Setters
-    public String getReconciliationId() {
-        return reconciliationId;
-    }
-
-    public void setReconciliationId(String reconciliationId) {
-        this.reconciliationId = reconciliationId;
-    }
-
-    public String getGlAccountId() {
-        return glAccountId;
-    }
-
-    public void setGlAccountId(String glAccountId) {
-        this.glAccountId = glAccountId;
-    }
-
-    public String getAccountCode() {
-        return accountCode;
-    }
-
-    public void setAccountCode(String accountCode) {
-        this.accountCode = accountCode;
-    }
-
-    public String getAccountName() {
-        return accountName;
-    }
-
-    public void setAccountName(String accountName) {
-        this.accountName = accountName;
-    }
-
-    public LocalDate getPeriodStartDate() {
-        return periodStartDate;
-    }
-
-    public void setPeriodStartDate(LocalDate periodStartDate) {
-        this.periodStartDate = periodStartDate;
-    }
-
-    public LocalDate getPeriodEndDate() {
-        return periodEndDate;
-    }
-
-    public void setPeriodEndDate(LocalDate periodEndDate) {
-        this.periodEndDate = periodEndDate;
-    }
-
-    public LocalDate getStatementDate() {
-        return statementDate;
-    }
-
-    public void setStatementDate(LocalDate statementDate) {
-        this.statementDate = statementDate;
-    }
-
-    public BigDecimal getStatementEndingBalance() {
-        return statementEndingBalance;
-    }
-
-    public void setStatementEndingBalance(BigDecimal statementEndingBalance) {
-        this.statementEndingBalance = statementEndingBalance;
-    }
-
-    public BigDecimal getGlEndingBalance() {
-        return glEndingBalance;
-    }
-
-    public void setGlEndingBalance(BigDecimal glEndingBalance) {
-        this.glEndingBalance = glEndingBalance;
-    }
-
-    public BigDecimal getDifference() {
-        return difference;
-    }
-
-    public void setDifference(BigDecimal difference) {
-        this.difference = difference;
-    }
-
-    public ReconciliationStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(ReconciliationStatus status) {
-        this.status = status;
-    }
-
-    public List<StatementLine> getStatementLines() {
-        return statementLines;
-    }
-
-    public void setStatementLines(List<StatementLine> statementLines) {
-        this.statementLines = statementLines;
-    }
-
-    public List<GLTransaction> getGlTransactions() {
-        return glTransactions;
-    }
-
-    public void setGlTransactions(List<GLTransaction> glTransactions) {
-        this.glTransactions = glTransactions;
-    }
-
-    public List<Adjustment> getAdjustments() {
-        return adjustments;
-    }
-
-    public void setAdjustments(List<Adjustment> adjustments) {
-        this.adjustments = adjustments;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public Instant getFinalizedAt() {
-        return finalizedAt;
-    }
-
-    public void setFinalizedAt(Instant finalizedAt) {
-        this.finalizedAt = finalizedAt;
-    }
-
-    public String getFinalizedBy() {
-        return finalizedBy;
-    }
-
-    public void setFinalizedBy(String finalizedBy) {
-        this.finalizedBy = finalizedBy;
     }
 
     @PrePersist

@@ -1,9 +1,9 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.internal.domain.InvoiceStatusView;
-import com.positivity.accounting.internal.domain.PaymentStatus;
 import com.positivity.accounting.internal.entity.InvoiceStatusResponse;
+import com.positivity.accounting.internal.entity.InvoiceStatusView;
 import com.positivity.accounting.internal.entity.PaymentAppliedRequest;
+import com.positivity.accounting.internal.entity.PaymentStatus;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,6 +35,13 @@ class InvoicePaymentStatusServiceTest {
     @Autowired
     private InvoiceStatusViewRepository statusViewRepository;
 
+    private static final UUID INV_001 = UUID.randomUUID();
+    private static final UUID INV_002 = UUID.randomUUID();
+    private static final UUID INV_003 = UUID.randomUUID();
+    private static final UUID INV_004 = UUID.randomUUID();
+    private static final UUID INV_005 = UUID.randomUUID();
+    private static final UUID INV_006 = UUID.randomUUID();
+
     @BeforeEach
     void setUp() {
         paymentEventRepository.deleteAll();
@@ -44,7 +52,7 @@ class InvoicePaymentStatusServiceTest {
     void testFullPayment() {
         // Arrange
         PaymentAppliedRequest request = new PaymentAppliedRequest();
-        request.setInvoiceId("INV-001");
+        request.setInvoiceId(INV_001);
         request.setTransactionReference("TXN-001");
         request.setPaymentAmount(new BigDecimal("100.00"));
         request.setInvoiceTotal(new BigDecimal("100.00"));
@@ -56,7 +64,7 @@ class InvoicePaymentStatusServiceTest {
 
         // Assert
         assertNotNull(response);
-        assertEquals("INV-001", response.getInvoiceId());
+        assertEquals(INV_001, response.getInvoiceId());
         assertEquals(PaymentStatus.PAID, response.getStatus());
         assertEquals(0, response.getTotalPaid().compareTo(new BigDecimal("100.00")));
         assertEquals(0, response.getRemainingBalance().compareTo(BigDecimal.ZERO));
@@ -66,7 +74,7 @@ class InvoicePaymentStatusServiceTest {
     void testPartialPayment() {
         // Arrange
         PaymentAppliedRequest request = new PaymentAppliedRequest();
-        request.setInvoiceId("INV-002");
+        request.setInvoiceId(INV_002);
         request.setTransactionReference("TXN-002");
         request.setPaymentAmount(new BigDecimal("50.00"));
         request.setInvoiceTotal(new BigDecimal("100.00"));
@@ -87,7 +95,7 @@ class InvoicePaymentStatusServiceTest {
     void testMultiplePartialPayments() {
         // Arrange - First payment
         PaymentAppliedRequest request1 = new PaymentAppliedRequest();
-        request1.setInvoiceId("INV-003");
+        request1.setInvoiceId(INV_003);
         request1.setTransactionReference("TXN-003-1");
         request1.setPaymentAmount(new BigDecimal("30.00"));
         request1.setInvoiceTotal(new BigDecimal("100.00"));
@@ -99,7 +107,7 @@ class InvoicePaymentStatusServiceTest {
 
         // Arrange - Second payment
         PaymentAppliedRequest request2 = new PaymentAppliedRequest();
-        request2.setInvoiceId("INV-003");
+        request2.setInvoiceId(INV_003);
         request2.setTransactionReference("TXN-003-2");
         request2.setPaymentAmount(new BigDecimal("70.00"));
         request2.setInvoiceTotal(new BigDecimal("100.00"));
@@ -117,7 +125,7 @@ class InvoicePaymentStatusServiceTest {
     void testFailedPayment() {
         // Arrange
         PaymentAppliedRequest request = new PaymentAppliedRequest();
-        request.setInvoiceId("INV-004");
+        request.setInvoiceId(INV_004);
         request.setTransactionReference("TXN-004");
         request.setPaymentAmount(new BigDecimal("100.00"));
         request.setInvoiceTotal(new BigDecimal("100.00"));
@@ -128,7 +136,7 @@ class InvoicePaymentStatusServiceTest {
         paymentStatusService.processPaymentApplied(request);
 
         // Assert - Failed payments don't count toward total
-        InvoiceStatusView statusView = statusViewRepository.findByInvoiceId("INV-004").orElseThrow();
+        InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(INV_004).orElseThrow();
         assertEquals(PaymentStatus.UNPAID, statusView.getCurrentStatus());
         assertEquals(0, statusView.getTotalPaid().compareTo(BigDecimal.ZERO));
     }
@@ -137,7 +145,7 @@ class InvoicePaymentStatusServiceTest {
     void testIdempotency() {
         // Arrange
         PaymentAppliedRequest request = new PaymentAppliedRequest();
-        request.setInvoiceId("INV-005");
+        request.setInvoiceId(INV_005);
         request.setTransactionReference("TXN-005");
         request.setPaymentAmount(new BigDecimal("100.00"));
         request.setInvoiceTotal(new BigDecimal("100.00"));
@@ -148,7 +156,7 @@ class InvoicePaymentStatusServiceTest {
         InvoiceStatusResponse response2 = paymentStatusService.processPaymentApplied(request);
 
         // Assert - Only one payment event should be created
-        long eventCount = paymentEventRepository.findByInvoiceIdOrderByTimestampDesc("INV-005").size();
+        long eventCount = paymentEventRepository.findByInvoiceIdOrderByTimestampDesc(INV_005).size();
         assertEquals(1, eventCount);
 
         // Both responses should be identical
@@ -160,7 +168,7 @@ class InvoicePaymentStatusServiceTest {
     void testGetInvoiceStatus() {
         // Arrange - Create an invoice with payment
         PaymentAppliedRequest request = new PaymentAppliedRequest();
-        request.setInvoiceId("INV-006");
+        request.setInvoiceId(INV_006);
         request.setTransactionReference("TXN-006");
         request.setPaymentAmount(new BigDecimal("75.00"));
         request.setInvoiceTotal(new BigDecimal("100.00"));
@@ -169,12 +177,12 @@ class InvoicePaymentStatusServiceTest {
         paymentStatusService.processPaymentApplied(request);
 
         // Act
-        InvoiceStatusResponse response = paymentStatusService.getInvoiceStatus("INV-006");
+        InvoiceStatusResponse response1 = paymentStatusService.getInvoiceStatus(INV_006);
 
         // Assert
-        assertNotNull(response);
-        assertEquals("INV-006", response.getInvoiceId());
-        assertEquals(PaymentStatus.PARTIALLY_PAID, response.getStatus());
-        assertEquals(0, response.getTotalPaid().compareTo(new BigDecimal("75.00")));
+        assertNotNull(response1);
+        assertEquals(INV_006, response1.getInvoiceId());
+        assertEquals(PaymentStatus.PARTIALLY_PAID, response1.getStatus());
+        assertEquals(0, response1.getTotalPaid().compareTo(new BigDecimal("75.00")));
     }
 }

@@ -2,7 +2,7 @@ package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dto.CreateVehicleRequest;
-import com.positivity.vehicle.internal.dto.VehicleResponse;
+import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -25,6 +25,12 @@
                 <artifactId>pos-events</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- Shared DTO Library -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-shared-dtos</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Test Aggregator (Architecture Testing) -->
             <dependency>

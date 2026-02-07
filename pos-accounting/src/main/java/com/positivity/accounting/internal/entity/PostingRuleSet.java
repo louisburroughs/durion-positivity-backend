@@ -4,6 +4,13 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * Posting Rule Set - parent entity for versioned posting rules.
@@ -15,6 +22,11 @@ import java.util.List;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Posting Rules</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = "versions")
 @Entity
 @Table(name = "posting_rule_set", indexes = {
         @Index(name = "idx_posting_rule_set_name", columnList = "name"),
@@ -22,9 +34,11 @@ import java.util.List;
 })
 public class PostingRuleSet {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "posting_rule_set_id", length = 50, nullable = false)
-    private String postingRuleSetId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "posting_rule_set_id", nullable = false)
+    private UUID postingRuleSetId;
 
     @Column(name = "name", length = 100, nullable = false)
     private String name;
@@ -51,83 +65,6 @@ public class PostingRuleSet {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
-
-    // Constructors
-    public PostingRuleSet() {
-    }
-
-    // Getters and Setters
-    public String getPostingRuleSetId() {
-        return postingRuleSetId;
-    }
-
-    public void setPostingRuleSetId(String postingRuleSetId) {
-        this.postingRuleSetId = postingRuleSetId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getEventType() {
-        return eventType;
-    }
-
-    public void setEventType(String eventType) {
-        this.eventType = eventType;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public List<PostingRuleVersion> getVersions() {
-        return versions;
-    }
-
-    public void setVersions(List<PostingRuleVersion> versions) {
-        this.versions = versions;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public Instant getModifiedAt() {
-        return modifiedAt;
-    }
-
-    public void setModifiedAt(Instant modifiedAt) {
-        this.modifiedAt = modifiedAt;
-    }
-
-    public String getModifiedBy() {
-        return modifiedBy;
-    }
-
-    public void setModifiedBy(String modifiedBy) {
-        this.modifiedBy = modifiedBy;
-    }
 
     @PrePersist
     protected void onCreate() {

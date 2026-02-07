@@ -1,5 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 /**
  * DTO for updating an existing GL Account.
  * 
@@ -9,29 +14,12 @@ package com.positivity.accounting.internal.dto;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - GLAccount Request</a>
  */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class GLAccountUpdateRequest {
 
     private String accountName;
     private String description;
-
-    // Constructors
-    public GLAccountUpdateRequest() {
-    }
-
-    // Getters and Setters
-    public String getAccountName() {
-        return accountName;
-    }
-
-    public void setAccountName(String accountName) {
-        this.accountName = accountName;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
 }

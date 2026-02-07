@@ -3,6 +3,13 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.UUID;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * Posting Rule Version - versioned posting rules for JE generation.
@@ -18,6 +25,11 @@ import java.time.Instant;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Posting Rules</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 @Entity
 @Table(name = "posting_rule_version", uniqueConstraints = {
         @UniqueConstraint(name = "uk_posting_rule_set_version", columnNames = { "posting_rule_set_id",
@@ -28,12 +40,14 @@ import java.time.Instant;
 })
 public class PostingRuleVersion {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "version_id", length = 50, nullable = false)
-    private String versionId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "version_id", nullable = false)
+    private UUID versionId;
 
-    @Column(name = "posting_rule_set_id", length = 50, nullable = false)
-    private String postingRuleSetId;
+    @Column(name = "posting_rule_set_id", nullable = false)
+    private UUID postingRuleSetId;
 
     @Column(name = "version_number", nullable = false)
     private Integer versionNumber;
@@ -74,115 +88,6 @@ public class PostingRuleVersion {
 
     @Column(name = "archived_by", length = 50)
     private String archivedBy;
-
-    // Constructors
-    public PostingRuleVersion() {
-    }
-
-    // Getters and Setters
-    public String getVersionId() {
-        return versionId;
-    }
-
-    public void setVersionId(String versionId) {
-        this.versionId = versionId;
-    }
-
-    public String getPostingRuleSetId() {
-        return postingRuleSetId;
-    }
-
-    public void setPostingRuleSetId(String postingRuleSetId) {
-        this.postingRuleSetId = postingRuleSetId;
-    }
-
-    public Integer getVersionNumber() {
-        return versionNumber;
-    }
-
-    public void setVersionNumber(Integer versionNumber) {
-        this.versionNumber = versionNumber;
-    }
-
-    public PostingRuleSetState getState() {
-        return state;
-    }
-
-    public void setState(PostingRuleSetState state) {
-        this.state = state;
-    }
-
-    public String getRulesDefinition() {
-        return rulesDefinition;
-    }
-
-    public void setRulesDefinition(String rulesDefinition) {
-        this.rulesDefinition = rulesDefinition;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public Instant getModifiedAt() {
-        return modifiedAt;
-    }
-
-    public void setModifiedAt(Instant modifiedAt) {
-        this.modifiedAt = modifiedAt;
-    }
-
-    public String getModifiedBy() {
-        return modifiedBy;
-    }
-
-    public void setModifiedBy(String modifiedBy) {
-        this.modifiedBy = modifiedBy;
-    }
-
-    public Instant getPublishedAt() {
-        return publishedAt;
-    }
-
-    public void setPublishedAt(Instant publishedAt) {
-        this.publishedAt = publishedAt;
-    }
-
-    public String getPublishedBy() {
-        return publishedBy;
-    }
-
-    public void setPublishedBy(String publishedBy) {
-        this.publishedBy = publishedBy;
-    }
-
-    public Instant getArchivedAt() {
-        return archivedAt;
-    }
-
-    public void setArchivedAt(Instant archivedAt) {
-        this.archivedAt = archivedAt;
-    }
-
-    public String getArchivedBy() {
-        return archivedBy;
-    }
-
-    public void setArchivedBy(String archivedBy) {
-        this.archivedBy = archivedBy;
-    }
 
     @PrePersist
     protected void onCreate() {

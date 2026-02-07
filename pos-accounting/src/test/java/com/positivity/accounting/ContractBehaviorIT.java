@@ -14,8 +14,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -62,7 +63,7 @@ public class ContractBehaviorIT {
                 request.setAccountCode("1000-000");
                 request.setAccountName("Cash - Operating");
                 request.setAccountType(AccountType.ASSET);
-                request.setActivationDate(LocalDate.now());
+                request.setActivationDate(LocalDateTime.now());
                 request.setDescription("Primary operating cash account");
 
                 // Act: POST to GL Account endpoint
@@ -98,7 +99,7 @@ public class ContractBehaviorIT {
 
                 // Prepare journal entry request
                 JournalEntryCreateRequest request = new JournalEntryCreateRequest();
-                request.setTransactionDate(LocalDate.now());
+                request.setTransactionDate(LocalDateTime.now());
                 request.setDescription("Daily sales deposit");
                 request.setSourceEventType("SALE");
 
@@ -124,7 +125,7 @@ public class ContractBehaviorIT {
                 request.setAccountCode("INVALID"); // Not in format ####-###
                 request.setAccountName("Invalid Account");
                 request.setAccountType(AccountType.ASSET);
-                request.setActivationDate(LocalDate.now());
+                request.setActivationDate(LocalDateTime.now());
 
                 // Act & Assert: Expect validation error
                 mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
@@ -162,7 +163,7 @@ public class ContractBehaviorIT {
                 first.setAccountCode("1000-000");
                 first.setAccountName("Cash");
                 first.setAccountType(AccountType.ASSET);
-                first.setActivationDate(LocalDate.now());
+                first.setActivationDate(LocalDateTime.now());
 
                 createGLAccountDirect(first);
 
@@ -171,7 +172,7 @@ public class ContractBehaviorIT {
                 duplicate.setAccountCode("1000-000"); // Same code
                 duplicate.setAccountName("Another Cash");
                 duplicate.setAccountType(AccountType.ASSET);
-                duplicate.setActivationDate(LocalDate.now());
+                duplicate.setActivationDate(LocalDateTime.now());
 
                 // Act & Assert: Expect conflict error
                 mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
@@ -193,7 +194,7 @@ public class ContractBehaviorIT {
                 createGLAccount("1000-000", "Cash", AccountType.ASSET);
 
                 JournalEntryCreateRequest request = new JournalEntryCreateRequest();
-                request.setTransactionDate(LocalDate.now());
+                request.setTransactionDate(LocalDateTime.now());
                 request.setDescription("Test entry");
                 request.setSourceEventType("SALE");
 
@@ -204,11 +205,12 @@ public class ContractBehaviorIT {
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
-                String firstEntryId = objectMapper.readTree(firstResult.getResponse().getContentAsString())
-                                .get("journalEntryId").asString();
+                UUID firstEntryId = UUID
+                                .fromString(objectMapper.readTree(firstResult.getResponse().getContentAsString())
+                                                .get("journalEntryId").asString());
 
                 // Assert: Entry was created with ID
-                assert !firstEntryId.isEmpty() : "Journal entry ID should not be empty";
+                assert firstEntryId != null : "Journal entry ID should not be null";
         }
 
         // ===============================================
@@ -228,15 +230,15 @@ public class ContractBehaviorIT {
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
-                String accountId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-                                .get("glAccountId").asString();
+                UUID accountId = UUID.fromString(objectMapper.readTree(createResult.getResponse().getContentAsString())
+                                .get("glAccountId").asString());
 
                 // Act: Attempt update - test endpoint behavior
                 GLAccountCreateRequest updateRequest = createGLAccountRequest("1000-000", "Updated Cash Account",
                                 AccountType.ASSET);
 
                 // Assert: Update attempt returns appropriate status
-                mockMvc.perform(put(API_V1 + "/accounting/gl-accounts/" + accountId)
+                mockMvc.perform(put(API_V1 + "/accounting/gl-accounts/" + accountId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(updateRequest)))
                                 .andDo(print())
@@ -251,7 +253,7 @@ public class ContractBehaviorIT {
                 createGLAccount("1000-000", "Cash", AccountType.ASSET);
 
                 JournalEntryCreateRequest request = new JournalEntryCreateRequest();
-                request.setTransactionDate(LocalDate.now());
+                request.setTransactionDate(LocalDateTime.now());
                 request.setDescription("Entry to verify creation");
                 request.setSourceEventType("SALE");
 
@@ -318,7 +320,7 @@ public class ContractBehaviorIT {
                 request.setAccountCode(code);
                 request.setAccountName(name);
                 request.setAccountType(type);
-                request.setActivationDate(LocalDate.now());
+                request.setActivationDate(LocalDateTime.now());
                 return request;
         }
 

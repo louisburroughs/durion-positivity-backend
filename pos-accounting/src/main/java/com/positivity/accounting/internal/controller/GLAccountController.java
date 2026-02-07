@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.UUID;
+
 /**
  * REST Controller for GL Account (Chart of Accounts) management.
  * Handles CRUD operations, activation/deactivation, and archival of GL
@@ -57,7 +59,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "404", description = "GL account not found")
         })
         public ResponseEntity<Void> getGLAccount(
-                        @Parameter(description = "GL account identifier") @PathVariable String glAccountId) {
+                        @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId) {
                 log.info("Stub getGLAccount glAccountId={}", glAccountId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
         }
@@ -84,7 +86,7 @@ public class GLAccountController {
         })
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_UPDATE", apiVersion = "1")
         public ResponseEntity<Void> updateGLAccount(
-                        @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
+                        @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
                 log.info("Stub updateGLAccount glAccountId={}", glAccountId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -99,7 +101,7 @@ public class GLAccountController {
         })
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ACTIVATE", apiVersion = "1")
         public ResponseEntity<Void> activateGLAccount(
-                        @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
+                        @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
                 log.info("Stub activateGLAccount glAccountId={}", glAccountId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -114,7 +116,7 @@ public class GLAccountController {
         })
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_DEACTIVATE", apiVersion = "1")
         public ResponseEntity<Void> deactivateGLAccount(
-                        @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
+                        @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
                 log.info("Stub deactivateGLAccount glAccountId={}", glAccountId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -129,7 +131,7 @@ public class GLAccountController {
         })
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ARCHIVE", apiVersion = "1")
         public ResponseEntity<Void> archiveGLAccount(
-                        @Parameter(description = "GL account identifier") @PathVariable String glAccountId,
+                        @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
                 log.info("Stub archiveGLAccount glAccountId={}", glAccountId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -143,7 +145,7 @@ public class GLAccountController {
                         @ApiResponse(responseCode = "404", description = "GL account not found")
         })
         public ResponseEntity<Void> getAccountBalance(
-                        @Parameter(description = "GL account identifier") @PathVariable String glAccountId) {
+                        @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId) {
                 log.info("Stub getAccountBalance glAccountId={}", glAccountId);
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
         }

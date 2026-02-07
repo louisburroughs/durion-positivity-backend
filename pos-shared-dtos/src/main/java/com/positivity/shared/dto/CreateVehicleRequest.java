@@ -1,4 +1,4 @@
-package com.positivity.vehicle.internal.dto;
+package com.positivity.shared.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

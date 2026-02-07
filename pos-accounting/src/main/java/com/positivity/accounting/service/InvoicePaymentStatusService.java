@@ -1,10 +1,10 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.internal.domain.InvoiceStatusView;
-import com.positivity.accounting.internal.domain.PaymentAppliedEvent;
-import com.positivity.accounting.internal.domain.PaymentStatus;
 import com.positivity.accounting.internal.entity.InvoiceStatusResponse;
+import com.positivity.accounting.internal.entity.InvoiceStatusView;
+import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
 import com.positivity.accounting.internal.entity.PaymentAppliedRequest;
+import com.positivity.accounting.internal.entity.PaymentStatus;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 import org.slf4j.Logger;
@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Service for managing invoice payment status updates.
@@ -86,7 +87,7 @@ public class InvoicePaymentStatusService {
      * Get current status of an invoice.
      */
     @Transactional(readOnly = true)
-    public InvoiceStatusResponse getInvoiceStatus(String invoiceId) {
+    public InvoiceStatusResponse getInvoiceStatus(UUID invoiceId) {
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
 
@@ -125,7 +126,7 @@ public class InvoicePaymentStatusService {
     /**
      * Update the invoice status view based on all payment events.
      */
-    private void updateInvoiceStatusView(String invoiceId, String latestTransactionRef) {
+    private void updateInvoiceStatusView(UUID invoiceId, String latestTransactionRef) {
         // Calculate total paid (excluding failed payments)
         BigDecimal totalPaid = paymentEventRepository.calculateTotalPaid(invoiceId);
 

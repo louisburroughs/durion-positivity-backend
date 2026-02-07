@@ -6,9 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for GL Account entity.
@@ -19,7 +20,7 @@ import java.util.Optional;
  * at entity level.
  */
 @Repository
-public interface GLAccountRepository extends JpaRepository<GLAccount, String> {
+public interface GLAccountRepository extends JpaRepository<GLAccount, UUID> {
 
     /**
      * Find a GL account by account code.
@@ -40,7 +41,7 @@ public interface GLAccountRepository extends JpaRepository<GLAccount, String> {
     @Query("SELECT g FROM GLAccount g WHERE g.activationDate <= :transactionDate " +
             "AND (g.deactivationDate IS NULL OR g.deactivationDate > :transactionDate) " +
             "ORDER BY g.accountCode")
-    List<GLAccount> findActiveAccountsOn(LocalDate transactionDate);
+    List<GLAccount> findActiveAccountsOn(LocalDateTime transactionDate);
 
     /**
      * Check if an account code already exists.

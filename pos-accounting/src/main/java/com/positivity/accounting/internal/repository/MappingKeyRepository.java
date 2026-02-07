@@ -6,23 +6,24 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for Mapping Key entity.
  * Supports querying mapping keys by posting category and name.
  */
 @Repository
-public interface MappingKeyRepository extends JpaRepository<MappingKey, String> {
+public interface MappingKeyRepository extends JpaRepository<MappingKey, UUID> {
 
     /**
      * Find a mapping key by posting category and key name.
      */
-    Optional<MappingKey> findByPostingCategoryIdAndKeyName(String postingCategoryId, String keyName);
+    Optional<MappingKey> findByPostingCategoryIdAndKeyName(UUID postingCategoryId, String keyName);
 
     /**
      * Find all mapping keys for a posting category.
      */
-    List<MappingKey> findByPostingCategoryId(String postingCategoryId);
+    List<MappingKey> findByPostingCategoryId(UUID postingCategoryId);
 
     /**
      * Find all active mapping keys.
@@ -32,5 +33,5 @@ public interface MappingKeyRepository extends JpaRepository<MappingKey, String> 
     /**
      * Check if a mapping key name already exists within a category.
      */
-    boolean existsByPostingCategoryIdAndKeyName(String postingCategoryId, String keyName);
+    boolean existsByPostingCategoryIdAndKeyName(UUID postingCategoryId, String keyName);
 }

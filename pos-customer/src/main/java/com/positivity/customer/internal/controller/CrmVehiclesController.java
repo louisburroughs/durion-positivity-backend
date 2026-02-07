@@ -5,7 +5,7 @@ import com.positivity.customer.internal.dto.VehicleTransferRequest;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.CrmVehicleService;
 import com.positivity.events.EmitEvent;
-import com.positivity.vehicle.internal.dto.VehicleResponse;
+import com.positivity.shared.dto.VehicleResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

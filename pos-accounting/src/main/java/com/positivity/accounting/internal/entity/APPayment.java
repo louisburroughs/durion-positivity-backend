@@ -5,7 +5,14 @@ import com.positivity.accounting.internal.enums.PaymentMethod;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * AP Payment entity - manages payment workflow for vendor bills.
@@ -20,6 +27,11 @@ import java.time.LocalDate;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - AP Payment</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 @Entity
 @Table(name = "ap_payment", indexes = {
         @Index(name = "idx_ap_payment_vendor_bill", columnList = "vendor_bill_id"),
@@ -29,15 +41,17 @@ import java.time.LocalDate;
 })
 public class APPayment {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "payment_id", length = 50, nullable = false)
-    private String paymentId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "payment_id", nullable = false)
+    private UUID paymentId;
 
-    @Column(name = "vendor_bill_id", length = 50, nullable = false)
-    private String vendorBillId;
+    @Column(name = "vendor_bill_id", nullable = false)
+    private UUID vendorBillId;
 
-    @Column(name = "vendor_id", length = 50, nullable = false)
-    private String vendorId;
+    @Column(name = "vendor_id", nullable = false)
+    private UUID vendorId;
 
     @Column(name = "vendor_name", length = 200)
     private String vendorName;
@@ -57,10 +71,10 @@ public class APPayment {
     private PaymentMethod paymentMethod;
 
     @Column(name = "payment_date")
-    private LocalDate paymentDate;
+    private LocalDateTime paymentDate;
 
-    @Column(name = "bank_account_id", length = 50)
-    private String bankAccountId;
+    @Column(name = "bank_account_id")
+    private UUID bankAccountId;
 
     @Column(name = "approval_level", length = 30)
     private String approvalLevel;
@@ -92,8 +106,8 @@ public class APPayment {
     @Column(name = "cancellation_reason", length = 1000)
     private String cancellationReason;
 
-    @Column(name = "payment_transaction_id", length = 50)
-    private String paymentTransactionId;
+    @Column(name = "payment_transaction_id")
+    private UUID paymentTransactionId;
 
     // Audit fields
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -102,197 +116,8 @@ public class APPayment {
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
-    // Constructors
-    public APPayment() {
-    }
-
-    public APPayment(String paymentId) {
+    public APPayment(UUID paymentId) {
         this.paymentId = paymentId;
-    }
-
-    // Getters and Setters
-    public String getPaymentId() {
-        return paymentId;
-    }
-
-    public void setPaymentId(String paymentId) {
-        this.paymentId = paymentId;
-    }
-
-    public String getVendorBillId() {
-        return vendorBillId;
-    }
-
-    public void setVendorBillId(String vendorBillId) {
-        this.vendorBillId = vendorBillId;
-    }
-
-    public String getVendorId() {
-        return vendorId;
-    }
-
-    public void setVendorId(String vendorId) {
-        this.vendorId = vendorId;
-    }
-
-    public String getVendorName() {
-        return vendorName;
-    }
-
-    public void setVendorName(String vendorName) {
-        this.vendorName = vendorName;
-    }
-
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
-
-    public APPaymentStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(APPaymentStatus status) {
-        this.status = status;
-    }
-
-    public PaymentMethod getPaymentMethod() {
-        return paymentMethod;
-    }
-
-    public void setPaymentMethod(PaymentMethod paymentMethod) {
-        this.paymentMethod = paymentMethod;
-    }
-
-    public LocalDate getPaymentDate() {
-        return paymentDate;
-    }
-
-    public void setPaymentDate(LocalDate paymentDate) {
-        this.paymentDate = paymentDate;
-    }
-
-    public String getBankAccountId() {
-        return bankAccountId;
-    }
-
-    public void setBankAccountId(String bankAccountId) {
-        this.bankAccountId = bankAccountId;
-    }
-
-    public String getApprovalLevel() {
-        return approvalLevel;
-    }
-
-    public void setApprovalLevel(String approvalLevel) {
-        this.approvalLevel = approvalLevel;
-    }
-
-    public BigDecimal getApprovalThreshold() {
-        return approvalThreshold;
-    }
-
-    public void setApprovalThreshold(BigDecimal approvalThreshold) {
-        this.approvalThreshold = approvalThreshold;
-    }
-
-    public Instant getApprovedAt() {
-        return approvedAt;
-    }
-
-    public void setApprovedAt(Instant approvedAt) {
-        this.approvedAt = approvedAt;
-    }
-
-    public String getApprovedBy() {
-        return approvedBy;
-    }
-
-    public void setApprovedBy(String approvedBy) {
-        this.approvedBy = approvedBy;
-    }
-
-    public String getApprovalJustification() {
-        return approvalJustification;
-    }
-
-    public void setApprovalJustification(String approvalJustification) {
-        this.approvalJustification = approvalJustification;
-    }
-
-    public Instant getScheduledAt() {
-        return scheduledAt;
-    }
-
-    public void setScheduledAt(Instant scheduledAt) {
-        this.scheduledAt = scheduledAt;
-    }
-
-    public String getScheduledBy() {
-        return scheduledBy;
-    }
-
-    public void setScheduledBy(String scheduledBy) {
-        this.scheduledBy = scheduledBy;
-    }
-
-    public Instant getCancelledAt() {
-        return cancelledAt;
-    }
-
-    public void setCancelledAt(Instant cancelledAt) {
-        this.cancelledAt = cancelledAt;
-    }
-
-    public String getCancelledBy() {
-        return cancelledBy;
-    }
-
-    public void setCancelledBy(String cancelledBy) {
-        this.cancelledBy = cancelledBy;
-    }
-
-    public String getCancellationReason() {
-        return cancellationReason;
-    }
-
-    public void setCancellationReason(String cancellationReason) {
-        this.cancellationReason = cancellationReason;
-    }
-
-    public String getPaymentTransactionId() {
-        return paymentTransactionId;
-    }
-
-    public void setPaymentTransactionId(String paymentTransactionId) {
-        this.paymentTransactionId = paymentTransactionId;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
     }
 
     @PrePersist

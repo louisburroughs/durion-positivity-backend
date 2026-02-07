@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Service for accounting event ingestion and processing.
@@ -95,7 +96,7 @@ public class EventIngestionService {
         // 4. Creating journal entry with balanced lines
 
         JournalEntry entry = new JournalEntry(); // TODO: construct from rule evaluation
-        entry.setSourceEventId((String) event.get("eventId"));
+        entry.setSourceEventId((UUID) event.get("eventId"));
 
         // Create entry in DRAFT status
         JournalEntry created = journalEntryService.createJournalEntry(entry);
@@ -107,34 +108,58 @@ public class EventIngestionService {
     /**
      * Retrieves an event and its processing status.
      */
-    public Map<String, Object> getEvent(String eventId) {
+    public Map<String, Object> getEvent(UUID eventId) {
         // TODO: Implement retrieval from audit table
         return Map.of();
+    }
+
+    /**
+     * Retrieves an event by ID as a JournalEntry.
+     */
+    public JournalEntry getEventById(UUID eventId) {
+        // TODO: Implement proper event storage and retrieval
+        // For now, return a stub journal entry
+        throw new IllegalArgumentException("Event not found: " + eventId);
     }
 
     /**
      * Retries processing of a failed event.
      * Useful when posting rules have been updated or temporary errors resolved.
      */
-    public JournalEntry retryEventProcessing(String eventId) {
+    public JournalEntry retryEventProcessing(UUID eventId) {
         Map<String, Object> record = getEvent(eventId);
         log.info("Retrying event {}", eventId);
         return submitEvent(record);
     }
 
     /**
+     * Retries processing of a failed event (alias for retryEventProcessing).
+     */
+    public JournalEntry retryEvent(UUID eventId) {
+        return retryEventProcessing(eventId);
+    }
+
+    /**
      * Retrieves the processing log for an event.
      * Contains matched rules, generated journal entries, any errors.
      */
-    public List<String> getEventProcessingLog(String eventId) {
+    public List<String> getEventProcessingLog(UUID eventId) {
         // TODO: Return audit log entries for this event
         return List.of();
     }
 
     /**
+     * Retrieves the processing log for an event as a string.
+     */
+    public String getProcessingLog(UUID eventId) {
+        List<String> log = getEventProcessingLog(eventId);
+        return String.join("\n", log);
+    }
+
+    /**
      * Lists all events with filtering.
      */
-    public Page<Map<String, Object>> listEvents(String organizationId,
+    public Page<JournalEntry> listEvents(String organizationId,
             String status,
             Pageable pageable) {
         // TODO: Return paginated list from audit table

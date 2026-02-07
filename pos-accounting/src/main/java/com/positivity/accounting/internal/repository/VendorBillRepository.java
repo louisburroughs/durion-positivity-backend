@@ -7,21 +7,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for Vendor Bill entity.
  * Supports querying bills by status, date range, and payment tracking.
  */
 @Repository
-public interface VendorBillRepository extends JpaRepository<VendorBill, String> {
+public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
 
         /**
          * Find all bills for a vendor.
          */
-        List<VendorBill> findByVendorId(String vendorId);
+        List<VendorBill> findByVendorId(UUID vendorId);
 
         /**
          * Find bills by status.
@@ -34,12 +35,12 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, String> 
         @Query("SELECT vb FROM VendorBill vb " +
                         "WHERE vb.billDate >= :startDate AND vb.billDate < :endDate " +
                         "ORDER BY vb.billDate DESC")
-        List<VendorBill> findByBillDateRange(LocalDate startDate, LocalDate endDate);
+        List<VendorBill> findByBillDateRange(LocalDateTime startDate, LocalDateTime endDate);
 
         /**
          * Find a bill by vendor and bill number.
          */
-        Optional<VendorBill> findByVendorIdAndBillNumber(String vendorId, String billNumber);
+        Optional<VendorBill> findByVendorIdAndBillNumber(UUID vendorId, String billNumber);
 
         /**
          * Find unpaid bills (status = APPROVED or PENDING_REVIEW) for a vendor.
@@ -49,7 +50,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, String> 
                         "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_REVIEW) "
                         +
                         "ORDER BY vb.dueDate ASC")
-        List<VendorBill> findUnpaidBillsForVendor(String vendorId);
+        List<VendorBill> findUnpaidBillsForVendor(UUID vendorId);
 
         /**
          * Get total amount owed to a vendor (APPROVED or PENDING_REVIEW status).
@@ -57,7 +58,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, String> 
         @Query("SELECT COALESCE(SUM(vb.totalAmount), 0) FROM VendorBill vb " +
                         "WHERE vb.vendorId = :vendorId " +
                         "AND vb.status IN (com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED, com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_REVIEW)")
-        BigDecimal getTotalOwedToVendor(String vendorId);
+        BigDecimal getTotalOwedToVendor(UUID vendorId);
 
         /**
          * Find bills due within a date range (excluding PAID status).
@@ -66,5 +67,5 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, String> 
                         "WHERE vb.dueDate >= :startDate AND vb.dueDate <= :endDate " +
                         "AND vb.status != com.positivity.accounting.internal.enums.VendorBillStatus.PAID " +
                         "ORDER BY vb.dueDate ASC")
-        List<VendorBill> findBillsDueInRange(LocalDate startDate, LocalDate endDate);
+        List<VendorBill> findBillsDueInRange(LocalDateTime startDate, LocalDateTime endDate);
 }

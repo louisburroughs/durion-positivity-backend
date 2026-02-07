@@ -35,7 +35,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleSet createPostingRuleSet(PostingRuleSet ruleSet) {
-        ruleSet.setPostingRuleSetId(UUID.randomUUID().toString());
+        ruleSet.setPostingRuleSetId(UUID.randomUUID());
         ruleSet.setCreatedAt(Instant.now());
         ruleSet.setModifiedAt(Instant.now());
         PostingRuleSet saved = ruleSetRepository.save(ruleSet);
@@ -45,13 +45,13 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     @Transactional(readOnly = true)
-    public PostingRuleSet getPostingRuleSet(String ruleSetId) {
+    public PostingRuleSet getPostingRuleSet(UUID ruleSetId) {
         return ruleSetRepository.findById(ruleSetId)
                 .orElseThrow(() -> new IllegalArgumentException("Posting rule set not found: " + ruleSetId));
     }
 
     @Override
-    public PostingRuleSet updatePostingRuleSet(String ruleSetId, PostingRuleSet updates) {
+    public PostingRuleSet updatePostingRuleSet(UUID ruleSetId, PostingRuleSet updates) {
         PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
         ruleSet.setName(updates.getName());
         ruleSet.setEventType(updates.getEventType());
@@ -63,7 +63,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     }
 
     @Override
-    public PostingRuleVersion createVersion(String ruleSetId, PostingRuleVersion version) {
+    public PostingRuleVersion createVersion(UUID ruleSetId, PostingRuleVersion version) {
         PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
         List<PostingRuleVersion> existing = versionRepository.findByPostingRuleSetId(ruleSetId);
         int maxVersion = existing.stream()
@@ -71,7 +71,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
                 .max(Integer::compareTo)
                 .orElse(0);
 
-        version.setVersionId(UUID.randomUUID().toString());
+        version.setVersionId(UUID.randomUUID());
         version.setPostingRuleSetId(ruleSetId);
         version.setVersionNumber(maxVersion + 1);
         version.setState(PostingRuleSetState.DRAFT);
@@ -85,7 +85,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     }
 
     @Override
-    public PostingRuleVersion updateVersion(String versionId, PostingRuleVersion updates) {
+    public PostingRuleVersion updateVersion(UUID versionId, PostingRuleVersion updates) {
         PostingRuleVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
 
@@ -101,7 +101,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     }
 
     @Override
-    public PostingRuleVersion publishVersion(String versionId) {
+    public PostingRuleVersion publishVersion(UUID versionId) {
         PostingRuleVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
 
@@ -134,7 +134,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     }
 
     @Override
-    public PostingRuleVersion archiveVersion(String versionId) {
+    public PostingRuleVersion archiveVersion(UUID versionId) {
         PostingRuleVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
 
@@ -161,7 +161,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PostingRuleVersion> listVersions(String ruleSetId) {
+    public List<PostingRuleVersion> listVersions(UUID ruleSetId) {
         return versionRepository.findByPostingRuleSetId(ruleSetId);
     }
 }

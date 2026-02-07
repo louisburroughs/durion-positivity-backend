@@ -1,7 +1,7 @@
 package com.positivity.vehicle.service;
 
 import com.positivity.vehicle.internal.dto.CreateVehicleRequest;
-import com.positivity.vehicle.internal.dto.VehicleResponse;
+import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;

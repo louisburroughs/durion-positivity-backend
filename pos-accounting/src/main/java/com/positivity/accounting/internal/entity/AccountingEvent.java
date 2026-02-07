@@ -5,9 +5,16 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import jakarta.persistence.*;
 import org.hibernate.type.SqlTypes;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Accounting Event - canonical event ingestion for JE generation.
@@ -18,6 +25,11 @@ import java.util.Map;
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - Accounting Event</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 @Entity
 @Table(name = "accounting_event", indexes = {
         @Index(name = "idx_accounting_event_type", columnList = "event_type"),
@@ -27,15 +39,17 @@ import java.util.Map;
 })
 public class AccountingEvent {
 
+    @EqualsAndHashCode.Include
     @Id
-    @Column(name = "event_id", length = 50, nullable = false)
-    private String eventId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "event_id", nullable = false)
+    private UUID eventId;
 
     @Column(name = "event_type", length = 100, nullable = false)
     private String eventType;
 
     @Column(name = "transaction_date", nullable = false)
-    private LocalDate transactionDate;
+    private LocalDateTime transactionDate;
 
     /**
      * Event payload as JSON object.
@@ -50,8 +64,8 @@ public class AccountingEvent {
     @Column(name = "status", length = 20, nullable = false)
     private AccountingEventStatus status = AccountingEventStatus.RECEIVED;
 
-    @Column(name = "journal_entry_id", length = 50)
-    private String journalEntryId;
+    @Column(name = "journal_entry_id")
+    private UUID journalEntryId;
 
     @Column(name = "error_message", length = 2000)
     private String errorMessage;
@@ -64,91 +78,6 @@ public class AccountingEvent {
 
     @Column(name = "sequence_number")
     private Long sequenceNumber;
-
-    // Constructors
-    public AccountingEvent() {
-    }
-
-    // Getters and Setters
-    public String getEventId() {
-        return eventId;
-    }
-
-    public void setEventId(String eventId) {
-        this.eventId = eventId;
-    }
-
-    public String getEventType() {
-        return eventType;
-    }
-
-    public void setEventType(String eventType) {
-        this.eventType = eventType;
-    }
-
-    public LocalDate getTransactionDate() {
-        return transactionDate;
-    }
-
-    public void setTransactionDate(LocalDate transactionDate) {
-        this.transactionDate = transactionDate;
-    }
-
-    public Map<String, Object> getPayload() {
-        return payload;
-    }
-
-    public void setPayload(Map<String, Object> payload) {
-        this.payload = payload;
-    }
-
-    public AccountingEventStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(AccountingEventStatus status) {
-        this.status = status;
-    }
-
-    public String getJournalEntryId() {
-        return journalEntryId;
-    }
-
-    public void setJournalEntryId(String journalEntryId) {
-        this.journalEntryId = journalEntryId;
-    }
-
-    public String getErrorMessage() {
-        return errorMessage;
-    }
-
-    public void setErrorMessage(String errorMessage) {
-        this.errorMessage = errorMessage;
-    }
-
-    public Instant getReceivedAt() {
-        return receivedAt;
-    }
-
-    public void setReceivedAt(Instant receivedAt) {
-        this.receivedAt = receivedAt;
-    }
-
-    public Instant getProcessedAt() {
-        return processedAt;
-    }
-
-    public void setProcessedAt(Instant processedAt) {
-        this.processedAt = processedAt;
-    }
-
-    public Long getSequenceNumber() {
-        return sequenceNumber;
-    }
-
-    public void setSequenceNumber(Long sequenceNumber) {
-        this.sequenceNumber = sequenceNumber;
-    }
 
     @PrePersist
     protected void onCreate() {

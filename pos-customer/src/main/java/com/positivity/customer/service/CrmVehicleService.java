@@ -8,8 +8,8 @@ import com.positivity.customer.internal.entity.AbstractParty;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.vehicle.internal.dto.CreateVehicleRequest;
-import com.positivity.vehicle.internal.dto.VehicleResponse;
+import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.VehicleResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -252,7 +252,7 @@ public class CrmVehicleService {
         log.debug("Finding party for vehicle: {}", vehicleId);
         UUID vehicleUuid = parseVehicleId(vehicleId);
         VehicleResponse vehicleData = vehicleInventoryClient.getVehicle(vehicleUuid).orElse(null);
-        
+
         if (vehicleData == null || vehicleData.getVin() == null) {
             log.debug("Vehicle not found: {}", vehicleId);
             return null;
@@ -262,17 +262,17 @@ public class CrmVehicleService {
     }
 
     @Transactional(readOnly = true)
-    public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(String vinCode) {
+    public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(
+            String vinCode) {
         try {
             VehicleResponse vehicleData = vehicleInventoryClient.getVehicleByVin(vinCode).orElse(null);
-            
+
             if (vehicleData == null) {
                 log.debug("Vehicle lookup by VIN returned null: {}", vinCode);
                 return null;
             }
-            
-            com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary summary = 
-                new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary();
+
+            com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary summary = new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary();
             summary.setVehicleId(vehicleData.getVehicleId().toString());
             summary.setVin(vehicleData.getVin());
             summary.setLicensePlate(vehicleData.getLicensePlate());
@@ -290,17 +290,17 @@ public class CrmVehicleService {
         if (vinCode == null || vinCode.isBlank()) {
             return null;
         }
-        
+
         // Search through commercial parties
         List<com.positivity.customer.internal.entity.CommercialParty> allParties = commercialPartyRepository.findAll();
-        
+
         for (com.positivity.customer.internal.entity.CommercialParty candidate : allParties) {
             if (candidate.getVehicleVins().contains(vinCode)) {
                 log.debug("Party located for VIN {}: {}", vinCode, candidate.getPartyId());
                 return candidate;
             }
         }
-        
+
         log.debug("No party found owning VIN: {}", vinCode);
         return null;
     }
@@ -309,36 +309,32 @@ public class CrmVehicleService {
     public CrmSnapshotDTO buildSnapshotForVehicleOwner(@NonNull String vehicleId) {
         log.debug("Building snapshot via vehicle: {}", vehicleId);
         CommercialParty owner = findPartyByVehicleId(vehicleId);
-        
+
         if (owner == null) {
             log.warn("No owner found for vehicle: {}", vehicleId);
             return null;
         }
 
         log.debug("Found owner {} for vehicle {}", owner.getPartyId(), vehicleId);
-        
+
         // Delegate to shared snapshot builder
         return buildSnapshotForOwnerParty(owner);
     }
 
     public CrmSnapshotDTO buildSnapshotForOwnerParty(CommercialParty party) {
-        com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = 
-            new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
+        com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
                 java.util.UUID.randomUUID(),
                 java.time.Instant.now(),
-                "1.0.0"
-            );
+                "1.0.0");
 
-        com.positivity.customer.internal.dto.snapshot.AccountSummary acct = 
-            new com.positivity.customer.internal.dto.snapshot.AccountSummary(
+        com.positivity.customer.internal.dto.snapshot.AccountSummary acct = new com.positivity.customer.internal.dto.snapshot.AccountSummary(
                 party.getPartyId().toString(),
                 party.getPartyNumber() != null ? party.getPartyNumber() : "N/A",
                 party.getDisplayName() != null ? party.getDisplayName() : party.getLegalName(),
-                party.getPartyType().name()
-            );
+                party.getPartyType().name());
 
-        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles = 
-            collectVehiclesForParty(party);
+        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles = collectVehiclesForParty(
+                party);
 
         CrmSnapshotDTO result = new CrmSnapshotDTO();
         result.setSnapshotMetadata(meta);
@@ -346,14 +342,15 @@ public class CrmVehicleService {
         result.setContacts(java.util.Collections.emptyList());
         result.setVehicles(vehicles);
         result.setPreferences(null);
-        
+
         return result;
     }
 
-    public java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(CommercialParty party) {
+    public java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(
+            CommercialParty party) {
         return party.getVehicleVins().stream()
-            .map(this::fetchVehicleSummaryByVin)
-            .filter(java.util.Objects::nonNull)
-            .collect(java.util.stream.Collectors.toList());
+                .map(this::fetchVehicleSummaryByVin)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toList());
     }
 }
