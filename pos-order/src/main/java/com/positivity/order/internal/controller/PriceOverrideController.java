@@ -2,8 +2,8 @@ package com.positivity.order.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.*;
-import com.positivity.order.internal.model.OverrideStatus;
-import com.positivity.order.internal.model.PriceOverride;
+import com.positivity.order.internal.entity.OverrideStatus;
+import com.positivity.order.internal.entity.PriceOverride;
 import com.positivity.order.internal.security.PriceOverridePermissions;
 import com.positivity.order.service.PriceOverrideService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,7 +37,7 @@ import java.util.List;
  */
 @Tag(name = "Price Overrides", description = "Price override management with approval workflow")
 @RestController
-@RequestMapping("/api/v1/orders/price-overrides")
+@RequestMapping("/v1/orders/price-overrides")
 @RequiredArgsConstructor
 @Slf4j
 public class PriceOverrideController {

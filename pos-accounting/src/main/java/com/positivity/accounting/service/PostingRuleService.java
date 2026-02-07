@@ -52,7 +52,7 @@ public interface PostingRuleService {
     /**
      * Lists all rule sets for an organization.
      */
-    List<PostingRuleSet> listRuleSets(String organizationId);
+    List<PostingRuleSet> listRuleSets(UUID organizationId);
 
     /**
      * Lists all versions of a rule set.

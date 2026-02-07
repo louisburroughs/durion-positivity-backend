@@ -20,7 +20,7 @@ import java.util.List;
 @Tag(name = "Vehicle Fitment API", description = "Endpoints for vehicle manufacturers, makes, models, and types")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/vehicle-fitment")
+@RequestMapping("/v1/vehicle-fitment")
 public class VehicleFitmentController {
 
     private final VehicleFitmentService vehicleFitmentService;
@@ -38,8 +38,7 @@ public class VehicleFitmentController {
     })
     @GetMapping("/makes/{manufacturerId}")
     public List<Make> getMakesByManufacturer(
-            @Parameter(description = "ID of the manufacturer", example = "1")
-            @PathVariable Long manufacturerId) {
+            @Parameter(description = "ID of the manufacturer", example = "1") @PathVariable Long manufacturerId) {
         return vehicleFitmentService.getMakesByManufacturer(manufacturerId);
     }
 
@@ -49,8 +48,7 @@ public class VehicleFitmentController {
     })
     @GetMapping("/models/{makeId}")
     public List<Model> getModelsByMake(
-            @Parameter(description = "ID of the make", example = "1")
-            @PathVariable Long makeId) {
+            @Parameter(description = "ID of the make", example = "1") @PathVariable Long makeId) {
         return vehicleFitmentService.getModelsByMake(makeId);
     }
 
@@ -60,8 +58,7 @@ public class VehicleFitmentController {
     })
     @GetMapping("/vehicle-types/{makeId}")
     public List<VehicleType> getVehicleTypesForMake(
-            @Parameter(description = "ID of the make", example = "1")
-            @PathVariable Long makeId) {
+            @Parameter(description = "ID of the make", example = "1") @PathVariable Long makeId) {
         return vehicleFitmentService.getVehicleTypesForMake(makeId);
     }
 }

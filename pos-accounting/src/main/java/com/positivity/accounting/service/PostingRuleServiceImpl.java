@@ -152,7 +152,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PostingRuleSet> listRuleSets(String organizationId) {
+    public List<PostingRuleSet> listRuleSets(UUID organizationId) {
         // Organization filtering not supported at entity level
         // Return all rule sets - filtering should be done at service/controller layer
         // if needed

@@ -25,7 +25,7 @@ import java.util.Map;
 @Tag(name = "Vehicle Applicability Hints", description = "Endpoints for managing product fitment hints and filtering products by vehicle attributes")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/vehicle-fitment/hints")
+@RequestMapping("/v1/vehicle-fitment/hints")
 public class VehicleApplicabilityHintController {
 
     private final VehicleApplicabilityHintService hintService;

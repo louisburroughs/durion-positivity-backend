@@ -11,7 +11,7 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/vehicle-reference")
+@RequestMapping("/v1/vehicle-reference")
 public class VehicleReferenceController {
     private final VehicleReferenceService vehicleReferenceService;
 
@@ -25,4 +25,3 @@ public class VehicleReferenceController {
         return vehicleReferenceService.getModelsByMakeId(makeId);
     }
 }
-

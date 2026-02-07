@@ -1,6 +1,9 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -8,10 +11,17 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service for accounting event ingestion and processing.
@@ -44,6 +54,13 @@ public class EventIngestionService {
     private final JournalEntryService journalEntryService;
 
     /**
+     * In-memory idempotency tracker keyed by content hash.
+     * TODO: Replace with persistent store (e.g., database table) for production
+     * use.
+     */
+    private final Set<String> processedEventHashes = ConcurrentHashMap.newKeySet();
+
+    /**
      * Submits a business event for accounting processing.
      * Event is validated against schema and queued for rule-set matching.
      * Uses idempotency key to prevent duplicate processing.
@@ -51,7 +68,7 @@ public class EventIngestionService {
      * Event payload structure:
      * {
      * "eventType": "INVOICE_RECEIVED",
-     * "organizationId": "org123",
+     * "organizationId": "550e8400-e29b-41d4-a716-446655440000",
      * "sourceSystem": "MYOB",
      * "transactionDate": "2024-01-15T10:30:00Z",
      * "dimensions": {
@@ -71,8 +88,8 @@ public class EventIngestionService {
      * @return generated journal entry
      * @throws IllegalArgumentException if event is invalid or rule set not found
      */
-    public JournalEntry submitEvent(Map<String, Object> event) {
-        String organizationId = (String) event.get("organizationId");
+    public AccountingEventResponse submitEvent(Map<String, Object> event) {
+        UUID organizationId = (UUID) event.get("organizationId");
         String sourceSystem = (String) event.get("sourceSystem");
         LocalDateTime transactionDate = (LocalDateTime) event.get("transactionDate");
         String eventType = (String) event.get("eventType");
@@ -88,21 +105,31 @@ public class EventIngestionService {
             throw new IllegalArgumentException(msg);
         }
 
-        // TODO: Apply rule set to event payload to generate journal entry lines
-        // This would involve:
-        // 1. Evaluating rules against event payload
-        // 2. Calling GLMappingResolver for each rule match
-        // 3. Accumulating debit/credit amounts
-        // 4. Creating journal entry with balanced lines
+        // Idempotency check — reject duplicate events based on content hash
+        String contentHash = computeEventHash(event);
+        if (!processedEventHashes.add(contentHash)) {
+            throw new DuplicateEventException(
+                    "Duplicate event detected for org " + organizationId + " from " + sourceSystem);
+        }
 
-        JournalEntry entry = new JournalEntry(); // TODO: construct from rule evaluation
-        entry.setSourceEventId((UUID) event.get("eventId"));
+        // Accept event with RECEIVED status.
+        // TODO: Persist event to audit table and schedule async processing
+        // via posting rule sets to generate journal entries.
+        UUID eventId = (UUID) event.get("eventId");
+        if (eventId == null) {
+            eventId = UUID.randomUUID();
+        }
 
-        // Create entry in DRAFT status
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        log.info("Created journal entry {} from event {}", created.getJournalEntryId(), event.get("eventId"));
+        AccountingEventResponse response = AccountingEventResponse.builder()
+                .eventId(eventId)
+                .eventType(eventType)
+                .transactionDate(transactionDate)
+                .status(AccountingEventStatus.RECEIVED)
+                .receivedAt(Instant.now())
+                .build();
 
-        return created;
+        log.info("Accepted accounting event {} with status RECEIVED", eventId);
+        return response;
     }
 
     /**
@@ -126,7 +153,7 @@ public class EventIngestionService {
      * Retries processing of a failed event.
      * Useful when posting rules have been updated or temporary errors resolved.
      */
-    public JournalEntry retryEventProcessing(UUID eventId) {
+    public AccountingEventResponse retryEventProcessing(UUID eventId) {
         Map<String, Object> record = getEvent(eventId);
         log.info("Retrying event {}", eventId);
         return submitEvent(record);
@@ -135,7 +162,7 @@ public class EventIngestionService {
     /**
      * Retries processing of a failed event (alias for retryEventProcessing).
      */
-    public JournalEntry retryEvent(UUID eventId) {
+    public AccountingEventResponse retryEvent(UUID eventId) {
         return retryEventProcessing(eventId);
     }
 
@@ -159,7 +186,7 @@ public class EventIngestionService {
     /**
      * Lists all events with filtering.
      */
-    public Page<JournalEntry> listEvents(String organizationId,
+    public Page<JournalEntry> listEvents(UUID organizationId,
             String status,
             Pageable pageable) {
         // TODO: Return paginated list from audit table
@@ -213,5 +240,25 @@ public class EventIngestionService {
         }
 
         return errors;
+    }
+
+    /**
+     * Computes a SHA-256 hash of the event content for idempotency detection.
+     * Uses organizationId, sourceSystem, eventType, transactionDate, and payload.
+     */
+    private String computeEventHash(Map<String, Object> event) {
+        String content = String.valueOf(event.get("organizationId"))
+                + "|" + event.get("sourceSystem")
+                + "|" + event.get("eventType")
+                + "|" + event.get("transactionDate")
+                + "|" + event.get("payload");
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is always available in standard JDKs
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 }
