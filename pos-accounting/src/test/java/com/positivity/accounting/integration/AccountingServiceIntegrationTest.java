@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,7 +28,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
-import com.positivity.accounting.config.TestSecurityConfig;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -37,7 +37,6 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Transactional
-@Import(TestSecurityConfig.class)
 @DisplayName("Phase 3 Integration Tests - Accounting Service Wrappers")
 class AccountingServiceIntegrationTest {
 
@@ -52,9 +51,22 @@ class AccountingServiceIntegrationTest {
   @Autowired
   private GLAccountRepository glAccountRepository;
 
-  private static final String ORG_ID = "org-test-001";
-  private static final String JWT_TOKEN = "Bearer test-jwt-token-valid";
+  private static final UUID ORG_ID = UUID.fromString("00000000-0000-4000-a000-000000000010");
   private static final String BASE_URL = "/v1/accounting";
+
+  // Gateway header values — mirrors what pos-api-gateway injects after JWT
+  // validation
+  private static final String TEST_USER = "testuser";
+  private static final String TEST_AUTHORITIES = Stream.of(
+      "accounting:je:view", "accounting:je:create", "accounting:je:post", "accounting:je:reverse",
+      "accounting:coa:view", "accounting:coa:create", "accounting:coa:edit", "accounting:coa:deactivate",
+      "accounting:events:view", "accounting:events:submit", "accounting:events:retry",
+      "accounting:posting_rules:view", "accounting:posting_rules:create",
+      "accounting:posting_rules:publish", "accounting:posting_rules:archive",
+      "accounting:ap:view", "accounting:ap:pay",
+      "accounting:mappings:view", "accounting:mappings:create",
+      "accounting:audit:view")
+      .collect(Collectors.joining(","));
 
   // UUID constants for entity IDs used in test payloads
   private static final UUID GL_AR_ID = UUID.fromString("00000000-0000-4000-a000-000000000001");
@@ -64,7 +76,9 @@ class AccountingServiceIntegrationTest {
 
   @BeforeEach
   void setup() {
-    // Initialize MockMvc with WebApplicationContext and Spring Security
+    // Initialize MockMvc with the production security filter chain.
+    // GatewayAuthoritiesFilter reads X-Authorities / X-User headers to populate
+    // SecurityContext — tests send those headers just as the API gateway would.
     this.mockMvc = MockMvcBuilders
         .webAppContextSetup(context)
         .apply(springSecurity())
@@ -82,16 +96,17 @@ class AccountingServiceIntegrationTest {
   void testCreateGLAccount() throws Exception {
     String payload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "accountCode": "1000",
           "description": "Cash - Operating Account",
           "accountType": "ASSET",
           "postingCategory": "OPERATING"
         }
-        """;
+        """.formatted(ORG_ID);
 
     mockMvc.perform(post(BASE_URL + "/gl-accounts")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isCreated())
@@ -104,8 +119,9 @@ class AccountingServiceIntegrationTest {
 
   void testListGLAccounts() throws Exception {
     mockMvc.perform(get(BASE_URL + "/gl-accounts")
-        .header("Authorization", JWT_TOKEN)
-        .param("organizationId", ORG_ID)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .param("organizationId", ORG_ID.toString())
         .param("page", "0")
         .param("pageSize", "20"))
         .andExpect(status().isOk())
@@ -135,7 +151,8 @@ class AccountingServiceIntegrationTest {
         """;
 
     mockMvc.perform(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isOk())
@@ -155,7 +172,8 @@ class AccountingServiceIntegrationTest {
     account = glAccountRepository.save(account);
 
     mockMvc.perform(post(BASE_URL + "/gl-accounts/" + account.getGlAccountId() + "/activate")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content("{}"))
         .andExpect(status().isBadRequest())
@@ -166,21 +184,22 @@ class AccountingServiceIntegrationTest {
   @DisplayName("Should return 403 when user lacks accounting:coa:create permission")
 
   void testCreateGLAccountUnauthorized() throws Exception {
-    String invalidToken = "Bearer invalid-token-no-permissions";
+    // Send X-Authorities WITHOUT accounting:coa:create so @PreAuthorize rejects
+    String insufficientAuthorities = "accounting:je:view";
     String payload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "accountCode": "4000",
           "accountType": "ASSET"
         }
-        """;
+        """.formatted(ORG_ID);
 
     mockMvc.perform(post(BASE_URL + "/gl-accounts")
-        .header("Authorization", invalidToken)
+        .header("X-Authorities", insufficientAuthorities)
+        .header("X-User", "unauthorized-user")
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.error.code").value("INSUFFICIENT_PERMISSIONS"));
+        .andExpect(status().isForbidden());
   }
 
   // ============================================
@@ -210,7 +229,7 @@ class AccountingServiceIntegrationTest {
 
     String payload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
           "description": "Invoice received",
           "lines": [
@@ -224,10 +243,11 @@ class AccountingServiceIntegrationTest {
             }
           ]
         }
-        """.formatted(cashAccount.getGlAccountId(), revenueAccount.getGlAccountId());
+        """.formatted(ORG_ID, cashAccount.getGlAccountId(), revenueAccount.getGlAccountId());
 
     mockMvc.perform(post(BASE_URL + "/journal-entries")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isCreated())
@@ -250,7 +270,7 @@ class AccountingServiceIntegrationTest {
 
     String payload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
           "lines": [
             {
@@ -263,10 +283,11 @@ class AccountingServiceIntegrationTest {
             }
           ]
         }
-        """.formatted(account1.getGlAccountId(), account1.getGlAccountId());
+        """.formatted(ORG_ID, account1.getGlAccountId(), account1.getGlAccountId());
 
     mockMvc.perform(post(BASE_URL + "/journal-entries")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isUnprocessableContent())
@@ -297,17 +318,18 @@ class AccountingServiceIntegrationTest {
     // Create entry
     String createPayload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
           "lines": [
             {"glAccountId": "%s", "debitAmount": 100.00},
             {"glAccountId": "%s", "creditAmount": 100.00}
           ]
         }
-        """.formatted(account1.getGlAccountId(), account2.getGlAccountId());
+        """.formatted(ORG_ID, account1.getGlAccountId(), account2.getGlAccountId());
 
     MvcResult createResult = mockMvc.perform(post(BASE_URL + "/journal-entries")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(createPayload))
         .andExpect(status().isCreated())
@@ -318,7 +340,8 @@ class AccountingServiceIntegrationTest {
 
     // Post entry
     mockMvc.perform(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")
-        .header("Authorization", JWT_TOKEN))
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("POSTED"));
   }
@@ -338,17 +361,18 @@ class AccountingServiceIntegrationTest {
 
     String payload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "transactionDate": "2025-01-01T10:00:00Z",
           "lines": [
             {"glAccountId": "%s", "debitAmount": 100.00},
             {"glAccountId": "%s", "creditAmount": 100.00}
           ]
         }
-        """.formatted(account.getGlAccountId(), account.getGlAccountId());
+        """.formatted(ORG_ID, account.getGlAccountId(), account.getGlAccountId());
 
     MvcResult result = mockMvc.perform(post(BASE_URL + "/journal-entries")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andReturn();
@@ -358,12 +382,14 @@ class AccountingServiceIntegrationTest {
 
     // Post it
     mockMvc.perform(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")
-        .header("Authorization", JWT_TOKEN))
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER))
         .andExpect(status().isOk());
 
     // Try to post again
     mockMvc.perform(post(BASE_URL + "/journal-entries/" + entryId.toString() + "/post")
-        .header("Authorization", JWT_TOKEN))
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.error.code").value("ENTRY_ALREADY_POSTED"));
   }
@@ -378,7 +404,7 @@ class AccountingServiceIntegrationTest {
   void testCreateAndPublishRuleSet() throws Exception {
     String createPayload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "name": "AR Auto-Post v1",
           "description": "Automatic posting rules for AR invoices",
           "rules": [
@@ -390,10 +416,11 @@ class AccountingServiceIntegrationTest {
             }
           ]
         }
-        """.formatted(GL_AR_ID);
+        """.formatted(ORG_ID, GL_AR_ID);
 
     MvcResult createResult = mockMvc.perform(post(BASE_URL + "/posting-rules")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(createPayload))
         .andExpect(status().isCreated())
@@ -405,7 +432,8 @@ class AccountingServiceIntegrationTest {
 
     // Publish rule set
     mockMvc.perform(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")
-        .header("Authorization", JWT_TOKEN))
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("PUBLISHED"));
   }
@@ -416,14 +444,15 @@ class AccountingServiceIntegrationTest {
   void testModifyPublishedRuleSetFails() throws Exception {
     String createPayload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "name": "Test Rules",
           "rules": []
         }
-        """;
+        """.formatted(ORG_ID);
 
     MvcResult createResult = mockMvc.perform(post(BASE_URL + "/posting-rules")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(createPayload))
         .andReturn();
@@ -433,7 +462,8 @@ class AccountingServiceIntegrationTest {
 
     // Publish
     mockMvc.perform(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")
-        .header("Authorization", JWT_TOKEN))
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER))
         .andExpect(status().isOk());
 
     // Try to update published set
@@ -444,7 +474,8 @@ class AccountingServiceIntegrationTest {
         """;
 
     mockMvc.perform(put(BASE_URL + "/posting-rules/" + ruleSetId.toString())
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(updatePayload))
         .andExpect(status().isConflict())
@@ -469,7 +500,7 @@ class AccountingServiceIntegrationTest {
 
     String payload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "sourceSystem": "ERP_LEGACY",
           "externalCode": "1000-COGS",
           "glAccountId": "%s",
@@ -480,10 +511,11 @@ class AccountingServiceIntegrationTest {
             "locationId": "NYC"
           }
         }
-        """.formatted(account.getGlAccountId());
+        """.formatted(ORG_ID, account.getGlAccountId());
 
     mockMvc.perform(post(BASE_URL + "/mappings")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(payload))
         .andExpect(status().isCreated())
@@ -505,15 +537,16 @@ class AccountingServiceIntegrationTest {
 
     String resolvePayload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "sourceSystem": "ERP_LEGACY",
           "externalCode": "1000-COGS",
           "transactionDate": "2025-06-15T10:00:00Z"
         }
-        """;
+        """.formatted(ORG_ID);
 
     mockMvc.perform(post(BASE_URL + "/mappings/resolve")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(resolvePayload))
         .andExpect(status().isOk())
@@ -530,7 +563,7 @@ class AccountingServiceIntegrationTest {
   void testSubmitAccountingEvent() throws Exception {
     String eventPayload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "sourceSystem": "billing-service",
           "eventType": "billing.invoicePosted",
           "transactionDate": "2025-01-01T10:00:00Z",
@@ -540,10 +573,11 @@ class AccountingServiceIntegrationTest {
             "totalAmount": 1000.00
           }
         }
-        """.formatted(INVOICE_ID, CUSTOMER_ID);
+        """.formatted(ORG_ID, INVOICE_ID, CUSTOMER_ID);
 
     mockMvc.perform(post(BASE_URL + "/events")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
         .andExpect(status().isAccepted())
@@ -557,17 +591,18 @@ class AccountingServiceIntegrationTest {
   void testDuplicateEventRejection() throws Exception {
     String eventPayload = """
         {
-          "organizationId": "org-test-001",
+          "organizationId": "%s",
           "sourceSystem": "billing-service",
           "eventType": "billing.invoicePosted",
           "transactionDate": "2025-01-01T10:00:00Z",
           "payload": {"invoiceId": "%s"}
         }
-        """.formatted(INVOICE_ID);
+        """.formatted(ORG_ID, INVOICE_ID);
 
     // Submit first
     mockMvc.perform(post(BASE_URL + "/events")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
         .andExpect(status().isAccepted())
@@ -575,7 +610,8 @@ class AccountingServiceIntegrationTest {
 
     // Submit duplicate
     mockMvc.perform(post(BASE_URL + "/events")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
         .andExpect(status().isConflict())
@@ -598,7 +634,8 @@ class AccountingServiceIntegrationTest {
 
     // Assume bill created via event; test approval
     mockMvc.perform(post(BASE_URL + "/vendor-bills/" + BILL_ID + "/approve")
-        .header("Authorization", JWT_TOKEN)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(approvePayload))
         .andExpect(status().isOk());

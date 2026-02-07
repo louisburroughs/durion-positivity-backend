@@ -1,12 +1,13 @@
 package com.positivity.order.internal.dto;
 
-import com.positivity.order.internal.model.OverrideStatus;
-import com.positivity.order.internal.model.PriceOverrideReasonCode;
 import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import com.positivity.order.internal.entity.OverrideStatus;
+import com.positivity.order.internal.entity.PriceOverrideReasonCode;
 
 /**
  * Response DTO for price override application.
@@ -14,7 +15,7 @@ import java.time.Instant;
 @Data
 @Builder
 public class ApplyPriceOverrideResponse {
-    
+
     private Long overrideId;
     private String orderId;
     private String orderLineId;

@@ -62,15 +62,15 @@ public class EventIngestionController {
         })
         @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
         public ResponseEntity<PagedResponse<AccountingEventResponse>> listEvents(
+                        @Parameter(description = "Organization identifier") @RequestParam UUID organizationId,
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-                        @Parameter(description = "Filter by event type") @RequestParam(required = false) String eventType,
                         @Parameter(description = "Filter by processing status") @RequestParam(required = false) String status) {
-                log.debug("Listing accounting events: page={}, size={}, eventType={}, status={}", page, size, eventType,
+                log.debug("Listing accounting events: org={}, page={}, size={}, status={}", organizationId, page, size,
                                 status);
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-                Page<JournalEntry> eventPage = eventIngestionService.listEvents(eventType, status, pageable);
+                Page<JournalEntry> eventPage = eventIngestionService.listEvents(organizationId, status, pageable);
 
                 PagedResponse<AccountingEventResponse> response = new PagedResponse<AccountingEventResponse>(
                                 eventPage.getContent().stream()
@@ -109,12 +109,12 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "400", description = "Invalid request")
         })
         @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
-        public ResponseEntity<JournalEntryResponse> submitEvent(
+        public ResponseEntity<AccountingEventResponse> submitEvent(
                         @Valid @RequestBody AccountingEventSubmitRequest request) {
                 log.info("Submitting accounting event: type={}, org={}", request.getEventType(),
                                 request.getOrganizationId());
-                JournalEntry entry = eventIngestionService.submitEvent(request.toMap());
-                return ResponseEntity.status(HttpStatus.ACCEPTED).body(JournalEntryMapper.toResponse(entry));
+                AccountingEventResponse response = eventIngestionService.submitEvent(request.toMap());
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
         }
 
         @PostMapping("/{eventId}/retry")
@@ -125,12 +125,12 @@ public class EventIngestionController {
                         @ApiResponse(responseCode = "404", description = "Event not found")
         })
         @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
-        public ResponseEntity<JournalEntryResponse> retryEventProcessing(
+        public ResponseEntity<AccountingEventResponse> retryEventProcessing(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId,
                         @RequestBody(required = false) Object request) {
                 log.info("Retrying event processing: {}", eventId);
-                JournalEntry entry = eventIngestionService.retryEvent(eventId);
-                return ResponseEntity.status(HttpStatus.ACCEPTED).body(JournalEntryMapper.toResponse(entry));
+                AccountingEventResponse response = eventIngestionService.retryEvent(eventId);
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
         }
 
         @GetMapping("/{eventId}/processing-log")

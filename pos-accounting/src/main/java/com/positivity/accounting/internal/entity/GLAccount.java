@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.springframework.data.domain.Persistable;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -36,11 +38,20 @@ import lombok.ToString;
         @Index(name = "idx_activation_date", columnList = "activation_date"),
         @Index(name = "idx_deactivation_date", columnList = "deactivation_date")
 })
-public class GLAccount {
+public class GLAccount implements Persistable<UUID> {
+
+    /**
+     * Transient flag used by Spring Data JPA to distinguish new entities from
+     * existing ones. Required because the entity uses an assigned/pre-set ID
+     * combined with an initialized {@code @Version} field, which would
+     * otherwise cause {@code save()} to call {@code merge()} instead of
+     * {@code persist()}.
+     */
+    @Transient
+    private boolean isNew = true;
 
     @EqualsAndHashCode.Include
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "gl_account_id", nullable = false)
     private UUID glAccountId;
 
@@ -82,17 +93,36 @@ public class GLAccount {
     // Optimistic locking
     @Version
     @Column(name = "version")
-    private Integer version;
+    private Integer version = 0;
+
+    @Override
+    public UUID getId() {
+        return glAccountId;
+    }
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
 
     // Lifecycle callbacks
     @PrePersist
     protected void onCreate() {
+        if (this.glAccountId == null) {
+            this.glAccountId = UUID.randomUUID();
+        }
         Instant now = Instant.now();
         this.createdAt = now;
         this.modifiedAt = now;
         if (this.activationDate == null) {
             this.activationDate = LocalDateTime.now();
         }
+    }
+
+    @PostPersist
+    @PostLoad
+    protected void markNotNew() {
+        this.isNew = false;
     }
 
     @PreUpdate

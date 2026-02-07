@@ -143,6 +143,12 @@
             <artifactId>pos-security-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- pos-shared-dtos for shared DTOs -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.dto.EnvelopeErrorResponse;
 import com.positivity.accounting.internal.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,5 +33,11 @@ public class AccountingExceptionHandler {
                 .message("Access denied")
                 .build();
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
+    @ExceptionHandler(DuplicateEventException.class)
+    public ResponseEntity<EnvelopeErrorResponse> handleDuplicateEvent(DuplicateEventException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(EnvelopeErrorResponse.of("DUPLICATE_EVENT", ex.getMessage()));
     }
 }
