@@ -14,8 +14,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class HintResponse {
-    private Long hintId;
-    private Long productId;
+    private String hintId;
+    private String productId;
     private List<FitmentTagDto> fitmentTags;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

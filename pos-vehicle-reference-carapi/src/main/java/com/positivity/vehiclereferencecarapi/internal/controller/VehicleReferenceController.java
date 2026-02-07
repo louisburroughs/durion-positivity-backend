@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -21,7 +22,7 @@ public class VehicleReferenceController {
     }
 
     @GetMapping("/models/{makeId}")
-    public List<CarApiModel> getModelsByMakeId(@PathVariable String makeId) {
+    public List<CarApiModel> getModelsByMakeId(@PathVariable UUID makeId) {
         return vehicleReferenceService.getModelsByMakeId(makeId);
     }
 }

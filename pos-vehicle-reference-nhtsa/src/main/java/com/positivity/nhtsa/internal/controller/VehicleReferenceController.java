@@ -7,6 +7,7 @@ import com.positivity.nhtsa.internal.entity.VehicleType;
 import com.positivity.nhtsa.service.VehicleReferenceService;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/vehicle-fitment")
@@ -24,17 +25,17 @@ public class VehicleReferenceController {
     }
 
     @GetMapping("/makes/{manufacturerId}")
-    public List<Make> getMakesByManufacturer(@PathVariable Long manufacturerId) {
+    public List<Make> getMakesByManufacturer(@PathVariable UUID manufacturerId) {
         return vehicleReferenceService.getMakesByManufacturer(manufacturerId);
     }
 
     @GetMapping("/models/{makeId}")
-    public List<Model> getModelsByMake(@PathVariable Long makeId) {
+    public List<Model> getModelsByMake(@PathVariable UUID makeId) {
         return vehicleReferenceService.getModelsByMake(makeId);
     }
 
     @GetMapping("/vehicle-types/{makeId}")
-    public List<VehicleType> getVehicleTypesForMake(@PathVariable Long makeId) {
+    public List<VehicleType> getVehicleTypesForMake(@PathVariable UUID makeId) {
         return vehicleReferenceService.getVehicleTypesForMake(makeId);
     }
 }

@@ -3,6 +3,7 @@ package com.positivity.vehicle.internal.entity;
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import lombok.Data;
+import java.util.UUID;
 
 @Data
 @Entity
@@ -19,6 +20,7 @@ public abstract class VehicleEntity implements Vehicle {
             id = UUIDv7Generator.generate();
         }
     }
+
     private String make;
     private String model;
     private int year;

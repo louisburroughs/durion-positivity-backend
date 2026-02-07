@@ -19,9 +19,9 @@ public class CarApiModel {
             id = UUIDv7Generator.generate();
         }
     }
-    private String modelId;
+
+    private UUID modelId;
     private String modelName;
-    private String makeId;
+    private UUID makeId;
     private LocalDateTime cacheTimestamp;
 }
-

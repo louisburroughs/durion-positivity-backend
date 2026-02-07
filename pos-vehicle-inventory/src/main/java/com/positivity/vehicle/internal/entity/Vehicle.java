@@ -1,7 +1,9 @@
 package com.positivity.vehicle.internal.entity;
 
+import java.util.UUID;
+
 public interface Vehicle {
-    Long getId();
+    UUID getId();
 
     String getMake();
 

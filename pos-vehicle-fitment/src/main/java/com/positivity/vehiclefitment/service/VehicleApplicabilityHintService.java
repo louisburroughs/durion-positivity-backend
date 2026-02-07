@@ -145,7 +145,11 @@ public class VehicleApplicabilityHintService {
         List<Long> productIdList = new ArrayList<>(matchingProductIds);
         log.info("Found {} matching products", productIdList.size());
 
-        return new FilterProductsResponse(productIdList, productIdList.size());
+        // Convert Long IDs to String for response
+        List<String> productIdStrings = productIdList.stream()
+                .map(String::valueOf)
+                .collect(Collectors.toList());
+        return new FilterProductsResponse(productIdStrings, productIdStrings.size());
     }
 
     /**
@@ -218,8 +222,8 @@ public class VehicleApplicabilityHintService {
      */
     private HintResponse mapToResponse(VehicleApplicabilityHint hint) {
         HintResponse response = new HintResponse();
-        response.setHintId(hint.getHintId());
-        response.setProductId(hint.getProductId());
+        response.setHintId(hint.getHintId().toString());
+        response.setProductId(String.valueOf(hint.getProductId()));
         response.setCreatedAt(hint.getCreatedAt());
         response.setUpdatedAt(hint.getUpdatedAt());
         response.setCreatedBy(hint.getCreatedBy());
