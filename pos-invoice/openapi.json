@@ -10,7 +10,7 @@
   },
   "servers": [
     {
-      "url": "http://api-gateway.local/api/invoice",
+      "url": "http://api-gateway.local/invoice",
       "description": "API Gateway"
     }
   ],
