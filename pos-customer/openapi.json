@@ -11,7 +11,7 @@
     },
     "servers": [
         {
-            "url": "http://api-gateway.local/api/customer",
+            "url": "http://api-gateway.local/customer",
             "description": "API Gateway"
         }
     ],

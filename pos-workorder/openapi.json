@@ -10,7 +10,7 @@
   },
   "servers": [
     {
-      "url": "http://api-gateway.local/api/workorder",
+      "url": "http://api-gateway.local/workorder",
       "description": "API Gateway endpoint for work order services"
     }
   ],
