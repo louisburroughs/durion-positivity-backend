@@ -16,6 +16,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  jackson:
+    default-property-inclusion: non_null
 
 server:
   port: 0
