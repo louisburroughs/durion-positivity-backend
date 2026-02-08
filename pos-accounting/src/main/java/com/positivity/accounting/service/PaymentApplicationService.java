@@ -3,6 +3,7 @@ package com.positivity.accounting.service;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceRequest;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
+import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
@@ -21,7 +22,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -154,9 +157,28 @@ public class PaymentApplicationService {
                                         totalApplicationAmount, payment.getUnappliedAmount()));
                 }
 
-                // 4. Validate all invoices and currency match
+                // 4. Validate all invoices, cap amounts to balanceDue, and detect overpayment
+                BigDecimal actualTotalApplicationAmount = BigDecimal.ZERO;
+                BigDecimal overpaymentAmount = BigDecimal.ZERO;
+                Map<UUID, BigDecimal> cappedAmounts = new HashMap<>();
+
                 for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
-                        validateInvoiceApplication(invoiceApp, payment.getCurrency());
+                        var invoiceDetails = validateInvoiceApplication(invoiceApp, payment.getCurrency());
+                        
+                        // Cap application to invoice balance due
+                        BigDecimal requestedAmount = invoiceApp.getAmountToApply();
+                        BigDecimal cappedAmount = requestedAmount.min(invoiceDetails.getBalanceDue());
+                        BigDecimal excessForThisInvoice = requestedAmount.subtract(cappedAmount);
+                        
+                        cappedAmounts.put(invoiceApp.getInvoiceId(), cappedAmount);
+                        actualTotalApplicationAmount = actualTotalApplicationAmount.add(cappedAmount);
+                        overpaymentAmount = overpaymentAmount.add(excessForThisInvoice);
+                        
+                        if (excessForThisInvoice.compareTo(BigDecimal.ZERO) > 0) {
+                                log.info("Capped application to invoice {} from {} to {} (excess: {})",
+                                                invoiceApp.getInvoiceId(), requestedAmount, cappedAmount,
+                                                excessForThisInvoice);
+                        }
                 }
 
                 // 5. Create PaymentApplication records and update invoices
@@ -164,12 +186,21 @@ public class PaymentApplicationService {
                 Instant applicationTimestamp = Instant.now();
 
                 for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
+                        BigDecimal amountToApply = cappedAmounts.get(invoiceApp.getInvoiceId());
+                        
+                        // Skip if capped amount is zero (fully overpayment scenario)
+                        if (amountToApply.compareTo(BigDecimal.ZERO) == 0) {
+                                log.info("Skipping invoice {} - capped amount is 0 (already paid in full)",
+                                                invoiceApp.getInvoiceId());
+                                continue;
+                        }
+                        
                         PaymentApplication application = new PaymentApplication();
                         application.setPaymentId(paymentId);
                         application.setInvoiceId(invoiceApp.getInvoiceId());
                         application.setCustomerId(payment.getCustomerId());
                         application.setCurrency(payment.getCurrency());
-                        application.setAppliedAmount(invoiceApp.getAmountToApply());
+                        application.setAppliedAmount(amountToApply);
                         application.setApplicationTimestamp(applicationTimestamp);
                         application.setApplicationRequestId(request.getApplicationRequestId());
                         application.setCreatedAt(applicationTimestamp);
@@ -180,7 +211,7 @@ public class PaymentApplicationService {
                         // TODO #2: Apply payment to invoice via service client
                         ApplyPaymentToInvoiceRequest invoiceRequest = ApplyPaymentToInvoiceRequest.builder()
                                         .paymentApplicationId(saved.getPaymentApplicationId())
-                                        .amountApplied(invoiceApp.getAmountToApply())
+                                        .amountApplied(amountToApply)
                                         .appliedAt(applicationTimestamp)
                                         .currency(payment.getCurrency())
                                         .paymentId(paymentId)
@@ -201,27 +232,44 @@ public class PaymentApplicationService {
 
                         log.info("Created PaymentApplication {} for payment {} to invoice {} amount {}",
                                         saved.getPaymentApplicationId(), paymentId, invoiceApp.getInvoiceId(),
-                                        invoiceApp.getAmountToApply());
+                                        amountToApply);
                 }
 
-                // 6. Update payment unappliedAmount
-                payment.applyAmount(totalApplicationAmount);
+                // 6. Capture unapplied amount before applying, for overpayment credit calculation
+                BigDecimal unappliedBeforeApplication = payment.getUnappliedAmount();
+                
+                // 7. Update payment unappliedAmount (apply actual applied amount)
+                payment.applyAmount(actualTotalApplicationAmount);
                 payment.setModifiedAt(applicationTimestamp);
                 payment.setModifiedBy(getCurrentUser());
+
+                // 8. Handle overpayment - create CustomerCredit if there's overpayment
+                PaymentApplicationResponse.CustomerCreditInfo creditInfo = null;
+                
+                if (overpaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
+                        // Explicit overpayment: payment amount exceeded what was needed for invoices
+                        // Convert any remaining unapplied amount to customer credit
+                        BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
+                        BigDecimal totalCreditAmount = overpaymentAmount.add(unappliedAfterApplication);
+                        
+                        creditInfo = createCustomerCredit(payment, totalCreditAmount, applicationTimestamp);
+                        
+                        // Mark payment as fully applied by converting remaining balance to credit
+                        // This ensures payment status becomes FULLY_APPLIED
+                        if (unappliedAfterApplication.compareTo(BigDecimal.ZERO) > 0) {
+                                payment.applyAmount(unappliedAfterApplication);
+                        }
+                        
+                        log.info("Overpayment detected: requested={}, applied={}, overpayment={}, " +
+                                        "unapplied before={}, unapplied after={}, total credit={}",
+                                        totalApplicationAmount, actualTotalApplicationAmount,
+                                        overpaymentAmount, unappliedBeforeApplication,
+                                        unappliedAfterApplication, totalCreditAmount);
+                }
+                
                 receivablePaymentRepository.save(payment);
 
-                // 7. Handle overpayment
-                PaymentApplicationResponse.CustomerCreditInfo creditInfo = null;
-                BigDecimal remainingAmount = payment.getUnappliedAmount();
-
-                if (remainingAmount.compareTo(BigDecimal.ZERO) > 0 &&
-                                payment.getStatus() == ReceivablePaymentStatus.FULLY_APPLIED) {
-                        // This shouldn't happen with current logic, but included for completeness
-                        // Overpayment scenario: payment exceeds all invoice applications
-                        creditInfo = createCustomerCredit(payment, remainingAmount, applicationTimestamp);
-                }
-
-                // 8. Build response
+                // 9. Build response
                 return PaymentApplicationResponse.builder()
                                 .paymentId(paymentId)
                                 .customerId(payment.getCustomerId())
@@ -344,7 +392,7 @@ public class PaymentApplicationService {
 
         // ===== PRIVATE HELPER METHODS =====
 
-        private void validateInvoiceApplication(
+        private InvoiceDetails validateInvoiceApplication(
                         PaymentApplicationRequest.InvoiceApplication invoiceApp,
                         String paymentCurrency) {
 
@@ -376,6 +424,8 @@ public class PaymentApplicationService {
                                                         + paymentCurrency + ")");
                 }
 
+                // Note: No longer failing if amountToApply > balanceDue
+                // The caller will cap the application to balanceDue and handle overpayment
                 // Validate amountToApply <= invoice.balanceDue
                 if (invoiceApp.getAmountToApply().compareTo(invoiceDetails.getBalanceDue()) > 0) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -387,6 +437,8 @@ public class PaymentApplicationService {
 
                 log.info("Invoice validation passed for invoice {} (status: {}, balanceDue: {})",
                                 invoiceApp.getInvoiceId(), status, invoiceDetails.getBalanceDue());
+                
+                return invoiceDetails;
         }
 
         private PaymentApplicationResponse.ApplicationDetail buildApplicationDetail(
