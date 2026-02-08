@@ -500,27 +500,42 @@ public class PaymentApplicationService {
         }
 
         private PaymentApplicationResponse buildResponseForExistingApplication(String applicationRequestId) {
-                // Find existing applications by request ID
-                PaymentApplication existingApp = paymentApplicationRepository
-                                .findByApplicationRequestId(applicationRequestId)
-                                .orElseThrow(() -> new IllegalStateException(
-                                                "Application request processed but not found: "
-                                                                + applicationRequestId));
+                // Find all existing applications by request ID (handles multi-invoice case)
+                List<PaymentApplication> existingApps = paymentApplicationRepository
+                                .findAllByApplicationRequestId(applicationRequestId);
 
-                ReceivablePayment payment = receivablePaymentRepository.findById(existingApp.getPaymentId())
-                                .orElseThrow(() -> new IllegalStateException(
-                                                "Payment not found: " + existingApp.getPaymentId()));
+                if (existingApps.isEmpty()) {
+                        throw new IllegalStateException(
+                                        "Application request processed but not found: " + applicationRequestId);
+                }
 
-                // Build minimal response for idempotent retry
+                // Use first application for common fields (all apps share same payment/customer/currency)
+                PaymentApplication firstApp = existingApps.get(0);
+
+                ReceivablePayment payment = receivablePaymentRepository.findById(firstApp.getPaymentId())
+                                .orElseThrow(() -> new IllegalStateException(
+                                                "Payment not found: " + firstApp.getPaymentId()));
+
+                // Calculate total applied amount across all applications
+                BigDecimal totalApplied = existingApps.stream()
+                                .map(PaymentApplication::getAppliedAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                // Build application details for all applications
+                List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = existingApps.stream()
+                                .map(app -> buildApplicationDetail(app, app.getInvoiceId()))
+                                .toList();
+
+                // Build response for idempotent retry
                 return PaymentApplicationResponse.builder()
-                                .paymentId(existingApp.getPaymentId())
-                                .customerId(existingApp.getCustomerId())
-                                .currency(existingApp.getCurrency())
+                                .paymentId(firstApp.getPaymentId())
+                                .customerId(firstApp.getCustomerId())
+                                .currency(firstApp.getCurrency())
                                 .totalAmount(payment.getTotalAmount())
-                                .appliedAmount(existingApp.getAppliedAmount())
+                                .appliedAmount(totalApplied)
                                 .remainingAmount(payment.getUnappliedAmount())
-                                .applications(List.of(buildApplicationDetail(existingApp, existingApp.getInvoiceId())))
-                                .applicationTimestamp(existingApp.getApplicationTimestamp())
+                                .applications(applicationDetails)
+                                .applicationTimestamp(firstApp.getApplicationTimestamp())
                                 .applicationRequestId(applicationRequestId)
                                 .build();
         }

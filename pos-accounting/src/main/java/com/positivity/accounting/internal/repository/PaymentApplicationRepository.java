@@ -52,6 +52,14 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
     Optional<PaymentApplication> findByApplicationRequestId(String applicationRequestId);
 
     /**
+     * Find all applications by request ID (for multi-invoice idempotency).
+     * 
+     * @param applicationRequestId idempotency key
+     * @return list of all applications for this request
+     */
+    List<PaymentApplication> findAllByApplicationRequestId(String applicationRequestId);
+
+    /**
      * Check if application request was already processed (idempotency check).
      * 
      * @param applicationRequestId idempotency key
