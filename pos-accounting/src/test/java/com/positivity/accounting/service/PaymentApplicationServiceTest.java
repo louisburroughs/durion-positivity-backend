@@ -22,6 +22,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
@@ -334,8 +336,10 @@ class PaymentApplicationServiceTest {
 
                 // Act & Assert
                 assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
-                                .isInstanceOf(IllegalArgumentException.class)
-                                .hasMessageContaining("Payment not found");
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("Payment not found")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.NOT_FOUND);
         }
 
         @Test
@@ -354,8 +358,10 @@ class PaymentApplicationServiceTest {
 
                 // Act & Assert
                 assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
-                                .isInstanceOf(IllegalStateException.class)
-                                .hasMessageContaining("is not available (status:");
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("is not available (status:")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
         @Test
@@ -373,8 +379,10 @@ class PaymentApplicationServiceTest {
 
                 // Act & Assert
                 assertThatThrownBy(() -> service.applyPaymentToInvoices(testPaymentId, request))
-                                .isInstanceOf(IllegalArgumentException.class)
-                                .hasMessageContaining("Insufficient funds");
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("Insufficient funds")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
         // ========================================
@@ -450,8 +458,10 @@ class PaymentApplicationServiceTest {
                                 applicationId,
                                 "Test reason",
                                 "admin@example.com"))
-                                .isInstanceOf(IllegalArgumentException.class)
-                                .hasMessageContaining("not found");
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("not found")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.NOT_FOUND);
         }
 
         @Test
@@ -478,8 +488,10 @@ class PaymentApplicationServiceTest {
                                 applicationId,
                                 "Second reversal attempt",
                                 "admin@example.com"))
-                                .isInstanceOf(IllegalArgumentException.class)
-                                .hasMessageContaining("has already been reversed");
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("has already been reversed")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.CONFLICT);
         }
 
         @Test
@@ -505,8 +517,10 @@ class PaymentApplicationServiceTest {
                                 applicationId,
                                 "Test reason",
                                 "admin@example.com"))
-                                .isInstanceOf(IllegalArgumentException.class)
-                                .hasMessageContaining("has already been reversed");
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("has already been reversed")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.CONFLICT);
 
                 verify(paymentApplicationReversalRepository, never()).save(any(PaymentApplicationReversal.class));
         }

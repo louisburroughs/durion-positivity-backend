@@ -13,9 +13,11 @@ import com.positivity.accounting.internal.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -117,8 +119,9 @@ public class PaymentApplicationService {
          * @param paymentId payment to apply
          * @param request   application request with invoices and amounts
          * @return application response with details
-         * @throws IllegalArgumentException if validation fails
-         * @throws IllegalStateException    if payment not found or unavailable
+         * @throws ResponseStatusException with NOT_FOUND if payment not found
+         * @throws ResponseStatusException with BAD_REQUEST if validation fails or insufficient funds
+         * @throws ResponseStatusException with CONFLICT if currency mismatch or invoice not applicable
          */
         public PaymentApplicationResponse applyPaymentToInvoices(
                         @NonNull UUID paymentId,
@@ -133,10 +136,11 @@ public class PaymentApplicationService {
 
                 // 1. Validate payment is AVAILABLE
                 ReceivablePayment payment = receivablePaymentRepository.findById(paymentId)
-                                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Payment not found: " + paymentId));
 
                 if (payment.getStatus() != ReceivablePaymentStatus.AVAILABLE) {
-                        throw new IllegalStateException(
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Payment " + paymentId + " is not available (status: " + payment.getStatus()
                                                         + ")");
                 }
@@ -148,7 +152,7 @@ public class PaymentApplicationService {
 
                 // 3. Validate sufficient funds
                 if (!payment.hasSufficientFunds(totalApplicationAmount)) {
-                        throw new IllegalArgumentException(String.format(
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, String.format(
                                         "Insufficient funds: requested %s, available %s",
                                         totalApplicationAmount, payment.getUnappliedAmount()));
                 }
@@ -294,7 +298,8 @@ public class PaymentApplicationService {
          * @param reason               reversal reason (required)
          * @param reversedBy           user performing reversal
          * @return reversal record
-         * @throws IllegalArgumentException if application not found or already reversed
+         * @throws ResponseStatusException with NOT_FOUND if application not found
+         * @throws ResponseStatusException with CONFLICT if already reversed
          */
         public PaymentApplicationReversal reversePaymentApplication(
                         @NonNull UUID paymentApplicationId,
@@ -303,13 +308,13 @@ public class PaymentApplicationService {
 
                 // 1. Check if already reversed
                 if (reversalRepository.existsByOriginalPaymentApplicationId(paymentApplicationId)) {
-                        throw new IllegalArgumentException(
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
                                         "Payment application " + paymentApplicationId + " has already been reversed");
                 }
 
                 // 2. Get original application
                 PaymentApplication original = paymentApplicationRepository.findById(paymentApplicationId)
-                                .orElseThrow(() -> new IllegalArgumentException(
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Payment application not found: " + paymentApplicationId));
 
                 // 3. Create reversal record
@@ -359,11 +364,13 @@ public class PaymentApplicationService {
 
         /**
          * Get payment application by ID.
+         * 
+         * @throws ResponseStatusException with NOT_FOUND if application not found
          */
         @Transactional(readOnly = true)
         public PaymentApplication getPaymentApplication(@NonNull UUID paymentApplicationId) {
                 return paymentApplicationRepository.findById(paymentApplicationId)
-                                .orElseThrow(() -> new IllegalArgumentException(
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Payment application not found: " + paymentApplicationId));
         }
 
@@ -391,7 +398,7 @@ public class PaymentApplicationService {
 
                 // Validate amount > 0
                 if (invoiceApp.getAmountToApply().compareTo(BigDecimal.ZERO) <= 0) {
-                        throw new IllegalArgumentException(
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Amount to apply must be greater than 0 for invoice "
                                                         + invoiceApp.getInvoiceId());
                 }
@@ -404,14 +411,14 @@ public class PaymentApplicationService {
                 // Validate invoice status is OPEN or PARTIALLY_PAID
                 String status = invoiceDetails.getStatus();
                 if ("PAID_IN_FULL".equals(status) || "VOIDED".equals(status) || "CANCELLED".equals(status)) {
-                        throw new IllegalArgumentException(
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
                                         "Invoice " + invoiceApp.getInvoiceId()
                                                         + " is not applicable for payment (status: " + status + ")");
                 }
 
                 // Validate currency matches
                 if (!invoiceDetails.getCurrency().equals(paymentCurrency)) {
-                        throw new IllegalArgumentException(
+                        throw new ResponseStatusException(HttpStatus.CONFLICT,
                                         "Currency mismatch for invoice " + invoiceApp.getInvoiceId() +
                                                         " (invoice: " + invoiceDetails.getCurrency() + ", payment: "
                                                         + paymentCurrency + ")");
@@ -419,6 +426,14 @@ public class PaymentApplicationService {
 
                 // Note: No longer failing if amountToApply > balanceDue
                 // The caller will cap the application to balanceDue and handle overpayment
+                // Validate amountToApply <= invoice.balanceDue
+                if (invoiceApp.getAmountToApply().compareTo(invoiceDetails.getBalanceDue()) > 0) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "Application amount " + invoiceApp.getAmountToApply() +
+                                                        " exceeds invoice balance due " + invoiceDetails.getBalanceDue()
+                                                        +
+                                                        " for invoice " + invoiceApp.getInvoiceId());
+                }
 
                 log.info("Invoice validation passed for invoice {} (status: {}, balanceDue: {})",
                                 invoiceApp.getInvoiceId(), status, invoiceDetails.getBalanceDue());
