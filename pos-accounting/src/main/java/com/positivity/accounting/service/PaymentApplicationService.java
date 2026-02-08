@@ -11,7 +11,6 @@ import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
 import com.positivity.accounting.internal.entity.*;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.repository.*;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.security.common.SecurityContextHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +53,6 @@ public class PaymentApplicationService {
         private final PaymentApplicationRepository paymentApplicationRepository;
         private final CustomerCreditRepository customerCreditRepository;
         private final PaymentApplicationReversalRepository reversalRepository;
-        private final InvoicePaymentStatusService invoicePaymentStatusService;
         private final InvoiceServiceClient invoiceServiceClient;
 
         /**
@@ -108,21 +106,32 @@ public class PaymentApplicationService {
         /**
          * Apply a payment to one or more invoices atomically.
          * 
-         * <p><strong>Atomicity Guarantee:</strong> This operation ensures atomicity across all invoice
-         * applications through compensating reversals. If any invoice service call fails, all previously
-         * successful invoice mutations are reversed before the local DB transaction rolls back. This
+         * <p>
+         * <strong>Atomicity Guarantee:</strong> This operation ensures atomicity across
+         * all invoice
+         * applications through compensating reversals. If any invoice service call
+         * fails, all previously
+         * successful invoice mutations are reversed before the local DB transaction
+         * rolls back. This
          * prevents the Accounting and Invoice services from becoming out of sync.
          * 
-         * <p><strong>Idempotency Requirement:</strong> The Invoice service MUST implement idempotent
-         * payment application using {@code paymentApplicationId} as the idempotency key. This allows
-         * safe retries and prevents duplicate applications if the same {@code paymentApplicationId}
+         * <p>
+         * <strong>Idempotency Requirement:</strong> The Invoice service MUST implement
+         * idempotent
+         * payment application using {@code paymentApplicationId} as the idempotency
+         * key. This allows
+         * safe retries and prevents duplicate applications if the same
+         * {@code paymentApplicationId}
          * is sent multiple times.
          * 
-         * <p><strong>Failure Handling:</strong>
+         * <p>
+         * <strong>Failure Handling:</strong>
          * <ul>
          * <li>If validation fails, throws exception before any mutations occur</li>
-         * <li>If an invoice service call fails, performs compensating reversals on all successfully
-         *     applied invoices, then rethrows the exception to trigger DB transaction rollback</li>
+         * <li>If an invoice service call fails, performs compensating reversals on all
+         * successfully
+         * applied invoices, then rethrows the exception to trigger DB transaction
+         * rollback</li>
          * <li>All compensating reversals are logged for audit trail and debugging</li>
          * </ul>
          * 
@@ -131,7 +140,8 @@ public class PaymentApplicationService {
          * 2. Validate each invoice is applicable (not PaidInFull/Voided/Cancelled)
          * 3. Validate requested amounts
          * 4. Create immutable PaymentApplication records
-         * 5. Update invoice balances and statuses (with compensating reversal on failure)
+         * 5. Update invoice balances and statuses (with compensating reversal on
+         * failure)
          * 6. Update payment unappliedAmount
          * 7. Handle overpayment (create CustomerCredit)
          * 8. Emit events for downstream consumers
@@ -140,9 +150,12 @@ public class PaymentApplicationService {
          * @param request   application request with invoices and amounts
          * @return application response with details
          * @throws ResponseStatusException with NOT_FOUND if payment not found
-         * @throws ResponseStatusException with BAD_REQUEST if validation fails or insufficient funds
-         * @throws ResponseStatusException with CONFLICT if currency mismatch or invoice not applicable
-         * @throws ResponseStatusException with SERVICE_UNAVAILABLE if invoice service call fails (after compensating reversals)
+         * @throws ResponseStatusException with BAD_REQUEST if validation fails or
+         *                                 insufficient funds
+         * @throws ResponseStatusException with CONFLICT if currency mismatch or invoice
+         *                                 not applicable
+         * @throws ResponseStatusException with SERVICE_UNAVAILABLE if invoice service
+         *                                 call fails (after compensating reversals)
          */
         public PaymentApplicationResponse applyPaymentToInvoices(
                         @NonNull UUID paymentId,
@@ -185,16 +198,16 @@ public class PaymentApplicationService {
 
                 for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
                         var invoiceDetails = validateInvoiceApplication(invoiceApp, payment.getCurrency());
-                        
+
                         // Cap application to invoice balance due
                         BigDecimal requestedAmount = invoiceApp.getAmountToApply();
                         BigDecimal cappedAmount = requestedAmount.min(invoiceDetails.getBalanceDue());
                         BigDecimal excessForThisInvoice = requestedAmount.subtract(cappedAmount);
-                        
+
                         cappedAmounts.put(invoiceApp.getInvoiceId(), cappedAmount);
                         actualTotalApplicationAmount = actualTotalApplicationAmount.add(cappedAmount);
                         overpaymentAmount = overpaymentAmount.add(excessForThisInvoice);
-                        
+
                         if (excessForThisInvoice.compareTo(BigDecimal.ZERO) > 0) {
                                 log.info("Capped application to invoice {} from {} to {} (excess: {})",
                                                 invoiceApp.getInvoiceId(), requestedAmount, cappedAmount,
@@ -206,7 +219,8 @@ public class PaymentApplicationService {
                 String currentUser = getCurrentUser();
 
                 // 5. Create PaymentApplication records and update invoices
-                // Track successful applications for compensating reversals if a later application fails
+                // Track successful applications for compensating reversals if a later
+                // application fails
                 List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = new ArrayList<>();
                 List<PaymentApplication> successfulApplications = new ArrayList<>();
                 Instant applicationTimestamp = Instant.now();
@@ -214,14 +228,14 @@ public class PaymentApplicationService {
                 try {
                         for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
                                 BigDecimal amountToApply = cappedAmounts.get(invoiceApp.getInvoiceId());
-                                
+
                                 // Skip if capped amount is zero (fully overpayment scenario)
                                 if (amountToApply.compareTo(BigDecimal.ZERO) == 0) {
                                         log.info("Skipping invoice {} - capped amount is 0 (already paid in full)",
                                                         invoiceApp.getInvoiceId());
                                         continue;
                                 }
-                                
+
                                 PaymentApplication application = new PaymentApplication();
                                 application.setPaymentId(paymentId);
                                 application.setInvoiceId(invoiceApp.getInvoiceId());
@@ -259,7 +273,8 @@ public class PaymentApplicationService {
 
                                 // Store response for building detail
                                 applicationDetails
-                                                .add(buildApplicationDetail(saved, invoiceApp.getInvoiceId(), invoiceResponse));
+                                                .add(buildApplicationDetail(saved, invoiceApp.getInvoiceId(),
+                                                                invoiceResponse));
 
                                 log.info("Created PaymentApplication {} for payment {} to invoice {} amount {}",
                                                 saved.getPaymentApplicationId(), paymentId, invoiceApp.getInvoiceId(),
@@ -267,89 +282,46 @@ public class PaymentApplicationService {
                         }
                 } catch (InvoiceServiceException e) {
                         // Compensating transaction: reverse all successful invoice applications
-                        // This ensures Invoice service state is rolled back before DB transaction rollback
+                        // This ensures Invoice service state is rolled back before DB transaction
+                        // rollback
                         log.error("Invoice service call failed during payment application for payment {} " +
                                         "(applicationRequestId: {}). Performing compensating reversals for {} successful applications",
                                         paymentId, request.getApplicationRequestId(), successfulApplications.size(), e);
-                        
+
                         performCompensatingReversals(successfulApplications, currentUser,
                                         "Automatic compensating reversal due to partial failure");
-                        
+
                         // Determine appropriate HTTP status to expose to API clients.
-                        // Propagate 4xx statuses when available, but treat 5xx or unknown as service unavailability.
+                        // Propagate 4xx statuses when available, but treat 5xx or unknown as service
+                        // unavailability.
                         HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
                         if (status == null || status.is5xxServerError()) {
                                 status = HttpStatus.SERVICE_UNAVAILABLE;
                         }
-                        
-                        // Generate ID for the payment application first
-                        UUID paymentApplicationId = UUIDv7Generator.generate();
-                        
-                        // TODO #2: Apply payment to invoice via service client
-                        ApplyPaymentToInvoiceRequest invoiceRequest = ApplyPaymentToInvoiceRequest.builder()
-                                        .paymentApplicationId(paymentApplicationId)
-                                        .amountApplied(amountToApply)
-                                        .appliedAt(applicationTimestamp)
-                                        .currency(payment.getCurrency())
-                                        .paymentId(paymentId)
-                                        .appliedBy(getCurrentUser())
-                                        .build();
-
-                        var invoiceResponse = invoiceServiceClient.applyPaymentToInvoice(
-                                        invoiceApp.getInvoiceId(),
-                                        invoiceRequest);
-
-                        log.info("Applied payment {} to invoice {} via service call, new balance: {} (was {})",
-                                        paymentApplicationId, invoiceApp.getInvoiceId(),
-                                        invoiceResponse.getBalanceAfter(), invoiceResponse.getBalanceBefore());
-                        
-                        // Now create and save PaymentApplication with all data (immutable entity)
-                        PaymentApplication application = new PaymentApplication();
-                        application.setPaymentApplicationId(paymentApplicationId);
-                        application.setPaymentId(paymentId);
-                        application.setInvoiceId(invoiceApp.getInvoiceId());
-                        application.setCustomerId(payment.getCustomerId());
-                        application.setCurrency(payment.getCurrency());
-                        application.setAppliedAmount(amountToApply);
-                        application.setApplicationTimestamp(applicationTimestamp);
-                        application.setApplicationRequestId(request.getApplicationRequestId());
-                        application.setCreatedAt(applicationTimestamp);
-                        application.setCreatedBy(getCurrentUser());
-                        // Store invoice balance/status for idempotent retries (avoid N external calls)
-                        application.setInvoiceBalanceBefore(invoiceResponse.getBalanceBefore());
-                        application.setInvoiceBalanceAfter(invoiceResponse.getBalanceAfter());
-                        application.setInvoiceStatus(invoiceResponse.getStatus());
-
-                        PaymentApplication saved = paymentApplicationRepository.save(application);
-
-                        // Store response for building detail (TODO #3)
-                        applicationDetails
-                                        .add(buildApplicationDetail(saved, invoiceApp.getInvoiceId(), invoiceResponse));
-
-                        log.info("Created PaymentApplication {} for payment {} to invoice {} amount {}",
-                                        saved.getPaymentApplicationId(), paymentId, invoiceApp.getInvoiceId(),
-                                        amountToApply);
                         // Rethrow to trigger DB transaction rollback
-                        // All PaymentApplication records will be rolled back along with other local state
+                        // All PaymentApplication records will be rolled back along with other local
+                        // state
                         throw new ResponseStatusException(status,
                                         String.format("Failed to apply payment %s to invoices. Local changes have been rolled back and compensating reversals were attempted; invoice state may be out of sync. Check logs and reconcile invoices manually if necessary.",
-                                                        paymentId), e);
+                                                        paymentId),
+                                        e);
                 } catch (RuntimeException e) {
                         // Unexpected runtime errors - still perform compensating reversals for safety
                         log.error("Unexpected error during payment application for payment {} " +
                                         "(applicationRequestId: {}). Performing compensating reversals for {} successful applications",
                                         paymentId, request.getApplicationRequestId(), successfulApplications.size(), e);
-                        
+
                         performCompensatingReversals(successfulApplications, currentUser,
                                         "Automatic compensating reversal due to unexpected failure");
-                        
+
                         // Rethrow original exception
                         throw e;
                 }
 
-                // 6. Capture unapplied amount before applying, for overpayment credit calculation
+                // 6. Capture unapplied amount before applying, for overpayment credit
+                // calculation
                 BigDecimal unappliedBeforeApplication = payment.getUnappliedAmount();
-                
+
                 // 7. Update payment unappliedAmount (apply actual applied amount)
                 payment.applyAmount(actualTotalApplicationAmount);
                 payment.setModifiedAt(applicationTimestamp);
@@ -357,28 +329,28 @@ public class PaymentApplicationService {
 
                 // 8. Handle overpayment - create CustomerCredit if there's overpayment
                 PaymentApplicationResponse.CustomerCreditInfo creditInfo = null;
-                
+
                 if (overpaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
                         // Explicit overpayment: payment amount exceeded what was needed for invoices
                         // The unapplied amount after application is the credit amount
                         // (overpaymentAmount represents what couldn't be applied due to balance limits)
                         BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
-                        
+
                         creditInfo = createCustomerCredit(payment, unappliedAfterApplication, applicationTimestamp);
-                        
+
                         // Mark payment as fully applied by converting remaining balance to credit
                         // This ensures payment status becomes FULLY_APPLIED
                         if (unappliedAfterApplication.compareTo(BigDecimal.ZERO) > 0) {
                                 payment.applyAmount(unappliedAfterApplication);
                         }
-                        
+
                         log.info("Overpayment detected: requested={}, applied={}, overpayment={}, " +
                                         "unapplied before={}, unapplied after={}, credit={}",
                                         totalApplicationAmount, actualTotalApplicationAmount,
                                         overpaymentAmount, unappliedBeforeApplication,
                                         unappliedAfterApplication, unappliedAfterApplication);
                 }
-                
+
                 receivablePaymentRepository.save(payment);
 
                 // 9. Build response
@@ -443,8 +415,10 @@ public class PaymentApplicationService {
                 // 4. Restore payment unappliedAmount
                 ReceivablePayment payment = receivablePaymentRepository.findById(original.getPaymentId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                                                "Internal error while reversing payment application " + paymentApplicationId
-                                                                + ": associated payment " + original.getPaymentId() + " not found"));
+                                                "Internal error while reversing payment application "
+                                                                + paymentApplicationId
+                                                                + ": associated payment " + original.getPaymentId()
+                                                                + " not found"));
 
                 payment.reverseAmount(original.getAppliedAmount());
                 payment.setModifiedAt(Instant.now());
@@ -527,8 +501,10 @@ public class PaymentApplicationService {
                         if (status == null || status.is5xxServerError()) {
                                 status = HttpStatus.SERVICE_UNAVAILABLE;
                         }
-                        throw new ResponseStatusException(status, 
-                                "Failed to validate invoice " + invoiceApp.getInvoiceId() + ": " + e.getMessage(), e);
+                        throw new ResponseStatusException(status,
+                                        "Failed to validate invoice " + invoiceApp.getInvoiceId() + ": "
+                                                        + e.getMessage(),
+                                        e);
                 }
 
                 // Validate invoice status is OPEN or PARTIALLY_PAID
@@ -549,7 +525,7 @@ public class PaymentApplicationService {
 
                 log.info("Invoice validation passed for invoice {} (status: {}, balanceDue: {})",
                                 invoiceApp.getInvoiceId(), status, invoiceDetails.getBalanceDue());
-                
+
                 return invoiceDetails;
         }
 
@@ -570,69 +546,85 @@ public class PaymentApplicationService {
         }
 
         /**
-         * Perform compensating reversals on Invoice service for successfully applied payments.
+         * Perform compensating reversals on Invoice service for successfully applied
+         * payments.
          * 
-         * <p>This method is called when a payment application fails partway through processing
-         * multiple invoices. It reverses all successful invoice mutations to ensure the Invoice
+         * <p>
+         * This method is called when a payment application fails partway through
+         * processing
+         * multiple invoices. It reverses all successful invoice mutations to ensure the
+         * Invoice
          * service state matches the local DB state after transaction rollback.
          * 
-         * <p><strong>Best Effort:</strong> If a compensating reversal fails, it is logged but
-         * does not block other reversals. This prevents cascading failures. Failed reversals
+         * <p>
+         * <strong>Best Effort:</strong> If a compensating reversal fails, it is logged
+         * but
+         * does not block other reversals. This prevents cascading failures. Failed
+         * reversals
          * are logged at ERROR level for manual reconciliation.
          * 
-         * <p><strong>Idempotency:</strong> Invoice service reversal endpoints must be idempotent
+         * <p>
+         * <strong>Idempotency:</strong> Invoice service reversal endpoints must be
+         * idempotent
          * using {@code paymentApplicationId} to handle retry scenarios safely.
          * 
-         * <p><strong>Reversal ID:</strong> The {@code reversalId} is set to null for compensating
-         * reversals since no local reversal record is created (the transaction will roll back). The
-         * Invoice service should accept null for this field or use {@code paymentApplicationId}
+         * <p>
+         * <strong>Reversal ID:</strong> The {@code reversalId} is set to null for
+         * compensating
+         * reversals since no local reversal record is created (the transaction will
+         * roll back). The
+         * Invoice service should accept null for this field or use
+         * {@code paymentApplicationId}
          * as the idempotency key instead.
          * 
-         * @param successfulApplications list of PaymentApplication records that were successfully
+         * @param successfulApplications list of PaymentApplication records that were
+         *                               successfully
          *                               applied to Invoice service
-         * @param reversedBy            user performing the reversal (for audit trail)
+         * @param reversedBy             user performing the reversal (for audit trail)
          * @param reason                 reason for reversal (for audit trail)
          */
         private void performCompensatingReversals(
                         List<PaymentApplication> successfulApplications,
                         String reversedBy,
                         String reason) {
-                
+
                 if (successfulApplications.isEmpty()) {
                         log.info("No successful applications to reverse");
                         return;
                 }
-                
+
                 log.warn("Performing compensating reversals for {} invoice applications",
                                 successfulApplications.size());
-                
+
                 // Reverse in reverse order (LIFO) to unwind in logical sequence
                 for (int i = successfulApplications.size() - 1; i >= 0; i--) {
                         PaymentApplication app = successfulApplications.get(i);
-                        
+
                         try {
                                 log.info("Compensating reversal: reversing invoice {} payment application {}",
                                                 app.getInvoiceId(), app.getPaymentApplicationId());
-                                
-                                ReversePaymentApplicationRequest reversalRequest = ReversePaymentApplicationRequest.builder()
+
+                                ReversePaymentApplicationRequest reversalRequest = ReversePaymentApplicationRequest
+                                                .builder()
                                                 .paymentApplicationId(app.getPaymentApplicationId())
                                                 // reversalId is null for compensating reversals since no local reversal
-                                                // record is created (transaction will roll back). Invoice service should
+                                                // record is created (transaction will roll back). Invoice service
+                                                // should
                                                 // accept null or use paymentApplicationId as the idempotency key.
                                                 .reversalId(null)
                                                 .amountToRestore(app.getAppliedAmount())
                                                 .reason(reason)
                                                 .reversedBy(reversedBy)
                                                 .build();
-                                
+
                                 var response = invoiceServiceClient.reversePaymentApplication(
                                                 app.getInvoiceId(),
                                                 reversalRequest);
-                                
+
                                 log.info("Successfully reversed invoice {} payment application {} (balance restored to {})",
                                                 app.getInvoiceId(), app.getPaymentApplicationId(),
                                                 response.getBalanceDue());
-                                
+
                         } catch (Exception reverseEx) {
                                 // Best effort: log but continue with other reversals
                                 // Failed reversals require manual reconciliation
@@ -640,11 +632,12 @@ public class PaymentApplicationService {
                                                 "payment application {} (amount: {}, customerId: {}, paymentId: {}). " +
                                                 "Manual reconciliation required. " +
                                                 "Invoice service IS OUT OF SYNC with Accounting service.",
-                                                app.getInvoiceId(), app.getPaymentApplicationId(), 
-                                                app.getAppliedAmount(), app.getCustomerId(), app.getPaymentId(), reverseEx);
+                                                app.getInvoiceId(), app.getPaymentApplicationId(),
+                                                app.getAppliedAmount(), app.getCustomerId(), app.getPaymentId(),
+                                                reverseEx);
                         }
                 }
-                
+
                 log.warn("Completed compensating reversals. {} applications processed",
                                 successfulApplications.size());
         }
@@ -653,7 +646,8 @@ public class PaymentApplicationService {
                         PaymentApplication application,
                         UUID invoiceId) {
 
-                // Use persisted invoice data for idempotent retries (avoids N external service calls)
+                // Use persisted invoice data for idempotent retries (avoids N external service
+                // calls)
                 return PaymentApplicationResponse.ApplicationDetail.builder()
                                 .paymentApplicationId(application.getPaymentApplicationId())
                                 .invoiceId(invoiceId)
@@ -709,7 +703,8 @@ public class PaymentApplicationService {
                 // Use first application for common fields and validate consistency
                 PaymentApplication firstApp = existingApps.get(0);
 
-                // Validate all applications share same payment/customer/currency (data integrity check)
+                // Validate all applications share same payment/customer/currency (data
+                // integrity check)
                 for (PaymentApplication app : existingApps) {
                         if (!app.getPaymentId().equals(firstApp.getPaymentId()) ||
                                         !app.getCustomerId().equals(firstApp.getCustomerId()) ||
@@ -755,7 +750,8 @@ public class PaymentApplicationService {
 
         /**
          * Extract current authenticated user from SecurityContext.
-         * Falls back to "SYSTEM" if no authentication is present (e.g., scheduled tasks)
+         * Falls back to "SYSTEM" if no authentication is present (e.g., scheduled
+         * tasks)
          * or if the user is the gateway anonymous user.
          * 
          * Uses SecurityContextHelper to properly handle gateway authentication,
