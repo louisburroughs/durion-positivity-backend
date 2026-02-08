@@ -1,0 +1,205 @@
+package com.positivity.accounting.service;
+
+import com.positivity.accounting.internal.dto.*;
+import com.positivity.accounting.internal.entity.PostingCategory;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+/**
+ * Service for Posting Category management.
+ * Handles CRUD operations and lifecycle management for posting categories.
+ */
+@Service
+public class PostingCategoryService {
+
+    private static final Logger log = LoggerFactory.getLogger(PostingCategoryService.class);
+
+    private final PostingCategoryRepository postingCategoryRepository;
+    private final GLMappingRepository glMappingRepository;
+
+    public PostingCategoryService(
+            @NonNull PostingCategoryRepository postingCategoryRepository,
+            @NonNull GLMappingRepository glMappingRepository) {
+        this.postingCategoryRepository = postingCategoryRepository;
+        this.glMappingRepository = glMappingRepository;
+    }
+
+    /**
+     * Creates a new posting category.
+     * 
+     * @param request the posting category creation request
+     * @return the created posting category response
+     * @throws IllegalArgumentException if category name already exists
+     */
+    @Transactional
+    public PostingCategoryResponse createPostingCategory(@NonNull PostingCategoryCreateRequest request) {
+        log.info("Creating posting category: {}", request.getCategoryName());
+
+        // Validate uniqueness
+        if (postingCategoryRepository.existsByCategoryName(request.getCategoryName())) {
+            throw new IllegalArgumentException(
+                    "Posting category with name '" + request.getCategoryName() + "' already exists");
+        }
+
+        PostingCategory category = new PostingCategory();
+        category.setCategoryName(request.getCategoryName().trim());
+        category.setDescription(request.getDescription());
+        category.setIsActive(true);
+        category.setCreatedBy(request.getCreatedBy());
+        category.setModifiedBy(request.getCreatedBy());
+
+        PostingCategory saved = postingCategoryRepository.save(category);
+        log.info("Created posting category: {} with ID: {}", saved.getCategoryName(), saved.getPostingCategoryId());
+
+        return toResponse(saved);
+    }
+
+    /**
+     * Retrieves a posting category by ID.
+     * 
+     * @param postingCategoryId the posting category identifier
+     * @return the posting category response
+     * @throws IllegalArgumentException if posting category not found
+     */
+    @Transactional(readOnly = true)
+    public PostingCategoryResponse getPostingCategory(@NonNull UUID postingCategoryId) {
+        log.info("Retrieving posting category: {}", postingCategoryId);
+
+        PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
+                .orElseThrow(() -> new IllegalArgumentException("Posting category not found: " + postingCategoryId));
+
+        return toResponse(category);
+    }
+
+    /**
+     * Updates an existing posting category.
+     * 
+     * @param postingCategoryId the posting category identifier
+     * @param request           the update request
+     * @return the updated posting category response
+     * @throws IllegalArgumentException if posting category not found or name
+     *                                  conflicts
+     */
+    @Transactional
+    public PostingCategoryResponse updatePostingCategory(
+            @NonNull UUID postingCategoryId,
+            @NonNull PostingCategoryUpdateRequest request) {
+        log.info("Updating posting category: {}", postingCategoryId);
+
+        PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
+                .orElseThrow(() -> new IllegalArgumentException("Posting category not found: " + postingCategoryId));
+
+        // Validate uniqueness if name is changing
+        String trimmedName = request.getCategoryName().trim();
+        if (!category.getCategoryName().equals(trimmedName) &&
+                postingCategoryRepository.existsByCategoryName(trimmedName)) {
+            throw new IllegalArgumentException("Posting category with name '" + trimmedName + "' already exists");
+        }
+
+        category.setCategoryName(trimmedName);
+        category.setDescription(request.getDescription());
+        category.setModifiedBy(request.getModifiedBy());
+
+        PostingCategory updated = postingCategoryRepository.save(category);
+        log.info("Updated posting category: {}", updated.getPostingCategoryId());
+
+        return toResponse(updated);
+    }
+
+    /**
+     * Lists posting categories with pagination and filtering.
+     * 
+     * @param page     page number (0-based)
+     * @param size     page size
+     * @param sort     sort field
+     * @param isActive filter by active status (null for all)
+     * @return paginated list of posting categories
+     */
+    @Transactional(readOnly = true)
+    public PostingCategoryListResponse listPostingCategories(
+            int page,
+            int size,
+            @NonNull String sort,
+            Boolean isActive) {
+        log.info("Listing posting categories: page={}, size={}, sort={}, isActive={}", page, size, sort, isActive);
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sort));
+        Page<PostingCategory> categoryPage;
+
+        if (isActive != null) {
+            categoryPage = postingCategoryRepository.findAll(
+                    (root, query, cb) -> cb.equal(root.get("isActive"), isActive),
+                    pageable);
+        } else {
+            categoryPage = postingCategoryRepository.findAll(pageable);
+        }
+
+        PostingCategoryListResponse response = new PostingCategoryListResponse();
+        response.setResults(categoryPage.getContent().stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList()));
+        response.setTotalCount(categoryPage.getTotalElements());
+        response.setPageNumber(page);
+        response.setPageSize(size);
+        response.setTotalPages(categoryPage.getTotalPages());
+
+        return response;
+    }
+
+    /**
+     * Deactivates a posting category.
+     * Validates that no active GL mappings reference this category.
+     * 
+     * @param postingCategoryId the posting category identifier
+     * @throws IllegalArgumentException if posting category not found
+     * @throws IllegalStateException    if active mappings exist
+     */
+    @Transactional
+    public void deactivatePostingCategory(@NonNull UUID postingCategoryId) {
+        log.info("Deactivating posting category: {}", postingCategoryId);
+
+        PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
+                .orElseThrow(() -> new IllegalArgumentException("Posting category not found: " + postingCategoryId));
+
+        // Check for active mappings
+        long activeMappingCount = glMappingRepository.countByPostingCategoryIdAndDeactivatedAtIsNull(postingCategoryId);
+        if (activeMappingCount > 0) {
+            throw new IllegalStateException(
+                    "Posting category '" + category.getCategoryName() +
+                            "' has " + activeMappingCount + " active GL mappings and cannot be deactivated");
+        }
+
+        category.setIsActive(false);
+        postingCategoryRepository.save(category);
+
+        log.info("Deactivated posting category: {}", postingCategoryId);
+    }
+
+    /**
+     * Converts a PostingCategory entity to a response DTO.
+     */
+    private PostingCategoryResponse toResponse(@NonNull PostingCategory category) {
+        return new PostingCategoryResponse(
+                category.getPostingCategoryId(),
+                category.getCategoryName(),
+                category.getDescription(),
+                category.getIsActive(),
+                category.getCreatedAt(),
+                category.getCreatedBy(),
+                category.getModifiedAt(),
+                category.getModifiedBy());
+    }
+}
