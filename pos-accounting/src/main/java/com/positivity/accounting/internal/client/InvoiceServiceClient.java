@@ -24,6 +24,7 @@ import java.util.function.Supplier;
  *
  * **Resilience:**
  * - Circuit breaker pattern with exponential backoff
+ * - Connect and read timeouts configured in RestClient (see RestClientConfig)
  * - Configurable invoice service URL
  * - Detailed error logging for debugging
  * - Graceful fallbacks (throws InvoiceServiceException for caller handling)
@@ -34,6 +35,7 @@ import java.util.function.Supplier;
  * @see <a href=
  *      "https://resilience4j.readme.io/docs/circuitbreaker">Resilience4j
  *      Circuit Breaker</a>
+ * @see RestClientConfig
  */
 @Slf4j
 @Component
@@ -45,9 +47,6 @@ public class InvoiceServiceClient {
 
     @Value("${pos.invoice.service.url:http://pos-invoice:8085}")
     private String invoiceServiceUrl;
-
-    @Value("${pos.invoice.service.timeout:5000}")
-    private long invoiceServiceTimeoutMs;
 
     /**
      * Fetch invoice details from Invoice service.
