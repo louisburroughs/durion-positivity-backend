@@ -282,53 +282,6 @@ public class PaymentApplicationService {
                                 status = HttpStatus.SERVICE_UNAVAILABLE;
                         }
                         
-                        // Generate ID for the payment application first
-                        UUID paymentApplicationId = UUIDv7Generator.generate();
-                        
-                        // TODO #2: Apply payment to invoice via service client
-                        ApplyPaymentToInvoiceRequest invoiceRequest = ApplyPaymentToInvoiceRequest.builder()
-                                        .paymentApplicationId(paymentApplicationId)
-                                        .amountApplied(amountToApply)
-                                        .appliedAt(applicationTimestamp)
-                                        .currency(payment.getCurrency())
-                                        .paymentId(paymentId)
-                                        .appliedBy(getCurrentUser())
-                                        .build();
-
-                        var invoiceResponse = invoiceServiceClient.applyPaymentToInvoice(
-                                        invoiceApp.getInvoiceId(),
-                                        invoiceRequest);
-
-                        log.info("Applied payment {} to invoice {} via service call, new balance: {} (was {})",
-                                        paymentApplicationId, invoiceApp.getInvoiceId(),
-                                        invoiceResponse.getBalanceAfter(), invoiceResponse.getBalanceBefore());
-                        
-                        // Now create and save PaymentApplication with all data (immutable entity)
-                        PaymentApplication application = new PaymentApplication();
-                        application.setPaymentApplicationId(paymentApplicationId);
-                        application.setPaymentId(paymentId);
-                        application.setInvoiceId(invoiceApp.getInvoiceId());
-                        application.setCustomerId(payment.getCustomerId());
-                        application.setCurrency(payment.getCurrency());
-                        application.setAppliedAmount(amountToApply);
-                        application.setApplicationTimestamp(applicationTimestamp);
-                        application.setApplicationRequestId(request.getApplicationRequestId());
-                        application.setCreatedAt(applicationTimestamp);
-                        application.setCreatedBy(getCurrentUser());
-                        // Store invoice balance/status for idempotent retries (avoid N external calls)
-                        application.setInvoiceBalanceBefore(invoiceResponse.getBalanceBefore());
-                        application.setInvoiceBalanceAfter(invoiceResponse.getBalanceAfter());
-                        application.setInvoiceStatus(invoiceResponse.getStatus());
-
-                        PaymentApplication saved = paymentApplicationRepository.save(application);
-
-                        // Store response for building detail (TODO #3)
-                        applicationDetails
-                                        .add(buildApplicationDetail(saved, invoiceApp.getInvoiceId(), invoiceResponse));
-
-                        log.info("Created PaymentApplication {} for payment {} to invoice {} amount {}",
-                                        saved.getPaymentApplicationId(), paymentId, invoiceApp.getInvoiceId(),
-                                        amountToApply);
                         // Rethrow to trigger DB transaction rollback
                         // All PaymentApplication records will be rolled back along with other local state
                         throw new ResponseStatusException(status,
