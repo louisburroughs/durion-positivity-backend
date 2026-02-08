@@ -38,10 +38,13 @@ public class MappingKey {
     private UUID mappingKeyId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (mappingKeyId == null) {
             mappingKeyId = UUIDv7Generator.generate();
         }
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.modifiedAt = now;
     }
 
     @Column(name = "posting_category_id", nullable = false)
@@ -68,13 +71,6 @@ public class MappingKey {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
-    }
 
     @PreUpdate
     protected void onUpdate() {

@@ -44,10 +44,11 @@ public class AccountingAuditLog {
     private UUID auditLogId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (auditLogId == null) {
             auditLogId = UUIDv7Generator.generate();
         }
+        this.timestamp = Instant.now();
     }
 
     @Column(name = "entity_type", length = 50, nullable = false)
@@ -80,8 +81,4 @@ public class AccountingAuditLog {
     @Column(name = "new_value", columnDefinition = "TEXT")
     private String newValue;
 
-    @PrePersist
-    protected void onCreate() {
-        this.timestamp = Instant.now();
-    }
 }

@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -50,6 +51,35 @@ public class ContractBehaviorIT {
 
         private static final String API_V1 = "/v1/accounting";
 
+        // Gateway header values — mirrors what pos-api-gateway injects after JWT
+        // validation
+        private static final String TEST_USER = "testuser";
+        private static final String TEST_AUTHORITIES = String.join(",",
+                        "accounting:je:view", "accounting:je:create", "accounting:je:post",
+                        "accounting:je:reverse",
+                        "accounting:coa:view", "accounting:coa:create", "accounting:coa:edit",
+                        "accounting:coa:deactivate",
+                        "accounting:events:view", "accounting:events:submit", "accounting:events:retry",
+                        "accounting:posting_rules:view", "accounting:posting_rules:create",
+                        "accounting:posting_rules:publish", "accounting:posting_rules:archive",
+                        "accounting:ap:view", "accounting:ap:pay",
+                        "accounting:mappings:view", "accounting:mappings:create",
+                        "accounting:audit:view",
+                        "accounting:posting-category:view", "accounting:posting-category:create",
+                        "accounting:posting-category:edit", "accounting:posting-category:deactivate",
+                        "accounting:mapping-key:view", "accounting:mapping-key:create",
+                        "accounting:mapping-key:edit", "accounting:mapping-key:deactivate");
+
+        /**
+         * Adds gateway authentication headers to a request builder.
+         * Mirrors the headers injected by pos-api-gateway after JWT validation.
+         */
+        private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
+                return builder
+                                .header("X-User", TEST_USER)
+                                .header("X-Authorities", TEST_AUTHORITIES);
+        }
+
         // ===============================================
         // HAPPY PATH SCENARIOS
         // ===============================================
@@ -67,7 +97,7 @@ public class ContractBehaviorIT {
                 request.setDescription("Primary operating cash account");
 
                 // Act: POST to GL Account endpoint
-                MvcResult result = mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
+                MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
@@ -104,7 +134,7 @@ public class ContractBehaviorIT {
                 request.setSourceEventType("SALE");
 
                 // Act: POST journal entry
-                mockMvc.perform(post(API_V1 + "/accounting/journal-entries")
+                mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
@@ -128,7 +158,7 @@ public class ContractBehaviorIT {
                 request.setActivationDate(LocalDateTime.now());
 
                 // Act & Assert: Expect validation error
-                mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
+                mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
@@ -146,7 +176,7 @@ public class ContractBehaviorIT {
                 request.setSourceEventType("SALE");
 
                 // Act & Assert: Expect validation error
-                mockMvc.perform(post(API_V1 + "/accounting/journal-entries")
+                mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
@@ -175,7 +205,7 @@ public class ContractBehaviorIT {
                 duplicate.setActivationDate(LocalDateTime.now());
 
                 // Act & Assert: Expect conflict error
-                mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
+                mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(duplicate)))
                                 .andDo(print())
@@ -199,7 +229,7 @@ public class ContractBehaviorIT {
                 request.setSourceEventType("SALE");
 
                 // Act: First request
-                MvcResult firstResult = mockMvc.perform(post(API_V1 + "/accounting/journal-entries")
+                MvcResult firstResult = mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
@@ -222,7 +252,7 @@ public class ContractBehaviorIT {
 
         public void testOptimisticLockingPreventsConflict() throws Exception {
                 // Arrange: Create GL account
-                MvcResult createResult = mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
+                MvcResult createResult = mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(
                                                 objectMapper.writeValueAsString(createGLAccountRequest("1000-000",
@@ -238,7 +268,7 @@ public class ContractBehaviorIT {
                                 AccountType.ASSET);
 
                 // Assert: Update attempt returns appropriate status
-                mockMvc.perform(put(API_V1 + "/accounting/gl-accounts/" + accountId.toString())
+                mockMvc.perform(withAuth(put(API_V1 + "/gl-accounts/" + accountId.toString()))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(updateRequest)))
                                 .andDo(print())
@@ -258,7 +288,7 @@ public class ContractBehaviorIT {
                 request.setSourceEventType("SALE");
 
                 // Act: Create entry
-                MvcResult result = mockMvc.perform(post(API_V1 + "/accounting/journal-entries")
+                MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
@@ -284,7 +314,7 @@ public class ContractBehaviorIT {
                 GLAccountCreateRequest request = createGLAccountRequest("2000-000", "Bank Account", AccountType.ASSET);
 
                 // Act & Assert: Verify GL account accepts monetary operations
-                mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
+                mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
@@ -299,7 +329,7 @@ public class ContractBehaviorIT {
                 GLAccountCreateRequest request = createGLAccountRequest("1000-000", "Cash", AccountType.ASSET);
 
                 // Act & Assert: Verify ISO 8601 format
-                mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
+                mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
@@ -325,7 +355,7 @@ public class ContractBehaviorIT {
         }
 
         private void createGLAccountDirect(GLAccountCreateRequest dto) throws Exception {
-                mockMvc.perform(post(API_V1 + "/accounting/gl-accounts")
+                mockMvc.perform(withAuth(post(API_V1 + "/gl-accounts"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(dto)))
                                 .andExpect(status().isCreated());

@@ -48,9 +48,16 @@ public class APPayment {
     private UUID paymentId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (paymentId == null) {
             paymentId = UUIDv7Generator.generate();
+        }
+        createdAt = Instant.now();
+        if (status == null) {
+            status = APPaymentStatus.PENDING_APPROVAL;
+        }
+        if (currency == null) {
+            currency = "USD";
         }
     }
 
@@ -127,14 +134,4 @@ public class APPayment {
         this.paymentId = paymentId;
     }
 
-    @PrePersist
-    protected void onCreate() {
-        createdAt = Instant.now();
-        if (status == null) {
-            status = APPaymentStatus.PENDING_APPROVAL;
-        }
-        if (currency == null) {
-            currency = "USD";
-        }
-    }
 }

@@ -41,10 +41,13 @@ public class PostingRuleSet {
     private UUID postingRuleSetId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (postingRuleSetId == null) {
             postingRuleSetId = UUIDv7Generator.generate();
         }
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.modifiedAt = now;
     }
 
     @Column(name = "name", length = 100, nullable = false)
@@ -72,13 +75,6 @@ public class PostingRuleSet {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
-    }
 
     @PreUpdate
     protected void onUpdate() {

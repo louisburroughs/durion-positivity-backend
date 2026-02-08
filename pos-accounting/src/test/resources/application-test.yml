@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: pos-customer-test
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  h2:
+    console:
+      enabled: false
+  main:
+    allow-bean-definition-overriding: true
+
+# Disable security for tests
+security:
+  enabled: false
+
+# Disable eureka for tests  
+eureka:
+  client:
+    enabled: false
+
+# Logging
+logging:
+  level:
+    com:
+      positivity: DEBUG
+    org:
+      springframework:
+        security: DEBUG

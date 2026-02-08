@@ -37,10 +37,13 @@ public class PostingCategory {
     private UUID postingCategoryId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (postingCategoryId == null) {
             postingCategoryId = UUIDv7Generator.generate();
         }
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.modifiedAt = now;
     }
 
     @Column(name = "category_name", length = 100, nullable = false)
@@ -64,13 +67,6 @@ public class PostingCategory {
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
-    }
 
     @PreUpdate
     protected void onUpdate() {

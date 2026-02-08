@@ -50,10 +50,13 @@ public class JournalEntry {
     private UUID journalEntryId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (journalEntryId == null) {
             journalEntryId = UUIDv7Generator.generate();
         }
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.modifiedAt = now;
     }
 
     @Enumerated(EnumType.STRING)
@@ -130,13 +133,6 @@ public class JournalEntry {
 
     @Column(name = "reversed_at")
     private Instant reversedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
-    }
 
     @PreUpdate
     protected void onUpdate() {

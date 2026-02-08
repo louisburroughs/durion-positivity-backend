@@ -47,10 +47,13 @@ public class VendorBill {
     private UUID vendorBillId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (vendorBillId == null) {
             vendorBillId = UUIDv7Generator.generate();
         }
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.modifiedAt = now;
     }
 
     @Column(name = "vendor_id", nullable = false)
@@ -125,13 +128,6 @@ public class VendorBill {
 
     @Column(name = "paid_by", length = 50)
     private String paidBy;
-
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
-    }
 
     @PreUpdate
     protected void onUpdate() {
