@@ -276,7 +276,7 @@ public class PaymentApplicationService {
                         
                         // Determine appropriate HTTP status to expose to API clients.
                         // Propagate 4xx statuses when available, but treat 5xx or unknown as service unavailability.
-                        HttpStatus status = e.getHttpStatus();
+                        HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
                         if (status == null || status.is5xxServerError()) {
                                 status = HttpStatus.SERVICE_UNAVAILABLE;
                         }
@@ -312,11 +312,11 @@ public class PaymentApplicationService {
                 
                 if (overpaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
                         // Explicit overpayment: payment amount exceeded what was needed for invoices
-                        // Convert any remaining unapplied amount to customer credit
+                        // The unapplied amount after application is the credit amount
+                        // (overpaymentAmount represents what couldn't be applied due to balance limits)
                         BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
-                        BigDecimal totalCreditAmount = overpaymentAmount.add(unappliedAfterApplication);
                         
-                        creditInfo = createCustomerCredit(payment, totalCreditAmount, applicationTimestamp);
+                        creditInfo = createCustomerCredit(payment, unappliedAfterApplication, applicationTimestamp);
                         
                         // Mark payment as fully applied by converting remaining balance to credit
                         // This ensures payment status becomes FULLY_APPLIED
@@ -325,10 +325,10 @@ public class PaymentApplicationService {
                         }
                         
                         log.info("Overpayment detected: requested={}, applied={}, overpayment={}, " +
-                                        "unapplied before={}, unapplied after={}, total credit={}",
+                                        "unapplied before={}, unapplied after={}, credit={}",
                                         totalApplicationAmount, actualTotalApplicationAmount,
                                         overpaymentAmount, unappliedBeforeApplication,
-                                        unappliedAfterApplication, totalCreditAmount);
+                                        unappliedAfterApplication, unappliedAfterApplication);
                 }
                 
                 receivablePaymentRepository.save(payment);
@@ -339,7 +339,7 @@ public class PaymentApplicationService {
                                 .customerId(payment.getCustomerId())
                                 .currency(payment.getCurrency())
                                 .totalAmount(payment.getTotalAmount())
-                                .appliedAmount(totalApplicationAmount)
+                                .appliedAmount(actualTotalApplicationAmount)
                                 .remainingAmount(payment.getUnappliedAmount())
                                 .applications(applicationDetails)
                                 .customerCredit(creditInfo)
@@ -469,10 +469,19 @@ public class PaymentApplicationService {
                                                         + invoiceApp.getInvoiceId());
                 }
 
-                // TODO #1: Validate invoice exists, is applicable (not
-                // PaidInFull/Voided/Cancelled)
-                // Fetch invoice details from service
-                var invoiceDetails = invoiceServiceClient.getInvoiceDetails(invoiceApp.getInvoiceId());
+                // Fetch invoice details from service (with InvoiceServiceException handling)
+                InvoiceDetails invoiceDetails;
+                try {
+                        invoiceDetails = invoiceServiceClient.getInvoiceDetails(invoiceApp.getInvoiceId());
+                } catch (InvoiceServiceException e) {
+                        // Translate service exception to appropriate HTTP status
+                        HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
+                        if (status == null || status.is5xxServerError()) {
+                                status = HttpStatus.SERVICE_UNAVAILABLE;
+                        }
+                        throw new ResponseStatusException(status, 
+                                "Failed to validate invoice " + invoiceApp.getInvoiceId() + ": " + e.getMessage(), e);
+                }
 
                 // Validate invoice status is OPEN or PARTIALLY_PAID
                 String status = invoiceDetails.getStatus();
@@ -488,17 +497,6 @@ public class PaymentApplicationService {
                                         "Currency mismatch for invoice " + invoiceApp.getInvoiceId() +
                                                         " (invoice: " + invoiceDetails.getCurrency() + ", payment: "
                                                         + paymentCurrency + ")");
-                }
-
-                // Note: No longer failing if amountToApply > balanceDue
-                // The caller will cap the application to balanceDue and handle overpayment
-                // Validate amountToApply <= invoice.balanceDue
-                if (invoiceApp.getAmountToApply().compareTo(invoiceDetails.getBalanceDue()) > 0) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                        "Application amount " + invoiceApp.getAmountToApply() +
-                                                        " exceeds invoice balance due " + invoiceDetails.getBalanceDue()
-                                                        +
-                                                        " for invoice " + invoiceApp.getInvoiceId());
                 }
 
                 log.info("Invoice validation passed for invoice {} (status: {}, balanceDue: {})",
