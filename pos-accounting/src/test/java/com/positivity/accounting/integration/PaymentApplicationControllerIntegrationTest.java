@@ -212,8 +212,8 @@ class PaymentApplicationControllerIntegrationTest {
         }
 
         @Test
-        @DisplayName("PA-003: Create customer credit when overpayment occurs")
-        void testApplyPayment_WithOverpayment_CreatesCredit() throws Exception {
+        @DisplayName("PA-003: Apply payment partially to single invoice")
+        void testApplyPayment_PartialApplication() throws Exception {
                 // Arrange
                 createTestPayment(testPaymentId, testCustomerId, "1000.00");
 
@@ -229,13 +229,13 @@ class PaymentApplicationControllerIntegrationTest {
                                 .andDo(print())
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.appliedAmount").value(600.00))
-                                .andExpect(jsonPath("$.remainingAmount").value(400.00));
-                // Note: customerCredit is only created when status=FULLY_APPLIED
-                // In normal flow with partial application, credit is not created
+                                .andExpect(jsonPath("$.remainingAmount").value(400.00))
+                                .andExpect(jsonPath("$.customerCredit").doesNotExist());
 
                 // Assert
                 ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
                 assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("400.00");
+                assertThat(payment.getStatus()).isEqualTo(ReceivablePaymentStatus.AVAILABLE);
         }
 
         @Test

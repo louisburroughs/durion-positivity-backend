@@ -30,13 +30,17 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
-@Table(name = "payment_application", indexes = {
+@Table(name = "payment_application", 
+    indexes = {
         @Index(name = "idx_payment_application_payment", columnList = "payment_id"),
-        @Index(name = "idx_payment_application_invoice", columnList = "invoice_id"),
         @Index(name = "idx_payment_application_customer", columnList = "customer_id"),
-        @Index(name = "idx_payment_application_request_id", columnList = "application_request_id"),
         @Index(name = "idx_payment_application_timestamp", columnList = "application_timestamp")
-})
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_payment_application_idempotency", 
+                         columnNames = {"application_request_id", "invoice_id"})
+    }
+)
 public class PaymentApplication {
 
     @EqualsAndHashCode.Include

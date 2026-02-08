@@ -30,10 +30,15 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
-@Table(name = "payment_application_reversal", indexes = {
-        @Index(name = "idx_reversal_original_application", columnList = "original_payment_application_id"),
+@Table(name = "payment_application_reversal", 
+    indexes = {
         @Index(name = "idx_reversal_reversed_at", columnList = "reversed_at")
-})
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_reversal_original_application", 
+                         columnNames = "original_payment_application_id")
+    }
+)
 public class PaymentApplicationReversal {
 
     @EqualsAndHashCode.Include

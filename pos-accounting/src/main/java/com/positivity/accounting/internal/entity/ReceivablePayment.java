@@ -35,12 +35,16 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
-@Table(name = "receivable_payment", indexes = {
+@Table(name = "receivable_payment", 
+    indexes = {
         @Index(name = "idx_receivable_payment_customer", columnList = "customer_id"),
         @Index(name = "idx_receivable_payment_status", columnList = "status"),
-        @Index(name = "idx_receivable_payment_cleared_at", columnList = "cleared_at"),
-        @Index(name = "idx_receivable_payment_source_event", columnList = "source_event_id")
-})
+        @Index(name = "idx_receivable_payment_cleared_at", columnList = "cleared_at")
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_receivable_payment_source_event", columnNames = "source_event_id")
+    }
+)
 public class ReceivablePayment {
 
     @EqualsAndHashCode.Include
