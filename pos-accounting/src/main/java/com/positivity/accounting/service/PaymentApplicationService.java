@@ -10,11 +10,11 @@ import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
 import com.positivity.accounting.internal.entity.*;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.repository.*;
+import com.positivity.security.common.SecurityContextHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -530,26 +530,15 @@ public class PaymentApplicationService {
 
         /**
          * Extract current authenticated user from SecurityContext.
-         * Falls back to "SYSTEM" if no authentication is present (e.g., scheduled
-         * tasks).
+         * Falls back to "SYSTEM" if no authentication is present (e.g., scheduled tasks)
+         * or if the user is the gateway anonymous user.
+         * 
+         * Uses SecurityContextHelper to properly handle gateway authentication,
+         * including treating the "anonymous" principal as unauthenticated.
          * 
          * @return username or "SYSTEM" as fallback
          */
         private String getCurrentUser() {
-                try {
-                        var authentication = SecurityContextHolder.getContext().getAuthentication();
-                        if (authentication != null && authentication.isAuthenticated()) {
-                                var principal = authentication.getPrincipal();
-                                if (principal instanceof String) {
-                                        return (String) principal;
-                                } else if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
-                                        return ((org.springframework.security.core.userdetails.UserDetails) principal)
-                                                        .getUsername();
-                                }
-                        }
-                } catch (Exception e) {
-                        log.debug("Could not extract user from SecurityContext: {}", e.getMessage());
-                }
-                return "SYSTEM";
+                return SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
         }
 }
