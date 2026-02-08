@@ -39,6 +39,7 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
      * @param pageable pagination parameters
      * @return page of reversals
      */
+    @Override
     Page<PaymentApplicationReversal> findAll(Pageable pageable);
 
     /**
