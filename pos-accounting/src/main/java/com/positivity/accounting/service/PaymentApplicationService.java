@@ -329,7 +329,7 @@ public class PaymentApplicationService {
 
                 // 4. Restore payment unappliedAmount
                 ReceivablePayment payment = receivablePaymentRepository.findById(original.getPaymentId())
-                                .orElseThrow(() -> new IllegalStateException(
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                                                 "Payment not found: " + original.getPaymentId()));
 
                 payment.reverseAmount(original.getAppliedAmount());
@@ -503,12 +503,12 @@ public class PaymentApplicationService {
                 // Find existing applications by request ID
                 PaymentApplication existingApp = paymentApplicationRepository
                                 .findByApplicationRequestId(applicationRequestId)
-                                .orElseThrow(() -> new IllegalStateException(
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                                                 "Application request processed but not found: "
                                                                 + applicationRequestId));
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(existingApp.getPaymentId())
-                                .orElseThrow(() -> new IllegalStateException(
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                                                 "Payment not found: " + existingApp.getPaymentId()));
 
                 // Build minimal response for idempotent retry
