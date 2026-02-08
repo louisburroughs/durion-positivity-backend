@@ -300,14 +300,16 @@ class PaymentApplicationServiceTest {
                 existingApplication.setCurrency("USD");
                 existingApplication.setApplicationRequestId(testApplicationRequestId);
                 existingApplication.setApplicationTimestamp(Instant.now());
+                // Set invoice balance/status (persisted for idempotent retries)
+                existingApplication.setInvoiceBalanceBefore(new BigDecimal("1000.00"));
+                existingApplication.setInvoiceBalanceAfter(new BigDecimal("500.00"));
+                existingApplication.setInvoiceStatus("PARTIALLY_PAID");
 
                 when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
                                 .thenReturn(true);
                 when(paymentApplicationRepository.findAllByApplicationRequestId(testApplicationRequestId))
                                 .thenReturn(List.of(existingApplication));
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
-                when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
-                                createTestInvoiceDetails(testInvoiceId, "PARTIALLY_PAID", "USD", "500.00"));
 
                 PaymentApplicationRequest request = createApplicationRequest(
                                 testApplicationRequestId,
