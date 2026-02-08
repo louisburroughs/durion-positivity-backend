@@ -231,38 +231,40 @@ public class PaymentApplicationService {
                                         amountToApply);
                 }
 
-                // 6. Update payment unappliedAmount (apply actual applied amount)
+                // 6. Capture remaining unapplied amount before applying, for overpayment handling
+                BigDecimal remainingUnappliedBeforeApplication = payment.getUnappliedAmount();
+                
+                // 7. Update payment unappliedAmount (apply actual applied amount)
                 payment.applyAmount(actualTotalApplicationAmount);
                 payment.setModifiedAt(applicationTimestamp);
                 payment.setModifiedBy(getCurrentUser());
 
-                // 7. Handle overpayment - create CustomerCredit if there's overpayment
+                // 8. Handle overpayment - create CustomerCredit if there's overpayment
                 PaymentApplicationResponse.CustomerCreditInfo creditInfo = null;
                 
                 if (overpaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
                         // Explicit overpayment: payment amount exceeded what was needed for invoices
-                        // Convert remaining unapplied amount to customer credit
-                        BigDecimal remainingUnappliedAmount = payment.getUnappliedAmount();
-                        BigDecimal totalCreditAmount = overpaymentAmount.add(remainingUnappliedAmount);
+                        // Convert any remaining unapplied amount to customer credit
+                        BigDecimal remainingUnappliedAfterApplication = payment.getUnappliedAmount();
+                        BigDecimal totalCreditAmount = overpaymentAmount.add(remainingUnappliedAfterApplication);
                         
-                        if (totalCreditAmount.compareTo(BigDecimal.ZERO) > 0) {
-                                creditInfo = createCustomerCredit(payment, totalCreditAmount, applicationTimestamp);
-                                
-                                // Mark payment as fully applied (convert remaining balance to credit)
-                                if (remainingUnappliedAmount.compareTo(BigDecimal.ZERO) > 0) {
-                                        payment.applyAmount(remainingUnappliedAmount);
-                                }
-                                
-                                log.info("Overpayment detected: requested={}, applied={}, overpayment={}, " +
-                                                "remaining unapplied={}, total credit={}",
-                                                totalApplicationAmount, actualTotalApplicationAmount,
-                                                overpaymentAmount, remainingUnappliedAmount, totalCreditAmount);
+                        creditInfo = createCustomerCredit(payment, totalCreditAmount, applicationTimestamp);
+                        
+                        // Mark payment as fully applied (convert remaining balance to credit)
+                        if (remainingUnappliedAfterApplication.compareTo(BigDecimal.ZERO) > 0) {
+                                payment.applyAmount(remainingUnappliedAfterApplication);
                         }
+                        
+                        log.info("Overpayment detected: requested={}, applied={}, overpayment={}, " +
+                                        "remaining before application={}, remaining after application={}, total credit={}",
+                                        totalApplicationAmount, actualTotalApplicationAmount,
+                                        overpaymentAmount, remainingUnappliedBeforeApplication,
+                                        remainingUnappliedAfterApplication, totalCreditAmount);
                 }
                 
                 receivablePaymentRepository.save(payment);
 
-                // 8. Build response
+                // 9. Build response
                 return PaymentApplicationResponse.builder()
                                 .paymentId(paymentId)
                                 .customerId(payment.getCustomerId())
