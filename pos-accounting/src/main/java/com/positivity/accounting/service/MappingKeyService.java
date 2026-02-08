@@ -13,11 +13,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Service for Mapping Key management.
@@ -46,8 +49,8 @@ public class MappingKeyService {
      * 
      * @param request the mapping key creation request
      * @return the created mapping key response
-     * @throws IllegalArgumentException if posting category not found or key name
-     *                                  already exists
+     * @throws ResponseStatusException with NOT_FOUND if posting category not found
+     * @throws ResponseStatusException with BAD_REQUEST if key name already exists
      */
     @Transactional
     public MappingKeyResponse createMappingKey(@NonNull MappingKeyCreateRequest request) {
@@ -55,14 +58,14 @@ public class MappingKeyService {
 
         // Validate posting category exists
         PostingCategory category = postingCategoryRepository.findById(request.getPostingCategoryId())
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Posting category not found: " + request.getPostingCategoryId()));
 
         // Validate uniqueness within category
         String trimmedName = request.getKeyName().trim();
         if (mappingKeyRepository.existsByPostingCategoryIdAndKeyName(
                 request.getPostingCategoryId(), trimmedName)) {
-            throw new IllegalArgumentException(
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Mapping key with name '" + trimmedName +
                             "' already exists in posting category '" + category.getCategoryName() + "'");
         }
@@ -86,17 +89,18 @@ public class MappingKeyService {
      * 
      * @param mappingKeyId the mapping key identifier
      * @return the mapping key response
-     * @throws IllegalArgumentException if mapping key not found
+     * @throws ResponseStatusException with NOT_FOUND if mapping key or category not found
      */
     @Transactional(readOnly = true)
     public MappingKeyResponse getMappingKey(@NonNull UUID mappingKeyId) {
         log.info("Retrieving mapping key: {}", mappingKeyId);
 
         MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
-                .orElseThrow(() -> new IllegalArgumentException("Mapping key not found: " + mappingKeyId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Mapping key not found: " + mappingKeyId));
 
         PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
-                .orElseThrow(() -> new IllegalStateException(
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Posting category not found: " + mappingKey.getPostingCategoryId()));
 
         return toResponse(mappingKey, category.getCategoryName());
@@ -108,7 +112,8 @@ public class MappingKeyService {
      * @param mappingKeyId the mapping key identifier
      * @param request      the update request
      * @return the updated mapping key response
-     * @throws IllegalArgumentException if mapping key not found or name conflicts
+     * @throws ResponseStatusException with NOT_FOUND if mapping key or category not found
+     * @throws ResponseStatusException with BAD_REQUEST if name conflicts
      */
     @Transactional
     public MappingKeyResponse updateMappingKey(
@@ -117,10 +122,11 @@ public class MappingKeyService {
         log.info("Updating mapping key: {}", mappingKeyId);
 
         MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
-                .orElseThrow(() -> new IllegalArgumentException("Mapping key not found: " + mappingKeyId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Mapping key not found: " + mappingKeyId));
 
         PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
-                .orElseThrow(() -> new IllegalStateException(
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Posting category not found: " + mappingKey.getPostingCategoryId()));
 
         // Validate uniqueness if name is changing
@@ -128,7 +134,7 @@ public class MappingKeyService {
         if (!mappingKey.getKeyName().equals(trimmedName) &&
                 mappingKeyRepository.existsByPostingCategoryIdAndKeyName(
                         mappingKey.getPostingCategoryId(), trimmedName)) {
-            throw new IllegalArgumentException(
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Mapping key with name '" + trimmedName +
                             "' already exists in posting category '" + category.getCategoryName() + "'");
         }
@@ -152,6 +158,7 @@ public class MappingKeyService {
      * @param sort              sort field
      * @param isActive          filter by active status (null for all)
      * @return paginated list of mapping keys
+     * @throws ResponseStatusException with NOT_FOUND if posting category not found
      */
     @Transactional(readOnly = true)
     public MappingKeyListResponse listMappingKeysByCategory(
@@ -165,7 +172,7 @@ public class MappingKeyService {
 
         // Validate category exists
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Posting category not found: " + postingCategoryId));
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(sort));
@@ -200,20 +207,21 @@ public class MappingKeyService {
      * Validates that no active GL mappings reference this key.
      * 
      * @param mappingKeyId the mapping key identifier
-     * @throws IllegalArgumentException if mapping key not found
-     * @throws IllegalStateException    if active mappings exist
+     * @throws ResponseStatusException with NOT_FOUND if mapping key not found
+     * @throws ResponseStatusException with CONFLICT if active mappings exist
      */
     @Transactional
     public void deactivateMappingKey(@NonNull UUID mappingKeyId) {
         log.info("Deactivating mapping key: {}", mappingKeyId);
 
         MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
-                .orElseThrow(() -> new IllegalArgumentException("Mapping key not found: " + mappingKeyId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Mapping key not found: " + mappingKeyId));
 
         // Check for active mappings
         long activeMappingCount = glMappingRepository.countByMappingKeyIdAndDeactivatedAtIsNull(mappingKeyId);
         if (activeMappingCount > 0) {
-            throw new IllegalStateException(
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Mapping key '" + mappingKey.getKeyName() +
                             "' has " + activeMappingCount + " active GL mappings and cannot be deactivated");
         }
