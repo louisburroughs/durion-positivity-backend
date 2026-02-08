@@ -1,15 +1,5 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.internal.dto.AccountingEventResponse;
-import com.positivity.accounting.internal.dto.DuplicateEventException;
-import com.positivity.accounting.internal.enums.AccountingEventStatus;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -21,6 +11,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.springdoc.core.converters.models.Pageable;
+import org.springframework.data.domain.Page;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for accounting event ingestion and processing.
@@ -194,9 +196,7 @@ public class EventIngestionService {
      * @param pageable       pagination parameters
      * @return paginated accounting event responses
      */
-    public Page<AccountingEventResponse> listEvents(UUID organizationId,
-            String status,
-            Pageable pageable) {
+    public Page<AccountingEventResponse> listEvents(UUID organizationId, Pageable pageable) {
         // TODO: Return paginated list from audit table
         return Page.empty();
     }
