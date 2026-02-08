@@ -426,15 +426,14 @@ class PaymentApplicationServiceTest {
                 // Act
                 PaymentApplicationReversal result = service.reversePaymentApplication(
                                 applicationId,
-                                "Customer disputed charge",
-                                "admin@example.com");
+                                "Customer disputed charge");
 
                 // Assert
                 assertThat(result).isNotNull();
                 assertThat(result.getOriginalPaymentApplicationId()).isEqualTo(applicationId);
                 assertThat(result.getAmount()).isEqualByComparingTo("500.00");
                 assertThat(result.getReason()).isEqualTo("Customer disputed charge");
-                assertThat(result.getReversedBy()).isEqualTo("admin@example.com");
+                assertThat(result.getReversedBy()).isEqualTo("SYSTEM"); // Derived from SecurityContext (fallback in tests)
 
                 // Verify payment unappliedAmount restored
                 assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("1000.00");
@@ -456,8 +455,7 @@ class PaymentApplicationServiceTest {
                 // Act & Assert
                 assertThatThrownBy(() -> service.reversePaymentApplication(
                                 applicationId,
-                                "Test reason",
-                                "admin@example.com"))
+                                "Test reason"))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("not found")
                                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
@@ -486,8 +484,7 @@ class PaymentApplicationServiceTest {
                 // Act & Assert
                 assertThatThrownBy(() -> service.reversePaymentApplication(
                                 applicationId,
-                                "Second reversal attempt",
-                                "admin@example.com"))
+                                "Second reversal attempt"))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("has already been reversed")
                                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
@@ -515,8 +512,7 @@ class PaymentApplicationServiceTest {
                 // Act & Assert
                 assertThatThrownBy(() -> service.reversePaymentApplication(
                                 applicationId,
-                                "Test reason",
-                                "admin@example.com"))
+                                "Test reason"))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("has already been reversed")
                                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())

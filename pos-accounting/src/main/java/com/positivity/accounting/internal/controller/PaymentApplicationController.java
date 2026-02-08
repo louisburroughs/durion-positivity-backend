@@ -114,10 +114,7 @@ public class PaymentApplicationController {
 
         log.info("Reversing payment application {} with reason: {}", applicationId, request.getReason());
 
-        // TODO: Get reversedBy from SecurityContext
-        String reversedBy = "SYSTEM";
-
-        paymentApplicationService.reversePaymentApplication(applicationId, request.getReason(), reversedBy);
+        paymentApplicationService.reversePaymentApplication(applicationId, request.getReason());
 
         log.info("Successfully reversed payment application {}", applicationId);
 

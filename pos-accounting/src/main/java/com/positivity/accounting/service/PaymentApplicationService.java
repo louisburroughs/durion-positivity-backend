@@ -293,18 +293,19 @@ public class PaymentApplicationService {
          * - Restores invoice balance and payment unappliedAmount
          * - Requires elevated permission (enforced at controller)
          * - Requires non-empty reason for audit
+         * - Derives reversedBy from SecurityContext
          * 
          * @param paymentApplicationId application to reverse
          * @param reason               reversal reason (required)
-         * @param reversedBy           user performing reversal
          * @return reversal record
          * @throws ResponseStatusException with NOT_FOUND if application not found
          * @throws ResponseStatusException with CONFLICT if already reversed
          */
         public PaymentApplicationReversal reversePaymentApplication(
                         @NonNull UUID paymentApplicationId,
-                        @NonNull String reason,
-                        @NonNull String reversedBy) {
+                        @NonNull String reason) {
+
+                String reversedBy = getCurrentUser();
 
                 // 1. Check if already reversed
                 if (reversalRepository.existsByOriginalPaymentApplicationId(paymentApplicationId)) {
