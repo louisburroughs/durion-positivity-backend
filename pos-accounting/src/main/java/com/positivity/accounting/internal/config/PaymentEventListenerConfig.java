@@ -96,18 +96,20 @@ public class PaymentEventListenerConfig {
                         event.getEventId() // sourceEventId for idempotency
                 );
 
-                log.info("Successfully processed PaymentCleared event {} for payment {}",
-                        event.getEventId(), event.getPaymentId());
+               log.info("Successfully processed PaymentCleared event {} for payment {}",
+                       event.getEventId(), event.getPaymentId());
 
-            } catch (IllegalArgumentException e) {
-                log.error("Invalid PaymentCleared event: {}", event, e);
-                // Skip invalid events (don't rethrow to prevent retry loop)
+           } catch (IllegalArgumentException e) {
+               log.error("Invalid PaymentCleared event {} for payment {}", event.getEventId(),
+                       event.getPaymentId(), e);
+               // Skip invalid events (don't rethrow to prevent retry loop)
 
-            } catch (Exception e) {
-                log.error("Error processing PaymentCleared event: {}", event, e);
-                // Rethrow to trigger retry mechanism (if configured)
-                throw e;
-            }
-        }
-    }
+           } catch (Exception e) {
+               log.error("Error processing PaymentCleared event {} for payment {}", event.getEventId(),
+                       event.getPaymentId(), e);
+               // Rethrow to trigger retry mechanism (if configured)
+               throw e;
+           }
+       }
+   }
 }
