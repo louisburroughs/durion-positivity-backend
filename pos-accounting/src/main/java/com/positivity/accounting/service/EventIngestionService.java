@@ -3,7 +3,6 @@ package com.positivity.accounting.service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
@@ -131,7 +130,7 @@ public class EventIngestionService {
         accountingEvent.setTransactionDate(transactionDate);
         accountingEvent.setPayload(event);
         accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
-        
+
         accountingEvent = accountingEventRepository.save(accountingEvent);
         log.info("Persisted accounting event {} with status RECEIVED", accountingEvent.getEventId());
 
@@ -206,21 +205,20 @@ public class EventIngestionService {
      * @return paginated accounting event responses
      */
     public Page<AccountingEventResponse> listEvents(
-            @NonNull UUID organizationId, 
-            String status, 
+            @NonNull UUID organizationId,
+            String status,
             @NonNull Pageable pageable) {
         log.debug("Listing events for organization {} with status filter: {}", organizationId, status);
-        
+
         Page<AccountingEvent> eventPage;
-        
+
         if (status != null && !status.isBlank()) {
             try {
                 AccountingEventStatus eventStatus = AccountingEventStatus.valueOf(status.trim().toUpperCase());
                 eventPage = accountingEventRepository.findByOrganizationIdAndStatus(
-                    organizationId, 
-                    eventStatus, 
-                    pageable
-                );
+                        organizationId,
+                        eventStatus,
+                        pageable);
             } catch (IllegalArgumentException e) {
                 log.warn("Invalid status filter '{}', returning all events for organization", status);
                 eventPage = accountingEventRepository.findByOrganizationId(organizationId, pageable);
@@ -228,7 +226,7 @@ public class EventIngestionService {
         } else {
             eventPage = accountingEventRepository.findByOrganizationId(organizationId, pageable);
         }
-        
+
         return eventPage.map(AccountingEventMapper::toEventResponse);
     }
 
