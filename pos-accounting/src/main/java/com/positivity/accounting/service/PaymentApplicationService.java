@@ -649,7 +649,7 @@ public class PaymentApplicationService {
                                 .findAllByApplicationRequestId(applicationRequestId);
 
                 if (existingApps.isEmpty()) {
-                        throw new IllegalStateException(
+                        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                                         "Application request processed but not found: " + applicationRequestId);
                 }
 
@@ -657,7 +657,7 @@ public class PaymentApplicationService {
                 PaymentApplication firstApp = existingApps.get(0);
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(firstApp.getPaymentId())
-                                .orElseThrow(() -> new IllegalStateException(
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                                                 "Payment not found: " + firstApp.getPaymentId()));
 
                 // Calculate total applied amount across all applications
