@@ -119,13 +119,13 @@ public class EventIngestionService {
         }
 
         // Accept event with RECEIVED status and persist to database
+        // Let @PrePersist generate UUIDv7 for time-ordered indexing unless provided
         UUID eventId = (UUID) event.get("eventId");
-        if (eventId == null) {
-            eventId = UUID.randomUUID();
-        }
 
         AccountingEvent accountingEvent = new AccountingEvent();
-        accountingEvent.setEventId(eventId);
+        if (eventId != null) {
+            accountingEvent.setEventId(eventId);
+        }
         accountingEvent.setOrganizationId(organizationId);
         accountingEvent.setEventType(eventType);
         accountingEvent.setTransactionDate(transactionDate);
@@ -133,11 +133,11 @@ public class EventIngestionService {
         accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
         
         accountingEvent = accountingEventRepository.save(accountingEvent);
-        log.info("Persisted accounting event {} with status RECEIVED", eventId);
+        log.info("Persisted accounting event {} with status RECEIVED", accountingEvent.getEventId());
 
         AccountingEventResponse response = AccountingEventMapper.toEventResponse(accountingEvent);
 
-        log.info("Accepted accounting event {} with status RECEIVED", eventId);
+        log.info("Accepted accounting event {} with status RECEIVED", accountingEvent.getEventId());
         return response;
     }
 

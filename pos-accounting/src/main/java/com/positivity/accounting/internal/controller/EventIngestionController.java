@@ -66,7 +66,7 @@ public class EventIngestionController {
                 log.debug("Listing accounting events: org={}, page={}, size={}, status={}", organizationId, page, size,
                                 status);
 
-                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "receivedAt"));
                 Page<AccountingEventResponse> eventPage = eventIngestionService.listEvents(organizationId, status,
                                 pageable);
 
