@@ -658,7 +658,8 @@ public class PaymentApplicationService {
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(firstApp.getPaymentId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                                                "Payment not found: " + firstApp.getPaymentId()));
+                                                "Internal payment data inconsistency: payment record not found for existing application. paymentId="
+                                                                + firstApp.getPaymentId()));
 
                 // Calculate total applied amount across all applications
                 BigDecimal totalApplied = existingApps.stream()
