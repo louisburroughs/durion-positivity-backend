@@ -50,7 +50,8 @@ pos:
   invoice:
     service:
       url: http://pos-invoice:8085
-      timeout: 5000  # milliseconds
+  # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
+  # See RestClientConfig.java for timeout configuration
 
 logging:
   level:
