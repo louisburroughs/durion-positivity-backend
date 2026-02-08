@@ -394,8 +394,9 @@ public class PaymentApplicationService {
 
                 // 4. Restore payment unappliedAmount
                 ReceivablePayment payment = receivablePaymentRepository.findById(original.getPaymentId())
-                                .orElseThrow(() -> new IllegalStateException(
-                                                "Payment not found: " + original.getPaymentId()));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                                                "Internal error while reversing payment application " + paymentApplicationId
+                                                                + ": associated payment " + original.getPaymentId() + " not found"));
 
                 payment.reverseAmount(original.getAppliedAmount());
                 payment.setModifiedAt(Instant.now());
@@ -650,7 +651,7 @@ public class PaymentApplicationService {
                                 .findAllByApplicationRequestId(applicationRequestId);
 
                 if (existingApps.isEmpty()) {
-                        throw new IllegalStateException(
+                        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                                         "Application request processed but not found: " + applicationRequestId);
                 }
 
@@ -658,8 +659,9 @@ public class PaymentApplicationService {
                 PaymentApplication firstApp = existingApps.get(0);
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(firstApp.getPaymentId())
-                                .orElseThrow(() -> new IllegalStateException(
-                                                "Payment not found: " + firstApp.getPaymentId()));
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                                                "Internal payment data inconsistency: payment record not found for existing application. paymentId="
+                                                                + firstApp.getPaymentId()));
 
                 // Calculate total applied amount across all applications
                 BigDecimal totalApplied = existingApps.stream()
