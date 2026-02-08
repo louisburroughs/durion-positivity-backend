@@ -394,7 +394,8 @@ public class PaymentApplicationService {
                 // 4. Restore payment unappliedAmount
                 ReceivablePayment payment = receivablePaymentRepository.findById(original.getPaymentId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                                                "Payment not found: " + original.getPaymentId()));
+                                                "Internal error while reversing payment application " + paymentApplicationId
+                                                                + ": associated payment " + original.getPaymentId() + " not found"));
 
                 payment.reverseAmount(original.getAppliedAmount());
                 payment.setModifiedAt(Instant.now());
