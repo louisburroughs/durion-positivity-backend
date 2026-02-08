@@ -80,18 +80,20 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
         List<GLMapping> findByPostingCategoryId(UUID postingCategoryId);
 
         /**
-         * Count active mappings (not deactivated) for a posting category.
+         * Count active mappings for a posting category.
+         * Active mappings are those with no end date or end date in the future.
          */
         @Query("SELECT COUNT(glm) FROM GLMapping glm " +
                         "WHERE glm.postingCategoryId = :postingCategoryId " +
-                        "AND glm.deactivatedAt IS NULL")
+                        "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP)")
         long countByPostingCategoryIdAndDeactivatedAtIsNull(UUID postingCategoryId);
 
         /**
-         * Count active mappings (not deactivated) for a mapping key.
+         * Count active mappings for a mapping key.
+         * Active mappings are those with no end date or end date in the future.
          */
         @Query("SELECT COUNT(glm) FROM GLMapping glm " +
                         "WHERE glm.mappingKeyId = :mappingKeyId " +
-                        "AND glm.deactivatedAt IS NULL")
+                        "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP)")
         long countByMappingKeyIdAndDeactivatedAtIsNull(UUID mappingKeyId);
 }

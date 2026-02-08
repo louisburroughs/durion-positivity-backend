@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.MappingKey;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -13,7 +14,7 @@ import java.util.UUID;
  * Supports querying mapping keys by posting category and name.
  */
 @Repository
-public interface MappingKeyRepository extends JpaRepository<MappingKey, UUID> {
+public interface MappingKeyRepository extends JpaRepository<MappingKey, UUID>, JpaSpecificationExecutor<MappingKey> {
 
     /**
      * Find a mapping key by posting category and key name.
