@@ -1,9 +1,5 @@
 package com.positivity.accounting.internal.config;
 
-import com.positivity.accounting.internal.dto.DuplicateEventException;
-import com.positivity.accounting.internal.dto.EnvelopeErrorResponse;
-import com.positivity.accounting.internal.dto.ErrorResponse;
-import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -11,6 +7,11 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.dto.EnvelopeErrorResponse;
+import com.positivity.accounting.internal.dto.ErrorResponse;
+import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 
 /**
  * Standardized error responses for security-related exceptions.
@@ -44,7 +45,7 @@ public class AccountingExceptionHandler {
 
     @ExceptionHandler(UnbalancedEntryException.class)
     public ResponseEntity<EnvelopeErrorResponse> handleUnbalancedEntry(UnbalancedEntryException ex) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(EnvelopeErrorResponse.of("UNBALANCED_ENTRY", ex.getMessage()));
     }
 }
