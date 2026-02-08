@@ -284,7 +284,7 @@ public class PaymentApplicationService {
                         // Rethrow to trigger DB transaction rollback
                         // All PaymentApplication records will be rolled back along with other local state
                         throw new ResponseStatusException(status,
-                                        String.format("Failed to apply payment %s to invoices. All changes have been rolled back.",
+                                        String.format("Failed to apply payment %s to invoices. Local changes have been rolled back and compensating reversals were attempted; invoice state may be out of sync. Check logs and reconcile invoices manually if necessary.",
                                                         paymentId), e);
                 } catch (RuntimeException e) {
                         // Unexpected runtime errors - still perform compensating reversals for safety
