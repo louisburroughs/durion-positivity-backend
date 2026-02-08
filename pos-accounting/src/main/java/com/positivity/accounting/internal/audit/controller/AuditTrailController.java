@@ -2,8 +2,8 @@ package com.positivity.accounting.internal.audit.controller;
 
 import com.positivity.accounting.internal.audit.dto.*;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
-import com.positivity.accounting.internal.audit.service.AuditTrailQueryService;
-import com.positivity.accounting.internal.audit.service.AuditTrailService;
+import com.positivity.accounting.service.AuditTrailQueryService;
+import com.positivity.accounting.service.AuditTrailService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

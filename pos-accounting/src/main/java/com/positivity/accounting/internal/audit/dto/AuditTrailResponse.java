@@ -1,14 +1,22 @@
 package com.positivity.accounting.internal.audit.dto;
 
-import com.positivity.accounting.internal.audit.entity.*;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import com.positivity.accounting.internal.audit.entity.ExceptionType;
+import com.positivity.accounting.internal.audit.entity.PolicyValidationResult;
+import com.positivity.accounting.internal.enums.AccountingIntent;
+import com.positivity.accounting.internal.enums.AccountingStatus;
+import com.positivity.accounting.internal.enums.CancellationType;
+import com.positivity.accounting.internal.enums.RefundMethod;
+import com.positivity.accounting.internal.enums.RefundPaymentStatus;
+import com.positivity.accounting.internal.enums.RefundType;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Response containing audit trail entry details.
@@ -18,7 +26,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class AuditTrailResponse {
-    
+
     private UUID auditId;
     private ExceptionType exceptionType;
     private UUID actorId;
@@ -27,7 +35,7 @@ public class AuditTrailResponse {
     private String reason;
     private String authorizationLevel;
     private String policyVersion;
-    
+
     // Price override fields
     private UUID orderId;
     private UUID lineItemId;
@@ -36,23 +44,23 @@ public class AuditTrailResponse {
     private String overrideAmountOrPercent;
     private String forbiddenCategoryCode;
     private PolicyValidationResult policyValidationResult;
-    
+
     // Refund fields
     private UUID invoiceId;
     private UUID paymentId;
     private RefundType refundType;
     private BigDecimal refundAmount;
-    private PaymentStatus originalPaymentStatus;
+    private RefundPaymentStatus originalPaymentStatus;
     private RefundMethod refundMethod;
     private String linkedSourceIds;
-    
+
     // Cancellation fields
     private CancellationType cancellationType;
     private String beforeSnapshot;
     private String afterSnapshot;
     private String partialPaymentInfo;
     private String glReversalStatus;
-    
+
     // Accounting fields
     private AccountingIntent accountingIntent;
     private AccountingStatus accountingStatus;

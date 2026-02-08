@@ -2,7 +2,6 @@ package com.positivity.accounting.service;
 
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -141,11 +140,15 @@ public class EventIngestionService {
     }
 
     /**
-     * Retrieves an event by ID as a JournalEntry.
+     * Retrieves an event by ID and returns a response DTO.
+     *
+     * @param eventId the event identifier
+     * @return the accounting event response
+     * @throws IllegalArgumentException if event not found
      */
-    public JournalEntry getEventById(UUID eventId) {
+    public AccountingEventResponse getEventById(UUID eventId) {
         // TODO: Implement proper event storage and retrieval
-        // For now, return a stub journal entry
+        // For now, throw not found
         throw new IllegalArgumentException("Event not found: " + eventId);
     }
 
@@ -184,9 +187,14 @@ public class EventIngestionService {
     }
 
     /**
-     * Lists all events with filtering.
+     * Lists all events with filtering, returning a page of response DTOs.
+     *
+     * @param organizationId the organization identifier
+     * @param status         optional status filter
+     * @param pageable       pagination parameters
+     * @return paginated accounting event responses
      */
-    public Page<JournalEntry> listEvents(UUID organizationId,
+    public Page<AccountingEventResponse> listEvents(UUID organizationId,
             String status,
             Pageable pageable) {
         // TODO: Return paginated list from audit table

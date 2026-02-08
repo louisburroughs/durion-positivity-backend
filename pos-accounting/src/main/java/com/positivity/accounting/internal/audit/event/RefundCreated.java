@@ -1,16 +1,17 @@
 package com.positivity.accounting.internal.audit.event;
 
-import com.positivity.accounting.internal.audit.entity.AccountingIntent;
-import com.positivity.accounting.internal.audit.entity.AccountingStatus;
-import com.positivity.accounting.internal.audit.entity.RefundType;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import com.positivity.accounting.internal.enums.AccountingIntent;
+import com.positivity.accounting.internal.enums.AccountingStatus;
+import com.positivity.accounting.internal.enums.RefundType;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Event emitted when a refund is created.
@@ -20,7 +21,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class RefundCreated {
-    
+
     private UUID auditId;
     private UUID invoiceId;
     private UUID paymentId;
@@ -32,12 +33,12 @@ public class RefundCreated {
     private String policyVersion;
     private String reason;
     private Instant timestamp;
-    
+
     private AccountingIntent accountingIntent;
-    
+
     @Builder.Default
     private AccountingStatus accountingStatus = AccountingStatus.PENDING_POSTING;
-    
+
     private String linkedSourceIds;
     private String expectedAccountingOutcome;
     private UUID sourceEventId;
