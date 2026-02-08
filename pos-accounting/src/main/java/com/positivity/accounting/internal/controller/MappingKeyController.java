@@ -47,7 +47,8 @@ public class MappingKeyController {
     @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_CREATE", apiVersion = "1")
     public ResponseEntity<MappingKeyResponse> createMappingKey(
             @Valid @RequestBody MappingKeyCreateRequest request) {
-        log.info("Create mapping key request: {} for category: {}", request.getKeyName(), request.getPostingCategoryId());
+        log.info("Create mapping key request: {} for category: {}", request.getKeyName(),
+                request.getPostingCategoryId());
         MappingKeyResponse response = mappingKeyService.createMappingKey(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -100,7 +101,8 @@ public class MappingKeyController {
             @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive) {
         log.info("List mapping keys for category: {}, page={}, size={}, sort={}, isActive={}",
                 postingCategoryId, page, size, sort, isActive);
-        MappingKeyListResponse response = mappingKeyService.listMappingKeysByCategory(postingCategoryId, page, size, sort, isActive);
+        MappingKeyListResponse response = mappingKeyService.listMappingKeysByCategory(postingCategoryId, page, size,
+                sort, isActive);
         return ResponseEntity.ok(response);
     }
 
