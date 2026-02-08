@@ -14,8 +14,10 @@ import org.springframework.web.client.RestClient;
  * **Usage:**
  * - Injected into service classes for making REST calls
  * - Used by InvoiceServiceClient for Invoice service integration
+ * - Other services can create their own RestClient beans using the same generic timeout properties
  *
  * **Configuration:**
+ * - Generic timeout properties apply to all RestClient beans in this module
  * - Connect timeout: prevents indefinite hangs during connection establishment (typically shorter)
  * - Read timeout: prevents indefinite hangs waiting for response data (typically longer for slow APIs)
  *
@@ -32,6 +34,9 @@ public class RestClientConfig {
      * to enforce connect and read timeouts, preventing threads from hanging indefinitely
      * on downstream service issues.
      *
+     * Timeout properties are generic (pos.restclient.*) and can be reused by other
+     * RestClient beans in this module.
+     *
      * Connect timeout (default 3s) is shorter since connection establishment
      * is typically fast. Read timeout (default 5s) is longer to accommodate
      * slower API processing.
@@ -44,8 +49,8 @@ public class RestClientConfig {
     @Bean
     public RestClient invoiceServiceRestClient(
             RestClient.Builder builder,
-            @Value("${pos.invoice.service.connect.timeout:3000}") int connectTimeoutMs,
-            @Value("${pos.invoice.service.read.timeout:5000}") int readTimeoutMs) {
+            @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
+            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
