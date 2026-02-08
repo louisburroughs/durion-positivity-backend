@@ -274,6 +274,51 @@ class PaymentApplicationControllerIntegrationTest {
         }
 
         @Test
+        @DisplayName("PA-004b: Enforce idempotency with duplicate multi-invoice applicationRequestId")
+        void testApplyPayment_MultiInvoice_Idempotent() throws Exception {
+                // Arrange
+                createTestPayment(testPaymentId, testCustomerId, "1000.00");
+
+                String idempotencyKey = UUID.randomUUID().toString();
+                PaymentApplicationRequest request = new PaymentApplicationRequest();
+                request.setApplicationRequestId(idempotencyKey);
+                request.setApplications(List.of(
+                                createInvoiceApplication(testInvoice1Id, "300.00"),
+                                createInvoiceApplication(testInvoice2Id, "400.00")));
+
+                // Act: First request
+                mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/applications"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.appliedAmount").value(700.00))
+                                .andExpect(jsonPath("$.applications.length()").value(2));
+
+                // Act: Second request with same idempotency key (retry scenario)
+                mockMvc.perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/applications"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andDo(print())
+                                .andExpect(status().isCreated()) // Still returns 201, but doesn't duplicate
+                                .andExpect(jsonPath("$.paymentId").value(testPaymentId.toString()))
+                                .andExpect(jsonPath("$.appliedAmount").value(700.00)) // Sum of both applications
+                                .andExpect(jsonPath("$.applications.length()").value(2)); // All applications returned
+
+                // Assert: Only two applications created (not duplicated)
+                List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(testPaymentId);
+                assertThat(applications).hasSize(2);
+
+                // Assert: Total applied is correct (not doubled)
+                BigDecimal totalApplied = applications.stream()
+                                .map(PaymentApplication::getAppliedAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                assertThat(totalApplied).isEqualByComparingTo("700.00");
+
+                ReceivablePayment payment = receivablePaymentRepository.findById(testPaymentId).orElseThrow();
+                assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("300.00"); // Not applied twice
+        }
+
+        @Test
         @DisplayName("PA-005: Fail when payment not found")
         void testApplyPayment_PaymentNotFound() throws Exception {
                 // Arrange
