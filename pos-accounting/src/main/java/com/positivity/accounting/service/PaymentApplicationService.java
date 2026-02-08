@@ -231,8 +231,8 @@ public class PaymentApplicationService {
                                         amountToApply);
                 }
 
-                // 6. Capture remaining unapplied amount before applying, for overpayment handling
-                BigDecimal remainingUnappliedBeforeApplication = payment.getUnappliedAmount();
+                // 6. Capture unapplied amount before applying, for overpayment credit calculation
+                BigDecimal unappliedBeforeApplication = payment.getUnappliedAmount();
                 
                 // 7. Update payment unappliedAmount (apply actual applied amount)
                 payment.applyAmount(actualTotalApplicationAmount);
@@ -245,21 +245,22 @@ public class PaymentApplicationService {
                 if (overpaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
                         // Explicit overpayment: payment amount exceeded what was needed for invoices
                         // Convert any remaining unapplied amount to customer credit
-                        BigDecimal remainingUnappliedAfterApplication = payment.getUnappliedAmount();
-                        BigDecimal totalCreditAmount = overpaymentAmount.add(remainingUnappliedAfterApplication);
+                        BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
+                        BigDecimal totalCreditAmount = overpaymentAmount.add(unappliedAfterApplication);
                         
                         creditInfo = createCustomerCredit(payment, totalCreditAmount, applicationTimestamp);
                         
-                        // Mark payment as fully applied (convert remaining balance to credit)
-                        if (remainingUnappliedAfterApplication.compareTo(BigDecimal.ZERO) > 0) {
-                                payment.applyAmount(remainingUnappliedAfterApplication);
+                        // Mark payment as fully applied by converting remaining balance to credit
+                        // This ensures payment status becomes FULLY_APPLIED
+                        if (unappliedAfterApplication.compareTo(BigDecimal.ZERO) > 0) {
+                                payment.applyAmount(unappliedAfterApplication);
                         }
                         
                         log.info("Overpayment detected: requested={}, applied={}, overpayment={}, " +
-                                        "remaining before application={}, remaining after application={}, total credit={}",
+                                        "unapplied before={}, unapplied after={}, total credit={}",
                                         totalApplicationAmount, actualTotalApplicationAmount,
-                                        overpaymentAmount, remainingUnappliedBeforeApplication,
-                                        remainingUnappliedAfterApplication, totalCreditAmount);
+                                        overpaymentAmount, unappliedBeforeApplication,
+                                        unappliedAfterApplication, totalCreditAmount);
                 }
                 
                 receivablePaymentRepository.save(payment);
