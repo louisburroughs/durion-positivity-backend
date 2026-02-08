@@ -303,8 +303,8 @@ class PaymentApplicationServiceTest {
 
                 when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
                                 .thenReturn(true);
-                when(paymentApplicationRepository.findByApplicationRequestId(testApplicationRequestId))
-                                .thenReturn(Optional.of(existingApplication));
+                when(paymentApplicationRepository.findAllByApplicationRequestId(testApplicationRequestId))
+                                .thenReturn(List.of(existingApplication));
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
                                 createTestInvoiceDetails(testInvoiceId, "PARTIALLY_PAID", "USD", "500.00"));
