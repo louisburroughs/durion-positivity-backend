@@ -38,11 +38,11 @@ public class ReversePaymentApplicationRequest implements Serializable {
     private UUID paymentApplicationId;
 
     /**
-     * Reversal record ID (new compensating transaction)
+     * Reversal record ID (new compensating transaction).
+     * Optional for compensating reversals where no local reversal record is created.
+     * When null, Invoice service should use paymentApplicationId as idempotency key.
      */
     @JsonProperty("reversalId")
-    @NotNull(message = "Reversal ID is required")
-    @NonNull
     private UUID reversalId;
 
     /**
