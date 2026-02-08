@@ -45,6 +45,11 @@ public class InvoicePaymentController {
      * Apply a payment to an invoice and update status (LEGACY - for invoice-centric
      * workflow).
      * 
+     * <p><strong>BACKWARD COMPATIBILITY:</strong> This endpoint is maintained at its original
+     * path {@code /v1/accounting/invoices/{invoiceId}/pay} for existing clients. The new
+     * payment-centric API is available at {@code /v1/accounting/payments/{paymentId}/applications}.
+     * Both endpoints are supported; this legacy endpoint will be removed in a future major version.
+     * 
      * @deprecated Use PaymentApplicationController for new payment-centric API
      * @param request Payment details including idempotency key
      * @return Updated invoice status
