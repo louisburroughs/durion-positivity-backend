@@ -17,7 +17,7 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 22 event types.
+         * Total: 27 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -71,7 +71,9 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.write("ACCOUNTING_EVENT_RETRY",
                                                 "Retry processing for a failed accounting event").build(),
 
-                                // InvoicePaymentController / PaymentApplicationController - 3 events
+                                // InvoicePaymentController / PaymentApplicationController - 4 events
+                                EventTypeRegistration.write("ACCOUNTING_INVOICE_PAY_LEGACY",
+                                                "Apply payment via legacy invoice-centric API").build(),
                                 EventTypeRegistration.write("ACCOUNTING_PAYMENT_APPLY",
                                                 "Apply a payment to an invoice").build(),
                                 EventTypeRegistration.write("ACCOUNTING_PAYMENT_APPLICATION_REVERSE",
