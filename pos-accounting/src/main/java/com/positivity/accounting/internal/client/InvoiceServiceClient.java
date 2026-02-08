@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.*;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
@@ -35,13 +36,14 @@ import java.util.function.Supplier;
  * @see <a href=
  *      "https://resilience4j.readme.io/docs/circuitbreaker">Resilience4j
  *      Circuit Breaker</a>
- * @see RestClientConfig
+ * @see com.positivity.accounting.internal.config.RestClientConfig
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class InvoiceServiceClient {
 
+    @Qualifier("invoiceServiceRestClient")
     private final RestClient restClient;
     private final CircuitBreaker invoiceServiceCircuitBreaker;
 
