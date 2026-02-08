@@ -96,4 +96,5 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
                         "WHERE glm.mappingKeyId = :mappingKeyId " +
                         "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP)")
         long countByMappingKeyIdAndDeactivatedAtIsNull(UUID mappingKeyId);
+
 }

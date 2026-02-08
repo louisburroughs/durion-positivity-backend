@@ -47,10 +47,13 @@ public class PostingRuleVersion {
     private UUID versionId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (versionId == null) {
             versionId = UUIDv7Generator.generate();
         }
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.modifiedAt = now;
     }
 
     @Column(name = "posting_rule_set_id", nullable = false)
@@ -95,13 +98,6 @@ public class PostingRuleVersion {
 
     @Column(name = "archived_by", length = 50)
     private String archivedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
-    }
 
     @PreUpdate
     protected void onUpdate() {

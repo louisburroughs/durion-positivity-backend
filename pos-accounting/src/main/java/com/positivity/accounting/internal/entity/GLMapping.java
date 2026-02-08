@@ -51,10 +51,11 @@ public class GLMapping {
     private UUID glMappingId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (glMappingId == null) {
             glMappingId = UUIDv7Generator.generate();
         }
+        this.createdAt = Instant.now();
     }
 
     @Column(name = "source_system", length = 50, nullable = false)
@@ -93,11 +94,6 @@ public class GLMapping {
 
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
-
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = Instant.now();
-    }
 
     /**
      * Check if this mapping is effective for a given transaction date.

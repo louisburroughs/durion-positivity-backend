@@ -50,9 +50,16 @@ public class Reconciliation {
     private UUID reconciliationId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (reconciliationId == null) {
             reconciliationId = UUIDv7Generator.generate();
+        }
+        createdAt = Instant.now();
+        if (status == null) {
+            status = ReconciliationStatus.IN_PROGRESS;
+        }
+        if (difference == null && statementEndingBalance != null && glEndingBalance != null) {
+            difference = statementEndingBalance.subtract(glEndingBalance);
         }
     }
 
@@ -155,14 +162,4 @@ public class Reconciliation {
         this.reconciliationId = reconciliationId;
     }
 
-    @PrePersist
-    protected void onCreate() {
-        createdAt = Instant.now();
-        if (status == null) {
-            status = ReconciliationStatus.IN_PROGRESS;
-        }
-        if (difference == null && statementEndingBalance != null && glEndingBalance != null) {
-            difference = statementEndingBalance.subtract(glEndingBalance);
-        }
-    }
 }

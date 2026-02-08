@@ -37,9 +37,15 @@ public class AuditTrailEntry {
     private UUID auditId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (auditId == null) {
             auditId = UUIDv7Generator.generate();
+        }
+        if (timestamp == null) {
+            timestamp = Instant.now();
+        }
+        if (accountingStatus == null) {
+            accountingStatus = AccountingStatus.PENDING_POSTING;
         }
     }
 
@@ -174,13 +180,4 @@ public class AuditTrailEntry {
     @Column(name = "source_document_id", length = 255)
     private String sourceDocumentId;
 
-    @PrePersist
-    protected void onCreate() {
-        if (timestamp == null) {
-            timestamp = Instant.now();
-        }
-        if (accountingStatus == null) {
-            accountingStatus = AccountingStatus.PENDING_POSTING;
-        }
-    }
 }

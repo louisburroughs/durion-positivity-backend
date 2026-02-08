@@ -46,10 +46,11 @@ public class AccountingEvent {
     private UUID eventId;
 
     @PrePersist
-    public void generateId() {
+    public void onPrePersist() {
         if (eventId == null) {
             eventId = UUIDv7Generator.generate();
         }
+        this.receivedAt = Instant.now();
     }
 
     @Column(name = "event_type", length = 100, nullable = false)
@@ -86,8 +87,4 @@ public class AccountingEvent {
     @Column(name = "sequence_number")
     private Long sequenceNumber;
 
-    @PrePersist
-    protected void onCreate() {
-        this.receivedAt = Instant.now();
-    }
 }
