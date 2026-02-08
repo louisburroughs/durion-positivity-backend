@@ -3,7 +3,6 @@ package com.positivity.accounting.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,13 +68,12 @@ class EventIngestionServiceTest {
         testEvent.setReceivedAt(Instant.now());
 
         testEventMap = Map.of(
-            "eventId", testEventId,
-            "organizationId", testOrganizationId,
-            "eventType", "INVOICE_RECEIVED",
-            "sourceSystem", "MYOB",
-            "transactionDate", LocalDateTime.now(),
-            "payload", Map.of("amount", "1500.00")
-        );
+                "eventId", testEventId,
+                "organizationId", testOrganizationId,
+                "eventType", "INVOICE_RECEIVED",
+                "sourceSystem", "MYOB",
+                "transactionDate", LocalDateTime.now(),
+                "payload", Map.of("amount", "1500.00"));
     }
 
     @Test
@@ -87,7 +85,7 @@ class EventIngestionServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
-            .thenReturn(eventPage);
+                .thenReturn(eventPage);
 
         // Act
         Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
@@ -111,8 +109,8 @@ class EventIngestionServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         when(accountingEventRepository.findByOrganizationIdAndStatus(
-            testOrganizationId, AccountingEventStatus.RECEIVED, pageable))
-            .thenReturn(eventPage);
+                testOrganizationId, AccountingEventStatus.RECEIVED, pageable))
+                .thenReturn(eventPage);
 
         // Act
         Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "RECEIVED", pageable);
@@ -123,7 +121,7 @@ class EventIngestionServiceTest {
         assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
         verify(accountingEventRepository).findByOrganizationIdAndStatus(
-            testOrganizationId, AccountingEventStatus.RECEIVED, pageable);
+                testOrganizationId, AccountingEventStatus.RECEIVED, pageable);
     }
 
     @Test
@@ -135,7 +133,7 @@ class EventIngestionServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
-            .thenReturn(eventPage);
+                .thenReturn(eventPage);
 
         // Act
         Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "INVALID_STATUS", pageable);
@@ -156,7 +154,7 @@ class EventIngestionServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
-            .thenReturn(emptyPage);
+                .thenReturn(emptyPage);
 
         // Act
         Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
@@ -172,7 +170,7 @@ class EventIngestionServiceTest {
     void testGetEventById_Found() {
         // Arrange
         when(accountingEventRepository.findById(testEventId))
-            .thenReturn(Optional.of(testEvent));
+                .thenReturn(Optional.of(testEvent));
 
         // Act
         AccountingEventResponse result = service.getEventById(testEventId);
@@ -191,12 +189,12 @@ class EventIngestionServiceTest {
     void testGetEventById_NotFound() {
         // Arrange
         when(accountingEventRepository.findById(testEventId))
-            .thenReturn(Optional.empty());
+                .thenReturn(Optional.empty());
 
         // Act & Assert
         assertThatThrownBy(() -> service.getEventById(testEventId))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Event not found");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Event not found");
 
         verify(accountingEventRepository).findById(testEventId);
     }
@@ -206,7 +204,7 @@ class EventIngestionServiceTest {
     void testGetEvent_Found() {
         // Arrange
         when(accountingEventRepository.findById(testEventId))
-            .thenReturn(Optional.of(testEvent));
+                .thenReturn(Optional.of(testEvent));
 
         // Act
         Map<String, Object> result = service.getEvent(testEventId);
@@ -223,7 +221,7 @@ class EventIngestionServiceTest {
     void testGetEvent_NotFound() {
         // Arrange
         when(accountingEventRepository.findById(testEventId))
-            .thenReturn(Optional.empty());
+                .thenReturn(Optional.empty());
 
         // Act
         Map<String, Object> result = service.getEvent(testEventId);
@@ -247,7 +245,7 @@ class EventIngestionServiceTest {
         savedEvent.setReceivedAt(Instant.now());
 
         when(accountingEventRepository.save(any(AccountingEvent.class)))
-            .thenReturn(savedEvent);
+                .thenReturn(savedEvent);
 
         // Act
         AccountingEventResponse result = service.submitEvent(testEventMap);
