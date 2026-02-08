@@ -36,7 +36,8 @@ import java.util.UUID;
         @Index(name = "idx_accounting_event_type", columnList = "event_type"),
         @Index(name = "idx_accounting_event_status", columnList = "status"),
         @Index(name = "idx_accounting_event_transaction_date", columnList = "transaction_date"),
-        @Index(name = "idx_accounting_event_received_at", columnList = "received_at")
+        @Index(name = "idx_accounting_event_received_at", columnList = "received_at"),
+        @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status")
 })
 public class AccountingEvent {
 
@@ -55,6 +56,9 @@ public class AccountingEvent {
 
     @Column(name = "event_type", length = 100, nullable = false)
     private String eventType;
+
+    @Column(name = "organization_id", nullable = false, columnDefinition = "UUID")
+    private UUID organizationId;
 
     @Column(name = "transaction_date", nullable = false)
     private LocalDateTime transactionDate;
