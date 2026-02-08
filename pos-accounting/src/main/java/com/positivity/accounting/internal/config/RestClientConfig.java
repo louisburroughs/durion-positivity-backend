@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.config;
 
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,8 +16,8 @@ import org.springframework.web.client.RestClient;
  * - Used by InvoiceServiceClient for Invoice service integration
  *
  * **Configuration:**
- * - Connect timeout: prevents indefinite hangs during connection establishment
- * - Read timeout: prevents indefinite hangs waiting for response data
+ * - Connect timeout: prevents indefinite hangs during connection establishment (typically shorter)
+ * - Read timeout: prevents indefinite hangs waiting for response data (typically longer for slow APIs)
  *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
@@ -30,15 +31,20 @@ public class RestClientConfig {
      * Uses SimpleClientHttpRequestFactory to enforce connect and read timeouts,
      * preventing threads from hanging indefinitely on downstream service issues.
      *
-     * @param timeoutMs timeout in milliseconds for both connect and read operations
+     * Connect timeout is typically shorter (2-3s) since connection establishment
+     * is fast. Read timeout is longer to accommodate slower API processing.
+     *
+     * @param connectTimeoutMs connect timeout in milliseconds (default 3000ms)
+     * @param readTimeoutMs read timeout in milliseconds (default 5000ms)
      * @return configured RestClient instance with timeout protection
      */
     @Bean
     public RestClient restClient(
-            @Value("${pos.invoice.service.timeout:5000}") int timeoutMs) {
+            @Value("${pos.invoice.service.connect.timeout:3000}") int connectTimeoutMs,
+            @Value("${pos.invoice.service.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(timeoutMs);
-        factory.setReadTimeout(timeoutMs);
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
         return RestClient.builder()
                 .requestFactory(factory)
