@@ -1,15 +1,5 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.internal.dto.AccountingEventResponse;
-import com.positivity.accounting.internal.dto.DuplicateEventException;
-import com.positivity.accounting.internal.enums.AccountingEventStatus;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -21,6 +11,22 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.accounting.internal.dto.AccountingEventMapper;
+import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for accounting event ingestion and processing.
@@ -51,6 +57,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class EventIngestionService {
 
     private final JournalEntryService journalEntryService;
+    private final AccountingEventRepository accountingEventRepository;
 
     /**
      * In-memory idempotency tracker keyed by content hash.
@@ -111,32 +118,36 @@ public class EventIngestionService {
                     "Duplicate event detected for org " + organizationId + " from " + sourceSystem);
         }
 
-        // Accept event with RECEIVED status.
-        // TODO: Persist event to audit table and schedule async processing
-        // via posting rule sets to generate journal entries.
+        // Accept event with RECEIVED status and persist to database
+        // Let @PrePersist generate UUIDv7 for time-ordered indexing unless provided
         UUID eventId = (UUID) event.get("eventId");
-        if (eventId == null) {
-            eventId = UUID.randomUUID();
+
+        AccountingEvent accountingEvent = new AccountingEvent();
+        if (eventId != null) {
+            accountingEvent.setEventId(eventId);
         }
+        accountingEvent.setOrganizationId(organizationId);
+        accountingEvent.setEventType(eventType);
+        accountingEvent.setTransactionDate(transactionDate);
+        accountingEvent.setPayload(event);
+        accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
+        
+        accountingEvent = accountingEventRepository.save(accountingEvent);
+        log.info("Persisted accounting event {} with status RECEIVED", accountingEvent.getEventId());
 
-        AccountingEventResponse response = AccountingEventResponse.builder()
-                .eventId(eventId)
-                .eventType(eventType)
-                .transactionDate(transactionDate)
-                .status(AccountingEventStatus.RECEIVED)
-                .receivedAt(Instant.now())
-                .build();
+        AccountingEventResponse response = AccountingEventMapper.toEventResponse(accountingEvent);
 
-        log.info("Accepted accounting event {} with status RECEIVED", eventId);
+        log.info("Accepted accounting event {} with status RECEIVED", accountingEvent.getEventId());
         return response;
     }
 
     /**
      * Retrieves an event and its processing status.
      */
-    public Map<String, Object> getEvent(UUID eventId) {
-        // TODO: Implement retrieval from audit table
-        return Map.of();
+    public Map<String, Object> getEvent(@NonNull UUID eventId) {
+        return accountingEventRepository.findById(eventId)
+                .map(AccountingEvent::getPayload)
+                .orElse(Map.of());
     }
 
     /**
@@ -146,10 +157,10 @@ public class EventIngestionService {
      * @return the accounting event response
      * @throws IllegalArgumentException if event not found
      */
-    public AccountingEventResponse getEventById(UUID eventId) {
-        // TODO: Implement proper event storage and retrieval
-        // For now, throw not found
-        throw new IllegalArgumentException("Event not found: " + eventId);
+    public AccountingEventResponse getEventById(@NonNull UUID eventId) {
+        AccountingEvent event = accountingEventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + eventId));
+        return AccountingEventMapper.toEventResponse(event);
     }
 
     /**
@@ -194,11 +205,31 @@ public class EventIngestionService {
      * @param pageable       pagination parameters
      * @return paginated accounting event responses
      */
-    public Page<AccountingEventResponse> listEvents(UUID organizationId,
-            String status,
-            Pageable pageable) {
-        // TODO: Return paginated list from audit table
-        return Page.empty();
+    public Page<AccountingEventResponse> listEvents(
+            @NonNull UUID organizationId, 
+            String status, 
+            @NonNull Pageable pageable) {
+        log.debug("Listing events for organization {} with status filter: {}", organizationId, status);
+        
+        Page<AccountingEvent> eventPage;
+        
+        if (status != null && !status.isBlank()) {
+            try {
+                AccountingEventStatus eventStatus = AccountingEventStatus.valueOf(status.trim().toUpperCase());
+                eventPage = accountingEventRepository.findByOrganizationIdAndStatus(
+                    organizationId, 
+                    eventStatus, 
+                    pageable
+                );
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid status filter '{}', returning all events for organization", status);
+                eventPage = accountingEventRepository.findByOrganizationId(organizationId, pageable);
+            }
+        } else {
+            eventPage = accountingEventRepository.findByOrganizationId(organizationId, pageable);
+        }
+        
+        return eventPage.map(AccountingEventMapper::toEventResponse);
     }
 
     /**
