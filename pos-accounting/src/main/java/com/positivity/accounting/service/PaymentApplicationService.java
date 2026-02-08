@@ -1,6 +1,7 @@
 package com.positivity.accounting.service;
 
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
+import com.positivity.accounting.internal.client.InvoiceServiceException;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceRequest;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
@@ -200,6 +201,9 @@ public class PaymentApplicationService {
                         }
                 }
 
+                // Capture current user early to avoid issues in exception handler
+                String currentUser = getCurrentUser();
+
                 // 5. Create PaymentApplication records and update invoices
                 // Track successful applications for compensating reversals if a later application fails
                 List<PaymentApplicationResponse.ApplicationDetail> applicationDetails = new ArrayList<>();
@@ -226,7 +230,7 @@ public class PaymentApplicationService {
                                 application.setApplicationTimestamp(applicationTimestamp);
                                 application.setApplicationRequestId(request.getApplicationRequestId());
                                 application.setCreatedAt(applicationTimestamp);
-                                application.setCreatedBy(getCurrentUser());
+                                application.setCreatedBy(currentUser);
 
                                 PaymentApplication saved = paymentApplicationRepository.save(application);
 
@@ -238,7 +242,7 @@ public class PaymentApplicationService {
                                                 .appliedAt(applicationTimestamp)
                                                 .currency(payment.getCurrency())
                                                 .paymentId(paymentId)
-                                                .appliedBy(getCurrentUser())
+                                                .appliedBy(currentUser)
                                                 .build();
 
                                 var invoiceResponse = invoiceServiceClient.applyPaymentToInvoice(
@@ -260,20 +264,31 @@ public class PaymentApplicationService {
                                                 saved.getPaymentApplicationId(), paymentId, invoiceApp.getInvoiceId(),
                                                 amountToApply);
                         }
-                } catch (Exception e) {
+                } catch (InvoiceServiceException e) {
                         // Compensating transaction: reverse all successful invoice applications
                         // This ensures Invoice service state is rolled back before DB transaction rollback
                         log.error("Invoice service call failed during payment application. " +
                                         "Performing compensating reversals for {} successful applications",
                                         successfulApplications.size(), e);
                         
-                        performCompensatingReversals(successfulApplications, getCurrentUser(),
+                        performCompensatingReversals(successfulApplications, currentUser,
                                         "Automatic compensating reversal due to partial failure");
                         
                         // Rethrow to trigger DB transaction rollback
                         // All PaymentApplication records will be rolled back along with other local state
                         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                                         "Failed to apply payment to invoices. All changes have been rolled back.", e);
+                } catch (RuntimeException e) {
+                        // Unexpected runtime errors - still perform compensating reversals for safety
+                        log.error("Unexpected error during payment application. " +
+                                        "Performing compensating reversals for {} successful applications",
+                                        successfulApplications.size(), e);
+                        
+                        performCompensatingReversals(successfulApplications, currentUser,
+                                        "Automatic compensating reversal due to unexpected failure");
+                        
+                        // Rethrow original exception
+                        throw e;
                 }
 
                 // 6. Capture unapplied amount before applying, for overpayment credit calculation
@@ -282,7 +297,7 @@ public class PaymentApplicationService {
                 // 7. Update payment unappliedAmount (apply actual applied amount)
                 payment.applyAmount(actualTotalApplicationAmount);
                 payment.setModifiedAt(applicationTimestamp);
-                payment.setModifiedBy(getCurrentUser());
+                payment.setModifiedBy(currentUser);
 
                 // 8. Handle overpayment - create CustomerCredit if there's overpayment
                 PaymentApplicationResponse.CustomerCreditInfo creditInfo = null;
@@ -540,7 +555,10 @@ public class PaymentApplicationService {
                                 
                                 ReversePaymentApplicationRequest reversalRequest = ReversePaymentApplicationRequest.builder()
                                                 .paymentApplicationId(app.getPaymentApplicationId())
-                                                .reversalId(null) // No local reversal record created yet (will be rolled back)
+                                                // reversalId is null for compensating reversals since no local reversal
+                                                // record is created (transaction will roll back). Invoice service should
+                                                // accept null or use paymentApplicationId as the idempotency key.
+                                                .reversalId(null)
                                                 .amountToRestore(app.getAppliedAmount())
                                                 .reason(reason)
                                                 .reversedBy(reversedBy)
@@ -559,7 +577,7 @@ public class PaymentApplicationService {
                                 // Failed reversals require manual reconciliation
                                 log.error("CRITICAL: Failed to perform compensating reversal for invoice {} " +
                                                 "payment application {}. Manual reconciliation required. " +
-                                                "Invoice service may be out of sync.",
+                                                "Invoice service IS OUT OF SYNC with Accounting service.",
                                                 app.getInvoiceId(), app.getPaymentApplicationId(), reverseEx);
                         }
                 }
