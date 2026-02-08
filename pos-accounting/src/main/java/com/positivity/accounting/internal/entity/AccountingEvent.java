@@ -57,7 +57,7 @@ public class AccountingEvent {
     @Column(name = "event_type", length = 100, nullable = false)
     private String eventType;
 
-    @Column(name = "organization_id", nullable = false, columnDefinition = "UUID")
+    @Column(name = "organization_id", columnDefinition = "UUID")
     private UUID organizationId;
 
     @Column(name = "transaction_date", nullable = false)
