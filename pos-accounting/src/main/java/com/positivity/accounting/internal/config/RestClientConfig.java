@@ -31,8 +31,9 @@ public class RestClientConfig {
      * Uses SimpleClientHttpRequestFactory to enforce connect and read timeouts,
      * preventing threads from hanging indefinitely on downstream service issues.
      *
-     * Connect timeout is typically shorter (2-3s) since connection establishment
-     * is fast. Read timeout is longer to accommodate slower API processing.
+     * Connect timeout (default 3s) is shorter since connection establishment
+     * is typically fast. Read timeout (default 5s) is longer to accommodate
+     * slower API processing.
      *
      * @param connectTimeoutMs connect timeout in milliseconds (default 3000ms)
      * @param readTimeoutMs read timeout in milliseconds (default 5000ms)
