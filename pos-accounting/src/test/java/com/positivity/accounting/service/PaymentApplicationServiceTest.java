@@ -428,15 +428,14 @@ class PaymentApplicationServiceTest {
                 // Act
                 PaymentApplicationReversal result = service.reversePaymentApplication(
                                 applicationId,
-                                "Customer disputed charge",
-                                "admin@example.com");
+                                "Customer disputed charge");
 
                 // Assert
                 assertThat(result).isNotNull();
                 assertThat(result.getOriginalPaymentApplicationId()).isEqualTo(applicationId);
                 assertThat(result.getAmount()).isEqualByComparingTo("500.00");
                 assertThat(result.getReason()).isEqualTo("Customer disputed charge");
-                assertThat(result.getReversedBy()).isEqualTo("admin@example.com");
+                assertThat(result.getReversedBy()).isEqualTo("SYSTEM"); // Derived from SecurityContext (fallback in tests)
 
                 // Verify payment unappliedAmount restored
                 assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("1000.00");
@@ -449,6 +448,66 @@ class PaymentApplicationServiceTest {
         }
 
         @Test
+        @DisplayName("Should use authenticated user from SecurityContext for reversal audit")
+        void testReversePaymentApplication_WithAuthenticatedUser() {
+                // Arrange
+                UUID applicationId = UUID.randomUUID();
+                PaymentApplication application = new PaymentApplication();
+                application.setPaymentApplicationId(applicationId);
+                application.setPaymentId(testPaymentId);
+                application.setCustomerId(testCustomerId);
+                application.setInvoiceId(testInvoiceId);
+                application.setAppliedAmount(new BigDecimal("500.00"));
+                application.setCurrency("USD");
+                application.setApplicationRequestId(testApplicationRequestId);
+                application.setApplicationTimestamp(Instant.now());
+
+                testPayment.setUnappliedAmount(new BigDecimal("500.00"));
+
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                                .thenReturn(false);
+                when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationReversalRepository.save(any(PaymentApplicationReversal.class)))
+                                .thenAnswer(invocation -> {
+                                        PaymentApplicationReversal rev = invocation.getArgument(0);
+                                        if (rev.getReversalId() == null) {
+                                                rev.setReversalId(UUID.randomUUID());
+                                        }
+                                        return rev;
+                                });
+                when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+                when(invoiceServiceClient.reversePaymentApplication(any(), any())).thenReturn(
+                                createReversePaymentResponse(testInvoiceId, "500.00", "1000.00"));
+
+                // Set up SecurityContext with authenticated user
+                org.springframework.security.core.Authentication authentication = 
+                        new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                "admin@example.com", null, List.of());
+                org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .setAuthentication(authentication);
+
+                try {
+                        // Act
+                        PaymentApplicationReversal result = service.reversePaymentApplication(
+                                        applicationId,
+                                        "Customer disputed charge");
+
+                        // Assert
+                        assertThat(result).isNotNull();
+                        assertThat(result.getReversedBy()).isEqualTo("admin@example.com"); // From SecurityContext
+                        assertThat(testPayment.getModifiedBy()).isEqualTo("admin@example.com"); // Payment also updated
+
+                        verify(paymentApplicationReversalRepository).save(any(PaymentApplicationReversal.class));
+                        verify(receivablePaymentRepository).save(testPayment);
+                } finally {
+                        // Clean up SecurityContext to avoid test pollution
+                        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+                }
+        }
+
+        @Test
         @DisplayName("Should fail when application not found")
         void testReversePaymentApplication_ApplicationNotFound() {
                 // Arrange
@@ -458,8 +517,7 @@ class PaymentApplicationServiceTest {
                 // Act & Assert
                 assertThatThrownBy(() -> service.reversePaymentApplication(
                                 applicationId,
-                                "Test reason",
-                                "admin@example.com"))
+                                "Test reason"))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("not found")
                                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
@@ -488,8 +546,7 @@ class PaymentApplicationServiceTest {
                 // Act & Assert
                 assertThatThrownBy(() -> service.reversePaymentApplication(
                                 applicationId,
-                                "Second reversal attempt",
-                                "admin@example.com"))
+                                "Second reversal attempt"))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("has already been reversed")
                                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
@@ -517,8 +574,7 @@ class PaymentApplicationServiceTest {
                 // Act & Assert
                 assertThatThrownBy(() -> service.reversePaymentApplication(
                                 applicationId,
-                                "Test reason",
-                                "admin@example.com"))
+                                "Test reason"))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("has already been reversed")
                                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
