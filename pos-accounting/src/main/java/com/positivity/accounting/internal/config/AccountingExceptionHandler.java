@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.config;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.EnvelopeErrorResponse;
 import com.positivity.accounting.internal.dto.ErrorResponse;
+import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,5 +40,11 @@ public class AccountingExceptionHandler {
     public ResponseEntity<EnvelopeErrorResponse> handleDuplicateEvent(DuplicateEventException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(EnvelopeErrorResponse.of("DUPLICATE_EVENT", ex.getMessage()));
+    }
+
+    @ExceptionHandler(UnbalancedEntryException.class)
+    public ResponseEntity<EnvelopeErrorResponse> handleUnbalancedEntry(UnbalancedEntryException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(EnvelopeErrorResponse.of("UNBALANCED_ENTRY", ex.getMessage()));
     }
 }

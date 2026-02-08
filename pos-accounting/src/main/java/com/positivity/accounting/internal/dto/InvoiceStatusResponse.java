@@ -1,5 +1,6 @@
-package com.positivity.accounting.internal.entity;
+package com.positivity.accounting.internal.dto;
 
+import com.positivity.accounting.internal.enums.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

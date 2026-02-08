@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.entity;
+package com.positivity.accounting.internal.enums;
 
 /**
  * Enumeration of possible payment statuses for an invoice.

@@ -1,12 +1,29 @@
 package com.positivity.accounting.internal.audit.entity;
 
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
-import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import com.positivity.accounting.internal.enums.AccountingIntent;
+import com.positivity.accounting.internal.enums.AccountingStatus;
+import com.positivity.accounting.internal.enums.CancellationType;
+import com.positivity.accounting.internal.enums.RefundMethod;
+import com.positivity.accounting.internal.enums.RefundPaymentStatus;
+import com.positivity.accounting.internal.enums.RefundType;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Immutable audit trail entry for financial exceptions.
@@ -133,7 +150,7 @@ public class AuditTrailEntry {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "original_payment_status", length = 50)
-    private PaymentStatus originalPaymentStatus;
+    private RefundPaymentStatus originalPaymentStatus;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "refund_method", length = 50)
