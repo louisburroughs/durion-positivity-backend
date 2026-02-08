@@ -1,5 +1,6 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
@@ -260,7 +261,7 @@ public class JournalEntryService {
                     "Journal entry is unbalanced. Total debits: %.2f, Total credits: %.2f, Difference: %.4f",
                     totalDebits, totalCredits, difference);
             log.warn(msg);
-            throw new IllegalArgumentException(msg);
+            throw new UnbalancedEntryException(msg);
         }
 
         log.debug("Journal entry balance valid: debits={}, credits={}", totalDebits, totalCredits);

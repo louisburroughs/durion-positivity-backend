@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
-import com.positivity.accounting.internal.entity.InvoiceStatusResponse;
-import com.positivity.accounting.internal.entity.PaymentAppliedRequest;
+import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
+import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,31 +42,39 @@ public class InvoicePaymentController {
     }
 
     /**
-     * Apply a payment to an invoice and update status.
+     * Apply a payment to an invoice and update status (LEGACY - for invoice-centric
+     * workflow).
      * 
+     * <p><strong>BACKWARD COMPATIBILITY:</strong> This endpoint is maintained at its original
+     * path {@code /v1/accounting/invoices/{invoiceId}/pay} for existing clients. The new
+     * payment-centric API is available at {@code /v1/accounting/payments/{paymentId}/applications}.
+     * Both endpoints are supported; this legacy endpoint will be removed in a future major version.
+     * 
+     * @deprecated Use PaymentApplicationController for new payment-centric API
      * @param request Payment details including idempotency key
      * @return Updated invoice status
      */
-    @PostMapping("/v1/accounting/payments/{paymentId}/applications")
+    @Deprecated(since = "0.2.0", forRemoval = true)
+    @PostMapping("/v1/accounting/invoices/{invoiceId}/pay")
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
-    @Operation(summary = "Apply payment", description = "Apply a payment to an invoice and update its status.")
+    @Operation(summary = "Apply payment (LEGACY)", description = "Apply a payment to an invoice (invoice-centric workflow). Use /payments/{paymentId}/applications for new API.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Payment applied", content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid payment request"),
             @ApiResponse(responseCode = "500", description = "Processing error")
     })
-    @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
+    @EmitEvent(id = "ACCOUNTING_INVOICE_PAY", apiVersion = "1")
     public ResponseEntity<InvoiceStatusResponse> applyPayment(
-            @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
+            @Parameter(description = "Invoice identifier (LEGACY - kept for backward compatibility)") @PathVariable UUID invoiceId,
             @Valid @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Payment application payload", required = true, content = @Content(schema = @Schema(implementation = PaymentAppliedRequest.class))) PaymentAppliedRequest request) {
 
         log.info("Received payment application for invoice {}", request.getInvoiceId());
 
-        if (!paymentId.toString().equals(request.getTransactionReference())) {
+        if (!invoiceId.equals(request.getInvoiceId())) {
             log.warn(
-                    "paymentId path param does not match transactionReference in body (paymentId={}, transactionReference={})",
-                    paymentId,
-                    request.getTransactionReference());
+                    "invoiceId path param does not match invoiceId in body (path={}, body={})",
+                    invoiceId,
+                    request.getInvoiceId());
             return ResponseEntity.badRequest().build();
         }
 

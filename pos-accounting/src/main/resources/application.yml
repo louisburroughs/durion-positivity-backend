@@ -16,6 +16,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  jackson:
+    default-property-inclusion: non_null
 
 server:
   port: 0
@@ -42,6 +44,14 @@ eureka:
     register-with-eureka: true
   instance:
     prefer-ip-address: true
+
+# Cross-service configuration
+pos:
+  invoice:
+    service:
+      url: http://pos-invoice:8085
+  # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
+  # See RestClientConfig.java for timeout configuration
 
 logging:
   level:

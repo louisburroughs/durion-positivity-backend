@@ -1,15 +1,16 @@
 package com.positivity.accounting.internal.audit.event;
 
-import com.positivity.accounting.internal.audit.entity.AccountingIntent;
-import com.positivity.accounting.internal.audit.entity.AccountingStatus;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+import com.positivity.accounting.internal.enums.AccountingIntent;
+import com.positivity.accounting.internal.enums.AccountingStatus;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Event emitted when a price override is created.
@@ -19,7 +20,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class OverridePriceCreated {
-    
+
     private UUID auditId;
     private UUID orderId;
     private UUID lineItemId;
@@ -31,13 +32,13 @@ public class OverridePriceCreated {
     private String policyVersion;
     private String reason;
     private Instant timestamp;
-    
+
     @Builder.Default
     private AccountingIntent accountingIntent = AccountingIntent.REVENUE_ADJUSTMENT;
-    
+
     @Builder.Default
     private AccountingStatus accountingStatus = AccountingStatus.PENDING_POSTING;
-    
+
     private String expectedAccountingOutcome;
     private UUID sourceEventId;
     private String sourceDocumentId;
