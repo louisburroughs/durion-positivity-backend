@@ -1,15 +1,16 @@
 package com.positivity.accounting.internal.audit.event;
 
-import com.positivity.accounting.internal.audit.entity.AccountingIntent;
-import com.positivity.accounting.internal.audit.entity.AccountingStatus;
-import com.positivity.accounting.internal.audit.entity.CancellationType;
+import java.time.Instant;
+import java.util.UUID;
+
+import com.positivity.accounting.internal.enums.AccountingIntent;
+import com.positivity.accounting.internal.enums.AccountingStatus;
+import com.positivity.accounting.internal.enums.CancellationType;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Event emitted when a cancellation is created.
@@ -19,7 +20,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class CancellationCreated {
-    
+
     private UUID auditId;
     private UUID orderId;
     private UUID invoiceId;
@@ -30,12 +31,12 @@ public class CancellationCreated {
     private String policyVersion;
     private String reason;
     private Instant timestamp;
-    
+
     private AccountingIntent accountingIntent;
-    
+
     @Builder.Default
     private AccountingStatus accountingStatus = AccountingStatus.PENDING_POSTING;
-    
+
     private String beforeSnapshot;
     private String afterSnapshot;
     private String partialPaymentInfo;

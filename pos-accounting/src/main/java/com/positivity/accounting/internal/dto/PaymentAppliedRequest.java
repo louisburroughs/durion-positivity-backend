@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.entity;
+package com.positivity.accounting.internal.dto;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;

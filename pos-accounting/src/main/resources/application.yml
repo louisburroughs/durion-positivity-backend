@@ -43,6 +43,13 @@ eureka:
   instance:
     prefer-ip-address: true
 
+# Cross-service configuration
+pos:
+  invoice:
+    service:
+      url: http://pos-invoice:8085
+      timeout: 5000  # milliseconds
+
 logging:
   level:
     root: INFO

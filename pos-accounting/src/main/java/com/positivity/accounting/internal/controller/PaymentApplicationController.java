@@ -1,10 +1,25 @@
 package com.positivity.accounting.internal.controller;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
 import com.positivity.accounting.service.PaymentApplicationService;
 import com.positivity.events.EmitEvent;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,13 +28,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 /**
  * REST Controller for payment application operations (AR).
@@ -117,5 +125,50 @@ public class PaymentApplicationController {
         log.info("Successfully reversed payment application {}", applicationId);
 
         return ResponseEntity.noContent().build();
+    }
+
+    // ===== EXCEPTION HANDLERS =====
+
+    /**
+     * Handle IllegalArgumentException - maps to 400 Bad Request or 404 Not Found.
+     * Checks message content to determine if it's a "not found" error (404) or
+     * validation error (400).
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        String message = ex.getMessage();
+
+        // Check if this is a "not found" error
+        if (message != null && (message.contains("not found") || message.contains("Not found"))) {
+            log.warn("Resource not found: {}", message);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("error", "Not Found");
+            body.put("message", message);
+            body.put("status", 404);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+        }
+
+        // Otherwise, treat as validation/business rule error (400)
+        log.warn("Validation error: {}", message);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "Bad Request");
+        body.put("message", message);
+        body.put("status", 400);
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    /**
+     * Handle IllegalStateException - maps to 400 Bad Request for business rule
+     * violations.
+     * Used for cases like "payment not available" or "insufficient funds".
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalStateException(IllegalStateException ex) {
+        log.warn("Business rule violation: {}", ex.getMessage());
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "Bad Request");
+        body.put("message", ex.getMessage());
+        body.put("status", 400);
+        return ResponseEntity.badRequest().body(body);
     }
 }

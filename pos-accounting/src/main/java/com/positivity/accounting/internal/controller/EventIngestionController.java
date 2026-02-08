@@ -1,20 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
-import com.positivity.accounting.internal.dto.AccountingEventMapper;
-import com.positivity.accounting.internal.dto.AccountingEventResponse;
-import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
-import com.positivity.accounting.internal.dto.JournalEntryMapper;
-import com.positivity.accounting.internal.dto.JournalEntryResponse;
-import com.positivity.accounting.internal.dto.PagedResponse;
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.service.EventIngestionService;
-import com.positivity.events.EmitEvent;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,8 +20,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-import java.util.stream.Collectors;
+import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
+import com.positivity.accounting.internal.dto.PagedResponse;
+import com.positivity.accounting.service.EventIngestionService;
+import com.positivity.events.EmitEvent;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 
 /**
  * REST Controller for Accounting Event Ingestion.
@@ -70,11 +67,11 @@ public class EventIngestionController {
                                 status);
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-                Page<JournalEntry> eventPage = eventIngestionService.listEvents(organizationId, status, pageable);
+                Page<AccountingEventResponse> eventPage = eventIngestionService.listEvents(organizationId, status,
+                                pageable);
 
                 PagedResponse<AccountingEventResponse> response = new PagedResponse<AccountingEventResponse>(
-                                eventPage.getContent().stream()
-                                                .map(AccountingEventMapper::toEventResponse).toList(),
+                                eventPage.getContent(),
                                 eventPage.getNumber(),
                                 eventPage.getSize(),
                                 eventPage.getTotalElements());
@@ -92,12 +89,7 @@ public class EventIngestionController {
         public ResponseEntity<AccountingEventResponse> getEvent(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
                 log.debug("Getting accounting event: {}", eventId);
-                JournalEntry entry = eventIngestionService.getEventById(eventId);
-                // Convert to event response (simplified for now)
-                AccountingEventResponse response = new AccountingEventResponse();
-                response.setEventId(entry.getSourceEventId());
-                response.setEventType(entry.getSourceEventType());
-                response.setStatus("PROCESSED");
+                AccountingEventResponse response = eventIngestionService.getEventById(eventId);
                 return ResponseEntity.ok(response);
         }
 

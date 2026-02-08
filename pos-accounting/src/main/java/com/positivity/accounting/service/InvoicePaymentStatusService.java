@@ -1,10 +1,10 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.internal.entity.InvoiceStatusResponse;
+import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.entity.InvoiceStatusView;
 import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
-import com.positivity.accounting.internal.entity.PaymentAppliedRequest;
-import com.positivity.accounting.internal.entity.PaymentStatus;
+import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
+import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 import org.slf4j.Logger;
