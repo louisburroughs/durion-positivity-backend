@@ -70,7 +70,15 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("accounting:ap:pay"),
             new SimpleGrantedAuthority("accounting:mappings:view"),
             new SimpleGrantedAuthority("accounting:mappings:create"),
-            new SimpleGrantedAuthority("accounting:audit:view"));
+            new SimpleGrantedAuthority("accounting:audit:view"),
+            new SimpleGrantedAuthority("accounting:posting-category:view"),
+            new SimpleGrantedAuthority("accounting:posting-category:create"),
+            new SimpleGrantedAuthority("accounting:posting-category:edit"),
+            new SimpleGrantedAuthority("accounting:posting-category:deactivate"),
+            new SimpleGrantedAuthority("accounting:mapping-key:view"),
+            new SimpleGrantedAuthority("accounting:mapping-key:create"),
+            new SimpleGrantedAuthority("accounting:mapping-key:edit"),
+            new SimpleGrantedAuthority("accounting:mapping-key:deactivate"));
 
     /**
      * Replaces the production gateway filter chain with a permissive one that
