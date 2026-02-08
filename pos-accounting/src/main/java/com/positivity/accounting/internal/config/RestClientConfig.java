@@ -27,27 +27,30 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
     /**
-     * Create RestClient bean with configured timeouts.
-     * Uses SimpleClientHttpRequestFactory to enforce connect and read timeouts,
-     * preventing threads from hanging indefinitely on downstream service issues.
+     * Create RestClient bean for Invoice service with configured timeouts.
+     * Uses Spring Boot's auto-configured RestClient.Builder with SimpleClientHttpRequestFactory
+     * to enforce connect and read timeouts, preventing threads from hanging indefinitely
+     * on downstream service issues.
      *
      * Connect timeout (default 3s) is shorter since connection establishment
      * is typically fast. Read timeout (default 5s) is longer to accommodate
      * slower API processing.
      *
+     * @param builder Spring Boot auto-configured RestClient.Builder with shared customizations
      * @param connectTimeoutMs connect timeout in milliseconds (default 3000ms)
      * @param readTimeoutMs read timeout in milliseconds (default 5000ms)
      * @return configured RestClient instance with timeout protection
      */
     @Bean
-    public RestClient restClient(
+    public RestClient invoiceServiceRestClient(
+            RestClient.Builder builder,
             @Value("${pos.invoice.service.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.invoice.service.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
-        return RestClient.builder()
+        return builder
                 .requestFactory(factory)
                 .build();
     }
