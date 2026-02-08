@@ -267,9 +267,9 @@ public class PaymentApplicationService {
                 } catch (InvoiceServiceException e) {
                         // Compensating transaction: reverse all successful invoice applications
                         // This ensures Invoice service state is rolled back before DB transaction rollback
-                        log.error("Invoice service call failed during payment application. " +
-                                        "Performing compensating reversals for {} successful applications",
-                                        successfulApplications.size(), e);
+                        log.error("Invoice service call failed during payment application for payment {} " +
+                                        "(applicationRequestId: {}). Performing compensating reversals for {} successful applications",
+                                        paymentId, request.getApplicationRequestId(), successfulApplications.size(), e);
                         
                         performCompensatingReversals(successfulApplications, currentUser,
                                         "Automatic compensating reversal due to partial failure");
@@ -277,12 +277,13 @@ public class PaymentApplicationService {
                         // Rethrow to trigger DB transaction rollback
                         // All PaymentApplication records will be rolled back along with other local state
                         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                                        "Failed to apply payment to invoices. All changes have been rolled back.", e);
+                                        String.format("Failed to apply payment %s to invoices. All changes have been rolled back.",
+                                                        paymentId), e);
                 } catch (RuntimeException e) {
                         // Unexpected runtime errors - still perform compensating reversals for safety
-                        log.error("Unexpected error during payment application. " +
-                                        "Performing compensating reversals for {} successful applications",
-                                        successfulApplications.size(), e);
+                        log.error("Unexpected error during payment application for payment {} " +
+                                        "(applicationRequestId: {}). Performing compensating reversals for {} successful applications",
+                                        paymentId, request.getApplicationRequestId(), successfulApplications.size(), e);
                         
                         performCompensatingReversals(successfulApplications, currentUser,
                                         "Automatic compensating reversal due to unexpected failure");
@@ -527,6 +528,11 @@ public class PaymentApplicationService {
          * <p><strong>Idempotency:</strong> Invoice service reversal endpoints must be idempotent
          * using {@code paymentApplicationId} to handle retry scenarios safely.
          * 
+         * <p><strong>Reversal ID:</strong> The {@code reversalId} is set to null for compensating
+         * reversals since no local reversal record is created (the transaction will roll back). The
+         * Invoice service should accept null for this field or use {@code paymentApplicationId}
+         * as the idempotency key instead.
+         * 
          * @param successfulApplications list of PaymentApplication records that were successfully
          *                               applied to Invoice service
          * @param reversedBy            user performing the reversal (for audit trail)
@@ -576,9 +582,11 @@ public class PaymentApplicationService {
                                 // Best effort: log but continue with other reversals
                                 // Failed reversals require manual reconciliation
                                 log.error("CRITICAL: Failed to perform compensating reversal for invoice {} " +
-                                                "payment application {}. Manual reconciliation required. " +
+                                                "payment application {} (amount: {}, customerId: {}, paymentId: {}). " +
+                                                "Manual reconciliation required. " +
                                                 "Invoice service IS OUT OF SYNC with Accounting service.",
-                                                app.getInvoiceId(), app.getPaymentApplicationId(), reverseEx);
+                                                app.getInvoiceId(), app.getPaymentApplicationId(), 
+                                                app.getAppliedAmount(), app.getCustomerId(), app.getPaymentId(), reverseEx);
                         }
                 }
                 
