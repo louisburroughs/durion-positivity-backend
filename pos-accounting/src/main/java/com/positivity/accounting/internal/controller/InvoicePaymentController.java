@@ -58,7 +58,7 @@ public class InvoicePaymentController {
             @ApiResponse(responseCode = "400", description = "Invalid payment request"),
             @ApiResponse(responseCode = "500", description = "Processing error")
     })
-    @EmitEvent(id = "ACCOUNTING_INVOICE_PAY_LEGACY", apiVersion = "1")
+    @EmitEvent(id = "ACCOUNTING_INVOICE_PAY", apiVersion = "1")
     public ResponseEntity<InvoiceStatusResponse> applyPayment(
             @Parameter(description = "Invoice identifier (LEGACY - kept for backward compatibility)") @PathVariable UUID invoiceId,
             @Valid @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Payment application payload", required = true, content = @Content(schema = @Schema(implementation = PaymentAppliedRequest.class))) PaymentAppliedRequest request) {
