@@ -11,8 +11,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -41,20 +43,21 @@ public class PostingCategoryService {
      * 
      * @param request the posting category creation request
      * @return the created posting category response
-     * @throws IllegalArgumentException if category name already exists
+     * @throws ResponseStatusException with BAD_REQUEST if category name already exists
      */
     @Transactional
     public PostingCategoryResponse createPostingCategory(@NonNull PostingCategoryCreateRequest request) {
-        log.info("Creating posting category: {}", request.getCategoryName());
+        String normalizedCategoryName = request.getCategoryName().trim();
+        log.info("Creating posting category: {}", normalizedCategoryName);
 
         // Validate uniqueness
-        if (postingCategoryRepository.existsByCategoryName(request.getCategoryName())) {
-            throw new IllegalArgumentException(
-                    "Posting category with name '" + request.getCategoryName() + "' already exists");
+        if (postingCategoryRepository.existsByCategoryName(normalizedCategoryName)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Posting category with name '" + normalizedCategoryName + "' already exists");
         }
 
         PostingCategory category = new PostingCategory();
-        category.setCategoryName(request.getCategoryName().trim());
+        category.setCategoryName(normalizedCategoryName);
         category.setDescription(request.getDescription());
         category.setIsActive(true);
         category.setCreatedBy(request.getCreatedBy());
@@ -71,14 +74,15 @@ public class PostingCategoryService {
      * 
      * @param postingCategoryId the posting category identifier
      * @return the posting category response
-     * @throws IllegalArgumentException if posting category not found
+     * @throws ResponseStatusException with NOT_FOUND if posting category not found
      */
     @Transactional(readOnly = true)
     public PostingCategoryResponse getPostingCategory(@NonNull UUID postingCategoryId) {
         log.info("Retrieving posting category: {}", postingCategoryId);
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
-                .orElseThrow(() -> new IllegalArgumentException("Posting category not found: " + postingCategoryId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Posting category not found: " + postingCategoryId));
 
         return toResponse(category);
     }
@@ -89,8 +93,8 @@ public class PostingCategoryService {
      * @param postingCategoryId the posting category identifier
      * @param request           the update request
      * @return the updated posting category response
-     * @throws IllegalArgumentException if posting category not found or name
-     *                                  conflicts
+     * @throws ResponseStatusException with NOT_FOUND if posting category not found
+     * @throws ResponseStatusException with BAD_REQUEST if name conflicts
      */
     @Transactional
     public PostingCategoryResponse updatePostingCategory(
@@ -99,13 +103,15 @@ public class PostingCategoryService {
         log.info("Updating posting category: {}", postingCategoryId);
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
-                .orElseThrow(() -> new IllegalArgumentException("Posting category not found: " + postingCategoryId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Posting category not found: " + postingCategoryId));
 
         // Validate uniqueness if name is changing
         String trimmedName = request.getCategoryName().trim();
         if (!category.getCategoryName().equals(trimmedName) &&
                 postingCategoryRepository.existsByCategoryName(trimmedName)) {
-            throw new IllegalArgumentException("Posting category with name '" + trimmedName + "' already exists");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Posting category with name '" + trimmedName + "' already exists");
         }
 
         category.setCategoryName(trimmedName);
@@ -163,20 +169,21 @@ public class PostingCategoryService {
      * Validates that no active GL mappings reference this category.
      * 
      * @param postingCategoryId the posting category identifier
-     * @throws IllegalArgumentException if posting category not found
-     * @throws IllegalStateException    if active mappings exist
+     * @throws ResponseStatusException with NOT_FOUND if posting category not found
+     * @throws ResponseStatusException with CONFLICT if active mappings exist
      */
     @Transactional
     public void deactivatePostingCategory(@NonNull UUID postingCategoryId) {
         log.info("Deactivating posting category: {}", postingCategoryId);
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
-                .orElseThrow(() -> new IllegalArgumentException("Posting category not found: " + postingCategoryId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Posting category not found: " + postingCategoryId));
 
         // Check for active mappings
         long activeMappingCount = glMappingRepository.countByPostingCategoryIdAndDeactivatedAtIsNull(postingCategoryId);
         if (activeMappingCount > 0) {
-            throw new IllegalStateException(
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Posting category '" + category.getCategoryName() +
                             "' has " + activeMappingCount + " active GL mappings and cannot be deactivated");
         }

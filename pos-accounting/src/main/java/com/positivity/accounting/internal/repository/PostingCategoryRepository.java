@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PostingCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -13,7 +14,7 @@ import java.util.UUID;
  * Supports looking up categories by name.
  */
 @Repository
-public interface PostingCategoryRepository extends JpaRepository<PostingCategory, UUID> {
+public interface PostingCategoryRepository extends JpaRepository<PostingCategory, UUID>, JpaSpecificationExecutor<PostingCategory> {
 
     /**
      * Find a category by name.
