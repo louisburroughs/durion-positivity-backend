@@ -274,9 +274,16 @@ public class PaymentApplicationService {
                         performCompensatingReversals(successfulApplications, currentUser,
                                         "Automatic compensating reversal due to partial failure");
                         
+                        // Determine appropriate HTTP status to expose to API clients.
+                        // Propagate 4xx statuses when available, but treat 5xx or unknown as service unavailability.
+                        HttpStatus status = e.getHttpStatus();
+                        if (status == null || status.is5xxServerError()) {
+                                status = HttpStatus.SERVICE_UNAVAILABLE;
+                        }
+                        
                         // Rethrow to trigger DB transaction rollback
                         // All PaymentApplication records will be rolled back along with other local state
-                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        throw new ResponseStatusException(status,
                                         String.format("Failed to apply payment %s to invoices. All changes have been rolled back.",
                                                         paymentId), e);
                 } catch (RuntimeException e) {
