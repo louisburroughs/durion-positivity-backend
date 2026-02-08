@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
 import com.positivity.accounting.internal.entity.*;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.repository.*;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.security.common.SecurityContextHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -281,6 +282,53 @@ public class PaymentApplicationService {
                                 status = HttpStatus.SERVICE_UNAVAILABLE;
                         }
                         
+                        // Generate ID for the payment application first
+                        UUID paymentApplicationId = UUIDv7Generator.generate();
+                        
+                        // TODO #2: Apply payment to invoice via service client
+                        ApplyPaymentToInvoiceRequest invoiceRequest = ApplyPaymentToInvoiceRequest.builder()
+                                        .paymentApplicationId(paymentApplicationId)
+                                        .amountApplied(amountToApply)
+                                        .appliedAt(applicationTimestamp)
+                                        .currency(payment.getCurrency())
+                                        .paymentId(paymentId)
+                                        .appliedBy(getCurrentUser())
+                                        .build();
+
+                        var invoiceResponse = invoiceServiceClient.applyPaymentToInvoice(
+                                        invoiceApp.getInvoiceId(),
+                                        invoiceRequest);
+
+                        log.info("Applied payment {} to invoice {} via service call, new balance: {} (was {})",
+                                        paymentApplicationId, invoiceApp.getInvoiceId(),
+                                        invoiceResponse.getBalanceAfter(), invoiceResponse.getBalanceBefore());
+                        
+                        // Now create and save PaymentApplication with all data (immutable entity)
+                        PaymentApplication application = new PaymentApplication();
+                        application.setPaymentApplicationId(paymentApplicationId);
+                        application.setPaymentId(paymentId);
+                        application.setInvoiceId(invoiceApp.getInvoiceId());
+                        application.setCustomerId(payment.getCustomerId());
+                        application.setCurrency(payment.getCurrency());
+                        application.setAppliedAmount(amountToApply);
+                        application.setApplicationTimestamp(applicationTimestamp);
+                        application.setApplicationRequestId(request.getApplicationRequestId());
+                        application.setCreatedAt(applicationTimestamp);
+                        application.setCreatedBy(getCurrentUser());
+                        // Store invoice balance/status for idempotent retries (avoid N external calls)
+                        application.setInvoiceBalanceBefore(invoiceResponse.getBalanceBefore());
+                        application.setInvoiceBalanceAfter(invoiceResponse.getBalanceAfter());
+                        application.setInvoiceStatus(invoiceResponse.getStatus());
+
+                        PaymentApplication saved = paymentApplicationRepository.save(application);
+
+                        // Store response for building detail (TODO #3)
+                        applicationDetails
+                                        .add(buildApplicationDetail(saved, invoiceApp.getInvoiceId(), invoiceResponse));
+
+                        log.info("Created PaymentApplication {} for payment {} to invoice {} amount {}",
+                                        saved.getPaymentApplicationId(), paymentId, invoiceApp.getInvoiceId(),
+                                        amountToApply);
                         // Rethrow to trigger DB transaction rollback
                         // All PaymentApplication records will be rolled back along with other local state
                         throw new ResponseStatusException(status,
@@ -605,16 +653,14 @@ public class PaymentApplicationService {
                         PaymentApplication application,
                         UUID invoiceId) {
 
-                // Fallback for idempotent retry case - fetch details
-                var invoiceResponse = invoiceServiceClient.getInvoiceDetails(invoiceId);
-
+                // Use persisted invoice data for idempotent retries (avoids N external service calls)
                 return PaymentApplicationResponse.ApplicationDetail.builder()
                                 .paymentApplicationId(application.getPaymentApplicationId())
                                 .invoiceId(invoiceId)
                                 .appliedAmount(application.getAppliedAmount())
-                                .invoiceBalanceBefore(invoiceResponse.getBalanceDue())
-                                .invoiceBalanceAfter(invoiceResponse.getBalanceDue())
-                                .invoiceStatus(invoiceResponse.getStatus())
+                                .invoiceBalanceBefore(application.getInvoiceBalanceBefore())
+                                .invoiceBalanceAfter(application.getInvoiceBalanceAfter())
+                                .invoiceStatus(application.getInvoiceStatus())
                                 .build();
         }
 
@@ -645,16 +691,36 @@ public class PaymentApplicationService {
 
         private PaymentApplicationResponse buildResponseForExistingApplication(String applicationRequestId) {
                 // Find all existing applications by request ID (handles multi-invoice case)
-                List<PaymentApplication> existingApps = paymentApplicationRepository
-                                .findAllByApplicationRequestId(applicationRequestId);
+                List<PaymentApplication> existingApps = new ArrayList<>(
+                                paymentApplicationRepository.findAllByApplicationRequestId(applicationRequestId));
 
                 if (existingApps.isEmpty()) {
                         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                                         "Application request processed but not found: " + applicationRequestId);
                 }
 
-                // Use first application for common fields (all apps share same payment/customer/currency)
+                // Sort by timestamp then ID for deterministic ordering
+                existingApps.sort((a, b) -> {
+                        int timestampCompare = a.getApplicationTimestamp().compareTo(b.getApplicationTimestamp());
+                        return timestampCompare != 0 ? timestampCompare
+                                        : a.getPaymentApplicationId().compareTo(b.getPaymentApplicationId());
+                });
+
+                // Use first application for common fields and validate consistency
                 PaymentApplication firstApp = existingApps.get(0);
+
+                // Validate all applications share same payment/customer/currency (data integrity check)
+                for (PaymentApplication app : existingApps) {
+                        if (!app.getPaymentId().equals(firstApp.getPaymentId()) ||
+                                        !app.getCustomerId().equals(firstApp.getCustomerId()) ||
+                                        !app.getCurrency().equals(firstApp.getCurrency())) {
+                                log.error("Inconsistent application data for requestId {}: app {} has different payment/customer/currency",
+                                                applicationRequestId, app.getPaymentApplicationId());
+                                throw new ResponseStatusException(
+                                                HttpStatus.INTERNAL_SERVER_ERROR,
+                                                "Inconsistent application data for request: " + applicationRequestId);
+                        }
+                }
 
                 ReceivablePayment payment = receivablePaymentRepository.findById(firstApp.getPaymentId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,

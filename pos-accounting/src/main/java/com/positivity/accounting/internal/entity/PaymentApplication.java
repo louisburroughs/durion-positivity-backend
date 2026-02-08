@@ -73,6 +73,27 @@ public class PaymentApplication {
     @Column(name = "applied_amount", precision = 19, scale = 4, nullable = false)
     private BigDecimal appliedAmount;
 
+    /**
+     * Invoice balance before this application was made.
+     * Stored to support idempotent retries without external service calls.
+     */
+    @Column(name = "invoice_balance_before", precision = 19, scale = 4)
+    private BigDecimal invoiceBalanceBefore;
+
+    /**
+     * Invoice balance after this application was made.
+     * Stored to support idempotent retries without external service calls.
+     */
+    @Column(name = "invoice_balance_after", precision = 19, scale = 4)
+    private BigDecimal invoiceBalanceAfter;
+
+    /**
+     * Invoice status at the time of application.
+     * Stored to support idempotent retries without external service calls.
+     */
+    @Column(name = "invoice_status", length = 50)
+    private String invoiceStatus;
+
     @Column(name = "application_timestamp", nullable = false, updatable = false)
     private Instant applicationTimestamp;
 
