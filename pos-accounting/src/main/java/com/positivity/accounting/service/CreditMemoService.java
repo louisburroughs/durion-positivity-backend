@@ -88,8 +88,12 @@ public class CreditMemoService {
             invoice = invoiceServiceClient.getInvoiceDetails(request.getOriginalInvoiceId());
         } catch (InvoiceServiceException e) {
             log.error("Failed to fetch invoice details for {}: {}", request.getOriginalInvoiceId(), e.getMessage());
+            HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
+            if (status == null) {
+                status = HttpStatus.BAD_GATEWAY;
+            }
             throw new ResponseStatusException(
-                    HttpStatus.valueOf(e.getHttpStatus()),
+                    status,
                     "Invoice not found or unavailable: " + e.getMessage());
         }
 
