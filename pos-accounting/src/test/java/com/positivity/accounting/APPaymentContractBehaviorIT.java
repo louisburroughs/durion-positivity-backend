@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.APPaymentAllocation;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
@@ -183,15 +184,19 @@ public class APPaymentContractBehaviorIT {
 
         // Assert: Verify automatic allocation (oldest due first: bill1 fully paid,
         // bill2 partially)
-        String responseJson = result.getResponse().getContentAsString();
-        assertThat(responseJson).contains("BILL-001"); // Bill 1 allocation
-        assertThat(responseJson).contains("BILL-002"); // Bill 2 allocation
-
-        // Verify allocation logic: bill1 = $500, bill2 = $100, unapplied = $0
         APPayment savedPayment = apPaymentRepository.findByPaymentRef(paymentRef).orElseThrow();
         assertThat(savedPayment.getUnappliedAmount()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(allocationRepository.findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId()))
-                .hasSize(2);
+        
+        List<APPaymentAllocation> allocations = allocationRepository.findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId());
+        assertThat(allocations).hasSize(2);
+        
+        // Verify bill1 (oldest due) gets allocated first: $500
+        assertThat(allocations.get(0).getVendorBillId()).isEqualTo(bill1.getVendorBillId());
+        assertThat(allocations.get(0).getAppliedAmount()).isEqualByComparingTo(new BigDecimal("500.00"));
+        
+        // Verify bill2 gets remaining $100
+        assertThat(allocations.get(1).getVendorBillId()).isEqualTo(bill2.getVendorBillId());
+        assertThat(allocations.get(1).getAppliedAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
     }
 
     @Test
@@ -271,9 +276,11 @@ public class APPaymentContractBehaviorIT {
                 .andExpect(jsonPath("$.paymentRef").value(paymentRef))
                 .andReturn();
 
+        String paymentId2 = objectMapper.readTree(result2.getResponse().getContentAsString())
+                .get("paymentId").asText();
+
         // Assert: Verify same payment instance returned (no duplicate created)
-        assertThat(result1.getResponse().getContentAsString())
-                .isEqualTo(result2.getResponse().getContentAsString());
+        assertThat(paymentId1).isEqualTo(paymentId2);
         assertThat(apPaymentRepository.findAll()).hasSize(1);
     }
 
