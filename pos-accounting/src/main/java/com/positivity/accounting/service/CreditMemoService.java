@@ -134,7 +134,7 @@ public class CreditMemoService {
         creditMemo.setCustomerId(invoice.getCustomerId());
         creditMemo.setCreditAmount(request.getCreditAmount());
         creditMemo.setTaxAmountReversed(taxReversed);
-        creditMemo.setTotalAmount(request.getCreditAmount().add(taxReversed));
+        // totalAmount is now calculated automatically from creditAmount + taxAmountReversed
         creditMemo.setReasonCode(request.getReasonCode());
         creditMemo.setJustificationNote(request.getJustificationNote());
         creditMemo.setStatus(CreditMemoStatus.POSTED);
