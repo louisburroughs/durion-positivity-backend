@@ -101,12 +101,13 @@ public class CreditMemo {
     }
 
     /**
-     * Returns the total amount of the credit memo (credit amount + tax amount reversed).
+     * Calculates the total amount of the credit memo (credit amount + tax amount reversed).
      * This is a derived field computed from creditAmount and taxAmountReversed.
      * 
      * @return the total credit memo amount
      */
-    public BigDecimal getTotalAmount() {
+    @Transient
+    public BigDecimal calculateTotalAmount() {
         BigDecimal credit = (creditAmount != null) ? creditAmount : BigDecimal.ZERO;
         BigDecimal tax = (taxAmountReversed != null) ? taxAmountReversed : BigDecimal.ZERO;
         return credit.add(tax);
