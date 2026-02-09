@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
+import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -55,8 +56,13 @@ public class JournalEntry {
             journalEntryId = UUIDv7Generator.generate();
         }
         Instant now = Instant.now();
+        String currentUser = SecurityContextHelper.isAuthenticated() 
+                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
+                : "SYSTEM";
         this.createdAt = now;
         this.modifiedAt = now;
+        this.createdBy = currentUser;
+        this.modifiedBy = currentUser;
         
         // Initialize line relationships: set journalEntryId and lineNumber
         initializeLines();
@@ -160,6 +166,9 @@ public class JournalEntry {
     @PreUpdate
     protected void onUpdate() {
         this.modifiedAt = Instant.now();
+        this.modifiedBy = SecurityContextHelper.isAuthenticated()
+                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
+                : "SYSTEM";
     }
 
     /**
