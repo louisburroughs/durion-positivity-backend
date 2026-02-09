@@ -129,6 +129,11 @@ public class APPaymentServiceImpl implements APPaymentService {
                             "Bill " + allocationLine.getVendorBillId() + " is not approved for payment");
                 }
 
+                if (!bill.getVendorId().equals(payment.getVendorId())) {
+                    throw new IllegalArgumentException(
+                            "Bill " + allocationLine.getVendorBillId() + " does not belong to vendor "
+                                    + payment.getVendorId());
+                }
                 APPaymentAllocation allocation = new APPaymentAllocation(
                         payment.getPaymentId(),
                         allocationLine.getVendorBillId(),
