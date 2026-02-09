@@ -37,7 +37,7 @@ public class CreditMemoResponse {
     private String justificationNote;
 
     @JsonProperty("status")
-    private String status;
+    private CreditMemoStatus status;
 
     @JsonProperty("creationTimestamp")
     private Instant creationTimestamp;
