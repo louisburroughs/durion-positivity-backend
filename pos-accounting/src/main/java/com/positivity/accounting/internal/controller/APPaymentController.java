@@ -75,7 +75,7 @@ public class APPaymentController {
         log.info("Executing payment for vendor {} with paymentRef {}", request.getVendorId(), request.getPaymentRef());
 
         APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/payments/{paymentId}")
