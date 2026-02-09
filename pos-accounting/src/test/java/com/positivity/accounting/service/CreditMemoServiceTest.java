@@ -265,7 +265,7 @@ class CreditMemoServiceTest {
 
     @Test
     @DisplayName("Should throw exception when invoice has zero remaining balance")
-    void testCreateCreditMemo_ZeroSubtotal() {
+    void testCreateCreditMemo_ZeroRemainingBalance() {
         // Given - invoice is fully paid (totalAmount = totalPaid, subtotal = 0)
         testInvoice = InvoiceDetails.builder()
                 .invoiceId(testInvoiceId)
