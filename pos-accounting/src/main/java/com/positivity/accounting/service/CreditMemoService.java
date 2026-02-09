@@ -103,21 +103,27 @@ public class CreditMemoService {
                     "Credit memos cannot be issued against " + invoice.getStatus() + " invoices");
         }
 
-        // Calculate remaining balance (subtotal) before attempting tax calculation
-        BigDecimal subtotal = invoice.getTotalAmount().subtract(
-                invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO);
-        
-        // Validate subtotal > 0 before attempting division to avoid ArithmeticException
-        if (subtotal.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Invoice has no remaining balance to credit. Total amount: " + invoice.getTotalAmount() 
-                            + ", Total paid: " + (invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO));
+        // Calculate remaining balance (balanceDue) before attempting tax calculation
+        BigDecimal balanceDue = invoice.getBalanceDue();
+        if (balanceDue == null) {
+            // Fallback to computed value only if balanceDue is unavailable
+            BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
+            balanceDue = invoice.getTotalAmount().subtract(totalPaid);
         }
-        
+
+        // Validate balanceDue > 0 before attempting division to avoid ArithmeticException
+        if (balanceDue.compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Invoice has no remaining balance to credit. Balance due: " + balanceDue
+                            + ", Total amount: " + invoice.getTotalAmount()
+                            + ", Total paid: " + totalPaid);
+        }
+
         // Calculate proportional tax reversal
-        BigDecimal taxAmount = subtotal.multiply(new BigDecimal("0.10")); // Simplified: assume 10% tax
+        BigDecimal taxAmount = balanceDue.multiply(new BigDecimal("0.10")); // Simplified: assume 10% tax
         BigDecimal creditRatio = request.getCreditAmount()
-                .divide(subtotal, 4, RoundingMode.HALF_UP);
+                .divide(balanceDue, 4, RoundingMode.HALF_UP);
         BigDecimal taxReversed = taxAmount
                 .multiply(creditRatio)
                 .setScale(2, RoundingMode.HALF_UP);
