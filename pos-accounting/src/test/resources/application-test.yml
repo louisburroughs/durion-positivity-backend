@@ -37,3 +37,11 @@ logging:
     org:
       springframework:
         security: DEBUG
+
+# Required GL account configuration for Credit Memo processing
+pos:
+  accounting:
+    credit-memo:
+      revenue-account-id: "01234567-89ab-cdef-0123-456789abcdef"
+      tax-payable-account-id: "fedcba98-7654-3210-fedc-ba9876543210"
+      ar-account-id: "11111111-2222-3333-4444-555555555555"

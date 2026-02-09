@@ -28,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
@@ -180,7 +181,7 @@ class PaymentApplicationServiceTest {
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
-                                createTestInvoiceDetails(testInvoiceId, "OPEN", "USD", "1000.00"));
+                                createTestInvoiceDetails(testInvoiceId, InvoiceStatus.OPEN, "USD", "1000.00"));
                 when(invoiceServiceClient.applyPaymentToInvoice(any(), any())).thenReturn(
                                 createApplyPaymentResponse(testInvoiceId, "1000.00", "500.00"));
 
@@ -226,7 +227,7 @@ class PaymentApplicationServiceTest {
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
-                                createTestInvoiceDetails(UUID.randomUUID(), "OPEN", "USD", "1000.00"));
+                                createTestInvoiceDetails(UUID.randomUUID(), InvoiceStatus.OPEN, "USD", "1000.00"));
                 when(invoiceServiceClient.applyPaymentToInvoice(any(), any())).thenReturn(
                                 createApplyPaymentResponse(UUID.randomUUID(), "1000.00", "500.00"));
 
@@ -264,7 +265,7 @@ class PaymentApplicationServiceTest {
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
-                                createTestInvoiceDetails(testInvoiceId, "OPEN", "USD", "1000.00"));
+                                createTestInvoiceDetails(testInvoiceId, InvoiceStatus.OPEN, "USD", "1000.00"));
                 when(invoiceServiceClient.applyPaymentToInvoice(any(), any())).thenReturn(
                                 createApplyPaymentResponse(testInvoiceId, "1000.00", "400.00"));
                 // Note: customerCreditRepository.save() is NOT called in normal flow
@@ -303,7 +304,7 @@ class PaymentApplicationServiceTest {
                 // Set invoice balance/status (persisted for idempotent retries)
                 existingApplication.setInvoiceBalanceBefore(new BigDecimal("1000.00"));
                 existingApplication.setInvoiceBalanceAfter(new BigDecimal("500.00"));
-                existingApplication.setInvoiceStatus("PARTIALLY_PAID");
+                existingApplication.setInvoiceStatus(InvoiceStatus.PARTIALLY_PAID);
 
                 when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
                                 .thenReturn(true);
@@ -435,7 +436,8 @@ class PaymentApplicationServiceTest {
                 assertThat(result.getOriginalPaymentApplicationId()).isEqualTo(applicationId);
                 assertThat(result.getAmount()).isEqualByComparingTo("500.00");
                 assertThat(result.getReason()).isEqualTo("Customer disputed charge");
-                assertThat(result.getReversedBy()).isEqualTo("SYSTEM"); // Derived from SecurityContext (fallback in tests)
+                assertThat(result.getReversedBy()).isEqualTo("SYSTEM"); // Derived from SecurityContext (fallback in
+                                                                        // tests)
 
                 // Verify payment unappliedAmount restored
                 assertThat(testPayment.getUnappliedAmount()).isEqualByComparingTo("1000.00");
@@ -482,11 +484,10 @@ class PaymentApplicationServiceTest {
                                 createReversePaymentResponse(testInvoiceId, "500.00", "1000.00"));
 
                 // Set up SecurityContext with authenticated user
-                org.springframework.security.core.Authentication authentication = 
-                        new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                org.springframework.security.core.Authentication authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                                 "admin@example.com", null, List.of());
                 org.springframework.security.core.context.SecurityContextHolder.getContext()
-                        .setAuthentication(authentication);
+                                .setAuthentication(authentication);
 
                 try {
                         // Act
@@ -603,7 +604,7 @@ class PaymentApplicationServiceTest {
                 return app;
         }
 
-        private InvoiceDetails createTestInvoiceDetails(@NonNull UUID invoiceId, @NonNull String status,
+        private InvoiceDetails createTestInvoiceDetails(@NonNull UUID invoiceId, @NonNull InvoiceStatus status,
                         @NonNull String currency, @NonNull String balanceDue) {
                 return InvoiceDetails.builder()
                                 .invoiceId(invoiceId)
@@ -619,7 +620,7 @@ class PaymentApplicationServiceTest {
                         @NonNull String balanceBefore, @NonNull String balanceAfter) {
                 return ApplyPaymentToInvoiceResponse.builder()
                                 .invoiceId(invoiceId)
-                                .status("PARTIALLY_PAID")
+                                .status(InvoiceStatus.PARTIALLY_PAID)
                                 .balanceBefore(new BigDecimal(balanceBefore))
                                 .balanceAfter(new BigDecimal(balanceAfter))
                                 .totalPaid(new BigDecimal(balanceBefore).subtract(new BigDecimal(balanceAfter)))
@@ -631,7 +632,7 @@ class PaymentApplicationServiceTest {
                         @NonNull String balanceBefore, @NonNull String balanceDue) {
                 return ReversePaymentApplicationResponse.builder()
                                 .invoiceId(invoiceId)
-                                .status("OPEN")
+                                .status(InvoiceStatus.OPEN)
                                 .balanceBefore(new BigDecimal(balanceBefore))
                                 .balanceDue(new BigDecimal(balanceDue))
                                 .build();

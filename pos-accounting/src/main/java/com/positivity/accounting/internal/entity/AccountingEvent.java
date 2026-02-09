@@ -1,21 +1,29 @@
 package com.positivity.accounting.internal.entity;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
+
 import org.hibernate.annotations.JdbcTypeCode;
-import com.positivity.accounting.internal.enums.AccountingEventStatus;
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
 import org.hibernate.type.SqlTypes;
 
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Accounting Event - canonical event ingestion for JE generation.

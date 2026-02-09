@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
@@ -30,17 +31,14 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
-@Table(name = "payment_application", 
-    indexes = {
+@Table(name = "payment_application", indexes = {
         @Index(name = "idx_payment_application_payment", columnList = "payment_id"),
         @Index(name = "idx_payment_application_customer", columnList = "customer_id"),
         @Index(name = "idx_payment_application_timestamp", columnList = "application_timestamp")
-    },
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uk_payment_application_idempotency", 
-                         columnNames = {"application_request_id", "invoice_id"})
-    }
-)
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_payment_application_idempotency", columnNames = { "application_request_id",
+                "invoice_id" })
+})
 public class PaymentApplication {
 
     @EqualsAndHashCode.Include
@@ -92,7 +90,7 @@ public class PaymentApplication {
      * Stored to support idempotent retries without external service calls.
      */
     @Column(name = "invoice_status", length = 50)
-    private String invoiceStatus;
+    private InvoiceStatus invoiceStatus;
 
     @Column(name = "application_timestamp", nullable = false, updatable = false)
     private Instant applicationTimestamp;

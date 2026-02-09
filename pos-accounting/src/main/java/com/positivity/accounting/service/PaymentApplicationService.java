@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationRequest;
 import com.positivity.accounting.internal.entity.*;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.*;
 import com.positivity.security.common.SecurityContextHelper;
 import lombok.RequiredArgsConstructor;
@@ -508,8 +509,9 @@ public class PaymentApplicationService {
                 }
 
                 // Validate invoice status is OPEN or PARTIALLY_PAID
-                String status = invoiceDetails.getStatus();
-                if ("PAID_IN_FULL".equals(status) || "VOIDED".equals(status) || "CANCELLED".equals(status)) {
+                InvoiceStatus status = invoiceDetails.getStatus();
+                if (InvoiceStatus.PAID_IN_FULL.equals(status) || InvoiceStatus.VOIDED.equals(status)
+                                || InvoiceStatus.CANCELLED.equals(status)) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                         "Invoice " + invoiceApp.getInvoiceId()
                                                         + " is not applicable for payment (status: " + status + ")");

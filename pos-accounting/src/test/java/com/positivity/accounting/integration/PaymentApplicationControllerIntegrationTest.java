@@ -3,6 +3,7 @@ package com.positivity.accounting.integration;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
@@ -93,7 +94,7 @@ class PaymentApplicationControllerIntegrationTest {
                         return InvoiceDetails.builder()
                                         .invoiceId(invoiceId)
                                         .customerId(testCustomerId)
-                                        .status("OPEN")
+                                        .status(InvoiceStatus.OPEN)
                                         .currency("USD")
                                         .totalAmount(new BigDecimal("10000.00"))
                                         .balanceDue(new BigDecimal("10000.00"))
@@ -107,8 +108,9 @@ class PaymentApplicationControllerIntegrationTest {
                         BigDecimal balanceAfter = balanceBefore.subtract(req.getAmountApplied());
                         return ApplyPaymentToInvoiceResponse.builder()
                                         .invoiceId(invoiceId)
-                                        .status(balanceAfter.compareTo(BigDecimal.ZERO) == 0 ? "PAID_IN_FULL"
-                                                        : "PARTIALLY_PAID")
+                                        .status(balanceAfter.compareTo(BigDecimal.ZERO) == 0
+                                                        ? InvoiceStatus.PAID_IN_FULL
+                                                        : InvoiceStatus.PARTIALLY_PAID)
                                         .balanceBefore(balanceBefore)
                                         .balanceAfter(balanceAfter)
                                         .totalPaid(req.getAmountApplied())
@@ -121,7 +123,7 @@ class PaymentApplicationControllerIntegrationTest {
                                         .getArgument(1);
                         return ReversePaymentApplicationResponse.builder()
                                         .invoiceId(invoiceId)
-                                        .status("OPEN")
+                                        .status(InvoiceStatus.OPEN)
                                         .balanceBefore(BigDecimal.ZERO)
                                         .balanceDue(req.getAmountToRestore())
                                         .build();
