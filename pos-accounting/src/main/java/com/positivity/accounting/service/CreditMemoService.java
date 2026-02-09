@@ -277,7 +277,7 @@ public class CreditMemoService {
         response.setTotalAmount(creditMemo.getTotalAmount());
         response.setReasonCode(creditMemo.getReasonCode());
         response.setJustificationNote(creditMemo.getJustificationNote());
-        response.setStatus(creditMemo.getStatus().name());
+        response.setStatus(creditMemo.getStatus());
         response.setCreationTimestamp(creditMemo.getCreationTimestamp());
         response.setPostedTimestamp(creditMemo.getPostedTimestamp());
         response.setCreatedByUserId(creditMemo.getCreatedByUserId());
