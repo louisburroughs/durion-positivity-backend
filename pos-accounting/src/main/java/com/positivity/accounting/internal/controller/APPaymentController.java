@@ -46,7 +46,7 @@ import lombok.extern.slf4j.Slf4j;
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
  *      #128</a>
  */
-@Slf4f
+@Slf4j
 @RestController
 @RequestMapping("/v1/accounting/ap")
 @Tag(name = "AP Payments", description = "Accounts Payable vendor payment operations")
