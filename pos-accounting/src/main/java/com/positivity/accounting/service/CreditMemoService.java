@@ -9,7 +9,7 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
-import com.positivity.accounting.internal.entity.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import lombok.RequiredArgsConstructor;

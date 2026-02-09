@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import jakarta.persistence.*;
 import org.jspecify.annotations.NonNull;
 
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import java.math.BigDecimal;

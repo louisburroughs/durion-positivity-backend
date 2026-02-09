@@ -4,7 +4,7 @@ import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.entity.CreditMemo;
-import com.positivity.accounting.internal.entity.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.service.GLPostingService;
 import com.positivity.accounting.service.InvoiceServiceClient;
