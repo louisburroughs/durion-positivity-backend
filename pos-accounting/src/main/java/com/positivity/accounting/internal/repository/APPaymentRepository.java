@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -43,15 +44,11 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
          * Find payments scheduled between dates.
          */
         @Query("SELECT p FROM APPayment p WHERE p.paymentDate BETWEEN :startDate AND :endDate")
-        List<APPayment> findPaymentsByDateRange(
-                        @Param("startDate") LocalDateTime startDate,
+        List<APPayment> findPaymentsByDateRange(@Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate);
 
         /**
-         * Find pending approvals requiring high-threshold authorization.
+         * Find payment by payment reference (idempotency key).
          */
-        @Query("SELECT p FROM APPayment p WHERE p.status = :status AND p.approvalLevel = :approvalLevel")
-        List<APPayment> findPendingByApprovalLevel(
-                        @Param("status") APPaymentStatus status,
-                        @Param("approvalLevel") String approvalLevel);
+        Optional<APPayment> findByPaymentRef(String paymentRef);
 }

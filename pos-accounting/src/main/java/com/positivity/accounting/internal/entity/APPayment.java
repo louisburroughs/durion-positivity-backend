@@ -26,15 +26,21 @@ import lombok.ToString;
 /**
  * AP Payment entity - manages payment workflow for vendor bills.
  * 
- * Lifecycle: PENDING_APPROVAL → APPROVED → SCHEDULED → PAID (or CANCELLED)
+ * Lifecycle: INITIATED → GATEWAY_PENDING → GATEWAY_SUCCEEDED → GL_POST_PENDING
+ * → GL_POSTED
  * 
- * Approval threshold logic:
- * - amount < threshold: requires accounting:ap_payment:approve_under_threshold
- * - amount >= threshold: requires accounting:ap_payment:approve_over_threshold
+ * Two-phase commit semantics:
+ * - Gateway success = payment succeeded (bills allocated)
+ * - GL posted = accounting completion (journal entry created)
+ * 
+ * Idempotency: paymentRef serves as unique idempotency key.
  * 
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
  *      Contract Guide - AP Payment</a>
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
+ *      #128</a>
  */
 @Getter
 @Setter
@@ -55,6 +61,10 @@ public class APPayment {
     @Column(name = "payment_id", nullable = false, columnDefinition = "UUID")
     private UUID paymentId;
 
+    /** Idempotency key for duplicate prevention */
+    @Column(name = "payment_ref", length = 100, unique = true, nullable = false)
+    private String paymentRef;
+
     @PrePersist
     public void onPrePersist() {
         if (paymentId == null) {
@@ -62,14 +72,14 @@ public class APPayment {
         }
         createdAt = Instant.now();
         if (status == null) {
-            status = APPaymentStatus.PENDING_APPROVAL;
+            status = APPaymentStatus.INITIATED;
         }
         if (currency == null) {
             currency = "USD";
         }
     }
 
-    @Column(name = "vendor_bill_id", nullable = false)
+    @Column(name = "vendor_bill_id")
     private UUID vendorBillId;
 
     @Column(name = "vendor_id", nullable = false)
@@ -78,8 +88,17 @@ public class APPayment {
     @Column(name = "vendor_name", length = 200)
     private String vendorName;
 
-    @Column(name = "amount", precision = 19, scale = 4, nullable = false)
-    private BigDecimal amount;
+    @Column(name = "gross_amount", precision = 19, scale = 4, nullable = false)
+    private BigDecimal grossAmount;
+
+    @Column(name = "fee_amount", precision = 19, scale = 4)
+    private BigDecimal feeAmount;
+
+    @Column(name = "net_amount", precision = 19, scale = 4)
+    private BigDecimal netAmount;
+
+    @Column(name = "unapplied_amount", precision = 19, scale = 4)
+    private BigDecimal unappliedAmount;
 
     @Column(name = "currency", length = 3, nullable = false)
     private String currency = "USD";
@@ -98,38 +117,26 @@ public class APPayment {
     @Column(name = "bank_account_id")
     private UUID bankAccountId;
 
-    @Column(name = "approval_level", length = 30)
-    private String approvalLevel;
+    @Column(name = "gateway_transaction_id", length = 200)
+    private String gatewayTransactionId;
 
-    @Column(name = "approval_threshold", precision = 19, scale = 4)
-    private BigDecimal approvalThreshold;
+    @Column(name = "gateway_response", length = 2000)
+    private String gatewayResponse;
 
-    @Column(name = "approved_at")
-    private Instant approvedAt;
+    @Column(name = "gateway_timestamp")
+    private Instant gatewayTimestamp;
 
-    @Column(name = "approved_by", length = 50)
-    private String approvedBy;
+    @Column(name = "gl_journal_entry_id")
+    private UUID glJournalEntryId;
 
-    @Column(name = "approval_justification", length = 1000)
-    private String approvalJustification;
+    @Column(name = "gl_posted_at")
+    private Instant glPostedAt;
 
-    @Column(name = "scheduled_at")
-    private Instant scheduledAt;
+    @Column(name = "gl_post_error", length = 2000)
+    private String glPostError;
 
-    @Column(name = "scheduled_by", length = 50)
-    private String scheduledBy;
-
-    @Column(name = "cancelled_at")
-    private Instant cancelledAt;
-
-    @Column(name = "cancelled_by", length = 50)
-    private String cancelledBy;
-
-    @Column(name = "cancellation_reason", length = 1000)
-    private String cancellationReason;
-
-    @Column(name = "payment_transaction_id")
-    private UUID paymentTransactionId;
+    @Column(name = "memo", length = 1000)
+    private String memo;
 
     // Audit fields
     @Column(name = "created_at", nullable = false, updatable = false)
