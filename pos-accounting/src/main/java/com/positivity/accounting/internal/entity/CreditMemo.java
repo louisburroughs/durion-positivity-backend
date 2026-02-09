@@ -89,7 +89,7 @@ public class CreditMemo {
     private String createdByUserId;
 
     @Column(name = "prior_period_adjustment", nullable = false)
-    private Boolean priorPeriodAdjustment = false;
+    private boolean priorPeriodAdjustment = false;
 
     @Column(name = "original_period_id", length = 50)
     private String originalPeriodId;
