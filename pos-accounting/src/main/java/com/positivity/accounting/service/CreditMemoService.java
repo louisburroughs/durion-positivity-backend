@@ -88,8 +88,12 @@ public class CreditMemoService {
             invoice = invoiceServiceClient.getInvoiceDetails(request.getOriginalInvoiceId());
         } catch (InvoiceServiceException e) {
             log.error("Failed to fetch invoice details for {}: {}", request.getOriginalInvoiceId(), e.getMessage());
+            HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
+            if (status == null) {
+                status = HttpStatus.BAD_GATEWAY;
+            }
             throw new ResponseStatusException(
-                    HttpStatus.valueOf(e.getHttpStatus()),
+                    status,
                     "Invoice not found or unavailable: " + e.getMessage());
         }
 
@@ -99,14 +103,7 @@ public class CreditMemoService {
                     "Credit memos cannot be issued against " + invoice.getStatus() + " invoices");
         }
 
-        // Validate credit amount doesn't exceed balance
-        if (request.getCreditAmount().compareTo(invoice.getBalanceDue()) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Credit amount " + request.getCreditAmount()
-                            + " exceeds invoice outstanding balance " + invoice.getBalanceDue());
-        }
-
-        // Calculate proportional tax reversal
+        // Calculate proportional tax reversal BEFORE validation
         BigDecimal subtotal = invoice.getTotalAmount().subtract(
                 invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO);
         BigDecimal taxAmount = subtotal.multiply(new BigDecimal("0.10")); // Simplified: assume 10% tax
@@ -115,6 +112,17 @@ public class CreditMemoService {
         BigDecimal taxReversed = taxAmount
                 .multiply(creditRatio)
                 .setScale(2, RoundingMode.HALF_UP);
+
+        // Calculate total amount that will be applied to invoice
+        BigDecimal totalCreditAmount = request.getCreditAmount().add(taxReversed);
+
+        // Validate total credit amount doesn't exceed balance
+        if (totalCreditAmount.compareTo(invoice.getBalanceDue()) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Total credit amount " + totalCreditAmount
+                            + " (credit: " + request.getCreditAmount() + " + tax: " + taxReversed + ")"
+                            + " exceeds invoice outstanding balance " + invoice.getBalanceDue());
+        }
 
         // Check if prior period adjustment
         boolean isPriorPeriod = false;
@@ -220,12 +228,7 @@ public class CreditMemoService {
         if (customerId != null) {
             creditMemos = creditMemoRepository.findByCustomerId(customerId, pageable);
         } else if (originalInvoiceId != null) {
-            creditMemos = creditMemoRepository.findByOriginalInvoiceId(originalInvoiceId)
-                    .stream()
-                    .collect(java.util.stream.Collectors.collectingAndThen(
-                            java.util.stream.Collectors.toList(),
-                            list -> new org.springframework.data.domain.PageImpl<>(
-                                    list, pageable, list.size())));
+            creditMemos = creditMemoRepository.findByOriginalInvoiceId(originalInvoiceId, pageable);
         } else if (status != null) {
             creditMemos = creditMemoRepository.findByStatus(status, pageable);
         } else {

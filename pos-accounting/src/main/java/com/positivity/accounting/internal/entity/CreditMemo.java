@@ -99,12 +99,12 @@ public class CreditMemo {
             postedTimestamp = Instant.now();
         }
     }
-    
+
     /**
-     * Calculate total credit memo amount (credit + tax).
-     * This is a computed field, not stored in database.
+     * Returns the total credit memo amount (creditAmount + taxAmountReversed).
+     * This is a calculated field, not stored in the database.
      * 
-     * @return sum of creditAmount and taxAmountReversed
+     * @return the total amount, or BigDecimal.ZERO if components are null
      */
     public BigDecimal getTotalAmount() {
         BigDecimal credit = this.creditAmount != null ? this.creditAmount : BigDecimal.ZERO;
