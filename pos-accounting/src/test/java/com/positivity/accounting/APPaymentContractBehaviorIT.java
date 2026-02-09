@@ -179,7 +179,7 @@ public class APPaymentContractBehaviorIT {
                 .andExpect(jsonPath("$.vendorId").value(testVendorId.toString()))
                 .andExpect(jsonPath("$.grossAmount").value(600.00))
                 .andExpect(jsonPath("$.netAmount").value(600.00))
-                .andExpect(jsonPath("$.status").value("GATEWAY_SUCCEEDED"))
+                .andExpect(jsonPath("$.status").value("GL_POST_PENDING"))
                 .andExpect(jsonPath("$.allocations").isNotEmpty())
                 .andReturn();
 
