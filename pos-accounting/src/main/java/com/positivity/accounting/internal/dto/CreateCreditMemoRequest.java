@@ -30,7 +30,7 @@ public class CreateCreditMemoRequest {
 
     @JsonProperty("reasonCode")
     @NotBlank(message = "Reason code is required")
-    @Size(min = 1, max = 50, message = "Reason code must be 1-50 characters")
+    @Size(max = 50, message = "Reason code must be 1-50 characters")
     private String reasonCode;
 
     @JsonProperty("justificationNote")
