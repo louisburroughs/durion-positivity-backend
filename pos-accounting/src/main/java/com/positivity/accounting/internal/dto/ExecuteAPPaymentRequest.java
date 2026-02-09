@@ -8,6 +8,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.accounting.internal.enums.PaymentMethod;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
@@ -77,6 +78,12 @@ public class ExecuteAPPaymentRequest {
     @Schema(description = "Unique payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012", requiredMode = Schema.RequiredMode.REQUIRED)
     @JsonProperty("paymentRef")
     private String paymentRef;
+
+    @NonNull
+    @NotNull(message = "Payment method is required")
+    @Schema(description = "Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)", example = "ACH", requiredMode = Schema.RequiredMode.REQUIRED)
+    @JsonProperty("paymentMethod")
+    private PaymentMethod paymentMethod;
 
     @Nullable
     @Size(max = 1000, message = "Memo must not exceed 1000 characters")
