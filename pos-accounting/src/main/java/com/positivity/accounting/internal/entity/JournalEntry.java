@@ -63,6 +63,29 @@ public class JournalEntry {
         this.modifiedAt = now;
         this.createdBy = currentUser;
         this.modifiedBy = currentUser;
+        
+        // Initialize line relationships: set journalEntryId and lineNumber
+        initializeLines();
+    }
+    
+    /**
+     * Initialize lines with proper parent reference and sequential line numbers.
+     * Called automatically during @PrePersist, but can be called manually if needed.
+     */
+    private void initializeLines() {
+        if (lines != null && !lines.isEmpty()) {
+            int lineNumber = 1;
+            for (JournalEntryLine line : lines) {
+                // Set parent reference if not already set
+                if (line.getJournalEntryId() == null) {
+                    line.setJournalEntryId(this.journalEntryId);
+                }
+                // Set line number if not already set
+                if (line.getLineNumber() == null) {
+                    line.setLineNumber(lineNumber++);
+                }
+            }
+        }
     }
 
     @Enumerated(EnumType.STRING)
@@ -174,5 +197,22 @@ public class JournalEntry {
     @Transient
     public boolean isImmutable() {
         return status == JournalEntryStatus.POSTED || status == JournalEntryStatus.REVERSED;
+    }
+
+    /**
+     * Add a line to this journal entry.
+     * The journalEntryId and lineNumber will be set automatically during persistence
+     * via the @PrePersist hook.
+     * 
+     * @param line the line to add
+     */
+    public void addLine(JournalEntryLine line) {
+        if (line == null) {
+            throw new IllegalArgumentException("Cannot add null line");
+        }
+        if (this.lines == null) {
+            this.lines = new ArrayList<>();
+        }
+        this.lines.add(line);
     }
 }
