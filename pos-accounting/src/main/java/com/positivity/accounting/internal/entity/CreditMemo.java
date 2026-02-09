@@ -99,4 +99,14 @@ public class CreditMemo {
             postedTimestamp = Instant.now();
         }
     }
+
+    /**
+     * Returns the total amount of the credit memo (credit amount + tax amount reversed).
+     * This is a derived field computed from creditAmount and taxAmountReversed.
+     * 
+     * @return the total credit memo amount
+     */
+    public BigDecimal getTotalAmount() {
+        return creditAmount.add(taxAmountReversed);
+    }
 }
