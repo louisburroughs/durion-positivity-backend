@@ -81,7 +81,7 @@ public class GLPostingService {
         JournalEntry entry = new JournalEntry();
         entry.setTransactionDate(LocalDateTime.now());
         entry.setDescription(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""));
-        entry.setSourceEventId(creditMemoId.toString());
+        entry.setSourceEventId(creditMemoId);
 
         // Create journal entry lines
         List<JournalEntryLine> lines = new ArrayList<>();
@@ -149,7 +149,7 @@ public class GLPostingService {
         JournalEntry entry = new JournalEntry();
         entry.setTransactionDate(LocalDateTime.now());
         entry.setDescription(description);
-        entry.setSourceEventId(paymentApplicationId.toString());
+        entry.setSourceEventId(paymentApplicationId);
 
         List<JournalEntryLine> lines = new ArrayList<>();
 

@@ -52,7 +52,9 @@ public class CreditMemo {
     @Column(name = "tax_amount_reversed", nullable = false, precision = 19, scale = 4)
     private BigDecimal taxAmountReversed;
 
-    @Column(name = "total_amount", nullable = false, precision = 19, scale = 4)
+    // totalAmount is a derived field, calculated from creditAmount + taxAmountReversed
+    // Not persisted to prevent data inconsistency
+    @Transient
     private BigDecimal totalAmount;
 
     @Column(name = "reason_code", nullable = false, length = 50)
@@ -138,12 +140,16 @@ public class CreditMemo {
         this.taxAmountReversed = taxAmountReversed;
     }
 
+    /**
+     * Returns the total credit memo amount (creditAmount + taxAmountReversed).
+     * This is a calculated field, not stored in the database.
+     * 
+     * @return the total amount, or BigDecimal.ZERO if components are null
+     */
     public BigDecimal getTotalAmount() {
-        return totalAmount;
-    }
-
-    public void setTotalAmount(@NonNull BigDecimal totalAmount) {
-        this.totalAmount = totalAmount;
+        BigDecimal credit = this.creditAmount != null ? this.creditAmount : BigDecimal.ZERO;
+        BigDecimal tax = this.taxAmountReversed != null ? this.taxAmountReversed : BigDecimal.ZERO;
+        return credit.add(tax);
     }
 
     public String getReasonCode() {
