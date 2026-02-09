@@ -96,21 +96,20 @@ public class CreditMemoContractBehaviorIT {
     void setUp() {
         // Clean up any existing test data
         creditMemoRepository.deleteAll();
-        
+
         // Setup default invoice service mocks
         // Default invoice details for $110 balance
         InvoiceDetails defaultInvoice = new InvoiceDetails(
-            UUID.randomUUID(),
-            UUID.randomUUID(),
-            new BigDecimal("110.00"),
-            "OPEN",
-            Instant.now().minus(10, ChronoUnit.DAYS),
-            new BigDecimal("100.00"),
-            new BigDecimal("10.00"),
-            new BigDecimal("110.00")
-        );
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                new BigDecimal("110.00"),
+                "OPEN",
+                Instant.now().minus(10, ChronoUnit.DAYS),
+                new BigDecimal("100.00"),
+                new BigDecimal("10.00"),
+                new BigDecimal("110.00"));
         when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
-        
+
         // Default invoice update response
         ApplyCreditMemoResponse defaultResponse = new ApplyCreditMemoResponse();
         defaultResponse.setInvoiceId(UUID.randomUUID());
@@ -119,7 +118,7 @@ public class CreditMemoContractBehaviorIT {
         defaultResponse.setStatus("PAID");
         defaultResponse.setCreditMemoApplied(true);
         when(invoiceServiceClient.applyCreditMemo(any(UUID.class), any(ApplyCreditMemoRequest.class)))
-            .thenReturn(defaultResponse);
+                .thenReturn(defaultResponse);
     }
 
     @AfterEach
@@ -184,7 +183,8 @@ public class CreditMemoContractBehaviorIT {
         request.setReasonCode("PRICING_ERROR");
         request.setJustificationNote("Incorrect pricing applied to line item #3");
 
-        // Mock partial credit response: balance goes from 110 to 82.50 (110 - 27.50 total with tax)
+        // Mock partial credit response: balance goes from 110 to 82.50 (110 - 27.50
+        // total with tax)
         ApplyCreditMemoResponse partialResponse = new ApplyCreditMemoResponse();
         partialResponse.setInvoiceId(testInvoiceId);
         partialResponse.setBalanceBefore(new BigDecimal("110.00"));
@@ -192,7 +192,7 @@ public class CreditMemoContractBehaviorIT {
         partialResponse.setStatus("OPEN");
         partialResponse.setCreditMemoApplied(true);
         when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-            .thenReturn(partialResponse);
+                .thenReturn(partialResponse);
 
         // Act: POST to Credit Memo endpoint
         mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
@@ -258,15 +258,14 @@ public class CreditMemoContractBehaviorIT {
 
         // Mock invoice details for balance lookup
         InvoiceDetails invoice = new InvoiceDetails(
-            invoiceId,
-            UUID.randomUUID(),
-            new BigDecimal("55.00"), // Balance after credit applied
-            "OPEN",
-            Instant.now(),
-            new BigDecimal("100.00"),
-            new BigDecimal("10.00"),
-            new BigDecimal("110.00")
-        );
+                invoiceId,
+                UUID.randomUUID(),
+                new BigDecimal("55.00"), // Balance after credit applied
+                "OPEN",
+                Instant.now(),
+                new BigDecimal("100.00"),
+                new BigDecimal("10.00"),
+                new BigDecimal("110.00"));
         when(invoiceServiceClient.getInvoiceDetails(invoiceId)).thenReturn(invoice);
 
         // Act: GET by ID

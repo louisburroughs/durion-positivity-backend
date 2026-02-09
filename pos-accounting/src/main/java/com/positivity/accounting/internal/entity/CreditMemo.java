@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.entity;
 import jakarta.persistence.*;
 import org.jspecify.annotations.NonNull;
 
+import com.positivity.shared.id.UUIDv7Generator;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -84,7 +86,7 @@ public class CreditMemo {
     @PrePersist
     protected void onCreate() {
         if (creditMemoId == null) {
-            creditMemoId = UUID.randomUUID();
+            creditMemoId = UUIDv7Generator.generate();
         }
         if (creationTimestamp == null) {
             creationTimestamp = Instant.now();
