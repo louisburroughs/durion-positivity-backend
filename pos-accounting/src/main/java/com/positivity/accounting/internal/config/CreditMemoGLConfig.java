@@ -11,15 +11,16 @@ import java.util.UUID;
 /**
  * Configuration for GL account mappings used in Credit Memo processing.
  * 
- * All GL accounts must be configured in application.yml:
+ * <p><strong>Required Configuration:</strong> All GL account IDs must be configured in application.yml
+ * or by command-line argument. The application will fail to start if any required property is missing.</p>
  * 
  * <pre>
  * pos:
  *   accounting:
  *     credit-memo:
- *       revenue-account-id: "..."
- *       tax-payable-account-id: "..."
- *       ar-account-id: "..."
+ *       revenue-account-id: "12345678-1234-5678-1234-567812345678"
+ *       tax-payable-account-id: "87654321-4321-8765-4321-876543218765"
+ *       ar-account-id: "11111111-2222-3333-4444-555555555555"
  * </pre>
  * 
  * @see <a href=
@@ -29,27 +30,28 @@ import java.util.UUID;
 @Data
 @Validated
 @Configuration
+@Validated
 @ConfigurationProperties(prefix = "pos.accounting.credit-memo")
 public class CreditMemoGLConfig {
 
     /**
      * GL account for revenue reversals.
-     * Required: Revenue account (typically 4000-4999 range)
+     * Required: Must be configured in application.yml (typically 4000-4999 range)
      */
-    @NotNull
+    @NotNull(message = "pos.accounting.credit-memo.revenue-account-id must be configured")
     private UUID revenueAccountId;
 
     /**
      * GL account for sales tax payable reversals.
-     * Required: Tax Liability account (typically 2200-2299 range)
+     * Required: Must be configured in application.yml (typically 2200-2299 range)
      */
-    @NotNull
+    @NotNull(message = "pos.accounting.credit-memo.tax-payable-account-id must be configured")
     private UUID taxPayableAccountId;
 
     /**
      * GL account for accounts receivable reductions.
-     * Required: AR account (typically 1200-1299 range)
+     * Required: Must be configured in application.yml (typically 1200-1299 range)
      */
-    @NotNull
+    @NotNull(message = "pos.accounting.credit-memo.ar-account-id must be configured")
     private UUID arAccountId;
 }
