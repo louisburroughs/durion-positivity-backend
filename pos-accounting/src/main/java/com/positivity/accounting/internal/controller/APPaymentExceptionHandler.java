@@ -45,7 +45,7 @@ public class APPaymentExceptionHandler {
         body.put("timestamp", Instant.now());
         body.put("status", HttpStatus.BAD_GATEWAY.value());
         body.put("error", "Bad Gateway");
-        body.put("message", "Payment gateway failure: " + ex.getMessage());
+        body.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
     }
 
