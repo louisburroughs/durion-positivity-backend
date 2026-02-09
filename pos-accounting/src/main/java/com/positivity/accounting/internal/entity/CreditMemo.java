@@ -104,7 +104,7 @@ public class CreditMemo {
      * Calculates the total amount of the credit memo (credit amount + tax amount reversed).
      * This is a derived field computed from creditAmount and taxAmountReversed.
      * 
-     * @return the total credit memo amount
+     * @return the total credit memo amount @return the total amount, or BigDecimal.ZERO if components are null
      */
     @Transient
     public BigDecimal calculateTotalAmount() {

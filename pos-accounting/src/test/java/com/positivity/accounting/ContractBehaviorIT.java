@@ -142,6 +142,46 @@ public class ContractBehaviorIT {
                                 .andExpect(jsonPath("$.journalEntryId").isNotEmpty());
         }
 
+        @Test
+        @DisplayName("CP-002a: Journal Entry audit fields populated correctly")
+        public void testJournalEntryAuditFieldsPopulated() throws Exception {
+                // Arrange: Create GL accounts first (prerequisites)
+                createGLAccount("1000-001", "Cash - Audit Test", AccountType.ASSET);
+
+                // Prepare journal entry request
+                JournalEntryCreateRequest request = new JournalEntryCreateRequest();
+                request.setTransactionDate(LocalDateTime.now());
+                request.setDescription("Audit field test entry");
+                request.setSourceEventType("TEST");
+
+                // Act: POST journal entry
+                MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/journal-entries"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andDo(print())
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.journalEntryId").isNotEmpty())
+                                .andExpect(jsonPath("$.createdBy").value(TEST_USER))
+                                .andExpect(jsonPath("$.modifiedBy").value(TEST_USER))
+                                .andExpect(jsonPath("$.createdAt").isNotEmpty())
+                                .andExpect(jsonPath("$.modifiedAt").isNotEmpty())
+                                .andReturn();
+
+                // Extract journal entry ID for GET request
+                String responseBody = result.getResponse().getContentAsString();
+                Map<String, Object> response = objectMapper.readValue(responseBody, Map.class);
+                String journalEntryId = (String) response.get("journalEntryId");
+
+                // Assert: GET the created entry to verify audit fields persisted
+                mockMvc.perform(withAuth(get(API_V1 + "/journal-entries/" + journalEntryId)))
+                                .andDo(print())
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.createdBy").value(TEST_USER))
+                                .andExpect(jsonPath("$.modifiedBy").value(TEST_USER))
+                                .andExpect(jsonPath("$.createdAt").isNotEmpty())
+                                .andExpect(jsonPath("$.modifiedAt").isNotEmpty());
+        }
+
         // ===============================================
         // VALIDATION ERROR SCENARIOS
         // ===============================================
