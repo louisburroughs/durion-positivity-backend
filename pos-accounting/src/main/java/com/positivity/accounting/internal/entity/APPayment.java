@@ -1,14 +1,22 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.accounting.internal.enums.APPaymentStatus;
-import com.positivity.accounting.internal.enums.PaymentMethod;
-import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.PaymentMethod;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

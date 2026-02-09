@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+import lombok.experimental.Tolerate;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -43,7 +45,18 @@ public class InvoiceDetails implements Serializable {
      */
     @JsonProperty("status")
     @NonNull
-    private String status;
+    private InvoiceStatus status;
+
+    @Tolerate
+    public void setStatus(String status) {
+        if (status != null) {
+            try {
+                this.status = InvoiceStatus.valueOf(status);
+            } catch (IllegalArgumentException e) {
+                this.status = null;
+            }
+        }
+    }
 
     /**
      * Total invoice amount

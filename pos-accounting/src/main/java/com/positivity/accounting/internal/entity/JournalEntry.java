@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
+import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -55,8 +56,36 @@ public class JournalEntry {
             journalEntryId = UUIDv7Generator.generate();
         }
         Instant now = Instant.now();
+        String currentUser = SecurityContextHelper.isAuthenticated() 
+                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
+                : "SYSTEM";
         this.createdAt = now;
         this.modifiedAt = now;
+        this.createdBy = currentUser;
+        this.modifiedBy = currentUser;
+        
+        // Initialize line relationships: set journalEntryId and lineNumber
+        initializeLines();
+    }
+    
+    /**
+     * Initialize lines with proper parent reference and sequential line numbers.
+     * Called automatically during @PrePersist, but can be called manually if needed.
+     */
+    private void initializeLines() {
+        if (lines != null && !lines.isEmpty()) {
+            int lineNumber = 1;
+            for (JournalEntryLine line : lines) {
+                // Set parent reference if not already set
+                if (line.getJournalEntryId() == null) {
+                    line.setJournalEntryId(this.journalEntryId);
+                }
+                // Set line number if not already set
+                if (line.getLineNumber() == null) {
+                    line.setLineNumber(lineNumber++);
+                }
+            }
+        }
     }
 
     @Enumerated(EnumType.STRING)
@@ -137,6 +166,9 @@ public class JournalEntry {
     @PreUpdate
     protected void onUpdate() {
         this.modifiedAt = Instant.now();
+        this.modifiedBy = SecurityContextHelper.isAuthenticated()
+                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
+                : "SYSTEM";
     }
 
     /**
@@ -165,5 +197,22 @@ public class JournalEntry {
     @Transient
     public boolean isImmutable() {
         return status == JournalEntryStatus.POSTED || status == JournalEntryStatus.REVERSED;
+    }
+
+    /**
+     * Add a line to this journal entry.
+     * The journalEntryId and lineNumber will be set automatically during persistence
+     * via the @PrePersist hook.
+     * 
+     * @param line the line to add
+     */
+    public void addLine(JournalEntryLine line) {
+        if (line == null) {
+            throw new IllegalArgumentException("Cannot add null line");
+        }
+        if (this.lines == null) {
+            this.lines = new ArrayList<>();
+        }
+        this.lines.add(line);
     }
 }

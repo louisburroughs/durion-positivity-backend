@@ -47,11 +47,24 @@ eureka:
 
 # Cross-service configuration
 pos:
+  accounting:
+    credit-memo:
+      revenue-account-id: "00000000-0000-0000-0000-000000004000"
+      tax-payable-account-id: "00000000-0000-0000-0000-000000002200"
+      ar-account-id: "00000000-0000-0000-0000-000000001200"
   invoice:
     service:
       url: http://pos-invoice:8085
   # RestClient timeouts configured via pos.restclient.connect.timeout and pos.restclient.read.timeout
   # See RestClientConfig.java for timeout configuration
+  accounting:
+    credit-memo:
+      # Required: GL account for revenue reversals (typically 4000-4999 range)
+      revenue-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID}
+      # Required: GL account for sales tax payable reversals (typically 2200-2299 range)
+      tax-payable-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID}
+      # Required: GL account for accounts receivable reductions (typically 1200-1299 range)
+      ar-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
 
 logging:
   level:
