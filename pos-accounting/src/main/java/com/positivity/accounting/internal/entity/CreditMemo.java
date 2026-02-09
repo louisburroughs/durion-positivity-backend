@@ -101,14 +101,15 @@ public class CreditMemo {
     }
 
     /**
-     * Returns the total credit memo amount (creditAmount + taxAmountReversed).
-     * This is a calculated field, not stored in the database.
+     * Calculates the total amount of the credit memo (credit amount + tax amount reversed).
+     * This is a derived field computed from creditAmount and taxAmountReversed.
      * 
-     * @return the total amount, or BigDecimal.ZERO if components are null
+     * @return the total credit memo amount @return the total amount, or BigDecimal.ZERO if components are null
      */
-    public BigDecimal getTotalAmount() {
-        BigDecimal credit = this.creditAmount != null ? this.creditAmount : BigDecimal.ZERO;
-        BigDecimal tax = this.taxAmountReversed != null ? this.taxAmountReversed : BigDecimal.ZERO;
+    @Transient
+    public BigDecimal calculateTotalAmount() {
+        BigDecimal credit = (creditAmount != null) ? creditAmount : BigDecimal.ZERO;
+        BigDecimal tax = (taxAmountReversed != null) ? taxAmountReversed : BigDecimal.ZERO;
         return credit.add(tax);
     }
 }
