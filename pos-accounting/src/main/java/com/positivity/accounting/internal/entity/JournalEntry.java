@@ -201,6 +201,9 @@ public class JournalEntry {
         if (line == null) {
             throw new IllegalArgumentException("Cannot add null line");
         }
+        if (this.lines == null) {
+            this.lines = new ArrayList<>();
+        }
         this.lines.add(line);
     }
 }
