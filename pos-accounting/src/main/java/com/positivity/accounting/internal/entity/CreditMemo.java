@@ -107,6 +107,8 @@ public class CreditMemo {
      * @return the total credit memo amount
      */
     public BigDecimal getTotalAmount() {
-        return creditAmount.add(taxAmountReversed);
+        BigDecimal credit = (creditAmount != null) ? creditAmount : BigDecimal.ZERO;
+        BigDecimal tax = (taxAmountReversed != null) ? taxAmountReversed : BigDecimal.ZERO;
+        return credit.add(tax);
     }
 }
