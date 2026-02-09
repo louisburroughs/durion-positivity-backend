@@ -385,6 +385,42 @@ public class CreditMemoContractBehaviorIT {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    @DisplayName("CE-CM-005: Fully paid invoice - 409 Conflict")
+    void testCreateCreditMemo_FullyPaidInvoice() throws Exception {
+        // Arrange: Invoice is fully paid (zero balance remaining)
+        UUID testInvoiceId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        
+        // Mock a fully-paid invoice with zero balance
+        InvoiceDetails fullyPaidInvoice = InvoiceDetails.builder()
+                .invoiceId(testInvoiceId)
+                .customerId(customerId)
+                .status("PAID_IN_FULL")
+                .totalAmount(new BigDecimal("110.00"))
+                .totalPaid(new BigDecimal("110.00"))
+                .balanceDue(BigDecimal.ZERO)
+                .currency("USD")
+                .invoiceDate(Instant.now().minus(5, ChronoUnit.DAYS))
+                .build();
+        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(fullyPaidInvoice);
+        
+        CreateCreditMemoRequest request = new CreateCreditMemoRequest();
+        request.setOriginalInvoiceId(testInvoiceId);
+        request.setCreditAmount(new BigDecimal("50.00"));
+        request.setReasonCode("RETURNED_GOODS");
+        request.setJustificationNote("Customer returned items after full payment");
+
+        // Act & Assert: Expect 409 Conflict with meaningful message
+        mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Invoice has no remaining balance to credit")));
+    }
+
     // ===============================================
     // AUTHORIZATION SCENARIOS
     // ===============================================

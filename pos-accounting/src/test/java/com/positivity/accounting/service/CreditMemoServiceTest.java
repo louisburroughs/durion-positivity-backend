@@ -270,7 +270,7 @@ class CreditMemoServiceTest {
         testInvoice = InvoiceDetails.builder()
                 .invoiceId(testInvoiceId)
                 .customerId(testCustomerId)
-                .status("PAID")
+                .status("PAID_IN_FULL")
                 .totalAmount(new BigDecimal("110.00"))
                 .totalPaid(new BigDecimal("110.00"))
                 .balanceDue(BigDecimal.ZERO)
