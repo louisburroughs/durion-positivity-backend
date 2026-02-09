@@ -65,20 +65,6 @@ public class APPayment {
     @Column(name = "payment_ref", length = 100, unique = true, nullable = false)
     private String paymentRef;
 
-    @PrePersist
-    public void onPrePersist() {
-        if (paymentId == null) {
-            paymentId = UUIDv7Generator.generate();
-        }
-        createdAt = Instant.now();
-        if (status == null) {
-            status = APPaymentStatus.INITIATED;
-        }
-        if (currency == null) {
-            currency = "USD";
-        }
-    }
-
     @Column(name = "vendor_bill_id")
     private UUID vendorBillId;
 
@@ -147,6 +133,20 @@ public class APPayment {
 
     public APPayment(UUID paymentId) {
         this.paymentId = paymentId;
+    }
+
+    @PrePersist
+    public void onPrePersist() {
+        if (paymentId == null) {
+            paymentId = UUIDv7Generator.generate();
+        }
+        createdAt = Instant.now();
+        if (status == null) {
+            status = APPaymentStatus.INITIATED;
+        }
+        if (currency == null) {
+            currency = "USD";
+        }
     }
 
 }
