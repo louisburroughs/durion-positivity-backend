@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
@@ -74,8 +75,18 @@ public class APPaymentController {
         String currentUser = authentication != null ? authentication.getName() : "system";
         log.info("Executing payment for vendor {} with paymentRef {}", request.getVendorId(), request.getPaymentRef());
 
+        // Check if payment already exists for idempotency
+        Optional<APPaymentResponse> existing = apPaymentService.getPaymentByRef(request.getPaymentRef());
+        if (existing.isPresent()) {
+            // Idempotent replay: validate and return existing payment with 200 OK
+            log.info("Idempotent replay for paymentRef {}", request.getPaymentRef());
+            APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
+            return ResponseEntity.ok(response);
+        }
+
+        // New payment: return 201 Created
         APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/payments/{paymentId}")
