@@ -29,14 +29,6 @@ eureka:
   client:
     enabled: false
 
-# Credit Memo GL Configuration for tests
-pos:
-  accounting:
-    credit-memo:
-      revenue-account-id: "00000000-0000-0000-0000-000000004000"
-      tax-payable-account-id: "00000000-0000-0000-0000-000000002200"
-      ar-account-id: "00000000-0000-0000-0000-000000001200"
-
 # Logging
 logging:
   level:

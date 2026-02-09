@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -97,7 +98,7 @@ public class CreditMemoService {
         }
 
         // Validate invoice status (must be finalized/open)
-        if ("VOIDED".equalsIgnoreCase(invoice.getStatus()) || "CANCELLED".equalsIgnoreCase(invoice.getStatus())) {
+        if (InvoiceStatus.VOIDED.equals(invoice.getStatus()) || InvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Credit memos cannot be issued against " + invoice.getStatus() + " invoices");
         }
@@ -110,7 +111,8 @@ public class CreditMemoService {
             balanceDue = invoice.getTotalAmount().subtract(totalPaid);
         }
 
-        // Validate balanceDue > 0 before attempting division to avoid ArithmeticException
+        // Validate balanceDue > 0 before attempting division to avoid
+        // ArithmeticException
         if (balanceDue.compareTo(BigDecimal.ZERO) <= 0) {
             BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -156,7 +158,8 @@ public class CreditMemoService {
         creditMemo.setCustomerId(invoice.getCustomerId());
         creditMemo.setCreditAmount(request.getCreditAmount());
         creditMemo.setTaxAmountReversed(taxReversed);
-        // totalAmount is now calculated automatically from creditAmount + taxAmountReversed
+        // totalAmount is now calculated automatically from creditAmount +
+        // taxAmountReversed
         creditMemo.setReasonCode(request.getReasonCode());
         creditMemo.setJustificationNote(request.getJustificationNote());
         creditMemo.setStatus(CreditMemoStatus.POSTED);

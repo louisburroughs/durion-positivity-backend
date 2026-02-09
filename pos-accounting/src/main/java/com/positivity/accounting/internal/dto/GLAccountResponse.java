@@ -1,6 +1,8 @@
 package com.positivity.accounting.internal.dto;
 
 import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.enums.GLAccountStatus;
+import lombok.experimental.Tolerate;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -32,7 +34,19 @@ public class GLAccountResponse {
     private UUID parentAccountId;
     private LocalDateTime activationDate;
     private LocalDateTime deactivationDate;
-    private String status; // ACTIVE, INACTIVE, NOT_YET_ACTIVE (derived)
+    private GLAccountStatus status; // ACTIVE, INACTIVE, NOT_YET_ACTIVE (derived)
+
+    @Tolerate
+    public void setStatus(String status) {
+        if (status != null) {
+            try {
+                this.status = GLAccountStatus.valueOf(status);
+            } catch (IllegalArgumentException e) {
+                this.status = null;
+            }
+        }
+    }
+
     private Instant createdAt;
     private String createdBy;
     private Instant modifiedAt;

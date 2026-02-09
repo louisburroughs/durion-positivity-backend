@@ -1,15 +1,17 @@
 package com.positivity.accounting.internal.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Response after applying payment to invoice (from Invoice service).
@@ -33,7 +35,7 @@ public class ApplyPaymentToInvoiceResponse implements Serializable {
      * New invoice status after payment application
      */
     @JsonProperty("status")
-    private String status;
+    private InvoiceStatus status;
 
     /**
      * Invoice balance BEFORE payment application
