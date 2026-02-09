@@ -188,7 +188,16 @@ public class APPaymentServiceImpl implements APPaymentService {
 
                 // Calculate actual open amount (totalAmount - sum of prior allocations)
                 BigDecimal billOpen = calculateOpenAmount(bill.getVendorBillId());
+                // Skip bills that are fully paid or over-allocated (no positive open amount)
+                if (billOpen == null || billOpen.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
+
                 BigDecimal toApply = remaining.min(billOpen);
+                // Only create allocations with a strictly positive applied amount
+                if (toApply.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
 
                 APPaymentAllocation allocation = new APPaymentAllocation(
                         payment.getPaymentId(),
