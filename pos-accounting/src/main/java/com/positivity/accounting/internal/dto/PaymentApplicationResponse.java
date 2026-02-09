@@ -7,6 +7,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+
 /**
  * Response DTO for payment application operations.
  * 
@@ -48,7 +50,7 @@ public class PaymentApplicationResponse {
         private BigDecimal appliedAmount;
         private BigDecimal invoiceBalanceBefore;
         private BigDecimal invoiceBalanceAfter;
-        private String invoiceStatus;
+        private InvoiceStatus invoiceStatus;
     }
 
     /**

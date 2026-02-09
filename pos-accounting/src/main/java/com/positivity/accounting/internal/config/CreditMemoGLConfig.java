@@ -1,18 +1,22 @@
 package com.positivity.accounting.internal.config;
 
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
+import java.util.UUID;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.validation.annotation.Validated;
 
-import java.util.UUID;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
 
 /**
  * Configuration for GL account mappings used in Credit Memo processing.
  * 
- * <p><strong>Required Configuration:</strong> All GL account IDs must be configured in application.yml
- * or by command-line argument. The application will fail to start if any required property is missing.</p>
+ * <p>
+ * <strong>Required Configuration:</strong> All GL account IDs must be
+ * configured in application.yml
+ * or by command-line argument. The application will fail to start if any
+ * required property is missing.
+ * </p>
  * 
  * <pre>
  * pos:
@@ -28,9 +32,7 @@ import java.util.UUID;
  *      #131</a>
  */
 @Data
-@Validated
 @Configuration
-@Validated
 @ConfigurationProperties(prefix = "pos.accounting.credit-memo")
 public class CreditMemoGLConfig {
 

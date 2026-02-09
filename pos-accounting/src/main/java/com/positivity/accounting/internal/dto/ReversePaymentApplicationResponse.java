@@ -10,6 +10,8 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+import lombok.experimental.Tolerate;
 
 /**
  * Response after reversing payment application on invoice (from Invoice
@@ -34,7 +36,18 @@ public class ReversePaymentApplicationResponse implements Serializable {
      * Invoice status after reversal
      */
     @JsonProperty("status")
-    private String status;
+    private InvoiceStatus status;
+
+    @Tolerate
+    public void setStatus(String status) {
+        if (status != null) {
+            try {
+                this.status = InvoiceStatus.valueOf(status);
+            } catch (IllegalArgumentException e) {
+                this.status = null;
+            }
+        }
+    }
 
     /**
      * Invoice balance BEFORE reversal
