@@ -116,7 +116,7 @@ public class CreditMemoContractBehaviorIT {
         defaultResponse.setBalanceBefore(new BigDecimal("110.00"));
         defaultResponse.setBalanceAfter(new BigDecimal("0.00"));
         defaultResponse.setStatus("PAID");
-        defaultResponse.setCreditMemoApplied(true);
+        defaultResponse.setCreditMemoApplied(new BigDecimal("110.00"));
         when(invoiceServiceClient.applyCreditMemo(any(UUID.class), any(ApplyCreditMemoRequest.class)))
                 .thenReturn(defaultResponse);
     }
