@@ -249,7 +249,7 @@ public class CreditMemoService {
             creditMemos = creditMemoRepository.findAll(pageable);
         }
 
-        return creditMemos.map(cm -> buildResponse(cm, BigDecimal.ZERO)); // Balance unavailable in list view
+        return creditMemos.map(cm -> buildResponse(cm, null)); // Balance unavailable in list view
     }
 
     /**
