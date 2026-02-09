@@ -13,6 +13,7 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.accounting.internal.dto.APPaymentResponse;
@@ -101,10 +102,39 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Rollback the payment (transaction will roll back automatically)
             throw e;
         } catch (Exception e) {
-            // Gateway-level failures: transaction will roll back, so we can't persist GATEWAY_FAILED status
-            // For audit/idempotency of failed payments, this would require a separate transaction (REQUIRES_NEW)
+            // Gateway-level failures: persist failure state in separate transaction for audit/idempotency
+            persistGatewayFailure(payment.getPaymentId(), e.getMessage());
             log.error("Payment {} gateway failed: {}", request.getPaymentRef(), e.getMessage(), e);
             throw new PaymentGatewayException("Gateway failure: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Persists gateway failure state in a separate transaction.
+     * 
+     * This method uses REQUIRES_NEW propagation to ensure the failure state is persisted
+     * even when the parent transaction rolls back. This is critical for audit trails and
+     * idempotency - we need to record that a payment attempt was made and failed.
+     * 
+     * @param paymentId the payment ID
+     * @param errorMessage the error message from the gateway
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected void persistGatewayFailure(@NonNull UUID paymentId, String errorMessage) {
+        try {
+            Optional<APPayment> paymentOpt = paymentRepository.findById(paymentId);
+            if (paymentOpt.isPresent()) {
+                APPayment payment = paymentOpt.get();
+                payment.setStatus(APPaymentStatus.GATEWAY_FAILED);
+                payment.setGatewayResponse(errorMessage);
+                paymentRepository.save(payment);
+                log.info("Persisted gateway failure for payment {}", paymentId);
+            } else {
+                log.warn("Could not find payment {} to persist gateway failure", paymentId);
+            }
+        } catch (Exception ex) {
+            log.error("Failed to persist gateway failure for payment {}: {}", paymentId, ex.getMessage(), ex);
+            // Don't throw - this is best-effort persistence
         }
     }
 
