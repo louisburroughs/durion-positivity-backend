@@ -236,6 +236,69 @@ public class InvoiceServiceClient {
     }
 
     /**
+     * Apply credit memo to invoice.
+     * Updates invoice balance after credit memo is posted.
+     *
+     * @param invoiceId invoice identifier
+     * @param request   credit memo application details
+     * @return invoice state after credit memo applied
+     * @throws InvoiceServiceException if operation fails
+     */
+    public ApplyCreditMemoResponse applyCreditMemo(
+            UUID invoiceId,
+            ApplyCreditMemoRequest request) {
+
+        log.info("Applying credit memo {} to invoice {}: amount={}",
+                request.getCreditMemoId(), invoiceId, request.getTotalAmount());
+
+        Supplier<ApplyCreditMemoResponse> invokeRemote = () -> {
+            try {
+                ApplyCreditMemoResponse response = restClient.post()
+                        .uri(invoiceServiceUrl + "/v1/invoices/{id}/apply-credit-memo", invoiceId)
+                        .body(request)
+                        .retrieve()
+                        .onStatus(HttpStatusCode::isError, (httpRequest, httpResponse) -> {
+                            log.warn("Invoice service error applying credit memo: {} {}",
+                                    httpResponse.getStatusCode(), httpResponse.getStatusText());
+                            throw new InvoiceServiceException(
+                                    "Invoice service returned " + httpResponse.getStatusCode(),
+                                    httpResponse.getStatusCode().value());
+                        })
+                        .body(ApplyCreditMemoResponse.class);
+
+                if (response == null) {
+                    log.warn("Invoice service returned null response for apply credit memo on invoice {}",
+                            invoiceId);
+                    throw new InvoiceServiceException("No response from invoice service", 500);
+                }
+
+                log.info("Successfully applied credit memo to invoice {}: new status={}, balanceAfter={}",
+                        invoiceId, response.getStatus(), response.getBalanceAfter());
+
+                return response;
+            } catch (RestClientException e) {
+                log.error("Failed to apply credit memo to invoice {}: {}", invoiceId, e.getMessage(), e);
+                throw new InvoiceServiceException(
+                        "Failed to apply credit memo to invoice: " + e.getMessage(), e);
+            }
+        };
+
+        try {
+            return invoiceServiceCircuitBreaker.executeSupplier(invokeRemote);
+        } catch (Exception e) {
+            if (e instanceof InvoiceServiceException) {
+                throw (InvoiceServiceException) e;
+            }
+            log.error("Circuit breaker open for applyCreditMemo({}): {}",
+                    invoiceId, e.getMessage());
+            throw new InvoiceServiceException(
+                    "Invoice service unavailable (circuit breaker open). Credit memo application cannot proceed.",
+                    503,
+                    e);
+        }
+    }
+
+    /**
      * Check if Invoice service is healthy.
      * Used for pre-flight validation before attempting payment operations.
      *
