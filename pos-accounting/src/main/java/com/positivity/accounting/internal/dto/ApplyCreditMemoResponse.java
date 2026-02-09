@@ -15,7 +15,9 @@ import java.util.UUID;
  * Response from applying a Credit Memo to an invoice.
  * Returned by Invoice service to Accounting service.
  * 
- * @see <a href="https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue #131</a>
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
+ *      #131</a>
  */
 @Data
 @Builder
