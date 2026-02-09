@@ -224,12 +224,7 @@ public class CreditMemoService {
         if (customerId != null) {
             creditMemos = creditMemoRepository.findByCustomerId(customerId, pageable);
         } else if (originalInvoiceId != null) {
-            creditMemos = creditMemoRepository.findByOriginalInvoiceId(originalInvoiceId)
-                    .stream()
-                    .collect(java.util.stream.Collectors.collectingAndThen(
-                            java.util.stream.Collectors.toList(),
-                            list -> new org.springframework.data.domain.PageImpl<>(
-                                    list, pageable, list.size())));
+            creditMemos = creditMemoRepository.findByOriginalInvoiceId(originalInvoiceId, pageable);
         } else if (status != null) {
             creditMemos = creditMemoRepository.findByStatus(status, pageable);
         } else {
