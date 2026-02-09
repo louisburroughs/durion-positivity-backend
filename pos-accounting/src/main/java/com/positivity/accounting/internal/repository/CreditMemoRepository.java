@@ -29,7 +29,7 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
      * Find all credit memos for an invoice with pagination.
      * 
      * @param originalInvoiceId invoice identifier
-     * @param pageable          pagination parameters
+     * @param pageable   pagination parameters
      * @return page of credit memos
      */
     Page<CreditMemo> findByOriginalInvoiceId(UUID originalInvoiceId, Pageable pageable);
