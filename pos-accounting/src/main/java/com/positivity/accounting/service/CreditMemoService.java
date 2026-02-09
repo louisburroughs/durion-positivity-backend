@@ -132,11 +132,11 @@ public class CreditMemoService {
         BigDecimal totalCreditAmount = request.getCreditAmount().add(taxReversed);
 
         // Validate total credit amount doesn't exceed balance
-        if (totalCreditAmount.compareTo(invoice.getBalanceDue()) > 0) {
+        if (totalCreditAmount.compareTo(balanceDue) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Total credit amount " + totalCreditAmount
                             + " (credit: " + request.getCreditAmount() + " + tax: " + taxReversed + ")"
-                            + " exceeds invoice outstanding balance " + invoice.getBalanceDue());
+                            + " exceeds invoice outstanding balance " + balanceDue);
         }
 
         // Check if prior period adjustment
