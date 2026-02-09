@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.CreditMemo;
-import com.positivity.accounting.internal.entity.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.entity;
+package com.positivity.accounting.internal.enums;
 
 /**
  * Status values for Credit Memo lifecycle.
