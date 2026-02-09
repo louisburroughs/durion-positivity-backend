@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -132,14 +133,14 @@ class CreditMemoServiceTest {
                 .creditMemoApplied(new BigDecimal("55.00"))
                 .build();
 
-        // Mock GL config
-        when(glConfig.getRevenueAccountId()).thenReturn(testRevenueAccountId);
-        when(glConfig.getTaxPayableAccountId()).thenReturn(testTaxAccountId);
-        when(glConfig.getArAccountId()).thenReturn(testArAccountId);
+        // Mock GL config (lenient - not all tests reach GL posting)
+        lenient().when(glConfig.getRevenueAccountId()).thenReturn(testRevenueAccountId);
+        lenient().when(glConfig.getTaxPayableAccountId()).thenReturn(testTaxAccountId);
+        lenient().when(glConfig.getArAccountId()).thenReturn(testArAccountId);
 
-        // Mock period service (default: not prior period)
-        when(periodService.isPriorPeriod(any())).thenReturn(false);
-        when(periodService.getCurrentPeriodId()).thenReturn("2026-02");
+        // Mock period service (lenient - not all tests reach period checks)
+        lenient().when(periodService.isPriorPeriod(any())).thenReturn(false);
+        lenient().when(periodService.getCurrentPeriodId()).thenReturn("2026-02");
     }
 
     @Test
@@ -263,6 +264,29 @@ class CreditMemoServiceTest {
     }
 
     @Test
+    @DisplayName("Should throw exception when invoice has zero remaining balance")
+    void testCreateCreditMemo_ZeroSubtotal() {
+        // Given - invoice is fully paid (totalAmount = totalPaid, subtotal = 0)
+        testInvoice = InvoiceDetails.builder()
+                .invoiceId(testInvoiceId)
+                .customerId(testCustomerId)
+                .status("PAID")
+                .totalAmount(new BigDecimal("110.00"))
+                .totalPaid(new BigDecimal("110.00"))
+                .balanceDue(BigDecimal.ZERO)
+                .currency("USD")
+                .build();
+        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+
+        // When / Then - should fail fast with 409 before attempting division
+        assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Invoice has no remaining balance to credit")
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
     @DisplayName("Should throw exception when invoice is voided")
     void testCreateCreditMemo_VoidedInvoice() {
         // Given
@@ -365,8 +389,9 @@ class CreditMemoServiceTest {
         // Given
         Pageable pageable = PageRequest.of(0, 10);
         List<CreditMemo> creditMemos = List.of(testCreditMemo);
+        Page<CreditMemo> page = new PageImpl<>(creditMemos, pageable, 1);
 
-        when(creditMemoRepository.findByOriginalInvoiceId(testInvoiceId)).thenReturn(creditMemos);
+        when(creditMemoRepository.findByOriginalInvoiceId(testInvoiceId, pageable)).thenReturn(page);
 
         // When
         Page<CreditMemoResponse> result = service.listCreditMemos(null, testInvoiceId, null, pageable);
@@ -377,7 +402,7 @@ class CreditMemoServiceTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getOriginalInvoiceId()).isEqualTo(testInvoiceId);
 
-        verify(creditMemoRepository).findByOriginalInvoiceId(testInvoiceId);
+        verify(creditMemoRepository).findByOriginalInvoiceId(testInvoiceId, pageable);
     }
 
     @Test
