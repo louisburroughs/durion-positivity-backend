@@ -18,7 +18,8 @@ import java.util.UUID;
  * Service for posting GL entries related to accounting transactions.
  * 
  * Responsibilities:
- * - Create and post journal entries for Credit Memos, Payment Applications, etc.
+ * - Create and post journal entries for Credit Memos, Payment Applications,
+ * etc.
  * - Validate entry balance before posting
  * - Link journal entries to source events
  * - Support prior period adjustment flagging
@@ -29,7 +30,9 @@ import java.util.UUID;
  * - Provides helper methods for common posting patterns
  * 
  * @see JournalEntryService
- * @see <a href="https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue #131</a>
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
+ *      #131</a>
  */
 @Slf4j
 @Service
@@ -47,15 +50,15 @@ public class GLPostingService {
      * - Debit: Tax Liability (tax reversed)
      * - Credit: Accounts Receivable (total amount)
      * 
-     * @param creditMemoId         Credit Memo identifier (source event)
-     * @param revenueAccountId     GL account for revenue reversal
-     * @param taxPayableAccountId  GL account for tax reversal
-     * @param arAccountId          GL account for AR reduction
-     * @param creditAmount         Credit amount (revenue portion)
-     * @param taxReversed          Tax amount reversed
-     * @param description          Entry description
-     * @param isPriorPeriod        True if prior period adjustment
-     * @param originalPeriodId     Original period ID if prior period
+     * @param creditMemoId        Credit Memo identifier (source event)
+     * @param revenueAccountId    GL account for revenue reversal
+     * @param taxPayableAccountId GL account for tax reversal
+     * @param arAccountId         GL account for AR reduction
+     * @param creditAmount        Credit amount (revenue portion)
+     * @param taxReversed         Tax amount reversed
+     * @param description         Entry description
+     * @param isPriorPeriod       True if prior period adjustment
+     * @param originalPeriodId    Original period ID if prior period
      * @return Posted journal entry
      */
     public JournalEntry postCreditMemoReversal(

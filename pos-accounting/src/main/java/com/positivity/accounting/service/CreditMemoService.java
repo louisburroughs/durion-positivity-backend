@@ -41,7 +41,8 @@ import java.util.UUID;
  * - Prior period adjustments: post to current period with flag
  * - No approval workflow for v1.0
  * 
- * Phase 2.1: Full integration with Invoice, GL posting, and Accounting period services.
+ * Phase 2.1: Full integration with Invoice, GL posting, and Accounting period
+ * services.
  * 
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue

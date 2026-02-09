@@ -20,7 +20,9 @@ import java.util.UUID;
  *       ar-account-id: "..."
  * </pre>
  * 
- * @see <a href="https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue #131</a>
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
+ *      #131</a>
  */
 @Data
 @Configuration

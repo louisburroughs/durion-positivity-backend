@@ -24,7 +24,9 @@ import java.time.YearMonth;
  * - Period status management (OPEN, CLOSED, LOCKED)
  * - Hard-close enforcement
  * 
- * @see <a href="https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue #131</a>
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
+ *      #131</a>
  */
 @Slf4j
 @Service
