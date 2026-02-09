@@ -52,11 +52,6 @@ public class CreditMemo {
     @Column(name = "tax_amount_reversed", nullable = false, precision = 19, scale = 4)
     private BigDecimal taxAmountReversed;
 
-    // totalAmount is a derived field, calculated from creditAmount + taxAmountReversed
-    // Not persisted to prevent data inconsistency
-    @Transient
-    private BigDecimal totalAmount;
-
     @Column(name = "reason_code", nullable = false, length = 50)
     private String reasonCode;
 
