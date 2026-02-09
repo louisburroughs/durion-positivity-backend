@@ -1,0 +1,344 @@
+package com.positivity.accounting;
+
+import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
+import com.positivity.accounting.internal.entity.CreditMemo;
+import com.positivity.accounting.internal.entity.CreditMemoStatus;
+import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import tools.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * Contract Behavioral Integration Tests for Credit Memo (CAP-052)
+ *
+ * This test suite validates the behavioral contracts defined in:
+ * durion/domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md
+ * Section: Credit Memo endpoints (v1.1)
+ *
+ * Each test maps to a scenario defined in the contract guide's "Examples"
+ * section for Credit Memo operations.
+ * Tests run against the actual service in test mode (not mocked).
+ *
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
+ *      #131</a>
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+@DisplayName("Credit Memo Backend Contract Behavioral Tests (CAP-052)")
+public class CreditMemoContractBehaviorIT {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private CreditMemoRepository creditMemoRepository;
+
+    private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
+
+    // Gateway header values — mirrors what pos-api-gateway injects after JWT
+    // validation
+    private static final String TEST_USER = "testuser";
+    private static final String TEST_AUTHORITIES = String.join(",",
+            "accounting:credit-memo:create",
+            "accounting:credit-memo:read");
+
+    /**
+     * Adds gateway authentication headers to a request builder.
+     * Mirrors the headers injected by pos-api-gateway after JWT validation.
+     */
+    private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
+        return builder
+                .header("X-User", TEST_USER)
+                .header("X-Authorities", TEST_AUTHORITIES);
+    }
+
+    @BeforeEach
+    void setUp() {
+        // Clean up any existing test data
+        creditMemoRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
+        // Clean up test data after each test
+        creditMemoRepository.deleteAll();
+    }
+
+    // ===============================================
+    // HAPPY PATH SCENARIOS (from Contract Guide Examples)
+    // ===============================================
+
+    @Test
+    @DisplayName("CP-CM-001: Create full credit memo (Contract Example 1)")
+    void testCreateFullCreditMemo_Success() throws Exception {
+        // Arrange: Full credit for returned goods (per contract guide example)
+        UUID testInvoiceId = UUID.randomUUID();
+        CreateCreditMemoRequest request = new CreateCreditMemoRequest();
+        request.setOriginalInvoiceId(testInvoiceId);
+        request.setCreditAmount(new BigDecimal("100.00"));
+        request.setReasonCode("RETURNED_GOODS");
+        request.setJustificationNote("Customer returned all items due to shipping damage");
+
+        // Act: POST to Credit Memo endpoint
+        MvcResult result = mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.creditMemoId").exists())
+                .andExpect(jsonPath("$.originalInvoiceId").value(testInvoiceId.toString()))
+                .andExpect(jsonPath("$.creditAmount").value(100.00))
+                .andExpect(jsonPath("$.taxAmountReversed").exists()) // Calculated proportionally
+                .andExpect(jsonPath("$.totalAmount").exists()) // Credit + tax
+                .andExpect(jsonPath("$.reasonCode").value("RETURNED_GOODS"))
+                .andExpect(jsonPath("$.status").value("POSTED"))
+                .andExpect(jsonPath("$.priorPeriodAdjustment").value(false))
+                .andExpect(jsonPath("$.creationTimestamp").exists())
+                .andExpect(jsonPath("$.postedTimestamp").exists())
+                .andReturn();
+
+        // Assert: Verify entity persisted with correct values
+        String responseBody = result.getResponse().getContentAsString();
+        var responseMap = objectMapper.readValue(responseBody, java.util.Map.class);
+        UUID creditMemoId = UUID.fromString((String) responseMap.get("creditMemoId"));
+
+        CreditMemo saved = creditMemoRepository.findById(creditMemoId).orElseThrow();
+        assertThat(saved.getOriginalInvoiceId()).isEqualTo(testInvoiceId);
+        assertThat(saved.getCreditAmount()).isEqualByComparingTo("100.00");
+        assertThat(saved.getReasonCode()).isEqualTo("RETURNED_GOODS");
+        assertThat(saved.getStatus()).isEqualTo(CreditMemoStatus.POSTED);
+    }
+
+    @Test
+    @DisplayName("CP-CM-002: Create partial credit memo (Contract Example 2)")
+    void testCreatePartialCreditMemo_Success() throws Exception {
+        // Arrange: Partial credit for pricing error
+        UUID testInvoiceId = UUID.randomUUID();
+        CreateCreditMemoRequest request = new CreateCreditMemoRequest();
+        request.setOriginalInvoiceId(testInvoiceId);
+        request.setCreditAmount(new BigDecimal("25.00")); // Partial amount
+        request.setReasonCode("PRICING_ERROR");
+        request.setJustificationNote("Incorrect pricing applied to line item #3");
+
+        // Act: POST to Credit Memo endpoint
+        mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.creditAmount").value(25.00))
+                .andExpect(jsonPath("$.reasonCode").value("PRICING_ERROR"))
+                .andExpect(jsonPath("$.status").value("POSTED"));
+    }
+
+    @Test
+    @DisplayName("CP-CM-003: List credit memos with pagination")
+    void testListCreditMemos_Paginated() throws Exception {
+        // Arrange: Create multiple credit memos
+        UUID invoiceId = UUID.randomUUID();
+        for (int i = 0; i < 5; i++) {
+            CreditMemo cm = new CreditMemo();
+            cm.setOriginalInvoiceId(invoiceId);
+            cm.setCustomerId(UUID.randomUUID());
+            cm.setCreditAmount(new BigDecimal("10.00"));
+            cm.setTaxAmountReversed(new BigDecimal("1.00"));
+            cm.setTotalAmount(new BigDecimal("11.00"));
+            cm.setReasonCode("SERVICE_CREDIT");
+            cm.setStatus(CreditMemoStatus.POSTED);
+            cm.setCreatedByUserId(TEST_USER);
+            cm.setCurrency("USD");
+            cm.setPriorPeriodAdjustment(false);
+            creditMemoRepository.save(cm);
+        }
+
+        // Act: GET list with pagination
+        mockMvc.perform(withAuth(get(API_V1_CREDIT_MEMOS))
+                .param("page", "0")
+                .param("size", "3"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(3))
+                .andExpect(jsonPath("$.totalElements").value(5))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    @DisplayName("CP-CM-004: Get credit memo by ID")
+    void testGetCreditMemo_Success() throws Exception {
+        // Arrange: Create a credit memo
+        CreditMemo cm = new CreditMemo();
+        cm.setOriginalInvoiceId(UUID.randomUUID());
+        cm.setCustomerId(UUID.randomUUID());
+        cm.setCreditAmount(new BigDecimal("50.00"));
+        cm.setTaxAmountReversed(new BigDecimal("5.00"));
+        cm.setTotalAmount(new BigDecimal("55.00"));
+        cm.setReasonCode("BILLING_ERROR");
+        cm.setJustificationNote("Duplicate charge on invoice");
+        cm.setStatus(CreditMemoStatus.POSTED);
+        cm.setCreatedByUserId(TEST_USER);
+        cm.setCurrency("USD");
+        cm.setPriorPeriodAdjustment(false);
+        CreditMemo saved = creditMemoRepository.save(cm);
+
+        // Act: GET by ID
+        mockMvc.perform(withAuth(get(API_V1_CREDIT_MEMOS + "/" + saved.getCreditMemoId())))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.creditMemoId").value(saved.getCreditMemoId().toString()))
+                .andExpect(jsonPath("$.creditAmount").value(50.00))
+                .andExpect(jsonPath("$.reasonCode").value("BILLING_ERROR"));
+    }
+
+    @Test
+    @DisplayName("CP-CM-005: Filter credit memos by invoice ID")
+    void testListCreditMemos_FilterByInvoice() throws Exception {
+        // Arrange: Create credit memos for different invoices
+        UUID targetInvoiceId = UUID.randomUUID();
+        UUID otherInvoiceId = UUID.randomUUID();
+
+        for (int i = 0; i < 3; i++) {
+            CreditMemo cm = new CreditMemo();
+            cm.setOriginalInvoiceId(i < 2 ? targetInvoiceId : otherInvoiceId);
+            cm.setCustomerId(UUID.randomUUID());
+            cm.setCreditAmount(new BigDecimal("10.00"));
+            cm.setTaxAmountReversed(new BigDecimal("1.00"));
+            cm.setTotalAmount(new BigDecimal("11.00"));
+            cm.setReasonCode("SERVICE_CREDIT");
+            cm.setStatus(CreditMemoStatus.POSTED);
+            cm.setCreatedByUserId(TEST_USER);
+            cm.setCurrency("USD");
+            cm.setPriorPeriodAdjustment(false);
+            creditMemoRepository.save(cm);
+        }
+
+        // Act: GET list filtered by invoice ID
+        mockMvc.perform(withAuth(get(API_V1_CREDIT_MEMOS))
+                .param("originalInvoiceId", targetInvoiceId.toString()))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].originalInvoiceId").value(targetInvoiceId.toString()));
+    }
+
+    // ===============================================
+    // ERROR SCENARIOS (from Contract Guide Examples)
+    // ===============================================
+
+    @Test
+    @DisplayName("CE-CM-001: Amount exceeds balance - 409 Conflict (Contract Example)")
+    void testCreateCreditMemo_AmountExceedsBalance() throws Exception {
+        // Arrange: Credit amount exceeds stubbed invoice balance ($110)
+        UUID testInvoiceId = UUID.randomUUID();
+        CreateCreditMemoRequest request = new CreateCreditMemoRequest();
+        request.setOriginalInvoiceId(testInvoiceId);
+        request.setCreditAmount(new BigDecimal("200.00")); // Exceeds balance
+        request.setReasonCode("RETURNED_GOODS");
+
+        // Act & Assert: Expect 409 Conflict
+        mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isConflict())
+                .andExpect(
+                        jsonPath("$.message").value("Credit amount 200.00 exceeds invoice outstanding balance 110.00"));
+    }
+
+    @Test
+    @DisplayName("CE-CM-002: Missing reason code - 400 Bad Request (Contract Example)")
+    void testCreateCreditMemo_MissingReasonCode() throws Exception {
+        // Arrange: No reason code provided
+        UUID testInvoiceId = UUID.randomUUID();
+        CreateCreditMemoRequest request = new CreateCreditMemoRequest();
+        request.setOriginalInvoiceId(testInvoiceId);
+        request.setCreditAmount(new BigDecimal("50.00"));
+        // request.setReasonCode(null); // Intentionally omitted
+
+        // Act & Assert: Expect 400 Bad Request with field errors
+        mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+        // Note: Specific field error structure depends on validation framework config
+    }
+
+    @Test
+    @DisplayName("CE-CM-003: Credit memo not found - 404 Not Found")
+    void testGetCreditMemo_NotFound() throws Exception {
+        // Arrange: Non-existent credit memo ID
+        UUID nonExistentId = UUID.randomUUID();
+
+        // Act & Assert: Expect 404 Not Found
+        mockMvc.perform(withAuth(get(API_V1_CREDIT_MEMOS + "/" + nonExistentId)))
+                .andDo(print())
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Credit Memo not found: " + nonExistentId));
+    }
+
+    @Test
+    @DisplayName("CE-CM-004: Invalid credit amount - 400 Bad Request")
+    void testCreateCreditMemo_InvalidAmount() throws Exception {
+        // Arrange: Negative credit amount
+        UUID testInvoiceId = UUID.randomUUID();
+        CreateCreditMemoRequest request = new CreateCreditMemoRequest();
+        request.setOriginalInvoiceId(testInvoiceId);
+        request.setCreditAmount(new BigDecimal("-10.00")); // Invalid
+        request.setReasonCode("RETURNED_GOODS");
+
+        // Act & Assert: Expect 400 Bad Request
+        mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+    }
+
+    // ===============================================
+    // AUTHORIZATION SCENARIOS
+    // ===============================================
+
+    @Test
+    @DisplayName("AUTH-CM-001: Missing authorities - 403 Forbidden")
+    void testCreateCreditMemo_NoAuthorities() throws Exception {
+        // Arrange: Request without authorities
+        UUID testInvoiceId = UUID.randomUUID();
+        CreateCreditMemoRequest request = new CreateCreditMemoRequest();
+        request.setOriginalInvoiceId(testInvoiceId);
+        request.setCreditAmount(new BigDecimal("50.00"));
+        request.setReasonCode("RETURNED_GOODS");
+
+        // Act & Assert: Expect 403 Forbidden (no authorities header)
+        mockMvc.perform(post(API_V1_CREDIT_MEMOS)
+                .header("X-User", TEST_USER) // User present but no authorities
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isForbidden());
+    }
+}

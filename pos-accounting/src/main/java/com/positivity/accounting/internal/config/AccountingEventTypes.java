@@ -17,7 +17,7 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 27 event types.
+         * Total: 30 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -87,6 +87,14 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.approval("ACCOUNTING_AUDIT_REFUND",
                                                 "Record a refund with policy validation").build(),
                                 EventTypeRegistration.write("ACCOUNTING_AUDIT_CANCELLATION",
-                                                "Record an order or invoice cancellation").build());
+                                                "Record an order or invoice cancellation").build(),
+
+                                // CreditMemoController - 3 events (CAP-052)
+                                EventTypeRegistration.write("ACCOUNTING_CREDIT_MEMO_CREATE",
+                                                "Create a credit memo to reverse invoice charges").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_LIST",
+                                                "List credit memos with optional filters").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_GET",
+                                                "Get credit memo details by ID").build());
         }
 }
