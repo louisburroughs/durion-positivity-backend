@@ -417,7 +417,8 @@ class CreditMemoServiceTest {
                 "PRICING_ERROR",
                 "SERVICE_CREDIT",
                 "BILLING_ERROR",
-                "DAMAGED_GOODS",
+                "DAMAGED_GOODS"
+        };
         when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
         when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
                 .thenReturn(testInvoiceResponse);
@@ -444,10 +445,7 @@ class CreditMemoServiceTest {
         when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
         when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(testInvoiceResponse
-        testRequest.setJustificationNote(null);
-        testCreditMemo.setJustificationNote(null);
-        when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
+                .thenReturn(testInvoiceResponse);
 
         // When
         CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
