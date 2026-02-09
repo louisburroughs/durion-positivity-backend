@@ -56,7 +56,9 @@ public class JournalEntry {
             journalEntryId = UUIDv7Generator.generate();
         }
         Instant now = Instant.now();
-        String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+        String currentUser = SecurityContextHelper.isAuthenticated() 
+                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
+                : "SYSTEM";
         this.createdAt = now;
         this.modifiedAt = now;
         this.createdBy = currentUser;
@@ -141,7 +143,9 @@ public class JournalEntry {
     @PreUpdate
     protected void onUpdate() {
         this.modifiedAt = Instant.now();
-        this.modifiedBy = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+        this.modifiedBy = SecurityContextHelper.isAuthenticated()
+                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
+                : "SYSTEM";
     }
 
     /**
