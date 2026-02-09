@@ -243,14 +243,13 @@ class CreditMemoServiceTest {
     @DisplayName("Should throw exception when total credit (including tax) exceeds invoice balance")
     void testCreateCreditMemo_TotalAmountWithTaxExceedsBalance() {
         // Given - invoice balance is $110.00
-        // Credit amount of $100.00 would equal balanceDue (old validation would pass)
-        // But with 10% tax reversal ($10.00), total becomes $110.00
-        // Since the calculation uses proportional tax, we need creditAmount where 
-        // creditAmount + (creditAmount * 0.10) > balanceDue
+        // Under old validation, only the creditAmount (without tax) was compared to balanceDue.
+        // With a 10% tax reversal, we need a creditAmount such that:
+        //   creditAmount + (creditAmount * 0.10) > balanceDue
         // Setting creditAmount to $105.00 gives us:
         //   - creditAmount: $105.00
         //   - taxReversed: $10.50 (10% of 105)
-        //   - total: $115.50 > $110.00 balance
+        //   - total: $115.50, which exceeds the $110.00 balance
         testRequest.setCreditAmount(new BigDecimal("105.00"));
         when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
 
