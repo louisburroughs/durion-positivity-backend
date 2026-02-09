@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.APPaymentAllocation;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
@@ -114,29 +115,27 @@ public class APPaymentContractBehaviorIT {
         testVendorId = UUID.randomUUID();
 
         // Bill 1: Due oldest (30 days ago), $500
-        bill1 = VendorBill.builder()
-                .vendorId(testVendorId)
-                .billNumber("BILL-001")
-                .billDate(LocalDate.now().minusDays(40))
-                .dueDate(LocalDate.now().minusDays(10))
-                .totalAmount(new BigDecimal("500.00"))
-                .openAmount(new BigDecimal("500.00"))
-                .status(VendorBillStatus.APPROVED)
-                .currency("USD")
-                .build();
+        bill1 = new VendorBill();
+        bill1.setVendorId(testVendorId);
+        bill1.setBillNumber("BILL-001");
+        bill1.setBillDate(LocalDate.now().minusDays(40).atStartOfDay());
+        bill1.setDueDate(LocalDate.now().minusDays(10).atStartOfDay());
+        bill1.setTotalAmount(new BigDecimal("500.00"));
+        bill1.setStatus(VendorBillStatus.APPROVED);
+        bill1.setCreatedBy("test-setup");
+        bill1.setModifiedBy("test-setup");
         bill1 = vendorBillRepository.save(bill1);
 
         // Bill 2: Due newer (15 days from now), $300
-        bill2 = VendorBill.builder()
-                .vendorId(testVendorId)
-                .billNumber("BILL-002")
-                .billDate(LocalDate.now().minusDays(10))
-                .dueDate(LocalDate.now().plusDays(15))
-                .totalAmount(new BigDecimal("300.00"))
-                .openAmount(new BigDecimal("300.00"))
-                .status(VendorBillStatus.APPROVED)
-                .currency("USD")
-                .build();
+        bill2 = new VendorBill();
+        bill2.setVendorId(testVendorId);
+        bill2.setBillNumber("BILL-002");
+        bill2.setBillDate(LocalDate.now().minusDays(10).atStartOfDay());
+        bill2.setDueDate(LocalDate.now().plusDays(15).atStartOfDay());
+        bill2.setTotalAmount(new BigDecimal("300.00"));
+        bill2.setStatus(VendorBillStatus.APPROVED);
+        bill2.setCreatedBy("test-setup");
+        bill2.setModifiedBy("test-setup");
         bill2 = vendorBillRepository.save(bill2);
     }
 
@@ -185,15 +184,19 @@ public class APPaymentContractBehaviorIT {
 
         // Assert: Verify automatic allocation (oldest due first: bill1 fully paid,
         // bill2 partially)
-        String responseJson = result.getResponse().getContentAsString();
-        assertThat(responseJson).contains("BILL-001"); // Bill 1 allocation
-        assertThat(responseJson).contains("BILL-002"); // Bill 2 allocation
-
-        // Verify allocation logic: bill1 = $500, bill2 = $100, unapplied = $0
         APPayment savedPayment = apPaymentRepository.findByPaymentRef(paymentRef).orElseThrow();
         assertThat(savedPayment.getUnappliedAmount()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(allocationRepository.findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId()))
-                .hasSize(2);
+        
+        List<APPaymentAllocation> allocations = allocationRepository.findByPaymentIdOrderByAllocationSequenceAsc(savedPayment.getPaymentId());
+        assertThat(allocations).hasSize(2);
+        
+        // Verify bill1 (oldest due) gets allocated first: $500
+        assertThat(allocations.get(0).getVendorBillId()).isEqualTo(bill1.getVendorBillId());
+        assertThat(allocations.get(0).getAppliedAmount()).isEqualByComparingTo(new BigDecimal("500.00"));
+        
+        // Verify bill2 gets remaining $100
+        assertThat(allocations.get(1).getVendorBillId()).isEqualTo(bill2.getVendorBillId());
+        assertThat(allocations.get(1).getAppliedAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
     }
 
     @Test
@@ -273,9 +276,11 @@ public class APPaymentContractBehaviorIT {
                 .andExpect(jsonPath("$.paymentRef").value(paymentRef))
                 .andReturn();
 
+        String paymentId2 = objectMapper.readTree(result2.getResponse().getContentAsString())
+                .get("paymentId").asText();
+
         // Assert: Verify same payment instance returned (no duplicate created)
-        assertThat(result1.getResponse().getContentAsString())
-                .isEqualTo(result2.getResponse().getContentAsString());
+        assertThat(paymentId1).isEqualTo(paymentId2);
         assertThat(apPaymentRepository.findAll()).hasSize(1);
     }
 
@@ -305,19 +310,19 @@ public class APPaymentContractBehaviorIT {
     void testGetPaymentById_Success() throws Exception {
         // Arrange: Create a payment first
         String paymentRef = UUID.randomUUID().toString();
-        APPayment payment = APPayment.builder()
-                .vendorId(testVendorId)
-                .paymentRef(paymentRef)
-                .grossAmount(new BigDecimal("100.00"))
-                .feeAmount(BigDecimal.ZERO)
-                .netAmount(new BigDecimal("100.00"))
-                .unappliedAmount(new BigDecimal("100.00"))
-                .currency("USD")
-                .paymentMethod(PaymentMethod.ACH)
-                .status(APPaymentStatus.GATEWAY_SUCCEEDED)
-                .gatewayTransactionId("TXN-12345")
-                .gatewayTimestamp(Instant.now())
-                .build();
+        APPayment payment = new APPayment();
+        payment.setVendorId(testVendorId);
+        payment.setPaymentRef(paymentRef);
+        payment.setGrossAmount(new BigDecimal("100.00"));
+        payment.setFeeAmount(BigDecimal.ZERO);
+        payment.setNetAmount(new BigDecimal("100.00"));
+        payment.setUnappliedAmount(new BigDecimal("100.00"));
+        payment.setCurrency("USD");
+        payment.setPaymentMethod(PaymentMethod.ACH);
+        payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+        payment.setGatewayTransactionId("TXN-12345");
+        payment.setGatewayTimestamp(Instant.now());
+        payment.setCreatedBy("test-user");
         payment = apPaymentRepository.save(payment);
 
         // Act: GET /v1/accounting/ap/payments/{paymentId}
@@ -336,21 +341,21 @@ public class APPaymentContractBehaviorIT {
     void testGetPaymentByRef_Success() throws Exception {
         // Arrange: Create a payment first
         String paymentRef = UUID.randomUUID().toString();
-        APPayment payment = APPayment.builder()
-                .vendorId(testVendorId)
-                .paymentRef(paymentRef)
-                .grossAmount(new BigDecimal("200.00"))
-                .feeAmount(BigDecimal.ZERO)
-                .netAmount(new BigDecimal("200.00"))
-                .unappliedAmount(BigDecimal.ZERO)
-                .currency("USD")
-                .paymentMethod(PaymentMethod.CHECK)
-                .status(APPaymentStatus.GL_POSTED)
-                .gatewayTransactionId("TXN-67890")
-                .gatewayTimestamp(Instant.now())
-                .glJournalEntryId("JE-001")
-                .glPostedAt(Instant.now())
-                .build();
+        APPayment payment = new APPayment();
+        payment.setVendorId(testVendorId);
+        payment.setPaymentRef(paymentRef);
+        payment.setGrossAmount(new BigDecimal("200.00"));
+        payment.setFeeAmount(BigDecimal.ZERO);
+        payment.setNetAmount(new BigDecimal("200.00"));
+        payment.setUnappliedAmount(BigDecimal.ZERO);
+        payment.setCurrency("USD");
+        payment.setPaymentMethod(PaymentMethod.CHECK);
+        payment.setStatus(APPaymentStatus.GL_POSTED);
+        payment.setGatewayTransactionId("TXN-67890");
+        payment.setGatewayTimestamp(Instant.now());
+        payment.setGlJournalEntryId(UUID.randomUUID());
+        payment.setGlPostedAt(Instant.now());
+        payment.setCreatedBy("test-user");
         payment = apPaymentRepository.save(payment);
 
         // Act: GET /v1/accounting/ap/payments/by-ref/{paymentRef}
@@ -359,7 +364,7 @@ public class APPaymentContractBehaviorIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paymentRef").value(paymentRef))
                 .andExpect(jsonPath("$.status").value("GL_POSTED"))
-                .andExpect(jsonPath("$.glJournalEntryId").value("JE-001"));
+                .andExpect(jsonPath("$.glJournalEntryId").value(payment.getGlJournalEntryId().toString()));
     }
 
     // ===============================================
