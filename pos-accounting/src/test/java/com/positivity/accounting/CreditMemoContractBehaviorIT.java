@@ -9,7 +9,7 @@ import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.service.GLPostingService;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.client.InvoiceServiceClient.InvoiceDetails;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
