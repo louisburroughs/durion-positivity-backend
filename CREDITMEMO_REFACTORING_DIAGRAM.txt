@@ -1,66 +1,16 @@
-╔════════════════════════════════════════════════════════════════════════════╗
-║         CreditMemoStatus Enum Refactoring - File Structure                ║
-╚════════════════════════════════════════════════════════════════════════════╝
+CREDITMEMO_REFACTORING_DIAGRAM (DEPRECATED)
 
-BEFORE:
-  pos-accounting/src/main/java/com/positivity/accounting/
-  ├── internal/
-  │   ├── entity/
-  │   │   ├── CreditMemo.java ─────────────┐
-  │   │   └── CreditMemoStatus.java  ◄─────┤ (OLD LOCATION - DELETED)
-  │   └── repository/                      │
-  │       └── CreditMemoRepository.java ───┘
-  └── service/
-      └── CreditMemoService.java ──────────┘
+This file originally contained an ad-hoc diagram used during the
+CreditMemoStatus enum refactoring to track file moves and import changes.
 
-AFTER:
-  pos-accounting/src/main/java/com/positivity/accounting/
-  ├── internal/
-  │   ├── entity/
-  │   │   └── CreditMemo.java ─────────────┐
-  │   ├── enums/                           │
-  │   │   └── CreditMemoStatus.java  ◄─────┤ (NEW LOCATION)
-  │   ├── repository/                      │
-  │   │   └── CreditMemoRepository.java ───┤
-  │   └── controller/                      │
-  │       └── CreditMemoController.java ───┤
-  └── service/                             │
-      └── CreditMemoService.java ──────────┘
+The refactoring has since been completed, and this one-off artifact is no
+longer part of the build or documentation structure. To keep the repository
+tidy, detailed documentation of the refactoring (if needed) should live
+under the docs/ directory (for example: docs/credit-memo-status-refactor.md).
 
-  pos-accounting/src/test/java/com/positivity/accounting/
-  ├── service/
-  │   └── CreditMemoServiceTest.java ──────┤
-  └── CreditMemoContractBehaviorIT.java ───┘
-
-╔════════════════════════════════════════════════════════════════════════════╗
-║                        Import Statement Changes                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-OLD IMPORT (REMOVED):
-  import com.positivity.accounting.internal.entity.CreditMemoStatus;
-  
-NEW IMPORT (6 FILES UPDATED):
-  import com.positivity.accounting.internal.enums.CreditMemoStatus;
-
-Files Updated:
-  ✅ CreditMemo.java                    (Entity)
-  ✅ CreditMemoRepository.java          (Repository)
-  ✅ CreditMemoService.java             (Service)
-  ✅ CreditMemoController.java          (Controller)
-  ✅ CreditMemoServiceTest.java         (Unit Test)
-  ✅ CreditMemoContractBehaviorIT.java  (Integration Test)
-
-╔════════════════════════════════════════════════════════════════════════════╗
-║                        Enum Structure (Preserved)                          ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-public enum CreditMemoStatus {
-    DRAFT,      // Credit Memo created but not yet posted to GL
-    POSTED,     // Credit Memo posted to GL; AR reduced
-    APPLIED,    // Credit Memo applied to customer account or future invoice
-    VOIDED      // Credit Memo voided/reversed
-}
-
+This file is intentionally kept minimal and may be safely removed in a
+future cleanup once any outstanding references in review tools or
+documentation have been updated.
 Lifecycle: DRAFT → POSTED → APPLIED or VOIDED
 
 ╔════════════════════════════════════════════════════════════════════════════╗
