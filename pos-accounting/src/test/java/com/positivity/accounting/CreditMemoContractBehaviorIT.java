@@ -190,7 +190,7 @@ public class CreditMemoContractBehaviorIT {
         partialResponse.setBalanceBefore(new BigDecimal("110.00"));
         partialResponse.setBalanceAfter(new BigDecimal("82.50"));
         partialResponse.setStatus("OPEN");
-        partialResponse.setCreditMemoApplied(true);
+        partialResponse.setCreditMemoApplied(new BigDecimal("27.50"));
         when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
                 .thenReturn(partialResponse);
 
