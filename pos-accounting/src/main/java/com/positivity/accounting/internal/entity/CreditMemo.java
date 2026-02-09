@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
-import org.jspecify.annotations.NonNull;
+import lombok.*;
 
 import com.positivity.shared.id.UUIDv7Generator;
 
@@ -27,6 +27,11 @@ import java.util.UUID;
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
  *      #131</a>
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 @Entity
 @Table(name = "credit_memo", indexes = {
         @Index(name = "idx_credit_memo_original_invoice", columnList = "original_invoice_id"),
@@ -36,6 +41,7 @@ import java.util.UUID;
 })
 public class CreditMemo {
 
+    @EqualsAndHashCode.Include
     @Id
     @Column(name = "credit_memo_id", nullable = false, updatable = false)
     private UUID creditMemoId;
@@ -75,7 +81,7 @@ public class CreditMemo {
     private String createdByUserId;
 
     @Column(name = "prior_period_adjustment", nullable = false)
-    private boolean priorPeriodAdjustment = false;
+    private Boolean priorPeriodAdjustment = false;
 
     @Column(name = "original_period_id", length = 50)
     private String originalPeriodId;
@@ -94,127 +100,5 @@ public class CreditMemo {
         if (status == CreditMemoStatus.POSTED && postedTimestamp == null) {
             postedTimestamp = Instant.now();
         }
-    }
-
-    // Getters and Setters
-
-    public UUID getCreditMemoId() {
-        return creditMemoId;
-    }
-
-    public void setCreditMemoId(@NonNull UUID creditMemoId) {
-        this.creditMemoId = creditMemoId;
-    }
-
-    public UUID getOriginalInvoiceId() {
-        return originalInvoiceId;
-    }
-
-    public void setOriginalInvoiceId(@NonNull UUID originalInvoiceId) {
-        this.originalInvoiceId = originalInvoiceId;
-    }
-
-    public UUID getCustomerId() {
-        return customerId;
-    }
-
-    public void setCustomerId(@NonNull UUID customerId) {
-        this.customerId = customerId;
-    }
-
-    public BigDecimal getCreditAmount() {
-        return creditAmount;
-    }
-
-    public void setCreditAmount(@NonNull BigDecimal creditAmount) {
-        this.creditAmount = creditAmount;
-    }
-
-    public BigDecimal getTaxAmountReversed() {
-        return taxAmountReversed;
-    }
-
-    public void setTaxAmountReversed(@NonNull BigDecimal taxAmountReversed) {
-        this.taxAmountReversed = taxAmountReversed;
-    }
-
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
-    }
-
-    public void setTotalAmount(@NonNull BigDecimal totalAmount) {
-        this.totalAmount = totalAmount;
-    }
-
-    public String getReasonCode() {
-        return reasonCode;
-    }
-
-    public void setReasonCode(@NonNull String reasonCode) {
-        this.reasonCode = reasonCode;
-    }
-
-    public String getJustificationNote() {
-        return justificationNote;
-    }
-
-    public void setJustificationNote(String justificationNote) {
-        this.justificationNote = justificationNote;
-    }
-
-    public CreditMemoStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(@NonNull CreditMemoStatus status) {
-        this.status = status;
-    }
-
-    public Instant getCreationTimestamp() {
-        return creationTimestamp;
-    }
-
-    public void setCreationTimestamp(@NonNull Instant creationTimestamp) {
-        this.creationTimestamp = creationTimestamp;
-    }
-
-    public Instant getPostedTimestamp() {
-        return postedTimestamp;
-    }
-
-    public void setPostedTimestamp(Instant postedTimestamp) {
-        this.postedTimestamp = postedTimestamp;
-    }
-
-    public String getCreatedByUserId() {
-        return createdByUserId;
-    }
-
-    public void setCreatedByUserId(@NonNull String createdByUserId) {
-        this.createdByUserId = createdByUserId;
-    }
-
-    public Boolean getPriorPeriodAdjustment() {
-        return priorPeriodAdjustment;
-    }
-
-    public void setPriorPeriodAdjustment(@NonNull Boolean priorPeriodAdjustment) {
-        this.priorPeriodAdjustment = priorPeriodAdjustment;
-    }
-
-    public String getOriginalPeriodId() {
-        return originalPeriodId;
-    }
-
-    public void setOriginalPeriodId(String originalPeriodId) {
-        this.originalPeriodId = originalPeriodId;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public void setCurrency(@NonNull String currency) {
-        this.currency = currency;
     }
 }
