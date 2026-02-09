@@ -7,8 +7,8 @@ import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.service.GLPostingService;
-import com.positivity.accounting.service.InvoiceServiceClient;
-import com.positivity.accounting.service.InvoiceServiceClient.InvoiceDetails;
+import com.positivity.accounting.internal.client.InvoiceServiceClient;
+import com.positivity.accounting.internal.client.InvoiceServiceClient.InvoiceDetails;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -216,7 +216,7 @@ public class CreditMemoContractBehaviorIT {
             cm.setCustomerId(UUID.randomUUID());
             cm.setCreditAmount(new BigDecimal("10.00"));
             cm.setTaxAmountReversed(new BigDecimal("1.00"));
-            cm.setTotalAmount(new BigDecimal("11.00"));
+            // totalAmount is now calculated: 10.00 + 1.00 = 11.00
             cm.setReasonCode("SERVICE_CREDIT");
             cm.setStatus(CreditMemoStatus.POSTED);
             cm.setCreatedByUserId(TEST_USER);
@@ -247,7 +247,7 @@ public class CreditMemoContractBehaviorIT {
         cm.setCustomerId(UUID.randomUUID());
         cm.setCreditAmount(new BigDecimal("50.00"));
         cm.setTaxAmountReversed(new BigDecimal("5.00"));
-        cm.setTotalAmount(new BigDecimal("55.00"));
+        // totalAmount is now calculated: 50.00 + 5.00 = 55.00
         cm.setReasonCode("BILLING_ERROR");
         cm.setJustificationNote("Duplicate charge on invoice");
         cm.setStatus(CreditMemoStatus.POSTED);
@@ -290,7 +290,7 @@ public class CreditMemoContractBehaviorIT {
             cm.setCustomerId(UUID.randomUUID());
             cm.setCreditAmount(new BigDecimal("10.00"));
             cm.setTaxAmountReversed(new BigDecimal("1.00"));
-            cm.setTotalAmount(new BigDecimal("11.00"));
+            // totalAmount is now calculated: 10.00 + 1.00 = 11.00
             cm.setReasonCode("SERVICE_CREDIT");
             cm.setStatus(CreditMemoStatus.POSTED);
             cm.setCreatedByUserId(TEST_USER);

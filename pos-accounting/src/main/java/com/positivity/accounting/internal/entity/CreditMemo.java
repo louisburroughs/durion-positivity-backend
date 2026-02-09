@@ -58,9 +58,6 @@ public class CreditMemo {
     @Column(name = "tax_amount_reversed", nullable = false, precision = 19, scale = 4)
     private BigDecimal taxAmountReversed;
 
-    @Column(name = "total_amount", nullable = false, precision = 19, scale = 4)
-    private BigDecimal totalAmount;
-
     @Column(name = "reason_code", nullable = false, length = 50)
     private String reasonCode;
 

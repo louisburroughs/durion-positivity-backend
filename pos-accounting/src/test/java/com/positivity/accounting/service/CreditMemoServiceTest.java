@@ -104,7 +104,7 @@ class CreditMemoServiceTest {
         testCreditMemo.setCustomerId(testCustomerId);
         testCreditMemo.setCreditAmount(new BigDecimal("50.00"));
         testCreditMemo.setTaxAmountReversed(new BigDecimal("5.00"));
-        testCreditMemo.setTotalAmount(new BigDecimal("55.00"));
+        // totalAmount is now calculated: 50.00 + 5.00 = 55.00
         testCreditMemo.setReasonCode("RETURNED_GOODS");
         testCreditMemo.setJustificationNote("Customer returned defective product");
         testCreditMemo.setStatus(CreditMemoStatus.POSTED);
@@ -193,7 +193,7 @@ class CreditMemoServiceTest {
         savedMemo.setCreditMemoId(testCreditMemoId);
         savedMemo.setCreditAmount(new BigDecimal("25.00"));
         savedMemo.setTaxAmountReversed(new BigDecimal("2.50")); // Proportional tax
-        savedMemo.setTotalAmount(new BigDecimal("27.50"));
+        // totalAmount is now calculated: 25.00 + 2.50 = 27.50
         savedMemo.setOriginalInvoiceId(testInvoiceId);
         savedMemo.setCustomerId(testCustomerId);
         savedMemo.setReasonCode("PRICING_ERROR");
