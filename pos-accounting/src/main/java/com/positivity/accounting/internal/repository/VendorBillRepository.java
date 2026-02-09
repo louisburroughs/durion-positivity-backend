@@ -30,6 +30,11 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         List<VendorBill> findByStatus(VendorBillStatus status);
 
         /**
+         * Find bills for a vendor with a specific status.
+         */
+        List<VendorBill> findByVendorIdAndStatus(UUID vendorId, VendorBillStatus status);
+
+        /**
          * Find bills received within a date range (based on billDate).
          */
         @Query("SELECT vb FROM VendorBill vb " +
