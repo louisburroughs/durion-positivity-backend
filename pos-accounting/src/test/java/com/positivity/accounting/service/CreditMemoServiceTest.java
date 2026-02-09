@@ -162,7 +162,7 @@ class CreditMemoServiceTest {
         assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("5.00");
         assertThat(response.getTotalAmount()).isEqualByComparingTo("55.00");
         assertThat(response.getReasonCode()).isEqualTo("RETURNED_GOODS");
-        assertThat(response.getStatus()).isEqualTo("POSTED");
+        assertThat(response.getStatus()).isEqualTo(CreditMemoStatus.POSTED);
         assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("55.00");
 
         // Verify entity was saved
@@ -368,7 +368,7 @@ class CreditMemoServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getTotalElements()).isEqualTo(1);
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).getStatus()).isEqualTo("POSTED");
+        assertThat(result.getContent().get(0).getStatus()).isEqualTo(CreditMemoStatus.POSTED);
 
         verify(creditMemoRepository).findByStatus(CreditMemoStatus.POSTED, pageable);
     }
@@ -417,7 +417,9 @@ class CreditMemoServiceTest {
                 "PRICING_ERROR",
                 "SERVICE_CREDIT",
                 "BILLING_ERROR",
-                "DAMAGED_GOODS",
+                "DAMAGED_GOODS"
+        };
+        
         when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
         when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
                 .thenReturn(testInvoiceResponse);
@@ -444,10 +446,7 @@ class CreditMemoServiceTest {
         when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
         when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
-                .thenReturn(testInvoiceResponse
-        testRequest.setJustificationNote(null);
-        testCreditMemo.setJustificationNote(null);
-        when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
+                .thenReturn(testInvoiceResponse);
 
         // When
         CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
