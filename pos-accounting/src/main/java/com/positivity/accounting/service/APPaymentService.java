@@ -58,10 +58,10 @@ public interface APPaymentService {
      *                    optional allocations
      * @param currentUser User initiating payment (for audit)
      * @return APPaymentResponse with status, allocations, gateway reference
-     * @throws IllegalArgumentException if validation fails (negative amounts,
-     *                                  invalid bills)
-     * @throws ConflictException        if paymentRef exists with different payload
-     * @throws GatewayFailureException  if gateway rejects payment
+     * @throws IllegalArgumentException if validation fails (e.g., negative amounts,
+     *                                  invalid bills or inconsistent idempotency payload)
+     * @throws RuntimeException         if payment processing fails at runtime (e.g.,
+     *                                  gateway rejection or unexpected downstream error)
      */
     @NonNull
     APPaymentResponse executePayment(@NonNull ExecuteAPPaymentRequest request, @NonNull String currentUser);
