@@ -63,10 +63,11 @@ public class APPaymentController {
             "Idempotent using paymentRef: same ref + same payload returns existing payment; " +
             "same ref + different payload yields 409 conflict.")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Payment executed successfully"),
+            @ApiResponse(responseCode = "200", description = "Idempotent replay: existing payment returned"),
+            @ApiResponse(responseCode = "201", description = "Payment executed successfully (new payment created)"),
             @ApiResponse(responseCode = "400", description = "Validation error: negative amounts, invalid bills, etc."),
             @ApiResponse(responseCode = "409", description = "Conflict: paymentRef exists with different payload"),
-            @ApiResponse(responseCode = "500", description = "Gateway failure or internal error")
+            @ApiResponse(responseCode = "502", description = "Payment gateway failure")
     })
     public @NonNull ResponseEntity<APPaymentResponse> executePayment(
             @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request,

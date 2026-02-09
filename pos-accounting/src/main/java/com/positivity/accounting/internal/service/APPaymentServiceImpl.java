@@ -101,10 +101,8 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Rollback the payment (transaction will roll back automatically)
             throw e;
         } catch (Exception e) {
-            // Only gateway-level failures should mark payment as GATEWAY_FAILED
-            payment.setStatus(APPaymentStatus.GATEWAY_FAILED);
-            payment.setGatewayResponse(e.getMessage());
-            paymentRepository.save(payment);
+            // Gateway-level failures: transaction will roll back, so we can't persist GATEWAY_FAILED status
+            // For audit/idempotency of failed payments, this would require a separate transaction (REQUIRES_NEW)
             log.error("Payment {} gateway failed: {}", request.getPaymentRef(), e.getMessage(), e);
             throw new PaymentGatewayException("Gateway failure: " + e.getMessage(), e);
         }
@@ -334,6 +332,9 @@ public class APPaymentServiceImpl implements APPaymentService {
     /**
      * Calculates the open (unpaid) amount for a vendor bill.
      * 
+     * Uses an aggregate database query to efficiently compute the sum of allocations
+     * without loading all allocation records into memory.
+     * 
      * @param vendorBillId the bill ID
      * @return open amount = totalAmount - sum of all allocations
      */
@@ -341,10 +342,8 @@ public class APPaymentServiceImpl implements APPaymentService {
         VendorBill bill = billRepository.findById(vendorBillId)
                 .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));
 
-        // Sum all allocations for this bill across all payments
-        BigDecimal totalAllocated = allocationRepository.findByVendorBillId(vendorBillId).stream()
-                .map(APPaymentAllocation::getAppliedAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Use aggregate query to sum allocations in database (avoids N+1 and high memory)
+        BigDecimal totalAllocated = allocationRepository.sumAllocatedAmountByVendorBillId(vendorBillId);
 
         return bill.getTotalAmount().subtract(totalAllocated);
     }
