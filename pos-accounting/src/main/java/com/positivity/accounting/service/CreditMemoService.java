@@ -155,7 +155,7 @@ public class CreditMemoService {
         creditMemo = creditMemoRepository.save(creditMemo);
 
         log.info("Created Credit Memo {} with total amount {}",
-                creditMemo.getCreditMemoId(), creditMemo.getTotalAmount());
+                creditMemo.getCreditMemoId(), creditMemo.calculateTotalAmount());
 
         // Post GL entries
         try {
@@ -183,7 +183,7 @@ public class CreditMemoService {
                     invoice.getInvoiceId(),
                     ApplyCreditMemoRequest.builder()
                             .creditMemoId(creditMemo.getCreditMemoId())
-                            .totalAmount(creditMemo.getTotalAmount())
+                            .totalAmount(creditMemo.calculateTotalAmount())
                             .appliedBy(currentUser)
                             .currency(creditMemo.getCurrency())
                             .build());
@@ -277,7 +277,7 @@ public class CreditMemoService {
         response.setCustomerId(creditMemo.getCustomerId());
         response.setCreditAmount(creditMemo.getCreditAmount());
         response.setTaxAmountReversed(creditMemo.getTaxAmountReversed());
-        response.setTotalAmount(creditMemo.getTotalAmount());
+        response.setTotalAmount(creditMemo.calculateTotalAmount());
         response.setReasonCode(creditMemo.getReasonCode());
         response.setJustificationNote(creditMemo.getJustificationNote());
         response.setStatus(creditMemo.getStatus());
