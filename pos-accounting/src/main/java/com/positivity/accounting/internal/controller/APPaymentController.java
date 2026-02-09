@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
@@ -62,10 +63,11 @@ public class APPaymentController {
             "Idempotent using paymentRef: same ref + same payload returns existing payment; " +
             "same ref + different payload yields 409 conflict.")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Payment executed successfully"),
+            @ApiResponse(responseCode = "200", description = "Idempotent replay: existing payment returned"),
+            @ApiResponse(responseCode = "201", description = "Payment executed successfully (new payment created)"),
             @ApiResponse(responseCode = "400", description = "Validation error: negative amounts, invalid bills, etc."),
             @ApiResponse(responseCode = "409", description = "Conflict: paymentRef exists with different payload"),
-            @ApiResponse(responseCode = "500", description = "Gateway failure or internal error")
+            @ApiResponse(responseCode = "502", description = "Payment gateway failure")
     })
     public @NonNull ResponseEntity<APPaymentResponse> executePayment(
             @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request,
@@ -74,8 +76,18 @@ public class APPaymentController {
         String currentUser = authentication != null ? authentication.getName() : "system";
         log.info("Executing payment for vendor {} with paymentRef {}", request.getVendorId(), request.getPaymentRef());
 
+        // Check if payment already exists for idempotency
+        Optional<APPaymentResponse> existing = apPaymentService.getPaymentByRef(request.getPaymentRef());
+        if (existing.isPresent()) {
+            // Idempotent replay: validate and return existing payment with 200 OK
+            log.info("Idempotent replay for paymentRef {}", request.getPaymentRef());
+            APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
+            return ResponseEntity.ok(response);
+        }
+
+        // New payment: return 201 Created
         APPaymentResponse response = apPaymentService.executePayment(request, currentUser);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/payments/{paymentId}")
