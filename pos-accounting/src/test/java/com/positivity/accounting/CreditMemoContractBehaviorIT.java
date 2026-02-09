@@ -1,9 +1,14 @@
 package com.positivity.accounting;
 
+import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
+import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.service.GLPostingService;
+import com.positivity.accounting.service.InvoiceServiceClient;
+import com.positivity.accounting.service.InvoiceServiceClient.InvoiceDetails;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,9 +25,14 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -56,6 +67,12 @@ public class CreditMemoContractBehaviorIT {
     @Autowired
     private CreditMemoRepository creditMemoRepository;
 
+    @MockBean
+    private InvoiceServiceClient invoiceServiceClient;
+
+    @MockBean
+    private GLPostingService glPostingService;
+
     private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
 
     // Gateway header values — mirrors what pos-api-gateway injects after JWT
@@ -79,6 +96,30 @@ public class CreditMemoContractBehaviorIT {
     void setUp() {
         // Clean up any existing test data
         creditMemoRepository.deleteAll();
+        
+        // Setup default invoice service mocks
+        // Default invoice details for $110 balance
+        InvoiceDetails defaultInvoice = new InvoiceDetails(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            new BigDecimal("110.00"),
+            "OPEN",
+            Instant.now().minus(10, ChronoUnit.DAYS),
+            new BigDecimal("100.00"),
+            new BigDecimal("10.00"),
+            new BigDecimal("110.00")
+        );
+        when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
+        
+        // Default invoice update response
+        ApplyCreditMemoResponse defaultResponse = new ApplyCreditMemoResponse();
+        defaultResponse.setInvoiceId(UUID.randomUUID());
+        defaultResponse.setBalanceBefore(new BigDecimal("110.00"));
+        defaultResponse.setBalanceAfter(new BigDecimal("0.00"));
+        defaultResponse.setStatus("PAID");
+        defaultResponse.setCreditMemoApplied(true);
+        when(invoiceServiceClient.applyCreditMemo(any(UUID.class), any(ApplyCreditMemoRequest.class)))
+            .thenReturn(defaultResponse);
     }
 
     @AfterEach
@@ -143,6 +184,16 @@ public class CreditMemoContractBehaviorIT {
         request.setReasonCode("PRICING_ERROR");
         request.setJustificationNote("Incorrect pricing applied to line item #3");
 
+        // Mock partial credit response: balance goes from 110 to 82.50 (110 - 27.50 total with tax)
+        ApplyCreditMemoResponse partialResponse = new ApplyCreditMemoResponse();
+        partialResponse.setInvoiceId(testInvoiceId);
+        partialResponse.setBalanceBefore(new BigDecimal("110.00"));
+        partialResponse.setBalanceAfter(new BigDecimal("82.50"));
+        partialResponse.setStatus("OPEN");
+        partialResponse.setCreditMemoApplied(true);
+        when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
+            .thenReturn(partialResponse);
+
         // Act: POST to Credit Memo endpoint
         mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -191,7 +242,8 @@ public class CreditMemoContractBehaviorIT {
     void testGetCreditMemo_Success() throws Exception {
         // Arrange: Create a credit memo
         CreditMemo cm = new CreditMemo();
-        cm.setOriginalInvoiceId(UUID.randomUUID());
+        UUID invoiceId = UUID.randomUUID();
+        cm.setOriginalInvoiceId(invoiceId);
         cm.setCustomerId(UUID.randomUUID());
         cm.setCreditAmount(new BigDecimal("50.00"));
         cm.setTaxAmountReversed(new BigDecimal("5.00"));
@@ -203,6 +255,19 @@ public class CreditMemoContractBehaviorIT {
         cm.setCurrency("USD");
         cm.setPriorPeriodAdjustment(false);
         CreditMemo saved = creditMemoRepository.save(cm);
+
+        // Mock invoice details for balance lookup
+        InvoiceDetails invoice = new InvoiceDetails(
+            invoiceId,
+            UUID.randomUUID(),
+            new BigDecimal("55.00"), // Balance after credit applied
+            "OPEN",
+            Instant.now(),
+            new BigDecimal("100.00"),
+            new BigDecimal("10.00"),
+            new BigDecimal("110.00")
+        );
+        when(invoiceServiceClient.getInvoiceDetails(invoiceId)).thenReturn(invoice);
 
         // Act: GET by ID
         mockMvc.perform(withAuth(get(API_V1_CREDIT_MEMOS + "/" + saved.getCreditMemoId())))
