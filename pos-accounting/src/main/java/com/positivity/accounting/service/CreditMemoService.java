@@ -103,14 +103,7 @@ public class CreditMemoService {
                     "Credit memos cannot be issued against " + invoice.getStatus() + " invoices");
         }
 
-        // Validate credit amount doesn't exceed balance
-        if (request.getCreditAmount().compareTo(invoice.getBalanceDue()) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Credit amount " + request.getCreditAmount()
-                            + " exceeds invoice outstanding balance " + invoice.getBalanceDue());
-        }
-
-        // Calculate proportional tax reversal
+        // Calculate proportional tax reversal BEFORE validation
         BigDecimal subtotal = invoice.getTotalAmount().subtract(
                 invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO);
         BigDecimal taxAmount = subtotal.multiply(new BigDecimal("0.10")); // Simplified: assume 10% tax
@@ -119,6 +112,17 @@ public class CreditMemoService {
         BigDecimal taxReversed = taxAmount
                 .multiply(creditRatio)
                 .setScale(2, RoundingMode.HALF_UP);
+
+        // Calculate total amount that will be applied to invoice
+        BigDecimal totalCreditAmount = request.getCreditAmount().add(taxReversed);
+
+        // Validate total credit amount doesn't exceed balance
+        if (totalCreditAmount.compareTo(invoice.getBalanceDue()) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Total credit amount " + totalCreditAmount
+                            + " (credit: " + request.getCreditAmount() + " + tax: " + taxReversed + ")"
+                            + " exceeds invoice outstanding balance " + invoice.getBalanceDue());
+        }
 
         // Check if prior period adjustment
         boolean isPriorPeriod = false;
