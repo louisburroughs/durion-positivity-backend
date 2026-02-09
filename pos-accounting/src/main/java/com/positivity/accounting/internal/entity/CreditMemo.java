@@ -1,14 +1,24 @@
 package com.positivity.accounting.internal.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
-
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.shared.id.UUIDv7Generator;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 /**
  * Credit Memo entity for reversing invoice charges.
