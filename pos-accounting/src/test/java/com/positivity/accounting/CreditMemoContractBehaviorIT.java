@@ -99,15 +99,18 @@ public class CreditMemoContractBehaviorIT {
 
         // Setup default invoice service mocks
         // Default invoice details for $110 balance
-        InvoiceDetails defaultInvoice = new InvoiceDetails(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                new BigDecimal("110.00"),
-                "OPEN",
-                Instant.now().minus(10, ChronoUnit.DAYS),
-                new BigDecimal("100.00"),
-                new BigDecimal("10.00"),
-                new BigDecimal("110.00"));
+        UUID invoiceId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        InvoiceDetails defaultInvoice = InvoiceDetails.builder()
+                .invoiceId(invoiceId)
+                .customerId(customerId)
+                .status("OPEN")
+                .totalAmount(new BigDecimal("110.00"))
+                .totalPaid(new BigDecimal("100.00"))
+                .balanceDue(new BigDecimal("10.00"))
+                .currency("USD")
+                .invoiceDate(Instant.now().minus(10, ChronoUnit.DAYS))
+                .build();
         when(invoiceServiceClient.getInvoiceDetails(any(UUID.class))).thenReturn(defaultInvoice);
 
         // Default invoice update response
