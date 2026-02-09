@@ -103,9 +103,18 @@ public class CreditMemoService {
                     "Credit memos cannot be issued against " + invoice.getStatus() + " invoices");
         }
 
-        // Calculate proportional tax reversal BEFORE validation
+        // Calculate remaining balance (subtotal) before attempting tax calculation
         BigDecimal subtotal = invoice.getTotalAmount().subtract(
                 invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO);
+        
+        // Validate subtotal > 0 before attempting division to avoid ArithmeticException
+        if (subtotal.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Invoice has no remaining balance to credit. Total amount: " + invoice.getTotalAmount() 
+                            + ", Total paid: " + (invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO));
+        }
+        
+        // Calculate proportional tax reversal
         BigDecimal taxAmount = subtotal.multiply(new BigDecimal("0.10")); // Simplified: assume 10% tax
         BigDecimal creditRatio = request.getCreditAmount()
                 .divide(subtotal, 4, RoundingMode.HALF_UP);
