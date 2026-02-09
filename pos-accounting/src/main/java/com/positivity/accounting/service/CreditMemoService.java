@@ -291,12 +291,4 @@ public class CreditMemoService {
         return response;
     }
 
-    /**
-     * Get current user from security context.
-     */
-    private String getCurrentUser() {
-        return SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
-                        "User not authenticated"));
-    }
 }
