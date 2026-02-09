@@ -365,8 +365,9 @@ class CreditMemoServiceTest {
         // Given
         Pageable pageable = PageRequest.of(0, 10);
         List<CreditMemo> creditMemos = List.of(testCreditMemo);
+        Page<CreditMemo> page = new PageImpl<>(creditMemos, pageable, 1);
 
-        when(creditMemoRepository.findByOriginalInvoiceId(testInvoiceId)).thenReturn(creditMemos);
+        when(creditMemoRepository.findByOriginalInvoiceId(testInvoiceId, pageable)).thenReturn(page);
 
         // When
         Page<CreditMemoResponse> result = service.listCreditMemos(null, testInvoiceId, null, pageable);
@@ -377,7 +378,7 @@ class CreditMemoServiceTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getOriginalInvoiceId()).isEqualTo(testInvoiceId);
 
-        verify(creditMemoRepository).findByOriginalInvoiceId(testInvoiceId);
+        verify(creditMemoRepository).findByOriginalInvoiceId(testInvoiceId, pageable);
     }
 
     @Test
