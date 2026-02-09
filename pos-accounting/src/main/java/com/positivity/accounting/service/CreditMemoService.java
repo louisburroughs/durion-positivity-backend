@@ -298,7 +298,7 @@ public class CreditMemoService {
         response.setCreationTimestamp(creditMemo.getCreationTimestamp());
         response.setPostedTimestamp(creditMemo.getPostedTimestamp());
         response.setCreatedByUserId(creditMemo.getCreatedByUserId());
-        response.setPriorPeriodAdjustment(creditMemo.getPriorPeriodAdjustment());
+        response.setPriorPeriodAdjustment(creditMemo.isPriorPeriodAdjustment());
         response.setOriginalPeriodId(creditMemo.getOriginalPeriodId());
         response.setCurrency(creditMemo.getCurrency());
         response.setInvoiceBalanceAfter(invoiceBalanceAfter);
