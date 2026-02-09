@@ -260,15 +260,14 @@ public class CreditMemoContractBehaviorIT {
         CreditMemo saved = creditMemoRepository.save(cm);
 
         // Mock invoice details for balance lookup
-        InvoiceDetails invoice = new InvoiceDetails(
-                invoiceId,
-                UUID.randomUUID(),
-                new BigDecimal("55.00"), // Balance after credit applied
-                "OPEN",
-                Instant.now(),
-                new BigDecimal("100.00"),
-                new BigDecimal("10.00"),
-                new BigDecimal("110.00"));
+        InvoiceDetails invoice = InvoiceDetails.builder()
+                .invoiceId(invoiceId)
+                .customerId(UUID.randomUUID())
+                .status("OPEN")
+                .totalAmount(new BigDecimal("110.00"))
+                .balanceDue(new BigDecimal("55.00")) // Balance after credit applied
+                .currency("USD")
+                .build();
         when(invoiceServiceClient.getInvoiceDetails(invoiceId)).thenReturn(invoice);
 
         // Act: GET by ID
