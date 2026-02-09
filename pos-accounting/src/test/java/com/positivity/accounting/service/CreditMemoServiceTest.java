@@ -240,6 +240,29 @@ class CreditMemoServiceTest {
     }
 
     @Test
+    @DisplayName("Should throw exception when total credit (including tax) exceeds invoice balance")
+    void testCreateCreditMemo_TotalAmountWithTaxExceedsBalance() {
+        // Given - invoice balance is $110.00
+        // Under old validation, only the creditAmount (without tax) was compared to balanceDue.
+        // With a 10% tax reversal, we need a creditAmount such that:
+        //   creditAmount + (creditAmount * 0.10) > balanceDue
+        // Setting creditAmount to $105.00 gives us:
+        //   - creditAmount: $105.00
+        //   - taxReversed: $10.50 (10% of 105)
+        //   - total: $115.50, which exceeds the $110.00 balance
+        testRequest.setCreditAmount(new BigDecimal("105.00"));
+        when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
+
+        // When / Then
+        assertThatThrownBy(() -> service.createCreditMemo(testRequest, "test-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Total credit amount")
+                .hasMessageContaining("exceeds invoice outstanding balance")
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
     @DisplayName("Should throw exception when invoice is voided")
     void testCreateCreditMemo_VoidedInvoice() {
         // Given
@@ -281,7 +304,13 @@ class CreditMemoServiceTest {
     void testCreateCreditMemo_PriorPeriodAdjustment() {
         // Given - invoice from prior period
         Instant priorPeriodDate = Instant.now().minusSeconds(2592000); // 30 days ago
-        testInvoice = testInvoice.toBuilder()
+        testInvoice = InvoiceDetails.builder()
+                .invoiceId(testInvoiceId)
+                .customerId(testCustomerId)
+                .status("OPEN")
+                .totalAmount(new BigDecimal("110.00"))
+                .balanceDue(new BigDecimal("110.00"))
+                .currency("USD")
                 .invoiceDate(priorPeriodDate)
                 .build();
 
