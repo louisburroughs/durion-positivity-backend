@@ -38,7 +38,7 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
-import com.positivity.accounting.internal.entity.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 
 /**
@@ -162,7 +162,7 @@ class CreditMemoServiceTest {
         assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("5.00");
         assertThat(response.getTotalAmount()).isEqualByComparingTo("55.00");
         assertThat(response.getReasonCode()).isEqualTo("RETURNED_GOODS");
-        assertThat(response.getStatus()).isEqualTo("POSTED");
+        assertThat(response.getStatus()).isEqualTo(CreditMemoStatus.POSTED);
         assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("55.00");
 
         // Verify entity was saved
@@ -368,7 +368,7 @@ class CreditMemoServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getTotalElements()).isEqualTo(1);
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).getStatus()).isEqualTo("POSTED");
+        assertThat(result.getContent().get(0).getStatus()).isEqualTo(CreditMemoStatus.POSTED);
 
         verify(creditMemoRepository).findByStatus(CreditMemoStatus.POSTED, pageable);
     }
@@ -419,6 +419,7 @@ class CreditMemoServiceTest {
                 "BILLING_ERROR",
                 "DAMAGED_GOODS"
         };
+        
         when(invoiceServiceClient.getInvoiceDetails(testInvoiceId)).thenReturn(testInvoice);
         when(invoiceServiceClient.applyCreditMemo(eq(testInvoiceId), any(ApplyCreditMemoRequest.class)))
                 .thenReturn(testInvoiceResponse);

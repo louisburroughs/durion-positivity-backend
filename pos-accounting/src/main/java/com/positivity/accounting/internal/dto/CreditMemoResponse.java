@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import org.jspecify.annotations.NonNull;
 
 import java.math.BigDecimal;
@@ -131,11 +132,11 @@ public class CreditMemoResponse {
         this.justificationNote = justificationNote;
     }
 
-    public String getStatus() {
+    public CreditMemoStatus getStatus() {
         return status;
     }
 
-    public void setStatus(@NonNull String status) {
+    public void setStatus(@NonNull CreditMemoStatus status) {
         this.status = status;
     }
 
