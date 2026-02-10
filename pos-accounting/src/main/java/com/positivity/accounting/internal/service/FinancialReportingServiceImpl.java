@@ -291,8 +291,9 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         try {
             glAccountId = UUID.fromString(accountId);
         } catch (IllegalArgumentException e) {
-            log.warn("Invalid UUID format for accountId: {}", accountId);
-            return List.of();
+            String message = "Invalid UUID format for accountId: " + accountId;
+            log.warn(message);
+            throw new IllegalArgumentException(message, e);
         }
         
         log.info("Drilling down account {} to journal lines for period {} to {}",
