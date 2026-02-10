@@ -166,10 +166,9 @@ public class EventIngestionController {
 
         @GetMapping("/{eventId}/reprocessing-history")
         @PreAuthorize("hasAuthority('accounting:events:view')")
-        @Operation(summary = "Get reprocessing history", description = "Retrieve all reprocessing attempts for a suspended accounting event.")
+        @Operation(summary = "Get reprocessing history", description = "Retrieve all reprocessing attempts for a suspended accounting event. Returns an empty list if the event does not exist or has no reprocessing history.")
         @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Reprocessing history returned"),
-                        @ApiResponse(responseCode = "404", description = "Event not found")
+                        @ApiResponse(responseCode = "200", description = "Reprocessing history returned (may be empty list)")
         })
         public ResponseEntity<List<ReprocessingAttemptHistoryResponse>> getReprocessingHistory(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
