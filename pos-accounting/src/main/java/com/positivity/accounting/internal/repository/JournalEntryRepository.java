@@ -1,17 +1,18 @@
 package com.positivity.accounting.internal.repository;
 
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
 
 /**
  * Repository for Journal Entry entity.
@@ -66,8 +67,8 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
      * Used for financial reporting.
      *
      * @param glAccountId GL account ID (UUID)
-     * @param startDate period start date
-     * @param endDate   period end date
+     * @param startDate   period start date
+     * @param endDate     period end date
      * @return net balance (sum of debits - sum of credits), or 0 if no entries
      */
     @Query("""
@@ -90,7 +91,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
      * Used for balance sheet generation.
      *
      * @param glAccountId GL account ID (UUID)
-     * @param asOfDate  reporting date (inclusive)
+     * @param asOfDate    reporting date (inclusive)
      * @return net balance (sum of debits - sum of credits), or 0 if no entries
      */
     @Query("""
@@ -112,8 +113,8 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
      * Used for drilldown reporting.
      *
      * @param glAccountId GL account ID (UUID)
-     * @param startDate period start date
-     * @param endDate   period end date
+     * @param startDate   period start date
+     * @param endDate     period end date
      * @return list of journal entries with lines for this account
      */
     @Query("""
@@ -127,4 +128,5 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 ORDER BY je.transactionDate DESC
             """)
     List<JournalEntry> findPostedEntriesForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
-}
+
+                        

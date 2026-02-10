@@ -1,8 +1,8 @@
 package com.positivity.accounting.internal.config;
 
-import com.positivity.events.EventTypeRegistration;
-
 import java.util.List;
+
+import com.positivity.events.EventTypeRegistration;
 
 /**
  * Registry of all event types emitted by the pos-accounting module.
