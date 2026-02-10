@@ -222,7 +222,9 @@ public class EventIngestionService {
         }
 
         // Increment attempt count
-        event.setAttemptCount(event.getAttemptCount() + 1);
+        Integer currentAttemptCount = event.getAttemptCount();
+        int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;
+        event.setAttemptCount(nextAttemptCount);
 
         // Create reprocessing attempt history record
         ReprocessingAttemptHistory attemptHistory = new ReprocessingAttemptHistory(
