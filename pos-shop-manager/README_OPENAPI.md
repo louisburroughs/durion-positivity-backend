@@ -176,7 +176,7 @@ kill -9 <PID>
 ## Compliance & Standards
 
 - ✅ OpenAPI 3.0.1 specification format
-- ✅ Spring Boot 3.4.2 best practices
+- ✅ Spring Boot 4.0.2 best practices
 - ✅ Spring Security 6 conventions
 - ✅ Java 21 compatibility
 - ✅ Consistent with other pos-* modules

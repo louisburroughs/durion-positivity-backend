@@ -190,7 +190,7 @@ class IntelligentUnsafeInferenceDetectorTest {
                 "Ensure proper security and validation\n" +
                 "\n" +
                 "Technical Stack\n" +
-                "Spring Boot 3.2.6\n" +
+                "Spring Boot 4.0.2\n" +
                 "Java 21\n" +
                 "Spring Data JPA\n" +
                 "PostgreSQL/MySQL";

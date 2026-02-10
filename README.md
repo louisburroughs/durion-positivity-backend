@@ -1,6 +1,6 @@
 # Durion Positivity Backend
 
-The **Durion Positivity Backend** is the server-side microservice suite for the Durion platform. Built on **Java 21** and **Spring Boot 3.x**, it provides the core business logic, data persistence, and API gateway capabilities for the Point of Sale (POS) system.
+The **Durion Positivity Backend** is the server-side microservice suite for the Durion platform. Built on **Java 21** and **Spring Boot 4.0.x**, it provides the core business logic, data persistence, and API gateway capabilities for the Point of Sale (POS) system.
 
 This repository works in tandem with the [Moqui Frontend](../durion-moqui-frontend/README.md) and is governed by the workspace-level policies in the [Durion](../durion/README.md) root repository.
 
@@ -61,7 +61,7 @@ The backend follows a domain-driven microservices architecture. Each bounded con
 ## Technology Stack
 
 - **Language**: Java 21 (LTS)
-- **Framework**: Spring Boot 3.x
+- **Framework**: Spring Boot 4.0.x
 - **Build System**: Maven (via `./mvnw` wrapper)
 - **Database**: PostgreSQL (Each service owns its own schema/database)
 - **Infrastructure**: Docker & Docker Compose (for local development)
@@ -125,15 +125,15 @@ For detailed agent commands and local stack setup, refer to [AGENTS.md](AGENTS.m
 
 ## Known Issues & Migration Notes
 
-### Spring Boot 3.4+ MockMvc Import Change
-**Issue**: The `@AutoConfigureMockMvc` annotation has moved in Spring Boot 3.4+.
+### Spring Boot 4.0.2+ MockMvc Import Change
+**Issue**: The `@AutoConfigureMockMvc` annotation has moved in Spring Boot 4.0.2+.
 
-**Old Import** (Spring Boot 3.2.x and earlier):
+**Old Import** (Spring Boot 4.0.2.x and earlier):
 ```java
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 ```
 
-**New Import** (Spring Boot 3.4+):
+**New Import** (Spring Boot 4.0.2+):
 ```java
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 ```

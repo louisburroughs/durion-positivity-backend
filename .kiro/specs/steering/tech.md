@@ -2,7 +2,7 @@
 
 ## Core Framework
 
-- **Spring Boot 3.2.6** - Primary application framework for microservices
+- **Spring Boot 4.0.2** - Primary application framework for microservices
 - **Spring Cloud 2023.0.1** - Microservices infrastructure and patterns
 - **Java 21** - Modern Java runtime with latest features
 - **Maven** - Build system and dependency management
