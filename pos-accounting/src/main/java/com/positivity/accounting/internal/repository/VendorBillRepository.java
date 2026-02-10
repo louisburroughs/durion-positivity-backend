@@ -73,4 +73,13 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                         "AND vb.status != com.positivity.accounting.internal.enums.VendorBillStatus.PAID " +
                         "ORDER BY vb.dueDate ASC")
         List<VendorBill> findBillsDueInRange(LocalDateTime startDate, LocalDateTime endDate);
+
+        /**
+         * Find bill by origin event ID (for idempotency checks in event-driven
+         * workflow).
+         * 
+         * @param originEventId UUID of the originating event (e.g., GoodsReceivedEvent)
+         * @return Optional containing the bill if found
+         */
+        Optional<VendorBill> findByOriginEventId(UUID originEventId);
 }

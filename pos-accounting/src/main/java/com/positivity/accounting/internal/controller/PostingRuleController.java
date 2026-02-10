@@ -1,9 +1,9 @@
 package com.positivity.accounting.internal.controller;
 
-import com.positivity.accounting.internal.dto.*;
-import com.positivity.accounting.internal.entity.PostingRuleSet;
-import com.positivity.accounting.internal.entity.PostingRuleVersion;
-import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
+import com.positivity.accounting.internal.dto.PostingRuleSetListResponse;
+import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
+import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.service.PostingRuleService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -59,9 +59,7 @@ public class PostingRuleController {
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "createdAt") String sort) {
                 log.info("List posting rule sets - page={}, size={}, sort={}", page, size, sort);
-                // For now, we pass null for organizationId since entity doesn't support it yet
-                List<PostingRuleSet> ruleSets = postingRuleService.listRuleSets(null);
-                PostingRuleSetListResponse response = PostingRuleMapper.toListResponse(ruleSets, page, size);
+                PostingRuleSetListResponse response = postingRuleService.listRuleSetsAsResponse(null, page, size);
                 return ResponseEntity.ok(response);
         }
 
@@ -75,8 +73,7 @@ public class PostingRuleController {
         public ResponseEntity<PostingRuleSetResponse> getPostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
                 log.info("Get posting rule set - ruleSetId={}", postingRuleSetId);
-                PostingRuleSet ruleSet = postingRuleService.getPostingRuleSet(postingRuleSetId);
-                PostingRuleSetResponse response = PostingRuleMapper.toResponse(ruleSet);
+                PostingRuleSetResponse response = postingRuleService.getPostingRuleSetAsResponse(postingRuleSetId);
                 return ResponseEntity.ok(response);
         }
 
@@ -91,23 +88,7 @@ public class PostingRuleController {
         public ResponseEntity<PostingRuleSetResponse> createPostingRuleSet(
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
                 log.info("Create posting rule set - name={}, eventType={}", request.getName(), request.getEventType());
-
-                // Build rule set with initial DRAFT version — single save via
-                // CascadeType.ALL (same pattern as JournalEntry + lines).
-                PostingRuleSet ruleSet = PostingRuleMapper.toEntity(request);
-
-                PostingRuleVersion version = new PostingRuleVersion();
-                version.setVersionNumber(1);
-                version.setState(PostingRuleSetState.DRAFT);
-                version.setRulesDefinition(request.getRulesDefinition());
-                version.setCreatedBy(request.getCreatedBy());
-                version.setModifiedBy(request.getCreatedBy());
-                version.setPostingRuleSet(ruleSet);
-                ruleSet.getVersions().add(version);
-
-                PostingRuleSet saved = postingRuleService.createPostingRuleSet(ruleSet);
-                PostingRuleSetResponse response = PostingRuleMapper.toResponse(saved);
-
+                PostingRuleSetResponse response = postingRuleService.createPostingRuleSetWithVersion(request);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
 
@@ -123,17 +104,7 @@ public class PostingRuleController {
         public ResponseEntity<PostingRuleVersionResponse> publishPostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
                 log.info("Publish posting rule set - ruleSetId={}", postingRuleSetId);
-
-                // Find the DRAFT version for this rule set
-                List<PostingRuleVersion> versions = postingRuleService.listVersions(postingRuleSetId);
-                PostingRuleVersion draftVersion = versions.stream()
-                                .filter(v -> v.getState() == PostingRuleSetState.DRAFT)
-                                .findFirst()
-                                .orElseThrow(() -> new IllegalArgumentException("No DRAFT version found to publish"));
-
-                PostingRuleVersion published = postingRuleService.publishVersion(draftVersion.getVersionId());
-                PostingRuleVersionResponse response = PostingRuleMapper.toVersionResponse(published);
-
+                PostingRuleVersionResponse response = postingRuleService.publishRuleSet(postingRuleSetId);
                 return ResponseEntity.ok(response);
         }
 
@@ -149,18 +120,7 @@ public class PostingRuleController {
         public ResponseEntity<PostingRuleVersionResponse> archivePostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
                 log.info("Archive posting rule set - ruleSetId={}", postingRuleSetId);
-
-                // Find the PUBLISHED version for this rule set
-                List<PostingRuleVersion> versions = postingRuleService.listVersions(postingRuleSetId);
-                PostingRuleVersion publishedVersion = versions.stream()
-                                .filter(v -> v.getState() == PostingRuleSetState.PUBLISHED)
-                                .findFirst()
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "No PUBLISHED version found to archive"));
-
-                PostingRuleVersion archived = postingRuleService.archiveVersion(publishedVersion.getVersionId());
-                PostingRuleVersionResponse response = PostingRuleMapper.toVersionResponse(archived);
-
+                PostingRuleVersionResponse response = postingRuleService.archiveRuleSet(postingRuleSetId);
                 return ResponseEntity.ok(response);
         }
 
@@ -176,12 +136,8 @@ public class PostingRuleController {
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size) {
                 log.info("List posting rule versions - ruleSetId={}, page={}, size={}", postingRuleSetId, page, size);
-
-                List<PostingRuleVersion> versions = postingRuleService.listVersions(postingRuleSetId);
-                List<PostingRuleVersionResponse> responses = versions.stream()
-                                .map(PostingRuleMapper::toVersionResponse)
-                                .toList();
-
+                List<PostingRuleVersionResponse> responses = postingRuleService
+                                .listVersionsAsResponse(postingRuleSetId);
                 return ResponseEntity.ok(responses);
         }
 }

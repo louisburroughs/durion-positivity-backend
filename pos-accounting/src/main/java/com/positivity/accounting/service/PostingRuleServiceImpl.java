@@ -1,5 +1,10 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.dto.PostingRuleMapper;
+import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
+import com.positivity.accounting.internal.dto.PostingRuleSetListResponse;
+import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
+import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
@@ -32,6 +37,74 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     private final PostingRuleSetRepository ruleSetRepository;
     private final PostingRuleVersionRepository versionRepository;
+
+    // ── DTO-based methods (used by controllers) ──────────────────────
+
+    @Override
+    public PostingRuleSetResponse createPostingRuleSetWithVersion(PostingRuleSetCreateRequest request) {
+        PostingRuleSet ruleSet = PostingRuleMapper.toEntity(request);
+
+        PostingRuleVersion version = new PostingRuleVersion();
+        version.setVersionNumber(1);
+        version.setState(PostingRuleSetState.DRAFT);
+        version.setRulesDefinition(request.getRulesDefinition());
+        version.setCreatedBy(request.getCreatedBy());
+        version.setModifiedBy(request.getCreatedBy());
+        version.setPostingRuleSet(ruleSet);
+        ruleSet.getVersions().add(version);
+
+        PostingRuleSet saved = createPostingRuleSet(ruleSet);
+        return PostingRuleMapper.toResponse(saved);
+    }
+
+    @Override
+    public PostingRuleVersionResponse publishRuleSet(UUID ruleSetId) {
+        List<PostingRuleVersion> versions = listVersions(ruleSetId);
+        PostingRuleVersion draftVersion = versions.stream()
+                .filter(v -> v.getState() == PostingRuleSetState.DRAFT)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No DRAFT version found to publish"));
+
+        PostingRuleVersion published = publishVersion(draftVersion.getVersionId());
+        return PostingRuleMapper.toVersionResponse(published);
+    }
+
+    @Override
+    public PostingRuleVersionResponse archiveRuleSet(UUID ruleSetId) {
+        List<PostingRuleVersion> versions = listVersions(ruleSetId);
+        PostingRuleVersion publishedVersion = versions.stream()
+                .filter(v -> v.getState() == PostingRuleSetState.PUBLISHED)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No PUBLISHED version found to archive"));
+
+        PostingRuleVersion archived = archiveVersion(publishedVersion.getVersionId());
+        return PostingRuleMapper.toVersionResponse(archived);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PostingRuleSetListResponse listRuleSetsAsResponse(UUID organizationId, int page, int size) {
+        List<PostingRuleSet> ruleSets = listRuleSets(organizationId);
+        return PostingRuleMapper.toListResponse(ruleSets, page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PostingRuleSetResponse getPostingRuleSetAsResponse(UUID ruleSetId) {
+        PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
+        return PostingRuleMapper.toResponse(ruleSet);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId) {
+        List<PostingRuleVersion> versions = listVersions(ruleSetId);
+        return versions.stream()
+                .map(PostingRuleMapper::toVersionResponse)
+                .toList();
+    }
+
+    // ── Entity-based methods (used by internal services) ─────────────
 
     @Override
     public PostingRuleSet createPostingRuleSet(PostingRuleSet ruleSet) {
