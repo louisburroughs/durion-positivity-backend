@@ -8,6 +8,7 @@ import com.positivity.accounting.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -16,10 +17,16 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.jspecify.annotations.NonNull;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -65,7 +72,7 @@ public class FinancialReportingController {
             @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2024-12-31") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date cannot be before start date");
         }
 
         IncomeStatementReport report = financialReportingService.generateIncomeStatement(startDate, endDate);
@@ -100,11 +107,11 @@ public class FinancialReportingController {
     @EmitEvent(id = "REPORT_DRILLDOWN_ACCOUNTS", apiVersion = "1")
     @Operation(summary = "Drilldown to Accounts", description = "Show which GL accounts contribute to a specific statement line")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Account drilldown successful", content = @Content(schema = @Schema(implementation = AccountDrilldownResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Account drilldown successful", 
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = AccountDrilldownResponse.class)))),
             @ApiResponse(responseCode = "400", description = "Invalid statement line code or date range"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements"),
-            @ApiResponse(responseCode = "404", description = "Statement line code not found")
+            @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
     })
     public ResponseEntity<List<AccountDrilldownResponse>> drilldownToAccounts(
             @Parameter(description = "Statement line code (e.g., REVENUE_SALES)", required = true) @PathVariable @NonNull String statementLineCode,
@@ -114,7 +121,7 @@ public class FinancialReportingController {
             @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2024-12-31") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date cannot be before start date");
         }
 
         List<AccountDrilldownResponse> response = financialReportingService.drilldownToAccounts(
@@ -130,21 +137,21 @@ public class FinancialReportingController {
     @EmitEvent(id = "REPORT_DRILLDOWN_JOURNAL_LINES", apiVersion = "1")
     @Operation(summary = "Drilldown to Journal Lines", description = "Show source journal entries contributing to a GL account balance")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Journal line drilldown successful", content = @Content(schema = @Schema(implementation = JournalLineDrilldownResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Journal line drilldown successful", 
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = JournalLineDrilldownResponse.class)))),
             @ApiResponse(responseCode = "400", description = "Invalid account ID or date range"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements"),
-            @ApiResponse(responseCode = "404", description = "Account ID not found")
+            @ApiResponse(responseCode = "403", description = "Forbidden - missing reporting:view:financial-statements")
     })
     public ResponseEntity<List<JournalLineDrilldownResponse>> drilldownToJournalLines(
-            @Parameter(description = "GL Account ID", required = true, example = "1000") @PathVariable @NonNull String accountId,
+            @Parameter(description = "GL Account ID (UUID)", required = true, example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable @NonNull String accountId,
 
             @Parameter(description = "Period start date (YYYY-MM-DD)", required = true, example = "2024-01-01") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate startDate,
 
             @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2024-12-31") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date cannot be before start date");
         }
 
         List<JournalLineDrilldownResponse> response = financialReportingService.drilldownToJournalLines(

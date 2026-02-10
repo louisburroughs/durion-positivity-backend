@@ -1,12 +1,27 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.accounting.internal.enums.OperationType;
-import com.positivity.accounting.internal.enums.StatementType;
-import jakarta.persistence.*;
-import lombok.*;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 
-import java.util.UUID;
+import com.positivity.accounting.internal.enums.OperationType;
+import com.positivity.accounting.internal.enums.StatementType;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Configurable mapping from GL accounts to financial statement lines.
@@ -25,7 +40,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "statement_line_mappings", indexes = {
         @Index(name = "idx_statement_line_mapping_type", columnList = "statement_type"),
-        @Index(name = "idx_statement_line_mapping_account", columnList = "account_id"),
+        @Index(name = "idx_statement_line_mapping_account", columnList = "gl_account_id"),
         @Index(name = "idx_statement_line_mapping_code", columnList = "statement_line_code")
 })
 @Getter
@@ -42,11 +57,11 @@ public class StatementLineMapping {
     private UUID mappingId;
 
     /**
-     * GL Account ID (references gl_accounts.account_id).
+     * GL Account ID (references gl_account.gl_account_id).
      */
     @NonNull
-    @Column(name = "account_id", length = 100, nullable = false)
-    private String accountId;
+    @Column(name = "gl_account_id", nullable = false)
+    private UUID glAccountId;
 
     /**
      * GL Account Name (denormalized for reporting performance).
@@ -99,7 +114,7 @@ public class StatementLineMapping {
     @PrePersist
     protected void onCreate() {
         if (mappingId == null) {
-            mappingId = UUID.randomUUID();
+            mappingId = UUIDv7Generator.generate();
         }
     }
 }
