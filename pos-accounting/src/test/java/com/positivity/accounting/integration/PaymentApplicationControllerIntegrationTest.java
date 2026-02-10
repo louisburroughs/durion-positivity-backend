@@ -33,9 +33,13 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
+
+import org.springframework.web.context.WebApplicationContext;
 
 /**
  * Integration tests for Payment Application REST API endpoints
@@ -48,6 +52,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PaymentApplicationControllerIntegrationTest {
 
         @Autowired
+        private WebApplicationContext context;
+
         private MockMvc mockMvc;
 
         @Autowired
@@ -76,6 +82,13 @@ class PaymentApplicationControllerIntegrationTest {
 
         @BeforeEach
         void setUp() {
+                // Initialize MockMvc with the production security filter chain.
+                // GatewayAuthoritiesFilter reads X-Authorities / X-User headers to populate
+                // SecurityContext — tests send those headers just as the API gateway would.
+                this.mockMvc = webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+
                 // Clean up test data
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();
@@ -153,7 +166,7 @@ class PaymentApplicationControllerIntegrationTest {
                                 createInvoiceApplication(testInvoice1Id, "500.00")));
 
                 // Act: POST to apply payment endpoint
-                MvcResult result = mockMvc
+                mockMvc
                                 .perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/applications"))
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(objectMapper.writeValueAsString(request)))
@@ -167,8 +180,7 @@ class PaymentApplicationControllerIntegrationTest {
                                 .andExpect(jsonPath("$.applications.length()").value(1))
                                 .andExpect(jsonPath("$.applications[0].invoiceId").value(testInvoice1Id.toString()))
                                 .andExpect(jsonPath("$.applications[0].appliedAmount").value(500.00))
-                                .andExpect(jsonPath("$.customerCredit").doesNotExist())
-                                .andReturn();
+                                .andExpect(jsonPath("$.customerCredit").doesNotExist());
 
                 // Assert: Verify database state
                 List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(testPaymentId);

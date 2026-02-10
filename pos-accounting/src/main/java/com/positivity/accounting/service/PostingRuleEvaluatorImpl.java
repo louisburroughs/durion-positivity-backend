@@ -1,5 +1,19 @@
 package com.positivity.accounting.service;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.accounting.internal.dto.MappingEvaluation;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -13,21 +27,9 @@ import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import com.positivity.shared.id.UUIDv7Generator;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Implementation of posting rule evaluator.
@@ -56,7 +58,6 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
     private final PostingRuleVersionRepository versionRepository;
     private final PostingRuleSetRepository ruleSetRepository;
-    private final JournalEntryService journalEntryService;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
 
@@ -101,17 +102,17 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
             // 2. Evaluate mapping keys (exact → fallback → category default)
             MappingEvaluation mappingEval = evaluateMappingKeys(event, ruleVersion);
-            if (!mappingEval.success) {
+            if (!mappingEval.isSuccess()) {
                 evaluationDetails.put("failureStep", "evaluateMappingKeys");
-                evaluationDetails.put("keysEvaluated", mappingEval.keysEvaluated);
+                evaluationDetails.put("keysEvaluated", mappingEval.getKeysEvaluated());
                 return PostingResult.failure(
                         PostingFailureReason.UNMAPPED_EVENT_TYPE,
                         "No mapping found for event type " + event.getEventType(),
                         evaluationDetails);
             }
 
-            evaluationDetails.put("mappingType", mappingEval.mappingType);
-            evaluationDetails.put("mappingKey", mappingEval.mappingKey);
+            evaluationDetails.put("mappingType", mappingEval.getMappingType());
+            evaluationDetails.put("mappingKey", mappingEval.getMappingKey());
 
             // 3. Generate journal entry draft
             JournalEntry journalEntry = generateJournalEntry(event, mappingEval, ruleVersion);
@@ -188,7 +189,6 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      */
     private MappingEvaluation evaluateMappingKeys(AccountingEvent event, PostingRuleVersion ruleVersion) {
         MappingEvaluation eval = new MappingEvaluation();
-        eval.keysEvaluated = new ArrayList<>();
 
         // TODO [CAP-278]: Implement actual mapping key evaluation logic
         // This requires parsing rulesDefinition JSON and checking against mapping
@@ -201,10 +201,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         // 3. If not found, check for fallback matches
         // 4. If not found, check for category default
 
-        eval.success = true;
-        eval.mappingType = "exact"; // or "fallback" or "category_default"
-        eval.mappingKey = event.getEventType();
-        eval.keysEvaluated.add(event.getEventType());
+        eval.setSuccess(true);
+        eval.setMappingType("exact"); // or "fallback" or "category_default"
+        eval.setMappingKey(event.getEventType());
+        eval.getKeysEvaluated().add(event.getEventType());
 
         return eval;
     }
@@ -277,15 +277,5 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         return entry.getLines().stream()
                 .map(line -> line.getCreditAmount() != null ? line.getCreditAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    /**
-     * Internal class to hold mapping evaluation results.
-     */
-    private static class MappingEvaluation {
-        boolean success;
-        String mappingType; // "exact", "fallback", "category_default"
-        String mappingKey;
-        List<String> keysEvaluated;
     }
 }
