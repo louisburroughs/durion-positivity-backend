@@ -348,37 +348,67 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     
     /**
      * Check if statement line code represents revenue (income statement).
+     * Supports both legacy codes (e.g. REVENUE_*) and Javadoc-style codes (e.g. PL_REVENUE_*).
      */
     private boolean isRevenueLine(String lineCode) {
-        return lineCode.startsWith("REVENUE_") || lineCode.contains("INCOME");
+        if (lineCode == null) {
+            return false;
+        }
+        return lineCode.startsWith("REVENUE_")
+                || lineCode.startsWith("PL_REVENUE_")
+                || lineCode.contains("INCOME");
     }
     
     /**
      * Check if statement line code represents expense (income statement).
+     * Supports both legacy codes (e.g. EXPENSE_*) and Javadoc-style codes (e.g. PL_EXPENSE_* / PL_EXPENSES_*).
      */
     private boolean isExpenseLine(String lineCode) {
-        return lineCode.startsWith("EXPENSE_") || lineCode.contains("COST");
+        if (lineCode == null) {
+            return false;
+        }
+        return lineCode.startsWith("EXPENSE_")
+                || lineCode.startsWith("PL_EXPENSE_")
+                || lineCode.startsWith("PL_EXPENSES_")
+                || lineCode.contains("COST");
     }
     
     /**
      * Check if statement line code represents asset (balance sheet).
+     * Supports both legacy codes (e.g. ASSET_*) and Javadoc-style codes (e.g. BS_ASSETS_*).
      */
     private boolean isAssetLine(String lineCode) {
-        return lineCode.startsWith("ASSET_");
+        if (lineCode == null) {
+            return false;
+        }
+        return lineCode.startsWith("ASSET_")
+                || lineCode.startsWith("BS_ASSETS_");
     }
     
     /**
      * Check if statement line code represents liability (balance sheet).
+     * Supports legacy codes (e.g. LIABILITY_*) and likely BS prefixes (e.g. BS_LIAB_*, BS_LIABILITY_*, BS_LIABILITIES_*).
      */
     private boolean isLiabilityLine(String lineCode) {
-        return lineCode.startsWith("LIABILITY_");
+        if (lineCode == null) {
+            return false;
+        }
+        return lineCode.startsWith("LIABILITY_")
+                || lineCode.startsWith("BS_LIAB_")
+                || lineCode.startsWith("BS_LIABILITY_")
+                || lineCode.startsWith("BS_LIABILITIES_");
     }
     
     /**
      * Check if statement line code represents equity (balance sheet).
+     * Supports both legacy codes (e.g. EQUITY_*) and Javadoc-style codes (e.g. BS_EQUITY_*).
      */
     private boolean isEquityLine(String lineCode) {
-        return lineCode.startsWith("EQUITY_");
+        if (lineCode == null) {
+            return false;
+        }
+        return lineCode.startsWith("EQUITY_")
+                || lineCode.startsWith("BS_EQUITY_");
     }
 }
 
