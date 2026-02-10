@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.accounting.internal.dto.AccountingEventMapper;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryMapper;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
@@ -64,6 +65,7 @@ public class EventIngestionService {
     private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
     private final IdempotencyService idempotencyService;
     private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository auditTrailEntryRepository;
+    private final PostingEngineOrchestrator postingEngineOrchestrator;
 
     /**
      * Submits a business event for accounting processing.
@@ -263,55 +265,70 @@ public class EventIngestionService {
 
                 log.info("Attempting to reprocess event {} with current mapping rules", eventId);
 
-                // Simulate successful reprocessing (placeholder for actual posting logic)
-                // In real implementation, this would call the posting rule engine
-                boolean reprocessingSucceeded = attemptReprocessingLogic(event, request);
+                // [CAP-278] Integration: Delegate to Posting Engine Orchestrator
+                // The posting engine handles:
+                // 1. Loading active PostingRuleSet for event.organizationId +
+                // event.transactionDate
+                // 2. Evaluating rules against event.payload to determine GL mappings
+                // 3. Generating JournalEntry if rules match successfully
+                // 4. Posting to GL if rule set has autoPost enabled (assumes autoPost=true for
+                // reprocessing)
+                // 5. Returning PostingResult with outcome
+
+                // Parse mappingVersionToUse from String to UUID if present
+                UUID mappingVersion = null;
+                if (request.getMappingVersionToUse() != null && !request.getMappingVersionToUse().isBlank()) {
+                    try {
+                        mappingVersion = UUID.fromString(request.getMappingVersionToUse());
+                    } catch (IllegalArgumentException e) {
+                        log.warn("Invalid UUID format for mappingVersionToUse: {}", request.getMappingVersionToUse());
+                        // Leave as null, will use default active version
+                    }
+                }
+
+                PostingResult postingResult = postingEngineOrchestrator.processEvent(
+                        event,
+                        mappingVersion,
+                        request.getTriggeredByUserId(),
+                        true // autoPost=true for reprocessing flow
+                );
+
+                boolean reprocessingSucceeded = postingResult.isSuccess();
 
                 if (reprocessingSucceeded) {
-                    // SUCCESS: Update event status and history
-                    event.setStatus(AccountingEventStatus.PROCESSED);
-                    event.setProcessedAt(java.time.Instant.now());
-                    event.setResolvedByUserId(request.getTriggeredByUserId());
+                    // SUCCESS: Event and history already updated by PostingEngineOrchestrator
+                    // The orchestrator has already:
+                    // - Set event.status = PROCESSED
+                    // - Set event.finalPostingReferenceId
+                    // - Set event.processedAt and resolvedByUserId
+                    // - Created/updated ReprocessingAttemptHistory with outcome=SUCCESS
 
-                    // Set final posting reference (would come from JE created)
-                    String finalPostingRef = "JE-" + UUID.randomUUID().toString().substring(0, 8);
-                    event.setFinalPostingReferenceId(finalPostingRef);
-
-                    // Update attempt history outcome
-                    attemptHistory.setOutcome(ReprocessingOutcome.SUCCESS);
-                    attemptHistory
-                            .setOutcomeDetails(
-                                    "Reprocessing succeeded. Posted to GL with reference: " + finalPostingRef);
-
+                    // Extract posting reference from evaluation details
+                    String finalPostingRef = (String) postingResult.getEvaluationDetails().get("postingReference");
                     log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
                 } else {
-                    // FAILURE: Keep as SUSPENDED, update error details
-                    event.setStatus(AccountingEventStatus.SUSPENDED);
-                    String errorDetails = "Reprocessing failed: mapping/rule still invalid";
-                    event.setFailureDetails(errorDetails);
+                    // FAILURE: Event and history already updated by PostingEngineOrchestrator
+                    // The orchestrator has already:
+                    // - Set event.status = SUSPENDED or FAILED
+                    // - Set event.failureReasonCode and failureDetails
+                    // - Created/updated ReprocessingAttemptHistory with outcome=FAILURE
 
-                    attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
-                    attemptHistory.setOutcomeDetails(errorDetails);
-
-                    log.warn("Reprocessing failed for event {}: {}", eventId, errorDetails);
+                    log.warn("Reprocessing failed for event {}: {} - {}",
+                            eventId,
+                            postingResult.getFailureReason(),
+                            postingResult.getFailureDetails());
                 }
 
             } catch (Exception e) {
-                // FAILURE: Keep as SUSPENDED/FAILED, log error
-                event.setStatus(AccountingEventStatus.SUSPENDED);
-                String errorMsg = "Reprocessing exception: " + e.getMessage();
-                event.setFailureDetails(errorMsg);
-                event.setErrorMessage(e.getMessage());
-
-                attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
-                attemptHistory.setOutcomeDetails(errorMsg);
-
-                log.error("Reprocessing failed for event {} due to exception", eventId, e);
-            } finally {
-                // Always persist the event state and attempt history
-                accountingEventRepository.save(event);
-                reprocessingAttemptHistoryRepository.save(attemptHistory);
+                // FAILURE: PostingEngineOrchestrator handles exceptions and updates event
+                // status
+                // But we still want to log at this level for visibility
+                log.error("Exception during reprocessing for event {} (already handled by orchestrator)", eventId, e);
             }
+
+            // Reload event to get updates from orchestrator
+            event = accountingEventRepository.findById(eventId)
+                    .orElseThrow(() -> new EventNotFoundException("Event not found after reprocessing: " + eventId));
 
             return AccountingEventMapper.toEventResponse(event);
 
@@ -323,48 +340,6 @@ public class EventIngestionService {
             log.warn(msg, e);
             throw new IllegalStateException(msg, e);
         }
-    }
-
-    /**
-     * Placeholder for actual reprocessing logic.
-     * In production, this would integrate with the posting rule engine.
-     * 
-     * TODO [CAP-056]: Replace with actual Posting Rule Engine integration.
-     * The real implementation should:
-     * 1. Load active PostingRuleSet for event.organizationId +
-     * event.transactionDate
-     * 2. Apply rules to event.payload to determine GL mappings
-     * 3. Generate JournalEntry if rules match successfully
-     * 4. Post to GL if rule set has autoPost enabled
-     * 5. Return true on success with journal entry reference, false on mapping
-     * failure
-     * 
-     * @param event   the event to reprocess
-     * @param request reprocess request context
-     * @return true if reprocessing succeeded, false otherwise
-     */
-    private boolean attemptReprocessingLogic(@NonNull AccountingEvent event, @NonNull ReprocessEventRequest request) {
-        // TODO [CAP-056]: Integrate with posting rule engine
-        // For now, simulate success if failureReasonCode is not UNMAPPED_EVENT_TYPE
-        // In real implementation, this would:
-        // 1. Load current posting rule set for event.organizationId +
-        // event.transactionDate
-        // 2. Apply rules to event.payload
-        // 3. Generate journal entry if rules match
-        // 4. Post to GL if auto-post is enabled
-        // 5. Return success/failure
-
-        log.debug("Simulating reprocessing logic for event {}", event.getEventId());
-
-        // Simulate: if failure was UNMAPPED_EVENT_TYPE and we still don't have a
-        // mapping, fail
-        if ("UNMAPPED_EVENT_TYPE".equals(event.getFailureReasonCode())) {
-            // Simulate checking if mapping now exists (50% chance for demo purposes)
-            return Math.random() > 0.5;
-        }
-
-        // For other failure codes, simulate success
-        return true;
     }
 
     /**
