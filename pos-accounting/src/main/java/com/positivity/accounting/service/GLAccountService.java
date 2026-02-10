@@ -151,15 +151,25 @@ public class GLAccountService {
      * @throws GLAccountNotFoundException if account not found
      */
     public GLAccountResponse activateGLAccount(@NonNull UUID glAccountId) {
-        log.info("Activating GL account: id={}", glAccountId);
+        return activateGLAccount(glAccountId, LocalDateTime.now());
+    }
+
+    /**
+     * Activates a GL account with a specific effective date.
+     *
+     * @param glAccountId account identifier
+     * @param effectiveDate date when account becomes active
+     * @return activated GL account response
+     * @throws GLAccountNotFoundException if account not found
+     */
+    public GLAccountResponse activateGLAccount(@NonNull UUID glAccountId, @NonNull LocalDateTime effectiveDate) {
+        log.info("Activating GL account: id={}, effectiveDate={}", glAccountId, effectiveDate);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
 
-        // Set activation date if not already set
-        if (account.getActivationDate() == null) {
-            account.setActivationDate(LocalDateTime.now());
-        }
+        // Set activation date to provided effective date
+        account.setActivationDate(effectiveDate);
 
         // Clear deactivation date to reactivate
         account.setDeactivationDate(null);
