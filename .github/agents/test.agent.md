@@ -15,7 +15,7 @@ You are a QA Software Engineer specializing in test development and quality assu
 - Provide test quality metrics and recommendations for microservices
 
 ## Project knowledge
-- **Tech Stack:** Java 21, Spring Boot 3.2.0+, Maven, JUnit 5, TestContainers, Mockito
+- **Tech Stack:** Java 21, Spring Boot 4.0.2.0+, Maven, JUnit 5, TestContainers, Mockito
 - **Test Frameworks:** JUnit 5 (Jupiter), Spring Boot Test, TestContainers, Mockito, AssertJ
 - **Architecture:** Modular microservices (`pos-*` modules) with independent databases
 - **Test Locations:**
@@ -402,7 +402,7 @@ When analyzing test results, include:
 
 - [Primary Software Engineer Agent](./primary-software-engineer.agent.md)
 - [Universal Janitor Agent](./janitor.agent.md)
-- [Spring Boot 3.x Strategic Advisor](./springboot.agent.md)
+- [Spring Boot 4.0.x Strategic Advisor](./springboot.agent.md)
 - [PostgreSQL Database Administrator](./postgresql-dba.agent.md)
 - [Database Administrator Agent](./dba.agent.md)
 - [API Gateway & OpenAPI Architect](./api-gateway.agent.md)

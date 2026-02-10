@@ -28,6 +28,7 @@ public class AccountingEventResponse {
 
     private UUID eventId;
     private String eventType;
+    private String sourceSystem;
     private LocalDateTime transactionDate;
     private Map<String, Object> payload;
     private AccountingEventStatus status;
@@ -36,6 +37,14 @@ public class AccountingEventResponse {
     private Instant receivedAt;
     private Instant processedAt;
     private Long sequenceNumber;
+
+    // ========== Suspense Queue Fields (CAP:055) ==========
+    private String failureReasonCode;
+    private String failureDetails;
+    private Integer attemptCount;
+    private String finalPostingReferenceId;
+    private String resolvedByUserId;
+    private String mappingVersionAttempted;
 
     /**
      * Convenience setter that parses a status string into the enum.

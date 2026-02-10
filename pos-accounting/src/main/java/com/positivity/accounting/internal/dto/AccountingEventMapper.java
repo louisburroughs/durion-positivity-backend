@@ -21,6 +21,7 @@ public final class AccountingEventMapper {
         return AccountingEventResponse.builder()
                 .eventId(entity.getEventId())
                 .eventType(entity.getEventType())
+                .sourceSystem(entity.getSourceSystem())
                 .transactionDate(entity.getTransactionDate())
                 .payload(entity.getPayload())
                 .status(entity.getStatus())
@@ -29,6 +30,13 @@ public final class AccountingEventMapper {
                 .receivedAt(entity.getReceivedAt())
                 .processedAt(entity.getProcessedAt())
                 .sequenceNumber(entity.getSequenceNumber())
+                // Suspense queue fields (CAP:055)
+                .failureReasonCode(entity.getFailureReasonCode())
+                .failureDetails(entity.getFailureDetails())
+                .attemptCount(entity.getAttemptCount())
+                .finalPostingReferenceId(entity.getFinalPostingReferenceId())
+                .resolvedByUserId(entity.getResolvedByUserId())
+                .mappingVersionAttempted(entity.getMappingVersionAttempted())
                 .build();
     }
 

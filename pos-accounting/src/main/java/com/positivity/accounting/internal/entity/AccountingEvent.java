@@ -19,6 +19,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,7 +46,8 @@ import lombok.ToString;
         @Index(name = "idx_accounting_event_status", columnList = "status"),
         @Index(name = "idx_accounting_event_transaction_date", columnList = "transaction_date"),
         @Index(name = "idx_accounting_event_received_at", columnList = "received_at"),
-        @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status")
+        @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status"),
+        @Index(name = "idx_accounting_event_source_system", columnList = "source_system")
 })
 public class AccountingEvent {
 
@@ -53,6 +55,14 @@ public class AccountingEvent {
     @Id
     @Column(name = "event_id", nullable = false, columnDefinition = "UUID")
     private UUID eventId;
+
+    /**
+     * Optimistic locking version field for concurrency control.
+     * Prevents concurrent reprocessing from creating duplicate postings (BR-3).
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @PrePersist
     public void onPrePersist() {
@@ -67,6 +77,13 @@ public class AccountingEvent {
 
     @Column(name = "organization_id", columnDefinition = "UUID")
     private UUID organizationId;
+
+    /**
+     * Source system that generated this accounting event.
+     * Extracted from event payload for efficient querying.
+     */
+    @Column(name = "source_system", length = 100, nullable = false)
+    private String sourceSystem;
 
     @Column(name = "transaction_date", nullable = false)
     private LocalDateTime transactionDate;
@@ -98,5 +115,49 @@ public class AccountingEvent {
 
     @Column(name = "sequence_number")
     private Long sequenceNumber;
+
+    // ========== Suspense Queue Fields (CAP:055) ==========
+
+    /**
+     * Structured failure reason code for suspense entries.
+     * Examples: UNMAPPED_EVENT_TYPE, INVALID_MAPPING_VERSION, RULE_CONFLICT
+     */
+    @Column(name = "failure_reason_code", length = 100)
+    private String failureReasonCode;
+
+    /**
+     * Detailed failure information for suspense entries.
+     * Provides additional context beyond errorMessage.
+     */
+    @Column(name = "failure_details", length = 4000)
+    private String failureDetails;
+
+    /**
+     * Number of reprocessing attempts for this event.
+     * Incremented each time reprocessing is triggered.
+     * Nullable for backward compatibility with existing events.
+     */
+    @Column(name = "attempt_count")
+    private Integer attemptCount;
+
+    /**
+     * Final posting reference after successful reprocessing.
+     * Links to the JE or posting transaction created from this event.
+     */
+    @Column(name = "final_posting_reference_id", length = 100)
+    private String finalPostingReferenceId;
+
+    /**
+     * User ID of the person who resolved/reprocessed this suspense entry.
+     */
+    @Column(name = "resolved_by_user_id", length = 100)
+    private String resolvedByUserId;
+
+    /**
+     * Mapping or rule version that was attempted when this event was suspended.
+     * Used for diagnostic and reprocessing purposes.
+     */
+    @Column(name = "mapping_version_attempted", length = 50)
+    private String mappingVersionAttempted;
 
 }

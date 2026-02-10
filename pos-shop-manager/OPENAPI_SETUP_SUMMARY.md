@@ -1,6 +1,6 @@
 # pos-shop-manager OpenAPI Setup Summary
 
-**Completed**: January 27, 2025 | **Module**: pos-shop-manager | **Framework**: Spring Boot 3.4.2
+**Completed**: January 27, 2025 | **Module**: pos-shop-manager | **Framework**: Spring Boot 4.0.2
 
 ## Project Status: ✅ READY FOR DEPLOYMENT
 
@@ -272,7 +272,7 @@ The bidirectional relationship with ShopQualification now correctly maps through
 ## Compliance & Standards
 
 - ✅ OpenAPI 3.0.1 specification format
-- ✅ Spring Boot 3.4.2 conventions followed
+- ✅ Spring Boot 4.0.2 conventions followed
 - ✅ Spring Security 6 best practices
 - ✅ Consistent with other pos-* modules (pos-price, pos-security-service, etc.)
 - ✅ Maven plugin version aligned with other modules

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-POS backend microservice suite for Durion. Multi-module Maven project containing gateway + `pos-*` services (Spring Boot 3.x, Java 21).
+POS backend microservice suite for Durion. Multi-module Maven project containing gateway + `pos-*` services (Spring Boot 4.0.x, Java 21).
 
 ## Quick Prerequisites
 
