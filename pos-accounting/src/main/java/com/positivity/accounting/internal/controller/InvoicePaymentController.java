@@ -45,10 +45,15 @@ public class InvoicePaymentController {
      * Apply a payment to an invoice and update status (LEGACY - for invoice-centric
      * workflow).
      * 
-     * <p><strong>BACKWARD COMPATIBILITY:</strong> This endpoint is maintained at its original
-     * path {@code /v1/accounting/invoices/{invoiceId}/pay} for existing clients. The new
-     * payment-centric API is available at {@code /v1/accounting/payments/{paymentId}/applications}.
-     * Both endpoints are supported; this legacy endpoint will be removed in a future major version.
+     * <p>
+     * <strong>BACKWARD COMPATIBILITY:</strong> This endpoint is maintained at its
+     * original
+     * path {@code /v1/accounting/invoices/{invoiceId}/pay} for existing clients.
+     * The new
+     * payment-centric API is available at
+     * {@code /v1/accounting/payments/{paymentId}/applications}.
+     * Both endpoints are supported; this legacy endpoint will be removed in a
+     * future major version.
      * 
      * @deprecated Use PaymentApplicationController for new payment-centric API
      * @param request Payment details including idempotency key
@@ -125,7 +130,7 @@ public class InvoicePaymentController {
         }
     }
 
-    @PostMapping("/v1/invoice/invoices")
+    @PostMapping("/v1/accounting/invoice/invoices")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Regenerate invoice from workorder", description = "Regenerate an invoice from a workorder.")
     @ApiResponses({
@@ -138,7 +143,7 @@ public class InvoicePaymentController {
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }
 
-    @GetMapping("/v1/invoice/rules/{customerId}")
+    @GetMapping("/v1/accounting/invoice/rules/{customerId}")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Get billing rules", description = "Retrieve billing rules for a customer.")
     @ApiResponses({
