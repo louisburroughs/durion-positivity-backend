@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
+import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -156,11 +157,11 @@ public class EventIngestionService {
      *
      * @param eventId the event identifier
      * @return the accounting event response
-     * @throws IllegalArgumentException if event not found
+     * @throws EventNotFoundException if event not found
      */
     public AccountingEventResponse getEventById(@NonNull UUID eventId) {
         AccountingEvent event = accountingEventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + eventId));
+                .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
         return AccountingEventMapper.toEventResponse(event);
     }
 
@@ -204,7 +205,7 @@ public class EventIngestionService {
 
         // Load the accounting event
         AccountingEvent event = accountingEventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + eventId));
+                .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
 
         // BR-3: Idempotency check - reject if already PROCESSED
         if (event.getStatus() == AccountingEventStatus.PROCESSED) {
