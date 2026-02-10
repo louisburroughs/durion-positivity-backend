@@ -156,11 +156,8 @@ public class EventIngestionController {
                                 return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
                         }
                 } catch (IllegalStateException e) {
-                        // BR-3: Idempotency violation (already PROCESSED) or invalid state
-                        if (e.getMessage().contains("already PROCESSED")) {
-                                return ResponseEntity.status(HttpStatus.CONFLICT).build();
-                        }
-                        throw e;
+                        // BR-3: Idempotency violation or invalid state - treat as conflict
+                        return ResponseEntity.status(HttpStatus.CONFLICT).build();
                 }
         }
 
