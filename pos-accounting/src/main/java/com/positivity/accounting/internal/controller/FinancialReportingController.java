@@ -69,6 +69,10 @@ public class FinancialReportingController {
 
             @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2024-12-31") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate endDate) {
 
+        // Use IllegalArgumentException for validation errors to leverage the module's
+        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad Request
+        // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
+        // This maintains the accounting domain's standard error contract across all endpoints.
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date cannot be before start date");
         }
@@ -118,6 +122,10 @@ public class FinancialReportingController {
 
             @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2024-12-31") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate endDate) {
 
+        // Use IllegalArgumentException for validation errors to leverage the module's
+        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad Request
+        // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
+        // This maintains the accounting domain's standard error contract across all endpoints.
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date cannot be before start date");
         }
@@ -148,6 +156,10 @@ public class FinancialReportingController {
 
             @Parameter(description = "Period end date (YYYY-MM-DD)", required = true, example = "2024-12-31") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @NonNull LocalDate endDate) {
 
+        // Use IllegalArgumentException for validation errors to leverage the module's
+        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad Request
+        // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
+        // This maintains the accounting domain's standard error contract across all endpoints.
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date cannot be before start date");
         }
