@@ -185,7 +185,7 @@ As a **Payroll Clerk**, I want HR to receive work sessions from shopmgr so that 
 
 ### Technical Stack
 
-- Spring Boot 3.2.6
+- Spring Boot 4.0.2
 - Java 21
 - Spring Data JPA
 - PostgreSQL/MySQL

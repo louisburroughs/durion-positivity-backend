@@ -174,7 +174,7 @@ As a **Store Manager**, I want to cancel an order so that mistaken orders can be
 
 ### Technical Stack
 
-- Spring Boot 3.2.6
+- Spring Boot 4.0.2
 - Java 21
 - Spring Data JPA
 - PostgreSQL/MySQL

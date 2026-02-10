@@ -14,7 +14,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,7 +37,6 @@ import com.positivity.accounting.internal.dto.ReprocessEventRequest;
  * Each test maps to an acceptance criterion defined in issue #122.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Suspense Queue Reprocessing Contract Behavioral Tests (CAP:055)")
 public class SuspenseQueueContractBehaviorIT {
@@ -75,8 +73,8 @@ public class SuspenseQueueContractBehaviorIT {
         // ===============================================
 
         @Test
-        @DisplayName("AC-2: Successful reprocess posts and closes entry")
-        public void testReprocessSuspendedEventHappyPath() throws Exception {
+        @DisplayName("AC-2a: Successful reprocess posts and closes entry (200 OK)")
+        public void testReprocessSuspendedEventSuccessful() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType("INVOICE_RECEIVED");
@@ -106,14 +104,54 @@ public class SuspenseQueueContractBehaviorIT {
                                 .reprocessingNotes("Testing reprocess after rule correction")
                                 .build();
 
-                // Note: This test may return 202 (still SUSPENDED) or 200 (PROCESSED) depending
-                // on simulated logic
-                // Assert: Reprocessing should be accepted
+                // Assert: Successful reprocessing returns 200 OK with PROCESSED status
                 mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(reprocessRequest)))
                                 .andDo(print())
-                                .andExpect(status().isOk().or(status().isAccepted()));
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("PROCESSED"));
+        }
+
+        @Test
+        @DisplayName("AC-2b: Reprocess accepted but still pending (202 Accepted)")
+        public void testReprocessSuspendedEventAccepted() throws Exception {
+                // Arrange: Create a suspended event
+                AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
+                submitRequest.setEventType("INVOICE_RECEIVED");
+                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setSourceSystem("TEST_SYSTEM");
+                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setPayload(Map.of(
+                                "invoiceId", "INV-001-PENDING",
+                                "amount", 100.00,
+                                "description", "Test invoice for pending reprocess"));
+
+                MvcResult submitResult = mockMvc.perform(withAuth(post(API_V1))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(submitRequest)))
+                                .andExpect(status().isAccepted())
+                                .andReturn();
+
+                String eventId = extractEventIdFromResponse(submitResult);
+
+                // Manually mark event as SUSPENDED for this test
+                // In production, this would happen through the posting rule engine
+                // TODO: Add helper method to set event status for test purposes
+
+                // Act: Reprocess the suspended event
+                ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
+                                .triggeredByUserId("test-admin")
+                                .reprocessingNotes("Testing reprocess that remains pending")
+                                .build();
+
+                // Assert: Reprocessing accepted but not yet completed returns 202 Accepted
+                mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(reprocessRequest)))
+                                .andDo(print())
+                                .andExpect(status().isAccepted())
+                                .andExpect(jsonPath("$.status").value("SUSPENDED"));
         }
 
         @Test
@@ -133,8 +171,8 @@ public class SuspenseQueueContractBehaviorIT {
         }
 
         @Test
-        @DisplayName("AC-4: Attempt history is maintained")
-        public void testReprocessingAttemptHistoryMaintained() throws Exception {
+        @DisplayName("AC-4a: Attempt history is maintained (successful reprocess)")
+        public void testReprocessingAttemptHistoryMaintainedSuccess() throws Exception {
                 // Arrange: Create a suspended event
                 AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
                 submitRequest.setEventType("INVOICE_RECEIVED");
@@ -144,7 +182,7 @@ public class SuspenseQueueContractBehaviorIT {
                 submitRequest.setPayload(Map.of(
                                 "invoiceId", "INV-002",
                                 "amount", 200.00,
-                                "description", "Test invoice for history tracking"));
+                                "description", "Test invoice for history tracking - successful"));
 
                 MvcResult submitResult = mockMvc.perform(withAuth(post(API_V1))
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -162,14 +200,56 @@ public class SuspenseQueueContractBehaviorIT {
                 mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(reprocessRequest)))
-                                .andExpect(status().isOk().or(status().isAccepted()));
+                                .andExpect(status().isOk());
 
                 // Assert: Reprocessing history should be retrievable
                 mockMvc.perform(withAuth(get(API_V1 + "/{eventId}/reprocessing-history", eventId)))
                                 .andDo(print())
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$").isArray())
-                                .andExpect(jsonPath("$[0].triggeredByUserId").value("test-admin"));
+                                .andExpect(jsonPath("$[0].triggeredByUserId").value("test-admin"))
+                                .andExpect(jsonPath("$[0].outcome").value("SUCCESS"));
+        }
+
+        @Test
+        @DisplayName("AC-4b: Attempt history is maintained (failed reprocess)")
+        public void testReprocessingAttemptHistoryMaintainedFailure() throws Exception {
+                // Arrange: Create a suspended event
+                AccountingEventSubmitRequest submitRequest = new AccountingEventSubmitRequest();
+                submitRequest.setEventType("INVOICE_RECEIVED");
+                submitRequest.setOrganizationId(UUID.randomUUID());
+                submitRequest.setSourceSystem("TEST_SYSTEM");
+                submitRequest.setTransactionDate(LocalDateTime.now());
+                submitRequest.setPayload(Map.of(
+                                "invoiceId", "INV-002-FAIL",
+                                "amount", 200.00,
+                                "description", "Test invoice for history tracking - failed"));
+
+                MvcResult submitResult = mockMvc.perform(withAuth(post(API_V1))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(submitRequest)))
+                                .andExpect(status().isAccepted())
+                                .andReturn();
+
+                String eventId = extractEventIdFromResponse(submitResult);
+
+                // Act: Reprocess the event
+                ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
+                                .triggeredByUserId("test-admin")
+                                .build();
+
+                mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", eventId))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(reprocessRequest)))
+                                .andExpect(status().isAccepted());
+
+                // Assert: Reprocessing history should be retrievable with failure outcome
+                mockMvc.perform(withAuth(get(API_V1 + "/{eventId}/reprocessing-history", eventId)))
+                                .andDo(print())
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$[0].triggeredByUserId").value("test-admin"))
+                                .andExpect(jsonPath("$[0].outcome").value("FAILURE"));
         }
 
         // ===============================================
@@ -178,8 +258,8 @@ public class SuspenseQueueContractBehaviorIT {
 
         @Test
         @DisplayName("Reprocess returns 404 for non-existent event")
-        public void testReprocessNonExistentEvent() throws Exception {
-                // Arrange: Use a random UUID that doesn't exist
+        public void testReprocessNonExistentEventNotFound() throws Exception {
+                // Arrange: Use a valid UUID format that doesn't exist in database
                 UUID nonExistentId = UUID.randomUUID();
 
                 // Act: Attempt to reprocess
@@ -187,12 +267,31 @@ public class SuspenseQueueContractBehaviorIT {
                                 .triggeredByUserId("test-admin")
                                 .build();
 
-                // Assert: Should return 404
+                // Assert: Should return 404 Not Found
                 mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", nonExistentId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(reprocessRequest)))
                                 .andDo(print())
-                                .andExpect(status().isNotFound().or(status().isBadRequest()));
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("Reprocess returns 400 for invalid event ID format")
+        public void testReprocessInvalidEventIdBadRequest() throws Exception {
+                // Arrange: Use an invalid ID that fails validation
+                String invalidId = "not-a-valid-uuid";
+
+                // Act: Attempt to reprocess with invalid UUID format
+                ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
+                                .triggeredByUserId("test-admin")
+                                .build();
+
+                // Assert: Should return 400 Bad Request
+                mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", invalidId))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(reprocessRequest)))
+                                .andDo(print())
+                                .andExpect(status().isBadRequest());
         }
 
         @Test

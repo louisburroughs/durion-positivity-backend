@@ -201,7 +201,7 @@ Traceability is your defense in disputes; enforce it.
 
 ### Technical Stack
 
-- Spring Boot 3.2.6
+- Spring Boot 4.0.2
 - Java 21
 - Spring Data JPA
 - PostgreSQL/MySQL

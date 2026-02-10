@@ -16,7 +16,7 @@
 
 ### Checkpoint 0.0: Pre-Execution Validation
 - [x] Verify Java 21 JDK is installed and configured
-- [x] Confirm Maven build configuration supports Spring Boot 3.x
+- [x] Confirm Maven build configuration supports Spring Boot 4.0.x
 - [x] Verify Redis availability for build queue and agent registry
 - [x] Confirm GitHub webhook endpoint is configured and accessible
 - [x] Validate GitHub PAT authentication credentials (read:repo, write:discussion)
@@ -35,7 +35,7 @@
   - `com/example/posagents/agents/infrastructure/` - Infrastructure/DevOps agents
   - `com/example/posagents/agents/support/` - Support/assistance agents
 - [x] Configure Maven build (pom.xml)
-  - Ensure Spring Boot 3.x dependencies
+  - Ensure Spring Boot 4.0.x dependencies
   - Add Java 21 compiler configuration
   - Add test framework: JUnit 5
   - Add property-based testing: quicktheories or jqwik
