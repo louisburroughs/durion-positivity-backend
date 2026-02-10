@@ -102,8 +102,7 @@ Content-Type: application/json
 POST /api/audit/cancellation
 Content-Type: application/json
 
-{
-  "orderId": "uuid",
+ 
   "cancellationType": "ORDER_CANCELLED",
   "beforeSnapshot": "{\"total\": 100.00, \"status\": \"CONFIRMED\"}",
   "afterSnapshot": "{\"total\": 0.00, \"status\": \"CANCELLED\"}",
@@ -276,6 +275,21 @@ Default refund policy:
 - Application: http://localhost:8084
 - H2 Console: http://localhost:8084/h2-console
 - Health Check: http://localhost:8084/actuator/health
+
+## Developer Guidance
+
+- **STRONG REFERENCE — Use `exemplars.md`:** The file `pos-accounting/exemplars.md` contains authoritative, curated code exemplars for controllers, services, repositories, entities, and tests. Follow the patterns and snippets there when adding or modifying code in this module. Treat `exemplars.md` as the canonical style and architectural guide for `pos-accounting`.
+- Tests and examples in this README follow the patterns documented in `exemplars.md`.
+
+## Testing Notes
+
+- Unit tests can be run locally without the full integration stack:
+
+```bash
+./mvnw -pl pos-accounting test -DskipITs
+```
+
+- Integration/contract tests use Spring context and may require dependent services or specific test profiles. If a Spring context fails to load, run the individual test with more logging or run only unit tests as shown above.
 
 ## Testing
 
