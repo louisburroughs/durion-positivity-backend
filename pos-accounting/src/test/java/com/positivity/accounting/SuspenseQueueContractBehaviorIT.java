@@ -175,7 +175,7 @@ public class SuspenseQueueContractBehaviorIT {
     // ===============================================
 
     @Test
-    @DisplayName("Reprocess returns 404 for non-existent event")
+    @DisplayName("Reprocess returns 400 for non-existent event")
     public void testReprocessNonExistentEvent() throws Exception {
         // Arrange: Use a random UUID that doesn't exist
         UUID nonExistentId = UUID.randomUUID();
@@ -185,12 +185,12 @@ public class SuspenseQueueContractBehaviorIT {
                 .triggeredByUserId("test-admin")
                 .build();
 
-        // Assert: Should return 404
+        // Assert: Should return 400 (IllegalArgumentException mapped by APPaymentExceptionHandler)
         mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", nonExistentId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(reprocessRequest)))
                 .andDo(print())
-                .andExpect(status().isNotFound().or(status().isBadRequest()));
+                .andExpect(status().isBadRequest());
     }
 
     @Test
