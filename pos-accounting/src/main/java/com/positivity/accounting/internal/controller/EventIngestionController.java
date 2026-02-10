@@ -173,6 +173,10 @@ public class EventIngestionController {
                 log.debug("Getting reprocessing history for event: {}", eventId);
                 List<ReprocessingAttemptHistoryResponse> history = eventIngestionService
                                 .getReprocessingHistory(eventId);
+                if (history == null || history.isEmpty()) {
+                        log.debug("No reprocessing history found for event: {}", eventId);
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                }
                 return ResponseEntity.ok(history);
         }
 
