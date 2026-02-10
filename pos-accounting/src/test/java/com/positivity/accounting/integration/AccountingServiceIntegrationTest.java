@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -383,8 +384,6 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
     UUID ruleSetId = UUID.fromString(objectMapper.readTree(createResult.getResponse().getContentAsString())
         .get("postingRuleSetId").asString());
-
-    // Publish rule set
     mockMvc.perform(withAuth(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.state").value("PUBLISHED"));
