@@ -43,7 +43,8 @@ public class PostingCategoryService {
      * 
      * @param request the posting category creation request
      * @return the created posting category response
-     * @throws ResponseStatusException with BAD_REQUEST if category name already exists
+     * @throws ResponseStatusException with BAD_REQUEST if category name already
+     *                                 exists
      */
     @Transactional
     public PostingCategoryResponse createPostingCategory(@NonNull PostingCategoryCreateRequest request) {
@@ -169,11 +170,12 @@ public class PostingCategoryService {
      * Validates that no active GL mappings reference this category.
      * 
      * @param postingCategoryId the posting category identifier
+     * @return the deactivated posting category response
      * @throws ResponseStatusException with NOT_FOUND if posting category not found
      * @throws ResponseStatusException with CONFLICT if active mappings exist
      */
     @Transactional
-    public void deactivatePostingCategory(@NonNull UUID postingCategoryId) {
+    public PostingCategoryResponse deactivatePostingCategory(@NonNull UUID postingCategoryId) {
         log.info("Deactivating posting category: {}", postingCategoryId);
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
@@ -189,9 +191,11 @@ public class PostingCategoryService {
         }
 
         category.setIsActive(false);
-        postingCategoryRepository.save(category);
+        PostingCategory deactivated = postingCategoryRepository.save(category);
 
         log.info("Deactivated posting category: {}", postingCategoryId);
+
+        return toResponse(deactivated);
     }
 
     /**

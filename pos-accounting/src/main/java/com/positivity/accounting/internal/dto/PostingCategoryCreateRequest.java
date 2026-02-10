@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
  * Request DTO for creating a new Posting Category.
  */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class PostingCategoryCreateRequest {
