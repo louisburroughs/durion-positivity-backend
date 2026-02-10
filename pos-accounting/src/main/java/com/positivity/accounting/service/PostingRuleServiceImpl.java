@@ -46,7 +46,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public PostingRuleSet getPostingRuleSet(UUID ruleSetId) {
-        return ruleSetRepository.findById(ruleSetId)
+        return ruleSetRepository.findByIdWithVersions(ruleSetId)
                 .orElseThrow(() -> new IllegalArgumentException("Posting rule set not found: " + ruleSetId));
     }
 
@@ -65,22 +65,22 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     public PostingRuleVersion createVersion(UUID ruleSetId, PostingRuleVersion version) {
         PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
-        List<PostingRuleVersion> existing = versionRepository.findByPostingRuleSetId(ruleSetId);
+        List<PostingRuleVersion> existing = versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId);
         int maxVersion = existing.stream()
                 .map(PostingRuleVersion::getVersionNumber)
                 .max(Integer::compareTo)
                 .orElse(0);
 
         version.setVersionId(UUID.randomUUID());
-        version.setPostingRuleSetId(ruleSetId);
+        version.setPostingRuleSet(ruleSet); // Set child -> parent (owning side)
         version.setVersionNumber(maxVersion + 1);
         version.setState(PostingRuleSetState.DRAFT);
         version.setCreatedAt(Instant.now());
         version.setModifiedAt(Instant.now());
 
         PostingRuleVersion saved = versionRepository.save(version);
-        log.info("Created version {} for rule set: {} (version count: {})",
-                saved.getVersionNumber(), ruleSet.getName(), maxVersion + 1);
+        log.info("Created version {} for rule set: {}",
+                saved.getVersionNumber(), ruleSet.getName());
         return saved;
     }
 
@@ -114,8 +114,9 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         }
 
         // Archive any existing PUBLISHED version
-        List<PostingRuleVersion> published = versionRepository.findByPostingRuleSetIdAndState(
-                version.getPostingRuleSetId(), PostingRuleSetState.PUBLISHED);
+        List<PostingRuleVersion> published = versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
+                version.getPostingRuleSet() != null ? version.getPostingRuleSet().getPostingRuleSetId() : null,
+                PostingRuleSetState.PUBLISHED);
         for (PostingRuleVersion oldVersion : published) {
             oldVersion.setState(PostingRuleSetState.ARCHIVED);
             oldVersion.setArchivedAt(Instant.now());
@@ -162,6 +163,6 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public List<PostingRuleVersion> listVersions(UUID ruleSetId) {
-        return versionRepository.findByPostingRuleSetId(ruleSetId);
+        return versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId);
     }
 }

@@ -245,35 +245,11 @@ public class EventIngestionService {
             }
 
             try {
-                // Re-run mapping/posting logic using current rules
-                // TODO [CAP-056]: Integrate with Posting Rule Engine (see CAP-055 Future
-                // Enhancements)
-                // When implemented, this should:
-                // 1. Load active PostingRuleSet for event.organizationId + transactionDate
-                // 2. Evaluate rules against event.payload to determine GL account mappings
-                // 3. Generate JournalEntry with lines for each mapping
-                // 4. Post to GL if rule set has autoPost enabled
-                // 5. Return journal entry reference on success
-                // For now, simulate reprocessing for testing:
-                // 1. Change status to PROCESSING
-                // 2. Attempt to create journal entry
-                // 3. On success: mark as PROCESSED
-                // 4. On failure: keep as SUSPENDED/FAILED
-
+                // Transition to PROCESSING before delegating to PostingEngineOrchestrator
                 event.setStatus(AccountingEventStatus.PROCESSING);
                 accountingEventRepository.save(event);
 
-                log.info("Attempting to reprocess event {} with current mapping rules", eventId);
-
-                // [CAP-278] Integration: Delegate to Posting Engine Orchestrator
-                // The posting engine handles:
-                // 1. Loading active PostingRuleSet for event.organizationId +
-                // event.transactionDate
-                // 2. Evaluating rules against event.payload to determine GL mappings
-                // 3. Generating JournalEntry if rules match successfully
-                // 4. Posting to GL if rule set has autoPost enabled (assumes autoPost=true for
-                // reprocessing)
-                // 5. Returning PostingResult with outcome
+                log.info("Reprocessing event {} via PostingEngineOrchestrator", eventId);
 
                 // Parse mappingVersionToUse from String to UUID if present
                 UUID mappingVersion = null;
@@ -296,23 +272,13 @@ public class EventIngestionService {
                 boolean reprocessingSucceeded = postingResult.isSuccess();
 
                 if (reprocessingSucceeded) {
-                    // SUCCESS: Event and history already updated by PostingEngineOrchestrator
-                    // The orchestrator has already:
-                    // - Set event.status = PROCESSED
-                    // - Set event.finalPostingReferenceId
-                    // - Set event.processedAt and resolvedByUserId
-                    // - Created/updated ReprocessingAttemptHistory with outcome=SUCCESS
-
-                    // Extract posting reference from evaluation details
+                    // Orchestrator already updated event status to PROCESSED,
+                    // set finalPostingReferenceId, processedAt, and resolvedByUserId.
                     String finalPostingRef = (String) postingResult.getEvaluationDetails().get("postingReference");
                     log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
                 } else {
-                    // FAILURE: Event and history already updated by PostingEngineOrchestrator
-                    // The orchestrator has already:
-                    // - Set event.status = SUSPENDED or FAILED
-                    // - Set event.failureReasonCode and failureDetails
-                    // - Created/updated ReprocessingAttemptHistory with outcome=FAILURE
-
+                    // Orchestrator already updated event status to SUSPENDED/FAILED
+                    // with failureReasonCode and failureDetails.
                     log.warn("Reprocessing failed for event {}: {} - {}",
                             eventId,
                             postingResult.getFailureReason(),
@@ -320,10 +286,7 @@ public class EventIngestionService {
                 }
 
             } catch (Exception e) {
-                // FAILURE: PostingEngineOrchestrator handles exceptions and updates event
-                // status
-                // But we still want to log at this level for visibility
-                log.error("Exception during reprocessing for event {} (already handled by orchestrator)", eventId, e);
+                log.error("Exception during reprocessing for event {}", eventId, e);
             }
 
             // Reload event to get updates from orchestrator
