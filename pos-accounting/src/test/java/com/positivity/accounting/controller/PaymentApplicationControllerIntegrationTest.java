@@ -70,7 +70,15 @@ import tools.jackson.databind.ObjectMapper;
  * Tests full request/response cycle with actual database and Spring Security.
  */
 @DisplayName("Payment Application Controller Integration Tests")
-class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
+class PaymentApplicationControllerIntegrationTest {
+
+        @Autowired
+        private WebApplicationContext context;
+
+        private MockMvc mockMvc;
+
+        @Autowired
+        private ObjectMapper objectMapper;
 
         @Autowired
         private ReceivablePaymentRepository receivablePaymentRepository;
