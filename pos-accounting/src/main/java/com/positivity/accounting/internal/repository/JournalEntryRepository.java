@@ -129,4 +129,4 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
             """)
     List<JournalEntry> findPostedEntriesForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
 
-                        
+}

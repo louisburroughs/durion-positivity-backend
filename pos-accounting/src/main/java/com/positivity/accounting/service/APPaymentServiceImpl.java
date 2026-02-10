@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.service;
+package com.positivity.accounting.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -29,7 +29,6 @@ import com.positivity.accounting.internal.exception.PaymentGatewayException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.service.APPaymentService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -102,7 +101,8 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Rollback the payment (transaction will roll back automatically)
             throw e;
         } catch (Exception e) {
-            // Gateway-level failures: persist failure state in separate transaction for audit/idempotency
+            // Gateway-level failures: persist failure state in separate transaction for
+            // audit/idempotency
             persistGatewayFailure(payment.getPaymentId(), e.getMessage());
             log.error("Payment {} gateway failed: {}", request.getPaymentRef(), e.getMessage(), e);
             throw new PaymentGatewayException("Gateway failure: " + e.getMessage(), e);
@@ -112,11 +112,13 @@ public class APPaymentServiceImpl implements APPaymentService {
     /**
      * Persists gateway failure state in a separate transaction.
      * 
-     * This method uses REQUIRES_NEW propagation to ensure the failure state is persisted
-     * even when the parent transaction rolls back. This is critical for audit trails and
+     * This method uses REQUIRES_NEW propagation to ensure the failure state is
+     * persisted
+     * even when the parent transaction rolls back. This is critical for audit
+     * trails and
      * idempotency - we need to record that a payment attempt was made and failed.
      * 
-     * @param paymentId the payment ID
+     * @param paymentId    the payment ID
      * @param errorMessage the error message from the gateway
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -144,7 +146,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         boolean grossAmountMatch = existing.getGrossAmount().compareTo(request.getGrossAmount()) == 0;
         boolean currencyMatch = existing.getCurrency().equals(request.getCurrency());
         boolean paymentMethodMatch = existing.getPaymentMethod() == request.getPaymentMethod();
-        
+
         // Compare fees and net amounts (null-safe)
         boolean feeMatch = (existing.getFeeAmount() == null && request.getFeeAmount() == null) ||
                 (existing.getFeeAmount() != null && request.getFeeAmount() != null &&
@@ -160,8 +162,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                             + "feeAmount, and netAmount.");
         }
 
-        // Note: Allocations are not compared as they may vary during automatic allocation;
-        // the critical financial amounts above ensure the effective payment is the same.
+        // Note: Allocations are not compared as they may vary during automatic
+        // allocation;
+        // the critical financial amounts above ensure the effective payment is the
+        // same.
     }
 
     private void applyAllocations(@NonNull APPayment payment, @NonNull ExecuteAPPaymentRequest request) {
@@ -362,7 +366,8 @@ public class APPaymentServiceImpl implements APPaymentService {
     /**
      * Calculates the open (unpaid) amount for a vendor bill.
      * 
-     * Uses an aggregate database query to efficiently compute the sum of allocations
+     * Uses an aggregate database query to efficiently compute the sum of
+     * allocations
      * without loading all allocation records into memory.
      * 
      * @param vendorBillId the bill ID
@@ -372,7 +377,8 @@ public class APPaymentServiceImpl implements APPaymentService {
         VendorBill bill = billRepository.findById(vendorBillId)
                 .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));
 
-        // Use aggregate query to sum allocations in database (avoids N+1 and high memory)
+        // Use aggregate query to sum allocations in database (avoids N+1 and high
+        // memory)
         BigDecimal totalAllocated = allocationRepository.sumAllocatedAmountByVendorBillId(vendorBillId);
 
         return bill.getTotalAmount().subtract(totalAllocated);
