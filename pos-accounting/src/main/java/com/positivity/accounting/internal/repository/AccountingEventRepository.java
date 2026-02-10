@@ -25,8 +25,13 @@ public interface AccountingEventRepository extends JpaRepository<AccountingEvent
      * Find accounting events by organization and status with pagination.
      */
     Page<AccountingEvent> findByOrganizationIdAndStatus(
-        UUID organizationId, 
-        AccountingEventStatus status, 
-        Pageable pageable
-    );
+            UUID organizationId,
+            AccountingEventStatus status,
+            Pageable pageable);
+
+    /**
+     * Find accounting events by source system.
+     * Uses indexed column for efficient querying.
+     */
+    Page<AccountingEvent> findBySourceSystem(String sourceSystem, Pageable pageable);
 }

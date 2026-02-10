@@ -77,7 +77,7 @@ management:
       slo:
         http.server.requests: 100ms,200ms,400ms,800ms,1600ms
   
-  # Tracing Configuration (Spring Boot 3.x native support)
+  # Tracing Configuration (Spring Boot 4.0.x native support)
   tracing:
     enabled: true
     sampling:

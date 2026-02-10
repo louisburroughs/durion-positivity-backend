@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.positivity.accounting.internal.dto.ErrorResponse;
+import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
 
@@ -15,6 +16,7 @@ import com.positivity.accounting.internal.exception.PaymentGatewayException;
  * Global exception handler for AP Payment operations.
  * 
  * Maps domain exceptions to appropriate HTTP status codes using standard ErrorResponse format:
+ * - EventNotFoundException → 404 Not Found
  * - IdempotencyConflictException → 409 Conflict
  * - PaymentGatewayException → 502 Bad Gateway
  * - IllegalArgumentException → 400 Bad Request (validation errors)
@@ -23,6 +25,16 @@ import com.positivity.accounting.internal.exception.PaymentGatewayException;
 public class APPaymentExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(APPaymentExceptionHandler.class);
+
+    @ExceptionHandler(EventNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleEventNotFound(EventNotFoundException ex) {
+        log.warn("Event not found: {}", ex.getMessage());
+        ErrorResponse body = ErrorResponse.builder()
+                .errorCode("EVENT_NOT_FOUND")
+                .message(ex.getMessage())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
 
     @ExceptionHandler(IdempotencyConflictException.class)
     public ResponseEntity<ErrorResponse> handleIdempotencyConflict(IdempotencyConflictException ex) {

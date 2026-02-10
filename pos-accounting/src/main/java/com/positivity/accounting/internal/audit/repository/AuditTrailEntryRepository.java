@@ -16,48 +16,51 @@ import java.util.UUID;
  */
 @Repository
 public interface AuditTrailEntryRepository extends JpaRepository<AuditTrailEntry, UUID> {
-    
+
     /**
      * Find all audit entries for a specific order.
      */
     List<AuditTrailEntry> findByOrderIdOrderByTimestampAsc(UUID orderId);
-    
+
     /**
      * Find all audit entries for a specific invoice.
      */
     List<AuditTrailEntry> findByInvoiceIdOrderByTimestampAsc(UUID invoiceId);
-    
+
     /**
      * Find audit entries by exception type within a date range.
      */
     @Query("SELECT a FROM AuditTrailEntry a WHERE a.exceptionType = :type " +
-           "AND a.timestamp BETWEEN :startDate AND :endDate " +
-           "ORDER BY a.timestamp ASC")
+            "AND a.timestamp BETWEEN :startDate AND :endDate " +
+            "ORDER BY a.timestamp ASC")
     List<AuditTrailEntry> findByExceptionTypeAndDateRange(
-        @Param("type") ExceptionType type,
-        @Param("startDate") Instant startDate,
-        @Param("endDate") Instant endDate
-    );
-    
+            @Param("type") ExceptionType type,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
     /**
      * Find audit entries by actor within a date range.
      */
     @Query("SELECT a FROM AuditTrailEntry a WHERE a.actorId = :actorId " +
-           "AND a.timestamp BETWEEN :startDate AND :endDate " +
-           "ORDER BY a.timestamp ASC")
+            "AND a.timestamp BETWEEN :startDate AND :endDate " +
+            "ORDER BY a.timestamp ASC")
     List<AuditTrailEntry> findByActorAndDateRange(
-        @Param("actorId") UUID actorId,
-        @Param("startDate") Instant startDate,
-        @Param("endDate") Instant endDate
-    );
-    
+            @Param("actorId") UUID actorId,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
     /**
      * Find all audit entries within a date range.
      */
     @Query("SELECT a FROM AuditTrailEntry a WHERE a.timestamp BETWEEN :startDate AND :endDate " +
-           "ORDER BY a.timestamp ASC")
+            "ORDER BY a.timestamp ASC")
     List<AuditTrailEntry> findByDateRange(
-        @Param("startDate") Instant startDate,
-        @Param("endDate") Instant endDate
-    );
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    /**
+     * Find all audit entries linked to a specific accounting event.
+     * Used for retrieving processing logs for an event.
+     */
+    List<AuditTrailEntry> findBySourceEventId(UUID sourceEventId);
 }

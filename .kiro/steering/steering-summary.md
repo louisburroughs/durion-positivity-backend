@@ -18,7 +18,7 @@ This document consolidates all steering guidance for the Positivity POS system d
 ## Technology Stack
 
 ### Core Framework
-- **Spring Boot 3.2.6** - Primary microservices framework
+- **Spring Boot 4.0.2** - Primary microservices framework
 - **Spring Cloud 2023.0.1** - Microservices infrastructure
 - **Java 21** - Modern runtime with latest features
 - **Maven** - Build system and dependency management

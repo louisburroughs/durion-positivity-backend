@@ -17,7 +17,7 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 34 event types.
+         * Total: 35 event types (updated for CAP:055).
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -63,13 +63,16 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.write("ACCOUNTING_GL_ACCOUNT_UPDATE_LEGACY",
                                                 "Update GL account via legacy path").build(),
 
-                                // EventIngestionController - 3 events
+                                // EventIngestionController - 4 events (updated for CAP:055)
                                 EventTypeRegistration.search("ACCOUNTING_EVENT_LIST",
                                                 "List accounting events with filters").build(),
                                 EventTypeRegistration.write("ACCOUNTING_EVENT_SUBMIT",
                                                 "Submit a new accounting event for processing").build(),
                                 EventTypeRegistration.write("ACCOUNTING_EVENT_RETRY",
                                                 "Retry processing for a failed accounting event").build(),
+                                EventTypeRegistration.approval("ACCOUNTING_EVENT_REPROCESS",
+                                                "Reprocess a suspended accounting event after mapping/rule correction")
+                                                .build(),
 
                                 // InvoicePaymentController / PaymentApplicationController - 4 events
                                 EventTypeRegistration.write("ACCOUNTING_INVOICE_PAY_LEGACY",

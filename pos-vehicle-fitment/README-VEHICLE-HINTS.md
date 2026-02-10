@@ -226,7 +226,7 @@ mvn test -pl pos-vehicle-fitment
 
 ## Dependencies
 
-- Spring Boot 3.2.6
+- Spring Boot 4.0.2
 - Spring Data JPA
 - H2 Database (runtime)
 - Lombok
