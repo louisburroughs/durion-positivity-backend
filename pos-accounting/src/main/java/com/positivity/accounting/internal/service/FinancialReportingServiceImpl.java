@@ -108,8 +108,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             
             // Apply operation type (SUM, SUBTRACT, NEGATE) to accumulate into statement line
             String lineCode = mapping.getStatementLineCode();
-            lineItems.merge(lineCode, accountBalance, 
-                    (total, amount) -> applyOperation(total, amount, mapping.getOperation()));
+            lineItems.compute(lineCode, (key, existingTotal) -> {
+                BigDecimal base = existingTotal != null ? existingTotal : BigDecimal.ZERO;
+                return applyOperation(base, accountBalance, mapping.getOperation());
+            });
             
             // Track revenue vs expense lines for totals
             BigDecimal currentTotal = lineItems.get(lineCode);
