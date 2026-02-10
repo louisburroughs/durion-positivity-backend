@@ -17,7 +17,8 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 40 event types (updated for CAP-053 Vendor Bill workflow).
+         * Total: 42 event types (updated for CAP-053 Vendor Bill workflow + GL
+         * Mapping).
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -109,6 +110,13 @@ public final class AccountingEventTypes {
                                                 "Drill down from statement line to contributing GL accounts").build(),
                                 EventTypeRegistration.fastRead("REPORT_DRILLDOWN_JOURNAL_LINES",
                                                 "Drill down from GL account to source journal entries").build(),
+
+                                // GLMappingController - 2 events (GL Mapping)
+                                EventTypeRegistration.write("ACCOUNTING_GL_MAPPING_CREATE",
+                                                "Create GL mapping from external code to GL account").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_GL_MAPPING_RESOLVE",
+                                                "Resolve external code to GL account using effective-dated mapping")
+                                                .build(),
 
                                 // VendorBillService - 5 events (CAP-053 Issue #130)
                                 EventTypeRegistration.write("ACCOUNTING_VENDOR_BILL_CREATE",

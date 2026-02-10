@@ -24,16 +24,15 @@ import lombok.NoArgsConstructor;
 public class GLMappingResponse {
 
     private UUID glMappingId;
-    private UUID postingCategoryId;
-    private String postingCategoryName;
-    private UUID mappingKeyId;
-    private String mappingKeyName;
+    private String sourceSystem;
+    private String externalCode;
     private UUID glAccountId;
     private String accountCode;
     private String accountName;
-    private LocalDateTime effectiveFrom;
-    private LocalDateTime effectiveTo;
+    private LocalDateTime effectiveStartDate;
+    private LocalDateTime effectiveEndDate;
     private Map<String, String> dimensions;
+    private Integer priority;
     private Instant createdAt;
     private String createdBy;
 }

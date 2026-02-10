@@ -8,12 +8,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,6 +66,7 @@ class AccountingServiceIntegrationTest {
       "accounting:posting_rules:publish", "accounting:posting_rules:archive",
       "accounting:ap:view", "accounting:ap:pay",
       "accounting:mappings:view", "accounting:mappings:create",
+      "accounting:gl-mapping:create", "accounting:gl-mapping:resolve",
       "accounting:audit:view")
       .collect(Collectors.joining(","));
 
@@ -497,8 +500,6 @@ class AccountingServiceIntegrationTest {
   // ============================================
 
   @Test
-  // @Disabled("GL Mapping service and controller not yet implemented - requires
-  // new GLMappingService")
   @DisplayName("Should create GL mapping with dimension matching")
   void testCreateGLMappingWithDimensions() throws Exception {
     GLAccount account = new GLAccount();
@@ -507,6 +508,10 @@ class AccountingServiceIntegrationTest {
     account.setAccountName("Test Account");
     account.setAccountType(AccountType.ASSET);
     account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+    account.setCreatedBy("testuser");
+    account.setCreatedAt(Instant.now());
+    account.setModifiedBy("testuser");
+    account.setModifiedAt(Instant.now());
     account = glAccountRepository.save(account);
 
     String payload = """
@@ -515,8 +520,8 @@ class AccountingServiceIntegrationTest {
           "sourceSystem": "ERP_LEGACY",
           "externalCode": "1000-COGS",
           "glAccountId": "%s",
-          "effectiveStartDate": "2025-01-01",
-          "effectiveEndDate": "2025-12-31",
+          "effectiveStartDate": "2025-01-01T00:00:00",
+          "effectiveEndDate": "2025-12-31T23:59:59",
           "dimensions": {
             "businessUnitId": "BU-001",
             "locationId": "NYC"
@@ -535,18 +540,41 @@ class AccountingServiceIntegrationTest {
   }
 
   @Test
-  // @Disabled("GL Mapping service and controller not yet implemented - requires
-  // new GLMappingService")
   @DisplayName("Should resolve GL mapping by external code with temporal awareness")
   void testResolveGLMapping() throws Exception {
+    // Create GL account with audit fields
     GLAccount account = new GLAccount();
     account.setGlAccountId(UUID.randomUUID());
     account.setAccountCode("1000");
     account.setAccountName("Test Account");
     account.setAccountType(AccountType.ASSET);
     account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+    account.setCreatedBy("testuser");
+    account.setCreatedAt(Instant.now());
+    account.setModifiedBy("testuser");
+    account.setModifiedAt(Instant.now());
     account = glAccountRepository.save(account);
 
+    // Create the mapping first
+    String createPayload = """
+        {
+          "organizationId": "%s",
+          "sourceSystem": "ERP_LEGACY",
+          "externalCode": "1000-COGS",
+          "glAccountId": "%s",
+          "effectiveStartDate": "2025-01-01T00:00:00",
+          "effectiveEndDate": "2025-12-31T23:59:59"
+        }
+        """.formatted(ORG_ID, account.getGlAccountId());
+
+    mockMvc.perform(post(BASE_URL + "/mappings")
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(createPayload))
+        .andExpect(status().isCreated());
+
+    // Now resolve the mapping
     String resolvePayload = """
         {
           "organizationId": "%s",
@@ -720,10 +748,11 @@ class AccountingServiceIntegrationTest {
   @DisplayName("Should list eligible vendor bills for payment")
   void testListEligibleVendorBills() throws Exception {
     // Test existing GET /ap/bills endpoint (already implemented)
+    // Endpoint requires vendorId as a required parameter
     mockMvc.perform(get(BASE_URL + "/ap/bills")
         .header("X-Authorities", TEST_AUTHORITIES)
         .header("X-User", TEST_USER)
-        .param("status", "APPROVED"))
+        .param("vendorId", VENDOR_ID.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isArray());
   }
