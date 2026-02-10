@@ -51,6 +51,13 @@ class FinancialReportingContractBehaviorIT {
 
     @Autowired
     private StatementLineMappingRepository statementLineMappingRepository;
+    
+    // Fixed UUIDs for deterministic testing
+    private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID COGS_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000002");
+    private static final UUID CASH_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000003");
+    private static final UUID AP_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000004");
+    private static final UUID EQUITY_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000005");
 
     @BeforeEach
     void setUp() {
@@ -147,22 +154,26 @@ class FinancialReportingContractBehaviorIT {
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].accountId").value(REVENUE_ACCOUNT_ID.toString()))
+                .andExpect(jsonPath("$[0].accountName").value("Sales Revenue"))
+                .andExpect(jsonPath("$[0].balance").isNumber())
+                .andExpect(jsonPath("$[0].statementLineCode").value("REVENUE_SALES"));
     }
 
     @Test
     @DisplayName("Drilldown to Journal Lines - Happy Path")
     @WithMockUser(authorities = "reporting:view:financial-statements")
     void testDrilldownToJournalLines_Success() throws Exception {
-        // Use a valid UUID format for the account ID path parameter
-        String testAccountId = UUID.randomUUID().toString();
-        mockMvc.perform(get("/api/v1/reports/financial/drilldown/journal-lines/" + testAccountId)
+        // Use the revenue account ID from test data
+        mockMvc.perform(get("/api/v1/reports/financial/drilldown/journal-lines/" + REVENUE_ACCOUNT_ID)
                 .param("startDate", "2024-01-01")
                 .param("endDate", "2024-12-31")
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$").isArray());
+        // Note: Array may be empty if no journal entries exist for this account in test data
     }
 
     @Test
@@ -209,20 +220,13 @@ class FinancialReportingContractBehaviorIT {
     // ========== Test Data Setup ==========
 
     /**
-     * Create sample statement line mappings for testing.
+     * Create sample statement line mappings for testing with fixed UUIDs.
      */
     private void createSampleStatementLineMappings() {
-        // Use consistent UUIDs for test data
-        UUID revenueAccountId = UUID.randomUUID();
-        UUID cogsAccountId = UUID.randomUUID();
-        UUID cashAccountId = UUID.randomUUID();
-        UUID apAccountId = UUID.randomUUID();
-        UUID equityAccountId = UUID.randomUUID();
-        
         // Income Statement Mappings
         statementLineMappingRepository.save(StatementLineMapping.builder()
                 .mappingId(UUID.randomUUID())
-                .glAccountId(revenueAccountId)
+                .glAccountId(REVENUE_ACCOUNT_ID)
                 .accountName("Sales Revenue")
                 .statementType(StatementType.INCOME_STATEMENT)
                 .statementLineCode("REVENUE_SALES")
@@ -233,7 +237,7 @@ class FinancialReportingContractBehaviorIT {
 
         statementLineMappingRepository.save(StatementLineMapping.builder()
                 .mappingId(UUID.randomUUID())
-                .glAccountId(cogsAccountId)
+                .glAccountId(COGS_ACCOUNT_ID)
                 .accountName("Cost of Goods Sold")
                 .statementType(StatementType.INCOME_STATEMENT)
                 .statementLineCode("EXPENSE_COGS")
@@ -245,7 +249,7 @@ class FinancialReportingContractBehaviorIT {
         // Balance Sheet Mappings
         statementLineMappingRepository.save(StatementLineMapping.builder()
                 .mappingId(UUID.randomUUID())
-                .glAccountId(cashAccountId)
+                .glAccountId(CASH_ACCOUNT_ID)
                 .accountName("Cash")
                 .statementType(StatementType.BALANCE_SHEET)
                 .statementLineCode("ASSET_CURRENT_CASH")
@@ -256,7 +260,7 @@ class FinancialReportingContractBehaviorIT {
 
         statementLineMappingRepository.save(StatementLineMapping.builder()
                 .mappingId(UUID.randomUUID())
-                .glAccountId(apAccountId)
+                .glAccountId(AP_ACCOUNT_ID)
                 .accountName("Accounts Payable")
                 .statementType(StatementType.BALANCE_SHEET)
                 .statementLineCode("LIABILITY_CURRENT_AP")
@@ -267,7 +271,7 @@ class FinancialReportingContractBehaviorIT {
 
         statementLineMappingRepository.save(StatementLineMapping.builder()
                 .mappingId(UUID.randomUUID())
-                .glAccountId(equityAccountId)
+                .glAccountId(EQUITY_ACCOUNT_ID)
                 .accountName("Owner's Equity")
                 .statementType(StatementType.BALANCE_SHEET)
                 .statementLineCode("EQUITY_OWNERS")
