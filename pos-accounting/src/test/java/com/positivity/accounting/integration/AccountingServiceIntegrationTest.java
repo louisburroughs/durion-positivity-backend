@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -435,7 +434,8 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   // ============================================
 
   @Test
-  @Disabled("GL Mapping service and controller not yet implemented - requires new GLMappingService")
+  // @Disabled("GL Mapping service and controller not yet implemented - requires
+  // new GLMappingService")
   @DisplayName("Should create GL mapping with dimension matching")
   void testCreateGLMappingWithDimensions() throws Exception {
     GLAccount account = new GLAccount();
@@ -474,7 +474,8 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   }
 
   @Test
-  @Disabled("GL Mapping service and controller not yet implemented - requires new GLMappingService")
+  // @Disabled("GL Mapping service and controller not yet implemented - requires
+  // new GLMappingService")
   @DisplayName("Should resolve GL mapping by external code with temporal awareness")
   void testResolveGLMapping() throws Exception {
     // Create GL account with audit fields
