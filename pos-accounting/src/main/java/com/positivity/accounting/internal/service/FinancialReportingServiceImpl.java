@@ -106,18 +106,17 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         for (StatementLineMapping mapping : mappings) {
             BigDecimal accountBalance = accountBalancesById.get(mapping.getGlAccountId());
             
-            // Apply operation type (SUM, SUBTRACT, NEGATE)
-            BigDecimal lineAmount = applyOperation(accountBalance, mapping.getOperation());
-            
-            // Accumulate into statement line (multiple accounts can map to same line)
+            // Apply operation type (SUM, SUBTRACT, NEGATE) to accumulate into statement line
             String lineCode = mapping.getStatementLineCode();
-            lineItems.merge(lineCode, lineAmount, BigDecimal::add);
+            lineItems.merge(lineCode, accountBalance, 
+                    (total, amount) -> applyOperation(total, amount, mapping.getOperation()));
             
             // Track revenue vs expense lines for totals
+            BigDecimal currentTotal = lineItems.get(lineCode);
             if (isRevenueLine(lineCode)) {
-                revenueLines.merge(lineCode, lineAmount, BigDecimal::add);
+                revenueLines.put(lineCode, currentTotal);
             } else if (isExpenseLine(lineCode)) {
-                expenseLines.merge(lineCode, lineAmount, BigDecimal::add);
+                expenseLines.put(lineCode, currentTotal);
             }
         }
         
@@ -184,20 +183,19 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         for (StatementLineMapping mapping : mappings) {
             BigDecimal accountBalance = accountBalancesById.get(mapping.getGlAccountId());
             
-            // Apply operation type (SUM, SUBTRACT, NEGATE)
-            BigDecimal lineAmount = applyOperation(accountBalance, mapping.getOperation());
-            
-            // Accumulate into statement line
+            // Apply operation type (SUM, SUBTRACT, NEGATE) to accumulate into statement line
             String lineCode = mapping.getStatementLineCode();
-            lineItems.merge(lineCode, lineAmount, BigDecimal::add);
+            lineItems.merge(lineCode, accountBalance,
+                    (total, amount) -> applyOperation(total, amount, mapping.getOperation()));
             
             // Track asset/liability/equity lines for totals
+            BigDecimal currentTotal = lineItems.get(lineCode);
             if (isAssetLine(lineCode)) {
-                assetLines.merge(lineCode, lineAmount, BigDecimal::add);
+                assetLines.put(lineCode, currentTotal);
             } else if (isLiabilityLine(lineCode)) {
-                liabilityLines.merge(lineCode, lineAmount, BigDecimal::add);
+                liabilityLines.put(lineCode, currentTotal);
             } else if (isEquityLine(lineCode)) {
-                equityLines.merge(lineCode, lineAmount, BigDecimal::add);
+                equityLines.put(lineCode, currentTotal);
             }
         }
         
@@ -265,12 +263,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                             startDateTime,
                             endDateTime
                     );
-                    BigDecimal lineAmount = applyOperation(accountBalance, mapping.getOperation());
+                    // Apply operation to transform the balance for display (starting from zero)
+                    BigDecimal displayBalance = applyOperation(BigDecimal.ZERO, accountBalance, mapping.getOperation());
                     
                     return AccountDrilldownResponse.builder()
                             .accountId(mapping.getGlAccountId().toString())
                             .accountName(mapping.getAccountName())
-                            .balance(lineAmount)
+                            .balance(displayBalance)
                             .statementLineCode(statementLineCode)
                             .build();
                 })
@@ -330,20 +329,28 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     // ========== Private Helper Methods ==========
     
     /**
-     * Apply operation type to account balance (for statement line calculation).
+     * Apply operation type to combine an amount with a running total.
+     * 
+     * @param total the current running total for the statement line
+     * @param amount the account balance to apply
+     * @param operationType the operation to perform (SUM, SUBTRACT, or NEGATE)
+     * @return the new total after applying the operation
      */
-    private BigDecimal applyOperation(BigDecimal amount, OperationType operationType) {
+    private BigDecimal applyOperation(BigDecimal total, BigDecimal amount, OperationType operationType) {
+        if (total == null) {
+            total = BigDecimal.ZERO;
+        }
         if (amount == null) {
-            return BigDecimal.ZERO;
+            amount = BigDecimal.ZERO;
         }
 
         return switch (operationType) {
-            // SUM: add the account balance to the line total as-is
-            case SUM -> amount;
-            // SUBTRACT: subtract the account balance from the line total (negate before adding)
-            case SUBTRACT -> amount.negate();
-            // NEGATE: flip the sign of the account balance before adding (e.g., show credit balances as positive)
-            case NEGATE -> amount.negate();
+            // SUM: add the amount to the total
+            case SUM -> total.add(amount);
+            // SUBTRACT: subtract the amount from the total
+            case SUBTRACT -> total.subtract(amount);
+            // NEGATE: flip the sign of the amount before adding (e.g., for credit-normal accounts)
+            case NEGATE -> total.add(amount.negate());
         };
     }
     
