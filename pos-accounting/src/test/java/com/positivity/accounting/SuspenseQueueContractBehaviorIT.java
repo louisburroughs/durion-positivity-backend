@@ -23,6 +23,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
+import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
+
+import java.time.Instant;
 
 /**
  * Contract Behavioral Integration Tests for Suspense Queue Reprocessing
@@ -46,6 +51,9 @@ public class SuspenseQueueContractBehaviorIT {
 
         @Autowired
         private ObjectMapper objectMapper;
+
+        @Autowired
+        private AccountingEventRepository accountingEventRepository;
 
         private static final String API_V1 = "/v1/accounting/events";
 
@@ -96,7 +104,7 @@ public class SuspenseQueueContractBehaviorIT {
 
                 // Manually mark event as SUSPENDED for this test
                 // In production, this would happen through the posting rule engine
-                // TODO: Add helper method to set event status for test purposes
+                markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating rule engine suspension");
 
                 // Act: Reprocess the suspended event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -137,7 +145,7 @@ public class SuspenseQueueContractBehaviorIT {
 
                 // Manually mark event as SUSPENDED for this test
                 // In production, this would happen through the posting rule engine
-                // TODO: Add helper method to set event status for test purposes
+                markEventAsSuspended(UUID.fromString(eventId), "Test setup: simulating pending reprocess");
 
                 // Act: Reprocess the suspended event
                 ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
@@ -160,14 +168,21 @@ public class SuspenseQueueContractBehaviorIT {
                 // This test validates BR-3: Idempotency rule
                 // Reprocessing a PROCESSED event should return 409 Conflict
 
-                // Arrange: Create and process an event
-                // TODO: Implement test fixture to create a PROCESSED event
+                // Arrange: Create a PROCESSED event
+                UUID processedEventId = createProcessedEvent();
 
                 // Act: Attempt to reprocess a PROCESSED event
-                // Expected: 409 Conflict
+                ReprocessEventRequest reprocessRequest = ReprocessEventRequest.builder()
+                                .triggeredByUserId("test-admin")
+                                .reprocessingNotes("Testing idempotency")
+                                .build();
 
-                // Note: This test requires additional setup to mark an event as PROCESSED
-                // Skipping for now but documented as required per AC-3
+                // Assert: Expected 409 Conflict
+                mockMvc.perform(withAuth(post(API_V1 + "/{eventId}/reprocess", processedEventId))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(reprocessRequest)))
+                                .andDo(print())
+                                .andExpect(status().isConflict());
         }
 
         @Test
@@ -323,5 +338,38 @@ public class SuspenseQueueContractBehaviorIT {
                 String responseBody = result.getResponse().getContentAsString();
                 Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
                 return (String) responseMap.get("eventId");
+        }
+
+        /**
+         * Helper method to mark an event as SUSPENDED for test purposes.
+         * In production, this would be done by the posting rule engine.
+         */
+        private void markEventAsSuspended(UUID eventId, String errorMessage) {
+                AccountingEvent event = accountingEventRepository.findById(eventId)
+                                .orElseThrow(() -> new IllegalStateException("Event not found: " + eventId));
+                event.setStatus(AccountingEventStatus.SUSPENDED);
+                event.setErrorMessage(errorMessage);
+                accountingEventRepository.save(event);
+        }
+
+        /**
+         * Helper method to create a fully PROCESSED event for testing idempotency.
+         * Returns the event ID of the created event.
+         */
+        private UUID createProcessedEvent() {
+                AccountingEvent event = new AccountingEvent();
+                event.setEventType("INVOICE_RECEIVED");
+                event.setOrganizationId(UUID.randomUUID());
+                event.setTransactionDate(LocalDateTime.now());
+                event.setPayload(Map.of(
+                                "invoiceId", "INV-PROCESSED",
+                                "amount", 100.00,
+                                "description", "Already processed invoice"));
+                event.setStatus(AccountingEventStatus.PROCESSED);
+                event.setProcessedAt(Instant.now());
+                event.setJournalEntryId(UUID.randomUUID()); // Simulate JE was created
+
+                AccountingEvent saved = accountingEventRepository.save(event);
+                return saved.getEventId();
         }
 }
