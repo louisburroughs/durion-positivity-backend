@@ -127,6 +127,7 @@ public class EventIngestionService {
             accountingEvent.setEventId(eventId);
         }
         accountingEvent.setOrganizationId(organizationId);
+        accountingEvent.setSourceSystem(sourceSystem);
         accountingEvent.setEventType(eventType);
         accountingEvent.setTransactionDate(transactionDate);
         accountingEvent.setPayload(event);
@@ -438,23 +439,19 @@ public class EventIngestionService {
 
     /**
      * Find all events from a specific source system.
-     * Note: sourceSystem is stored in the JSON payload, not as a separate column.
-     * This implementation requires full table scan and is not performant for large
-     * datasets.
-     * Consider adding a sourceSystem column for production use.
+     * Uses indexed sourceSystem column for efficient querying.
+     *
+     * @param sourceSystem the source system identifier
+     * @param pageable     pagination parameters
+     * @return paginated accounting event responses
      */
-    public List<Map<String, Object>> findBySourceSystem(String sourceSystem) {
-        log.warn("findBySourceSystem performs full table scan - consider schema optimization");
+    public Page<AccountingEventResponse> findBySourceSystem(
+            @NonNull String sourceSystem,
+            @NonNull Pageable pageable) {
+        log.debug("Finding events from source system: {}", sourceSystem);
 
-        // Query all events and filter by sourceSystem in payload
-        return accountingEventRepository.findAll()
-                .stream()
-                .filter(event -> {
-                    Map<String, Object> payload = event.getPayload();
-                    return payload != null && sourceSystem.equals(payload.get("sourceSystem"));
-                })
-                .map(AccountingEvent::getPayload)
-                .toList();
+        Page<AccountingEvent> eventPage = accountingEventRepository.findBySourceSystem(sourceSystem, pageable);
+        return eventPage.map(AccountingEventMapper::toEventResponse);
     }
 
     /**
@@ -474,15 +471,16 @@ public class EventIngestionService {
                 .stream()
                 .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
                         || event.getStatus() == AccountingEventStatus.SUSPENDED)
-                        && event.getAttemptCount() < maxRetries)
+                        && (event.getAttemptCount() == null || event.getAttemptCount() < maxRetries))
                 .toList();
 
         log.info("Found {} eligible failed/suspended events for retry", failedEvents.size());
 
         for (AccountingEvent event : failedEvents) {
             try {
+                int currentAttempt = event.getAttemptCount() != null ? event.getAttemptCount() : 0;
                 log.debug("Retrying event {} (attempt {}/{})",
-                        event.getEventId(), event.getAttemptCount() + 1, maxRetries);
+                        event.getEventId(), currentAttempt + 1, maxRetries);
 
                 // Retry processing through reprocessEvent
                 ReprocessEventRequest request = new ReprocessEventRequest();

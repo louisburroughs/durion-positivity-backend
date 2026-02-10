@@ -28,6 +28,7 @@ public class AccountingEventResponse {
 
     private UUID eventId;
     private String eventType;
+    private String sourceSystem;
     private LocalDateTime transactionDate;
     private Map<String, Object> payload;
     private AccountingEventStatus status;

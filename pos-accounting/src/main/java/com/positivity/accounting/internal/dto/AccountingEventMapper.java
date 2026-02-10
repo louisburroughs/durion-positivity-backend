@@ -21,6 +21,7 @@ public final class AccountingEventMapper {
         return AccountingEventResponse.builder()
                 .eventId(entity.getEventId())
                 .eventType(entity.getEventType())
+                .sourceSystem(entity.getSourceSystem())
                 .transactionDate(entity.getTransactionDate())
                 .payload(entity.getPayload())
                 .status(entity.getStatus())
