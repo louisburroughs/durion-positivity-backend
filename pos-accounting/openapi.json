@@ -1759,6 +1759,90 @@
                 }
             }
         },
+        "/v1/accounting/events/{eventId}/reprocess": {
+            "post": {
+                "tags": [
+                    "Accounting Events"
+                ],
+                "summary": "Reprocess suspended event",
+                "description": "Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.",
+                "operationId": "reprocessSuspendedEvent",
+                "parameters": [
+                    {
+                        "name": "eventId",
+                        "in": "path",
+                        "description": "Event identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReprocessEventRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Event already PROCESSED (idempotency violation)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Reprocessing completed successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "202": {
+                        "description": "Reprocessing accepted",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/accounting/credit-memos": {
             "get": {
                 "tags": [
@@ -1923,6 +2007,16 @@
                             }
                         }
                     },
+                    "201": {
+                        "description": "Refund recorded successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
+                                }
+                            }
+                        }
+                    },
                     "400": {
                         "description": "Invalid request parameters",
                         "content": {
@@ -1944,16 +2038,6 @@
                         "content": {
                             "*/*": {
                                 "schema": {}
-                            }
-                        }
-                    },
-                    "201": {
-                        "description": "Refund recorded successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
                             }
                         }
                     }
@@ -2043,16 +2127,6 @@
                     "required": true
                 },
                 "responses": {
-                    "201": {
-                        "description": "Cancellation recorded successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "description": "Invalid request parameters",
                         "content": {
@@ -2066,6 +2140,16 @@
                         "content": {
                             "*/*": {
                                 "schema": {}
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Cancellation recorded successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
+                                }
                             }
                         }
                     },
@@ -2215,6 +2299,16 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Income statement generated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IncomeStatementReport"
+                                }
+                            }
+                        }
+                    },
                     "403": {
                         "description": "Forbidden - missing reporting:view:financial-statements",
                         "content": {
@@ -2227,16 +2321,6 @@
                     },
                     "400": {
                         "description": "Invalid date range",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/IncomeStatementReport"
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Income statement generated successfully",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2408,6 +2492,19 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Account drilldown successful",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
                     "403": {
                         "description": "Forbidden - missing reporting:view:financial-statements",
                         "content": {
@@ -2423,19 +2520,6 @@
                     },
                     "400": {
                         "description": "Invalid statement line code or date range",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Account drilldown successful",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2490,8 +2574,8 @@
                     }
                 ],
                 "responses": {
-                    "403": {
-                        "description": "Forbidden - missing reporting:view:financial-statements",
+                    "200": {
+                        "description": "Balance sheet generated successfully",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2500,8 +2584,8 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Balance sheet generated successfully",
+                    "403": {
+                        "description": "Forbidden - missing reporting:view:financial-statements",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2776,8 +2860,8 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Invoice status returned",
+                    "404": {
+                        "description": "Invoice not found",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -2786,8 +2870,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Invoice not found",
+                    "200": {
+                        "description": "Invoice status returned",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -2896,6 +2980,43 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/AccountingEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/accounting/events/{eventId}/reprocessing-history": {
+            "get": {
+                "tags": [
+                    "Accounting Events"
+                ],
+                "summary": "Get reprocessing history",
+                "description": "Retrieve all reprocessing attempts for a suspended accounting event. Returns an empty list if the event does not exist or has no reprocessing history.",
+                "operationId": "getReprocessingHistory",
+                "parameters": [
+                    {
+                        "name": "eventId",
+                        "in": "path",
+                        "description": "Event identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reprocessing history returned (may be empty list)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ReprocessingAttemptHistoryResponse"
+                                    }
                                 }
                             }
                         }
@@ -3051,16 +3172,6 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Audit entries retrieved successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "description": "Invalid date range or exception type",
                         "content": {
@@ -3070,6 +3181,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/AuditTrailResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Audit entries retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
                                 }
                             }
                         }
@@ -3341,16 +3462,6 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Audit entries retrieved successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "description": "Invalid date range or actor ID",
                         "content": {
@@ -3360,6 +3471,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/AuditTrailResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Audit entries retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
                                 }
                             }
                         }
@@ -4119,6 +4240,9 @@
                     "eventType": {
                         "type": "string"
                     },
+                    "sourceSystem": {
+                        "type": "string"
+                    },
                     "transactionDate": {
                         "type": "string",
                         "format": "date-time"
@@ -4155,8 +4279,44 @@
                     "sequenceNumber": {
                         "type": "integer",
                         "format": "int64"
+                    },
+                    "failureReasonCode": {
+                        "type": "string"
+                    },
+                    "failureDetails": {
+                        "type": "string"
+                    },
+                    "attemptCount": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "finalPostingReferenceId": {
+                        "type": "string"
+                    },
+                    "resolvedByUserId": {
+                        "type": "string"
+                    },
+                    "mappingVersionAttempted": {
+                        "type": "string"
                     }
                 }
+            },
+            "ReprocessEventRequest": {
+                "type": "object",
+                "properties": {
+                    "triggeredByUserId": {
+                        "type": "string"
+                    },
+                    "mappingVersionToUse": {
+                        "type": "string"
+                    },
+                    "reprocessingNotes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "triggeredByUserId"
+                ]
             },
             "CreateCreditMemoRequest": {
                 "type": "object",
@@ -4995,6 +5155,39 @@
                     "totalPages": {
                         "type": "integer",
                         "format": "int32"
+                    }
+                }
+            },
+            "ReprocessingAttemptHistoryResponse": {
+                "type": "object",
+                "properties": {
+                    "attemptId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "eventId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "attemptedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "triggeredByUserId": {
+                        "type": "string"
+                    },
+                    "outcome": {
+                        "type": "string",
+                        "enum": [
+                            "SUCCESS",
+                            "FAILURE"
+                        ]
+                    },
+                    "outcomeDetails": {
+                        "type": "string"
+                    },
+                    "mappingVersionUsed": {
+                        "type": "string"
                     }
                 }
             },
