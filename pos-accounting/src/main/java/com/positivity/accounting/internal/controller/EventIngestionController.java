@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
@@ -23,6 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.PagedResponse;
+import com.positivity.accounting.internal.dto.ReprocessEventRequest;
+import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.service.EventIngestionService;
 import com.positivity.events.EmitEvent;
 
@@ -123,6 +127,56 @@ public class EventIngestionController {
                 log.info("Retrying event processing: {}", eventId);
                 AccountingEventResponse response = eventIngestionService.retryEvent(eventId);
                 return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+        }
+
+        @PostMapping("/{eventId}/reprocess")
+        @PreAuthorize("hasAuthority('accounting:events:reprocess')")
+        @Operation(summary = "Reprocess suspended event", description = "Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Reprocessing completed successfully"),
+                        @ApiResponse(responseCode = "202", description = "Reprocessing accepted"),
+                        @ApiResponse(responseCode = "400", description = "Invalid request"),
+                        @ApiResponse(responseCode = "404", description = "Event not found"),
+                        @ApiResponse(responseCode = "409", description = "Event already PROCESSED (idempotency violation)")
+        })
+        @EmitEvent(id = "ACCOUNTING_EVENT_REPROCESS", apiVersion = "1")
+        public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
+                        @Parameter(description = "Event identifier") @PathVariable UUID eventId,
+                        @Valid @RequestBody ReprocessEventRequest request) {
+                log.info("Reprocessing suspended event {} triggered by user {}", eventId,
+                                request.getTriggeredByUserId());
+
+                try {
+                        AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
+
+                        // Return 200 if PROCESSED, 202 if still SUSPENDED/FAILED
+                        if (response.getStatus() == AccountingEventStatus.PROCESSED) {
+                                return ResponseEntity.ok(response);
+                        } else {
+                                return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+                        }
+                } catch (IllegalStateException e) {
+                        // BR-3: Idempotency violation (already PROCESSED) or invalid state
+                        if (e.getMessage().contains("already PROCESSED")) {
+                                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+                        }
+                        throw e;
+                }
+        }
+
+        @GetMapping("/{eventId}/reprocessing-history")
+        @PreAuthorize("hasAuthority('accounting:events:view')")
+        @Operation(summary = "Get reprocessing history", description = "Retrieve all reprocessing attempts for a suspended accounting event.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Reprocessing history returned"),
+                        @ApiResponse(responseCode = "404", description = "Event not found")
+        })
+        public ResponseEntity<List<ReprocessingAttemptHistoryResponse>> getReprocessingHistory(
+                        @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
+                log.debug("Getting reprocessing history for event: {}", eventId);
+                List<ReprocessingAttemptHistoryResponse> history = eventIngestionService
+                                .getReprocessingHistory(eventId);
+                return ResponseEntity.ok(history);
         }
 
         @GetMapping("/{eventId}/processing-log")
