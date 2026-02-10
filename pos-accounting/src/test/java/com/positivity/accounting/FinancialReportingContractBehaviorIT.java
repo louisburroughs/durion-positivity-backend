@@ -165,13 +165,13 @@ class FinancialReportingContractBehaviorIT {
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.accountId").value("4000"))
-                .andExpect(jsonPath("$.startDate").value("2024-01-01"))
-                .andExpect(jsonPath("$.endDate").value("2024-12-31"))
-                .andExpect(jsonPath("$.journalLines").isArray())
-                .andExpect(jsonPath("$.totalDebits").isNumber())
-                .andExpect(jsonPath("$.totalCredits").isNumber())
-                .andExpect(jsonPath("$.netBalance").isNumber());
+                .andExpect(jsonPath("$[0].accountId").value("4000"))
+                .andExpect(jsonPath("$[0].startDate").value("2024-01-01"))
+                .andExpect(jsonPath("$[0].endDate").value("2024-12-31"))
+                .andExpect(jsonPath("$[0].journalLines").isArray())
+                .andExpect(jsonPath("$[0].totalDebits").isNumber())
+                .andExpect(jsonPath("$[0].totalCredits").isNumber())
+                .andExpect(jsonPath("$[0].netBalance").isNumber());
     }
 
     @Test
