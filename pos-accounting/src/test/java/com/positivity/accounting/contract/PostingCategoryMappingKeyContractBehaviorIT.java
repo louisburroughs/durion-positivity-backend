@@ -1,5 +1,7 @@
 package com.positivity.accounting.contract;
 
+import com.positivity.accounting.BaseIntegrationTest;
+
 import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;

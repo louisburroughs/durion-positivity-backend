@@ -556,7 +556,9 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             } else if (current instanceof String str) {
                 return new BigDecimal(str);
             }
-        } catch (Exception e) {
+        } catch (
+
+        Exception e) {
             log.warn("Failed to resolve amount from field '{}': {}", amountField, e.getMessage());
         }
 
