@@ -508,31 +508,6 @@
                 }
             }
         },
-        "/v1/invoice/invoices": {
-            "post": {
-                "tags": [
-                    "Invoice Payments"
-                ],
-                "summary": "Regenerate invoice from workorder",
-                "description": "Regenerate an invoice from a workorder.",
-                "operationId": "regenerateInvoiceFromWorkorder",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {}
-                        }
-                    }
-                },
-                "responses": {
-                    "202": {
-                        "description": "Invoice regeneration accepted"
-                    },
-                    "400": {
-                        "description": "Invalid request"
-                    }
-                }
-            }
-        },
         "/v1/accounting/posting-rules": {
             "get": {
                 "tags": [
@@ -1373,6 +1348,31 @@
                 "deprecated": true
             }
         },
+        "/v1/accounting/invoice/invoices": {
+            "post": {
+                "tags": [
+                    "Invoice Payments"
+                ],
+                "summary": "Regenerate invoice from workorder",
+                "description": "Regenerate an invoice from a workorder.",
+                "operationId": "regenerateInvoiceFromWorkorder",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "Invoice regeneration accepted"
+                    },
+                    "400": {
+                        "description": "Invalid request"
+                    }
+                }
+            }
+        },
         "/v1/accounting/glAccounts": {
             "post": {
                 "tags": [
@@ -1987,6 +1987,16 @@
                             }
                         }
                     },
+                    "201": {
+                        "description": "Price override recorded successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
+                                }
+                            }
+                        }
+                    },
                     "400": {
                         "description": "Invalid request parameters",
                         "content": {
@@ -2000,16 +2010,6 @@
                         "content": {
                             "*/*": {
                                 "schema": {}
-                            }
-                        }
-                    },
-                    "201": {
-                        "description": "Price override recorded successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
                             }
                         }
                     },
@@ -2152,36 +2152,6 @@
                 }
             }
         },
-        "/v1/invoice/rules/{customerId}": {
-            "get": {
-                "tags": [
-                    "Invoice Payments"
-                ],
-                "summary": "Get billing rules",
-                "description": "Retrieve billing rules for a customer.",
-                "operationId": "getBillingRules",
-                "parameters": [
-                    {
-                        "name": "customerId",
-                        "in": "path",
-                        "description": "Customer identifier",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Billing rules returned"
-                    },
-                    "404": {
-                        "description": "Customer not found"
-                    }
-                }
-            }
-        },
         "/v1/accounting/traceability/{journalEntryId}": {
             "get": {
                 "tags": [
@@ -2210,6 +2180,362 @@
                         "description": "Journal entry not found"
                     }
                 }
+            }
+        },
+        "/v1/accounting/reports/financial/income-statement": {
+            "get": {
+                "tags": [
+                    "Financial Reporting"
+                ],
+                "summary": "Generate Income Statement",
+                "description": "Generate Profit & Loss report for a date range with revenue, expenses, and net income",
+                "operationId": "generateIncomeStatement",
+                "parameters": [
+                    {
+                        "name": "startDate",
+                        "in": "query",
+                        "description": "Period start date (YYYY-MM-DD)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2024-01-01"
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "description": "Period end date (YYYY-MM-DD)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2024-12-31"
+                    }
+                ],
+                "responses": {
+                    "403": {
+                        "description": "Forbidden - missing reporting:view:financial-statements",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IncomeStatementReport"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date range",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IncomeStatementReport"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Income statement generated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IncomeStatementReport"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IncomeStatementReport"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/reports/financial/drilldown/journal-lines/{accountId}": {
+            "get": {
+                "tags": [
+                    "Financial Reporting"
+                ],
+                "summary": "Drilldown to Journal Lines",
+                "description": "Show source journal entries contributing to a GL account balance",
+                "operationId": "drilldownToJournalLines",
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "description": "GL Account ID (UUID)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
+                    },
+                    {
+                        "name": "startDate",
+                        "in": "query",
+                        "description": "Period start date (YYYY-MM-DD)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2024-01-01"
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "description": "Period end date (YYYY-MM-DD)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2024-12-31"
+                    }
+                ],
+                "responses": {
+                    "403": {
+                        "description": "Forbidden - missing reporting:view:financial-statements",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Journal line drilldown successful",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid account ID or date range",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}": {
+            "get": {
+                "tags": [
+                    "Financial Reporting"
+                ],
+                "summary": "Drilldown to Accounts",
+                "description": "Show which GL accounts contribute to a specific statement line",
+                "operationId": "drilldownToAccounts",
+                "parameters": [
+                    {
+                        "name": "statementLineCode",
+                        "in": "path",
+                        "description": "Statement line code (e.g., REVENUE_SALES)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "startDate",
+                        "in": "query",
+                        "description": "Period start date (YYYY-MM-DD)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2024-01-01"
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "description": "Period end date (YYYY-MM-DD)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2024-12-31"
+                    }
+                ],
+                "responses": {
+                    "403": {
+                        "description": "Forbidden - missing reporting:view:financial-statements",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid statement line code or date range",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Account drilldown successful",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/v1/accounting/reports/financial/balance-sheet": {
+            "get": {
+                "tags": [
+                    "Financial Reporting"
+                ],
+                "summary": "Generate Balance Sheet",
+                "description": "Generate Balance Sheet as of a specific date with assets, liabilities, and equity",
+                "operationId": "generateBalanceSheet",
+                "parameters": [
+                    {
+                        "name": "asOfDate",
+                        "in": "query",
+                        "description": "As-of date (YYYY-MM-DD)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2024-12-31"
+                    }
+                ],
+                "responses": {
+                    "403": {
+                        "description": "Forbidden - missing reporting:view:financial-statements",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BalanceSheetReport"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Balance sheet generated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BalanceSheetReport"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BalanceSheetReport"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BalanceSheetReport"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/v1/accounting/posting-rules/{postingRuleSetId}": {
@@ -2450,16 +2776,6 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Invoice not found",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/InvoiceStatusResponse"
-                                }
-                            }
-                        }
-                    },
                     "200": {
                         "description": "Invoice status returned",
                         "content": {
@@ -2469,6 +2785,46 @@
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "Invoice not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvoiceStatusResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/accounting/invoice/rules/{customerId}": {
+            "get": {
+                "tags": [
+                    "Invoice Payments"
+                ],
+                "summary": "Get billing rules",
+                "description": "Retrieve billing rules for a customer.",
+                "operationId": "getBillingRules",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "description": "Customer identifier",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Billing rules returned"
+                    },
+                    "404": {
+                        "description": "Customer not found"
                     }
                 }
             }
@@ -2682,16 +3038,6 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Audit entries retrieved successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "500": {
                         "description": "Internal server error",
                         "content": {
@@ -2701,6 +3047,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/AuditTrailResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Audit entries retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
                                 }
                             }
                         }
@@ -2767,16 +3123,6 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Audit entries retrieved successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "500": {
                         "description": "Internal server error",
                         "content": {
@@ -2786,6 +3132,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/AuditTrailResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Audit entries retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
                                 }
                             }
                         }
@@ -2828,16 +3184,6 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Audit entries retrieved successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "500": {
                         "description": "Internal server error",
                         "content": {
@@ -2847,6 +3193,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/AuditTrailResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Audit entries retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
                                 }
                             }
                         }
@@ -2876,16 +3232,6 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Audit entries retrieved successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "404": {
                         "description": "Invoice not found",
                         "content": {
@@ -2908,6 +3254,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/AuditTrailResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Audit entries retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
                                 }
                             }
                         }
@@ -2972,16 +3328,6 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Audit entries retrieved successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AuditTrailResponse"
-                                }
-                            }
-                        }
-                    },
                     "500": {
                         "description": "Internal server error",
                         "content": {
@@ -2991,6 +3337,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/AuditTrailResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Audit entries retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuditTrailResponse"
                                 }
                             }
                         }
@@ -3149,362 +3505,6 @@
                         }
                     }
                 }
-            }
-        },
-        "/api/v1/reports/financial/income-statement": {
-            "get": {
-                "tags": [
-                    "Financial Reporting"
-                ],
-                "summary": "Generate Income Statement",
-                "description": "Generate Profit & Loss report for a date range with revenue, expenses, and net income",
-                "operationId": "generateIncomeStatement",
-                "parameters": [
-                    {
-                        "name": "startDate",
-                        "in": "query",
-                        "description": "Period start date (YYYY-MM-DD)",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "date"
-                        },
-                        "example": "2024-01-01"
-                    },
-                    {
-                        "name": "endDate",
-                        "in": "query",
-                        "description": "Period end date (YYYY-MM-DD)",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "date"
-                        },
-                        "example": "2024-12-31"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Income statement generated successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/IncomeStatementReport"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - missing reporting:view:financial-statements",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/IncomeStatementReport"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid date range",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/IncomeStatementReport"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/IncomeStatementReport"
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            }
-        },
-        "/api/v1/reports/financial/drilldown/journal-lines/{accountId}": {
-            "get": {
-                "tags": [
-                    "Financial Reporting"
-                ],
-                "summary": "Drilldown to Journal Lines",
-                "description": "Show source journal entries contributing to a GL account balance",
-                "operationId": "drilldownToJournalLines",
-                "parameters": [
-                    {
-                        "name": "accountId",
-                        "in": "path",
-                        "description": "GL Account ID (UUID)",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "example": "123e4567-e89b-12d3-a456-426614174000"
-                    },
-                    {
-                        "name": "startDate",
-                        "in": "query",
-                        "description": "Period start date (YYYY-MM-DD)",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "date"
-                        },
-                        "example": "2024-01-01"
-                    },
-                    {
-                        "name": "endDate",
-                        "in": "query",
-                        "description": "Period end date (YYYY-MM-DD)",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "date"
-                        },
-                        "example": "2024-12-31"
-                    }
-                ],
-                "responses": {
-                    "403": {
-                        "description": "Forbidden - missing reporting:view:financial-statements",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Journal line drilldown successful",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid account ID or date range",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/JournalLineDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            }
-        },
-        "/api/v1/reports/financial/drilldown/accounts/{statementLineCode}": {
-            "get": {
-                "tags": [
-                    "Financial Reporting"
-                ],
-                "summary": "Drilldown to Accounts",
-                "description": "Show which GL accounts contribute to a specific statement line",
-                "operationId": "drilldownToAccounts",
-                "parameters": [
-                    {
-                        "name": "statementLineCode",
-                        "in": "path",
-                        "description": "Statement line code (e.g., REVENUE_SALES)",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "startDate",
-                        "in": "query",
-                        "description": "Period start date (YYYY-MM-DD)",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "date"
-                        },
-                        "example": "2024-01-01"
-                    },
-                    {
-                        "name": "endDate",
-                        "in": "query",
-                        "description": "Period end date (YYYY-MM-DD)",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "date"
-                        },
-                        "example": "2024-12-31"
-                    }
-                ],
-                "responses": {
-                    "403": {
-                        "description": "Forbidden - missing reporting:view:financial-statements",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid statement line code or date range",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Account drilldown successful",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AccountDrilldownResponse"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            }
-        },
-        "/api/v1/reports/financial/balance-sheet": {
-            "get": {
-                "tags": [
-                    "Financial Reporting"
-                ],
-                "summary": "Generate Balance Sheet",
-                "description": "Generate Balance Sheet as of a specific date with assets, liabilities, and equity",
-                "operationId": "generateBalanceSheet",
-                "parameters": [
-                    {
-                        "name": "asOfDate",
-                        "in": "query",
-                        "description": "As-of date (YYYY-MM-DD)",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "date"
-                        },
-                        "example": "2024-12-31"
-                    }
-                ],
-                "responses": {
-                    "403": {
-                        "description": "Forbidden - missing reporting:view:financial-statements",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BalanceSheetReport"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid date",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BalanceSheetReport"
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Balance sheet generated successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BalanceSheetReport"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/BalanceSheetReport"
-                                }
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
             }
         }
     },
@@ -4781,6 +4781,115 @@
                     }
                 }
             },
+            "IncomeStatementReport": {
+                "type": "object",
+                "properties": {
+                    "startDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "generatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "lineItems": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "totalRevenue": {
+                        "type": "number"
+                    },
+                    "totalExpenses": {
+                        "type": "number"
+                    },
+                    "netIncome": {
+                        "type": "number"
+                    }
+                }
+            },
+            "JournalLineDrilldownResponse": {
+                "type": "object",
+                "properties": {
+                    "journalEntryId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "transactionDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "debitAmount": {
+                        "type": "number"
+                    },
+                    "creditAmount": {
+                        "type": "number"
+                    },
+                    "sourceEventId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "sourceEventType": {
+                        "type": "string"
+                    }
+                }
+            },
+            "AccountDrilldownResponse": {
+                "type": "object",
+                "properties": {
+                    "accountId": {
+                        "type": "string"
+                    },
+                    "accountName": {
+                        "type": "string"
+                    },
+                    "balance": {
+                        "type": "number"
+                    },
+                    "statementLineCode": {
+                        "type": "string"
+                    }
+                }
+            },
+            "BalanceSheetReport": {
+                "type": "object",
+                "properties": {
+                    "asOfDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "generatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "lineItems": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "totalAssets": {
+                        "type": "number"
+                    },
+                    "totalLiabilities": {
+                        "type": "number"
+                    },
+                    "totalEquity": {
+                        "type": "number"
+                    },
+                    "balanced": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "PostingCategoryListResponse": {
                 "type": "object",
                 "properties": {
@@ -5055,115 +5164,6 @@
                             "CANCELLED"
                         ],
                         "example": "APPROVED"
-                    }
-                }
-            },
-            "IncomeStatementReport": {
-                "type": "object",
-                "properties": {
-                    "startDate": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "endDate": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "generatedAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "lineItems": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "number"
-                        }
-                    },
-                    "totalRevenue": {
-                        "type": "number"
-                    },
-                    "totalExpenses": {
-                        "type": "number"
-                    },
-                    "netIncome": {
-                        "type": "number"
-                    }
-                }
-            },
-            "JournalLineDrilldownResponse": {
-                "type": "object",
-                "properties": {
-                    "journalEntryId": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "transactionDate": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "description": {
-                        "type": "string"
-                    },
-                    "debitAmount": {
-                        "type": "number"
-                    },
-                    "creditAmount": {
-                        "type": "number"
-                    },
-                    "sourceEventId": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "sourceEventType": {
-                        "type": "string"
-                    }
-                }
-            },
-            "AccountDrilldownResponse": {
-                "type": "object",
-                "properties": {
-                    "accountId": {
-                        "type": "string"
-                    },
-                    "accountName": {
-                        "type": "string"
-                    },
-                    "balance": {
-                        "type": "number"
-                    },
-                    "statementLineCode": {
-                        "type": "string"
-                    }
-                }
-            },
-            "BalanceSheetReport": {
-                "type": "object",
-                "properties": {
-                    "asOfDate": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "generatedAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "lineItems": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "number"
-                        }
-                    },
-                    "totalAssets": {
-                        "type": "number"
-                    },
-                    "totalLiabilities": {
-                        "type": "number"
-                    },
-                    "totalEquity": {
-                        "type": "number"
-                    },
-                    "balanced": {
-                        "type": "boolean"
                     }
                 }
             }
