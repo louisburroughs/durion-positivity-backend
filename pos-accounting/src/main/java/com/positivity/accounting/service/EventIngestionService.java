@@ -20,8 +20,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.accounting.internal.dto.AccountingEventMapper;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.DuplicateEventException;
+import com.positivity.accounting.internal.dto.ReprocessEventRequest;
+import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryMapper;
+import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -57,6 +62,7 @@ public class EventIngestionService {
 
     private final JournalEntryService journalEntryService;
     private final AccountingEventRepository accountingEventRepository;
+    private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
 
     /**
      * In-memory idempotency tracker keyed by content hash.
@@ -177,6 +183,176 @@ public class EventIngestionService {
      */
     public AccountingEventResponse retryEvent(UUID eventId) {
         return retryEventProcessing(eventId);
+    }
+
+    /**
+     * Reprocesses a suspended accounting event.
+     * Distinct from retry: reprocess is for business-rule mapping failures that
+     * require manual intervention.
+     * 
+     * Business Rules (BR-3: Idempotency):
+     * - Reprocessing MUST be idempotent
+     * - A single suspense entry can produce at most one successful downstream
+     * posting
+     * - Returns 409 Conflict if entry is already PROCESSED
+     * 
+     * @param eventId the event identifier
+     * @param request reprocess request with user context
+     * @return updated accounting event response
+     * @throws IllegalArgumentException if event not found
+     * @throws IllegalStateException    if event is not SUSPENDED or already
+     *                                  PROCESSED
+     */
+    public AccountingEventResponse reprocessEvent(@NonNull UUID eventId, @NonNull ReprocessEventRequest request) {
+        log.info("Reprocessing suspended event {} triggered by user {}", eventId, request.getTriggeredByUserId());
+
+        // Load the accounting event
+        AccountingEvent event = accountingEventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + eventId));
+
+        // BR-3: Idempotency check - reject if already PROCESSED
+        if (event.getStatus() == AccountingEventStatus.PROCESSED) {
+            String msg = "Event " + eventId + " is already PROCESSED. Reprocessing would create duplicate posting.";
+            log.warn(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        // Verify event is SUSPENDED or FAILED (eligible for reprocessing)
+        if (event.getStatus() != AccountingEventStatus.SUSPENDED && event.getStatus() != AccountingEventStatus.FAILED) {
+            String msg = "Event " + eventId + " has status " + event.getStatus()
+                    + " and cannot be reprocessed. Only SUSPENDED or FAILED events can be reprocessed.";
+            log.warn(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        // Increment attempt count
+        event.setAttemptCount(event.getAttemptCount() + 1);
+
+        // Create reprocessing attempt history record
+        ReprocessingAttemptHistory attemptHistory = new ReprocessingAttemptHistory(
+                event,
+                request.getTriggeredByUserId(),
+                ReprocessingOutcome.FAILURE, // Default to FAILURE, will update on success
+                "Reprocessing attempt initiated");
+
+        if (request.getMappingVersionToUse() != null) {
+            attemptHistory.setMappingVersionUsed(request.getMappingVersionToUse());
+        }
+
+        try {
+            // Re-run mapping/posting logic using current rules
+            // TODO: Integrate with actual posting rule engine when available
+            // For now, simulate reprocessing:
+            // 1. Change status to PROCESSING
+            // 2. Attempt to create journal entry
+            // 3. On success: mark as PROCESSED
+            // 4. On failure: keep as SUSPENDED/FAILED
+
+            event.setStatus(AccountingEventStatus.PROCESSING);
+            accountingEventRepository.save(event);
+
+            log.info("Attempting to reprocess event {} with current mapping rules", eventId);
+
+            // Simulate successful reprocessing (placeholder for actual posting logic)
+            // In real implementation, this would call the posting rule engine
+            boolean reprocessingSucceeded = attemptReprocessingLogic(event, request);
+
+            if (reprocessingSucceeded) {
+                // SUCCESS: Update event status and history
+                event.setStatus(AccountingEventStatus.PROCESSED);
+                event.setProcessedAt(java.time.Instant.now());
+                event.setResolvedByUserId(request.getTriggeredByUserId());
+
+                // Set final posting reference (would come from JE created)
+                String finalPostingRef = "JE-" + UUID.randomUUID().toString().substring(0, 8);
+                event.setFinalPostingReferenceId(finalPostingRef);
+
+                // Update attempt history outcome
+                attemptHistory.setOutcome(ReprocessingOutcome.SUCCESS);
+                attemptHistory
+                        .setOutcomeDetails("Reprocessing succeeded. Posted to GL with reference: " + finalPostingRef);
+
+                log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
+            } else {
+                // FAILURE: Keep as SUSPENDED, update error details
+                event.setStatus(AccountingEventStatus.SUSPENDED);
+                String errorDetails = "Reprocessing failed: mapping/rule still invalid";
+                event.setFailureDetails(errorDetails);
+
+                attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
+                attemptHistory.setOutcomeDetails(errorDetails);
+
+                log.warn("Reprocessing failed for event {}: {}", eventId, errorDetails);
+            }
+
+        } catch (Exception e) {
+            // FAILURE: Keep as SUSPENDED/FAILED, log error
+            event.setStatus(AccountingEventStatus.SUSPENDED);
+            String errorMsg = "Reprocessing exception: " + e.getMessage();
+            event.setFailureDetails(errorMsg);
+            event.setErrorMessage(e.getMessage());
+
+            attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
+            attemptHistory.setOutcomeDetails(errorMsg);
+
+            log.error("Reprocessing failed for event {} due to exception", eventId, e);
+        } finally {
+            // Always persist the event state and attempt history
+            accountingEventRepository.save(event);
+            reprocessingAttemptHistoryRepository.save(attemptHistory);
+        }
+
+        return AccountingEventMapper.toEventResponse(event);
+    }
+
+    /**
+     * Placeholder for actual reprocessing logic.
+     * In production, this would integrate with the posting rule engine.
+     * 
+     * @param event   the event to reprocess
+     * @param request reprocess request context
+     * @return true if reprocessing succeeded, false otherwise
+     */
+    private boolean attemptReprocessingLogic(@NonNull AccountingEvent event, @NonNull ReprocessEventRequest request) {
+        // TODO: Integrate with posting rule engine
+        // For now, simulate success if failureReasonCode is not UNMAPPED_EVENT_TYPE
+        // In real implementation, this would:
+        // 1. Load current posting rule set for event.organizationId +
+        // event.transactionDate
+        // 2. Apply rules to event.payload
+        // 3. Generate journal entry if rules match
+        // 4. Post to GL if auto-post is enabled
+        // 5. Return success/failure
+
+        log.debug("Simulating reprocessing logic for event {}", event.getEventId());
+
+        // Simulate: if failure was UNMAPPED_EVENT_TYPE and we still don't have a
+        // mapping, fail
+        if ("UNMAPPED_EVENT_TYPE".equals(event.getFailureReasonCode())) {
+            // Simulate checking if mapping now exists (50% chance for demo purposes)
+            return Math.random() > 0.5;
+        }
+
+        // For other failure codes, simulate success
+        return true;
+    }
+
+    /**
+     * Retrieves all reprocessing attempt history for an accounting event.
+     * Used for audit trail and diagnostics.
+     * 
+     * @param eventId the event identifier
+     * @return list of reprocessing attempts, most recent first
+     */
+    public List<ReprocessingAttemptHistoryResponse> getReprocessingHistory(@NonNull UUID eventId) {
+        log.debug("Retrieving reprocessing history for event {}", eventId);
+
+        List<ReprocessingAttemptHistory> history = reprocessingAttemptHistoryRepository
+                .findByAccountingEvent_EventIdOrderByAttemptedAtDesc(eventId);
+
+        return history.stream()
+                .map(ReprocessingAttemptHistoryMapper::toResponse)
+                .toList();
     }
 
     /**

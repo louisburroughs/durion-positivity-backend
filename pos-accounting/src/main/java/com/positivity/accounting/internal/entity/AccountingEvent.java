@@ -99,4 +99,47 @@ public class AccountingEvent {
     @Column(name = "sequence_number")
     private Long sequenceNumber;
 
+    // ========== Suspense Queue Fields (CAP:055) ==========
+
+    /**
+     * Structured failure reason code for suspense entries.
+     * Examples: UNMAPPED_EVENT_TYPE, INVALID_MAPPING_VERSION, RULE_CONFLICT
+     */
+    @Column(name = "failure_reason_code", length = 100)
+    private String failureReasonCode;
+
+    /**
+     * Detailed failure information for suspense entries.
+     * Provides additional context beyond errorMessage.
+     */
+    @Column(name = "failure_details", length = 4000)
+    private String failureDetails;
+
+    /**
+     * Number of reprocessing attempts for this event.
+     * Incremented each time reprocessing is triggered.
+     */
+    @Column(name = "attempt_count", nullable = false)
+    private Integer attemptCount = 0;
+
+    /**
+     * Final posting reference after successful reprocessing.
+     * Links to the JE or posting transaction created from this event.
+     */
+    @Column(name = "final_posting_reference_id", length = 100)
+    private String finalPostingReferenceId;
+
+    /**
+     * User ID of the person who resolved/reprocessed this suspense entry.
+     */
+    @Column(name = "resolved_by_user_id", length = 100)
+    private String resolvedByUserId;
+
+    /**
+     * Mapping or rule version that was attempted when this event was suspended.
+     * Used for diagnostic and reprocessing purposes.
+     */
+    @Column(name = "mapping_version_attempted", length = 50)
+    private String mappingVersionAttempted;
+
 }
