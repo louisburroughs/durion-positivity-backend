@@ -17,7 +17,7 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 30 event types.
+         * Total: 34 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -95,6 +95,16 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_LIST",
                                                 "List credit memos with optional filters").build(),
                                 EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_GET",
-                                                "Get credit memo details by ID").build());
+                                                "Get credit memo details by ID").build(),
+
+                                // FinancialReportingController - 4 events (CAP-054)
+                                EventTypeRegistration.search("REPORT_INCOME_STATEMENT_GENERATE",
+                                                "Generate income statement report for a date range").build(),
+                                EventTypeRegistration.search("REPORT_BALANCE_SHEET_GENERATE",
+                                                "Generate balance sheet report as of a specific date").build(),
+                                EventTypeRegistration.fastRead("REPORT_DRILLDOWN_ACCOUNTS",
+                                                "Drill down from statement line to contributing GL accounts").build(),
+                                EventTypeRegistration.fastRead("REPORT_DRILLDOWN_JOURNAL_LINES",
+                                                "Drill down from GL account to source journal entries").build());
         }
 }
