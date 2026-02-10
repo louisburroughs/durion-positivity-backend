@@ -128,7 +128,7 @@ For detailed agent commands and local stack setup, refer to [AGENTS.md](AGENTS.m
 ### Spring Boot 4.0.2+ MockMvc Import Change
 **Issue**: The `@AutoConfigureMockMvc` annotation has moved in Spring Boot 4.0.2+.
 
-**Old Import** (Spring Boot 4.0.2.x and earlier):
+**Old Import** (Spring Boot 3.4.x and earlier):
 ```java
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 ```

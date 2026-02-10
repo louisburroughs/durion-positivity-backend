@@ -46,7 +46,8 @@ import lombok.ToString;
         @Index(name = "idx_accounting_event_status", columnList = "status"),
         @Index(name = "idx_accounting_event_transaction_date", columnList = "transaction_date"),
         @Index(name = "idx_accounting_event_received_at", columnList = "received_at"),
-        @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status")
+        @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status"),
+        @Index(name = "idx_accounting_event_source_system", columnList = "source_system")
 })
 public class AccountingEvent {
 
@@ -76,6 +77,13 @@ public class AccountingEvent {
 
     @Column(name = "organization_id", columnDefinition = "UUID")
     private UUID organizationId;
+
+    /**
+     * Source system that generated this accounting event.
+     * Extracted from event payload for efficient querying.
+     */
+    @Column(name = "source_system", length = 100, nullable = false)
+    private String sourceSystem;
 
     @Column(name = "transaction_date", nullable = false)
     private LocalDateTime transactionDate;
@@ -127,9 +135,10 @@ public class AccountingEvent {
     /**
      * Number of reprocessing attempts for this event.
      * Incremented each time reprocessing is triggered.
+     * Nullable for backward compatibility with existing events.
      */
-    @Column(name = "attempt_count", nullable = false)
-    private Integer attemptCount = 0;
+    @Column(name = "attempt_count")
+    private Integer attemptCount;
 
     /**
      * Final posting reference after successful reprocessing.
