@@ -7,9 +7,7 @@ import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
@@ -63,13 +61,8 @@ public class EventIngestionService {
     private final JournalEntryService journalEntryService;
     private final AccountingEventRepository accountingEventRepository;
     private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
-
-    /**
-     * In-memory idempotency tracker keyed by content hash.
-     * TODO: Replace with persistent store (e.g., database table) for production
-     * use.
-     */
-    private final Set<String> processedEventHashes = ConcurrentHashMap.newKeySet();
+    private final IdempotencyService idempotencyService;
+    private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository auditTrailEntryRepository;
 
     /**
      * Submits a business event for accounting processing.
@@ -118,10 +111,13 @@ public class EventIngestionService {
 
         // Idempotency check — reject duplicate events based on content hash
         String contentHash = computeEventHash(event);
-        if (!processedEventHashes.add(contentHash)) {
+        if (idempotencyService.isKeyProcessed(contentHash)) {
             throw new DuplicateEventException(
                     "Duplicate event detected for org " + organizationId + " from " + sourceSystem);
         }
+
+        // Register idempotency key for 24-hour deduplication window
+        idempotencyService.registerKey(contentHash, null); // invoice ID not applicable for accounting events
 
         // Accept event with RECEIVED status and persist to database
         // Let @PrePersist generate UUIDv7 for time-ordered indexing unless provided
@@ -359,9 +355,26 @@ public class EventIngestionService {
      * Retrieves the processing log for an event.
      * Contains matched rules, generated journal entries, any errors.
      */
-    public List<String> getEventProcessingLog(UUID eventId) {
-        // TODO: Return audit log entries for this event
-        return List.of();
+    public List<String> getEventProcessingLog(@NonNull UUID eventId) {
+        // Query audit trail entries linked to this accounting event
+        List<com.positivity.accounting.internal.audit.entity.AuditTrailEntry> auditEntries = auditTrailEntryRepository
+                .findBySourceEventId(eventId);
+
+        if (auditEntries.isEmpty()) {
+            log.debug("No audit trail entries found for event {}", eventId);
+            return List.of("Event " + eventId + ": No processing log entries found");
+        }
+
+        // Format audit entries as log messages
+        return auditEntries.stream()
+                .map(entry -> String.format("[%s] %s - Actor: %s (%s) - Status: %s - %s",
+                        entry.getTimestamp(),
+                        entry.getExceptionType(),
+                        entry.getActorId(),
+                        entry.getActorRole(),
+                        entry.getAccountingStatus(),
+                        entry.getReason() != null ? entry.getReason() : "No reason provided"))
+                .toList();
     }
 
     /**
@@ -408,10 +421,23 @@ public class EventIngestionService {
 
     /**
      * Find all events from a specific source system.
+     * Note: sourceSystem is stored in the JSON payload, not as a separate column.
+     * This implementation requires full table scan and is not performant for large
+     * datasets.
+     * Consider adding a sourceSystem column for production use.
      */
     public List<Map<String, Object>> findBySourceSystem(String sourceSystem) {
-        // TODO: Query audit table by source system
-        return List.of();
+        log.warn("findBySourceSystem performs full table scan - consider schema optimization");
+
+        // Query all events and filter by sourceSystem in payload
+        return accountingEventRepository.findAll()
+                .stream()
+                .filter(event -> {
+                    Map<String, Object> payload = event.getPayload();
+                    return payload != null && sourceSystem.equals(payload.get("sourceSystem"));
+                })
+                .map(AccountingEvent::getPayload)
+                .toList();
     }
 
     /**
@@ -422,9 +448,43 @@ public class EventIngestionService {
      * @return count of records processed
      */
     public int processFailed(int maxRetries) {
-        // TODO: Query failed records, retry up to maxRetries times
         log.info("Processing failed events (max retries: {})", maxRetries);
-        return 0;
+
+        int processedCount = 0;
+
+        // Query all FAILED and SUSPENDED events that haven't exceeded max retries
+        List<AccountingEvent> failedEvents = accountingEventRepository.findAll()
+                .stream()
+                .filter(event -> (event.getStatus() == AccountingEventStatus.FAILED
+                        || event.getStatus() == AccountingEventStatus.SUSPENDED)
+                        && event.getAttemptCount() < maxRetries)
+                .toList();
+
+        log.info("Found {} eligible failed/suspended events for retry", failedEvents.size());
+
+        for (AccountingEvent event : failedEvents) {
+            try {
+                log.debug("Retrying event {} (attempt {}/{})",
+                        event.getEventId(), event.getAttemptCount() + 1, maxRetries);
+
+                // Retry processing through reprocessEvent
+                ReprocessEventRequest request = new ReprocessEventRequest();
+                request.setTriggeredByUserId("SYSTEM_RETRY_JOB");
+                request.setMappingVersionToUse(null); // Use current active mapping
+
+                reprocessEvent(event.getEventId(), request);
+                processedCount++;
+
+            } catch (Exception e) {
+                log.error("Failed to retry event {}: {}", event.getEventId(), e.getMessage(), e);
+                // Continue processing other events even if one fails
+            }
+        }
+
+        log.info("Completed processing {} failed events out of {} candidates",
+                processedCount, failedEvents.size());
+
+        return processedCount;
     }
 
     /**
