@@ -17,7 +17,7 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 35 event types (updated for CAP:055).
+         * Total: 40 event types (updated for CAP-053 Vendor Bill workflow).
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -108,6 +108,19 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.fastRead("REPORT_DRILLDOWN_ACCOUNTS",
                                                 "Drill down from statement line to contributing GL accounts").build(),
                                 EventTypeRegistration.fastRead("REPORT_DRILLDOWN_JOURNAL_LINES",
-                                                "Drill down from GL account to source journal entries").build());
+                                                "Drill down from GL account to source journal entries").build(),
+
+                                // VendorBillService - 5 events (CAP-053 Issue #130)
+                                EventTypeRegistration.write("ACCOUNTING_VENDOR_BILL_CREATE",
+                                                "Create vendor bill from goods received event (Receipt Accrual)")
+                                                .build(),
+                                EventTypeRegistration.write("ACCOUNTING_VENDOR_BILL_MATCH",
+                                                "Three-way match vendor invoice to existing bill").build(),
+                                EventTypeRegistration.approval("ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE",
+                                                "Resolve vendor bill match exception (accept/correct/void)").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET",
+                                                "Get vendor bill details by ID").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET_BY_EVENT",
+                                                "Get vendor bill by origin event ID (idempotency check)").build());
         }
 }

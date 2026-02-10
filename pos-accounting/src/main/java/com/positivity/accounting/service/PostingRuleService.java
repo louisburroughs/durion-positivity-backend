@@ -1,5 +1,9 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
+import com.positivity.accounting.internal.dto.PostingRuleSetListResponse;
+import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
+import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 
@@ -12,6 +16,43 @@ import java.util.UUID;
  * Rule sets are immutable once PUBLISHED; changes require new versions.
  */
 public interface PostingRuleService {
+
+    // ── DTO-based methods (used by controllers) ──────────────────────
+
+    /**
+     * Creates a new posting rule set with an initial DRAFT version.
+     * Returns the created rule set as a response DTO.
+     */
+    PostingRuleSetResponse createPostingRuleSetWithVersion(PostingRuleSetCreateRequest request);
+
+    /**
+     * Publishes the latest DRAFT version of a posting rule set.
+     * Returns the published version as a response DTO.
+     */
+    PostingRuleVersionResponse publishRuleSet(UUID ruleSetId);
+
+    /**
+     * Archives the PUBLISHED version of a posting rule set.
+     * Returns the archived version as a response DTO.
+     */
+    PostingRuleVersionResponse archiveRuleSet(UUID ruleSetId);
+
+    /**
+     * Lists posting rule sets as a paginated response DTO.
+     */
+    PostingRuleSetListResponse listRuleSetsAsResponse(UUID organizationId, int page, int size);
+
+    /**
+     * Retrieves a posting rule set as a response DTO.
+     */
+    PostingRuleSetResponse getPostingRuleSetAsResponse(UUID ruleSetId);
+
+    /**
+     * Lists versions of a posting rule set as response DTOs.
+     */
+    List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId);
+
+    // ── Entity-based methods (used by internal services) ─────────────
 
     /**
      * Creates a new posting rule set in DRAFT status.
