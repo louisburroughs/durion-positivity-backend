@@ -1,7 +1,5 @@
 package com.positivity.accounting.internal.dto;
 
-import org.jspecify.annotations.NonNull;
-
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
