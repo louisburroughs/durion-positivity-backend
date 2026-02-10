@@ -60,7 +60,6 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional
 public class EventIngestionService {
 
-    private final JournalEntryService journalEntryService;
     private final AccountingEventRepository accountingEventRepository;
     private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
     private final IdempotencyService idempotencyService;
@@ -245,8 +244,15 @@ public class EventIngestionService {
 
             try {
                 // Re-run mapping/posting logic using current rules
-                // TODO: Integrate with actual posting rule engine when available
-                // For now, simulate reprocessing:
+                // TODO [CAP-056]: Integrate with Posting Rule Engine (see CAP-055 Future
+                // Enhancements)
+                // When implemented, this should:
+                // 1. Load active PostingRuleSet for event.organizationId + transactionDate
+                // 2. Evaluate rules against event.payload to determine GL account mappings
+                // 3. Generate JournalEntry with lines for each mapping
+                // 4. Post to GL if rule set has autoPost enabled
+                // 5. Return journal entry reference on success
+                // For now, simulate reprocessing for testing:
                 // 1. Change status to PROCESSING
                 // 2. Attempt to create journal entry
                 // 3. On success: mark as PROCESSED
@@ -323,12 +329,22 @@ public class EventIngestionService {
      * Placeholder for actual reprocessing logic.
      * In production, this would integrate with the posting rule engine.
      * 
+     * TODO [CAP-056]: Replace with actual Posting Rule Engine integration.
+     * The real implementation should:
+     * 1. Load active PostingRuleSet for event.organizationId +
+     * event.transactionDate
+     * 2. Apply rules to event.payload to determine GL mappings
+     * 3. Generate JournalEntry if rules match successfully
+     * 4. Post to GL if rule set has autoPost enabled
+     * 5. Return true on success with journal entry reference, false on mapping
+     * failure
+     * 
      * @param event   the event to reprocess
      * @param request reprocess request context
      * @return true if reprocessing succeeded, false otherwise
      */
     private boolean attemptReprocessingLogic(@NonNull AccountingEvent event, @NonNull ReprocessEventRequest request) {
-        // TODO: Integrate with posting rule engine
+        // TODO [CAP-056]: Integrate with posting rule engine
         // For now, simulate success if failureReasonCode is not UNMAPPED_EVENT_TYPE
         // In real implementation, this would:
         // 1. Load current posting rule set for event.organizationId +
