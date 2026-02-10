@@ -338,11 +338,12 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
 
         return switch (operationType) {
+            // SUM: add the account balance to the line total as-is
             case SUM -> amount;
-            // SUBTRACT: contra-account logic, contribute as a subtraction in aggregation
+            // SUBTRACT: subtract the account balance from the line total (negate before adding)
             case SUBTRACT -> amount.negate();
-            // NEGATE: presentation-only sign flip; do not change the aggregated amount here
-            case NEGATE -> amount;
+            // NEGATE: flip the sign of the account balance before adding (e.g., show credit balances as positive)
+            case NEGATE -> amount.negate();
         };
     }
     
