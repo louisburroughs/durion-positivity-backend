@@ -299,11 +299,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         if (amount == null) {
             return BigDecimal.ZERO;
         }
-        
+
         return switch (operationType) {
             case SUM -> amount;
+            // SUBTRACT: contra-account logic, contribute as a subtraction in aggregation
             case SUBTRACT -> amount.negate();
-            case NEGATE -> amount.negate();
+            // NEGATE: presentation-only sign flip; do not change the aggregated amount here
+            case NEGATE -> amount;
         };
     }
     
