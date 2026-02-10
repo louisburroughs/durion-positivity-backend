@@ -41,7 +41,15 @@ import tools.jackson.databind.ObjectMapper;
  * Tests full request/response cycle with actual database and Spring Security.
  */
 @DisplayName("Payment Application Controller Integration Tests")
-class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
+class PaymentApplicationControllerIntegrationTest {
+
+        @Autowired
+        private WebApplicationContext context;
+
+        private MockMvc mockMvc;
+
+        @Autowired
+        private ObjectMapper objectMapper;
 
         @Autowired
         private ReceivablePaymentRepository receivablePaymentRepository;
@@ -61,6 +69,13 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
         @BeforeEach
         void setUp() {
+                // Initialize MockMvc with the production security filter chain.
+                // GatewayAuthoritiesFilter reads X-Authorities / X-User headers to populate
+                // SecurityContext — tests send those headers just as the API gateway would.
+                this.mockMvc = webAppContextSetup(context)
+                                .apply(springSecurity())
+                                .build();
+
                 // Clean up test data
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();
