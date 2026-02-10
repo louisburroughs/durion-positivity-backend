@@ -65,7 +65,7 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
      * entries only).
      * Used for financial reporting.
      *
-     * @param accountId GL account ID
+     * @param glAccountId GL account ID (UUID)
      * @param startDate period start date
      * @param endDate   period end date
      * @return net balance (sum of debits - sum of credits), or 0 if no entries
@@ -79,17 +79,17 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 FROM JournalEntry je
                 JOIN je.lines jel
                 WHERE je.status = 'POSTED'
-                  AND jel.accountId = :accountId
+                  AND jel.glAccountId = :glAccountId
                   AND je.transactionDate >= :startDate
                   AND je.transactionDate <= :endDate
             """)
-    java.math.BigDecimal sumPostedBalanceForAccount(String accountId, LocalDateTime startDate, LocalDateTime endDate);
+    java.math.BigDecimal sumPostedBalanceForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
 
     /**
      * Sum net balance for a GL account as of a specific date (POSTED entries only).
      * Used for balance sheet generation.
      *
-     * @param accountId GL account ID
+     * @param glAccountId GL account ID (UUID)
      * @param asOfDate  reporting date (inclusive)
      * @return net balance (sum of debits - sum of credits), or 0 if no entries
      */
@@ -102,16 +102,16 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 FROM JournalEntry je
                 JOIN je.lines jel
                 WHERE je.status = 'POSTED'
-                  AND jel.accountId = :accountId
+                  AND jel.glAccountId = :glAccountId
                   AND je.transactionDate <= :asOfDate
             """)
-    java.math.BigDecimal sumPostedBalanceAsOf(String accountId, LocalDateTime asOfDate);
+    java.math.BigDecimal sumPostedBalanceAsOf(UUID glAccountId, LocalDateTime asOfDate);
 
     /**
      * Find all POSTED journal lines for a GL account within date range.
      * Used for drilldown reporting.
      *
-     * @param accountId GL account ID
+     * @param glAccountId GL account ID (UUID)
      * @param startDate period start date
      * @param endDate   period end date
      * @return list of journal entries with lines for this account
@@ -121,10 +121,10 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
                 FROM JournalEntry je
                 JOIN FETCH je.lines jel
                 WHERE je.status = 'POSTED'
-                  AND jel.accountId = :accountId
+                  AND jel.glAccountId = :glAccountId
                   AND je.transactionDate >= :startDate
                   AND je.transactionDate <= :endDate
                 ORDER BY je.transactionDate DESC
             """)
-    List<JournalEntry> findPostedEntriesForAccount(String accountId, LocalDateTime startDate, LocalDateTime endDate);
+    List<JournalEntry> findPostedEntriesForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
 }

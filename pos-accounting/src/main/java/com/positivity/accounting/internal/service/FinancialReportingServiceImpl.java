@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -58,6 +59,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @NonNull LocalDate startDate,
             @NonNull LocalDate endDate) {
         
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        
         log.info("Generating income statement for period {} to {}", startDate, endDate);
         
         LocalDateTime startDateTime = startDate.atStartOfDay();
@@ -85,12 +90,21 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         Map<String, BigDecimal> revenueLines = new HashMap<>();
         Map<String, BigDecimal> expenseLines = new HashMap<>();
         
+        // Precompute balances per distinct account to avoid N+1 queries
+        Map<UUID, BigDecimal> accountBalancesById = mappings.stream()
+                .map(StatementLineMapping::getGlAccountId)
+                .distinct()
+                .collect(Collectors.toMap(
+                        glAccountId -> glAccountId,
+                        glAccountId -> journalEntryRepository.sumPostedBalanceForAccount(
+                                glAccountId,
+                                startDateTime,
+                                endDateTime
+                        )
+                ));
+        
         for (StatementLineMapping mapping : mappings) {
-            BigDecimal accountBalance = journalEntryRepository.sumPostedBalanceForAccount(
-                    mapping.getAccountId(),
-                    startDateTime,
-                    endDateTime
-            );
+            BigDecimal accountBalance = accountBalancesById.get(mapping.getGlAccountId());
             
             // Apply operation type (SUM, SUBTRACT, NEGATE)
             BigDecimal lineAmount = applyOperation(accountBalance, mapping.getOperation());
@@ -158,11 +172,17 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         Map<String, BigDecimal> liabilityLines = new HashMap<>();
         Map<String, BigDecimal> equityLines = new HashMap<>();
         
+        // Precompute balances per distinct account to avoid N+1 queries
+        Map<UUID, BigDecimal> accountBalancesById = mappings.stream()
+                .map(StatementLineMapping::getGlAccountId)
+                .distinct()
+                .collect(Collectors.toMap(
+                        glAccountId -> glAccountId,
+                        glAccountId -> journalEntryRepository.sumPostedBalanceAsOf(glAccountId, asOfDateTime)
+                ));
+        
         for (StatementLineMapping mapping : mappings) {
-            BigDecimal accountBalance = journalEntryRepository.sumPostedBalanceAsOf(
-                    mapping.getAccountId(),
-                    asOfDateTime
-            );
+            BigDecimal accountBalance = accountBalancesById.get(mapping.getGlAccountId());
             
             // Apply operation type (SUM, SUBTRACT, NEGATE)
             BigDecimal lineAmount = applyOperation(accountBalance, mapping.getOperation());
@@ -218,6 +238,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @NonNull LocalDate startDate,
             @NonNull LocalDate endDate) {
         
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        
         log.info("Drilling down statement line {} to accounts for period {} to {}",
                 statementLineCode, startDate, endDate);
         
@@ -237,14 +261,14 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         return mappings.stream()
                 .map(mapping -> {
                     BigDecimal accountBalance = journalEntryRepository.sumPostedBalanceForAccount(
-                            mapping.getAccountId(),
+                            mapping.getGlAccountId(),
                             startDateTime,
                             endDateTime
                     );
                     BigDecimal lineAmount = applyOperation(accountBalance, mapping.getOperation());
                     
                     return AccountDrilldownResponse.builder()
-                            .accountId(mapping.getAccountId())
+                            .accountId(mapping.getGlAccountId().toString())
                             .accountName(mapping.getAccountName())
                             .balance(lineAmount)
                             .statementLineCode(statementLineCode)
@@ -259,6 +283,19 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @NonNull LocalDate startDate,
             @NonNull LocalDate endDate) {
         
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        
+        UUID glAccountId;
+        try {
+            glAccountId = UUID.fromString(accountId);
+        } catch (IllegalArgumentException e) {
+            String message = "Invalid UUID format for accountId: " + accountId;
+            log.warn(message);
+            throw new IllegalArgumentException(message, e);
+        }
+        
         log.info("Drilling down account {} to journal lines for period {} to {}",
                 accountId, startDate, endDate);
         
@@ -267,7 +304,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         
         // Find all posted journal entries affecting this account
         List<JournalEntry> entries = journalEntryRepository.findPostedEntriesForAccount(
-                accountId,
+                glAccountId,
                 startDateTime,
                 endDateTime
         );
@@ -275,7 +312,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // Extract journal lines for this account
         return entries.stream()
                 .flatMap(entry -> entry.getLines().stream()
-                        .filter(line -> accountId.equals(line.getGlAccountId().toString()))
+                        .filter(line -> glAccountId.equals(line.getGlAccountId()))
                         .map(line -> JournalLineDrilldownResponse.builder()
                                 .journalEntryId(entry.getJournalEntryId())
                                 .transactionDate(entry.getTransactionDate().toLocalDate())
