@@ -13,7 +13,9 @@ import java.util.List;
  * with drilldown capability to source transactions.
  * 
  * All reports use POSTED journal entries only (excludes DRAFT).
- * Reports are reproducible: same parameters always yield same results.
+ * Financial content (amounts, balances, line items) is reproducible for the
+ * same parameters and underlying posted data, while non-financial metadata
+ * (such as generation timestamps) may vary between calls.
  * 
  * @see <a href="durion-positivity-backend#125">Backend Story #125</a>
  * @see <a href=
