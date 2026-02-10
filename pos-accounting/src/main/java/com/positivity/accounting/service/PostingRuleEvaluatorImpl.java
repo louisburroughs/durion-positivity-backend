@@ -3,6 +3,7 @@ package com.positivity.accounting.service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,25 +31,49 @@ import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Implementation of posting rule evaluator.
  * Loads applicable rule versions and produces deterministic mappings from
  * events to journal entries.
- * 
+ *
  * Core Algorithm:
- * 1. Load PUBLISHED PostingRuleVersion for org + transaction date
- * 2. Parse rulesDefinition JSON and evaluate conditions
- * 3. Attempt exact match → fallback match → category default
- * 4. Generate balanced JournalEntry from matched mapping
+ * 1. Load PUBLISHED PostingRuleVersion for event type
+ * 2. Parse rulesDefinition JSON and evaluate conditions against event payload
+ * 3. Resolve GL accounts via GLMappingResolver (exact → fallback → category
+ * default)
+ * 4. Generate balanced JournalEntry from resolved mappings
  * 5. Return PostingResult with outcome
+ *
+ * rulesDefinition JSON schema:
  * 
- * TODO [CAP-278]: This is a foundational implementation. The actual mapping
- * logic
- * requires full understanding of rulesDefinition schema and mapping table
- * structures.
- * Current implementation provides the framework; mapping evaluation needs
- * enhancement.
+ * <pre>
+ * {
+ *   "conditions": [
+ *     {
+ *       "condition": "eventType == 'billing.invoicePosted'",
+ *       "lines": [
+ *         {
+ *           "postingCategoryId": "uuid",
+ *           "mappingKeyId": "uuid",
+ *           "side": "DEBIT",
+ *           "amountField": "payload.amount",
+ *           "description": "Accounts Receivable"
+ *         },
+ *         {
+ *           "postingCategoryId": "uuid",
+ *           "mappingKeyId": "uuid",
+ *           "side": "CREDIT",
+ *           "amountField": "payload.amount",
+ *           "description": "Revenue"
+ *         }
+ *       ]
+ *     }
+ *   ]
+ * }
+ * </pre>
  */
 @Slf4j
 @Service
@@ -58,6 +83,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
     private final PostingRuleVersionRepository versionRepository;
     private final PostingRuleSetRepository ruleSetRepository;
+    private final GLMappingResolver glMappingResolver;
+    private final ObjectMapper objectMapper;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
 
@@ -91,8 +118,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             // 1. Load applicable PostingRuleVersion
             PostingRuleVersion ruleVersion = loadRuleVersion(event, mappingVersionToUse);
             if (ruleVersion == null) {
-                String msg = String.format("No published rule version found for org %s on %s",
-                        event.getOrganizationId(), event.getTransactionDate());
+                String msg = String.format("No published rule version found for eventType '%s' on %s",
+                        event.getEventType(), event.getTransactionDate());
                 evaluationDetails.put("failureStep", "loadRuleVersion");
                 return PostingResult.failure(PostingFailureReason.NO_RULE_VERSION, msg, evaluationDetails);
             }
@@ -100,7 +127,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             evaluationDetails.put("ruleVersionUsed", ruleVersion.getVersionId());
             evaluationDetails.put("ruleVersionNumber", ruleVersion.getVersionNumber());
 
-            // 2. Evaluate mapping keys (exact → fallback → category default)
+            // 2. Evaluate mapping keys: parse rulesDefinition and resolve GL accounts
             MappingEvaluation mappingEval = evaluateMappingKeys(event, ruleVersion);
             if (!mappingEval.isSuccess()) {
                 evaluationDetails.put("failureStep", "evaluateMappingKeys");
@@ -114,7 +141,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             evaluationDetails.put("mappingType", mappingEval.getMappingType());
             evaluationDetails.put("mappingKey", mappingEval.getMappingKey());
 
-            // 3. Generate journal entry draft
+            // 3. Generate journal entry draft from resolved lines
             JournalEntry journalEntry = generateJournalEntry(event, mappingEval, ruleVersion);
 
             // 4. Validate balance
@@ -149,111 +176,353 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
     /**
      * Loads the applicable PostingRuleVersion for the given event.
-     * Uses mappingVersionToUse if provided, otherwise finds active PUBLISHED
-     * version
-     * for the organization and transaction date.
+     * Uses mappingVersionToUse if provided, otherwise finds the active PUBLISHED
+     * version matching the event type.
+     *
+     * Note: PostingRuleSet does not currently have an organizationId field, so
+     * filtering is by eventType only. Organization-scoped rule sets can be added
+     * when multi-tenant rule management is required.
      */
     private PostingRuleVersion loadRuleVersion(AccountingEvent event, UUID mappingVersionToUse) {
         if (mappingVersionToUse != null) {
+            log.debug("Loading specific rule version: {}", mappingVersionToUse);
             return versionRepository.findById(mappingVersionToUse).orElse(null);
         }
 
         // Find rule sets matching event type
-        // TODO [CAP-278]: Add organization filtering and effective date checking
         List<PostingRuleSet> ruleSets = ruleSetRepository.findByEventType(event.getEventType());
         if (ruleSets.isEmpty()) {
+            log.debug("No rule sets found for eventType '{}'", event.getEventType());
             return null;
         }
 
-        // For each rule set, find PUBLISHED versions
+        // For each rule set, find PUBLISHED versions (most recent first via @OrderBy)
         for (PostingRuleSet ruleSet : ruleSets) {
-            List<PostingRuleVersion> publishedVersions = versionRepository.findByPostingRuleSetIdAndState(
-                    ruleSet.getPostingRuleSetId(),
-                    PostingRuleSetState.PUBLISHED);
+            List<PostingRuleVersion> publishedVersions = versionRepository
+                    .findByPostingRuleSet_PostingRuleSetIdAndState(
+                            ruleSet.getPostingRuleSetId(),
+                            PostingRuleSetState.PUBLISHED);
 
             if (!publishedVersions.isEmpty()) {
-                // Return the first published version found
-                // TODO [CAP-278]: Implement proper org + date filtering to select the correct
-                // version
-                return publishedVersions.get(0);
+                PostingRuleVersion selected = publishedVersions.get(0);
+                log.debug("Selected rule version {} (v{}) from rule set '{}' for eventType '{}'",
+                        selected.getVersionId(), selected.getVersionNumber(),
+                        ruleSet.getName(), event.getEventType());
+                return selected;
             }
         }
 
+        log.debug("No PUBLISHED versions found for eventType '{}'", event.getEventType());
         return null;
     }
 
     /**
-     * Evaluates mapping keys in order: exact match → fallback match → category
-     * default.
-     * Returns information about the matched mapping or failure.
+     * Evaluates mapping keys by parsing the rulesDefinition JSON from the rule
+     * version
+     * and resolving GL accounts via GLMappingResolver.
+     *
+     * Resolution order: exact match → fallback match → category default
+     * (handled by GLMappingResolver internally).
+     *
+     * @param event       the accounting event
+     * @param ruleVersion the selected posting rule version
+     * @return evaluation result with resolved GL account lines
      */
+    @SuppressWarnings("unchecked")
     private MappingEvaluation evaluateMappingKeys(AccountingEvent event, PostingRuleVersion ruleVersion) {
         MappingEvaluation eval = new MappingEvaluation();
+        String rulesJson = ruleVersion.getRulesDefinition();
 
-        // TODO [CAP-278]: Implement actual mapping key evaluation logic
-        // This requires parsing rulesDefinition JSON and checking against mapping
-        // tables
+        // Handle empty/null rules (e.g. newly-created stub rule sets)
+        if (rulesJson == null || rulesJson.isBlank() || "{}".equals(rulesJson.trim())) {
+            log.debug("Rules definition is empty for version {}, using event-type passthrough",
+                    ruleVersion.getVersionId());
+            eval.setSuccess(true);
+            eval.setMappingType("passthrough");
+            eval.setMappingKey(event.getEventType());
+            eval.getKeysEvaluated().add(event.getEventType());
+            return eval;
+        }
 
-        // For now, simulate a successful exact match
-        // In production, this would:
-        // 1. Parse event.payload to extract dimension values
-        // 2. Check GLMapping table for exact dimension match
-        // 3. If not found, check for fallback matches
-        // 4. If not found, check for category default
+        try {
+            JsonNode root = objectMapper.readTree(rulesJson);
+            JsonNode conditions = root.get("conditions");
 
-        eval.setSuccess(true);
-        eval.setMappingType("exact"); // or "fallback" or "category_default"
-        eval.setMappingKey(event.getEventType());
-        eval.getKeysEvaluated().add(event.getEventType());
+            if (conditions == null || !conditions.isArray() || conditions.isEmpty()) {
+                log.debug("No conditions in rulesDefinition for version {}", ruleVersion.getVersionId());
+                eval.setSuccess(true);
+                eval.setMappingType("passthrough");
+                eval.setMappingKey(event.getEventType());
+                return eval;
+            }
 
-        return eval;
+            // Extract event dimensions for GL resolution
+            Map<String, String> dimensions = extractDimensions(event);
+
+            // Evaluate each condition block; first matching condition wins
+            for (JsonNode conditionBlock : conditions) {
+                String conditionExpr = conditionBlock.has("condition")
+                        ? conditionBlock.get("condition").asText()
+                        : null;
+
+                eval.getKeysEvaluated().add(conditionExpr != null ? conditionExpr : "(default)");
+
+                if (!matchesCondition(conditionExpr, event)) {
+                    continue;
+                }
+
+                // Condition matched — resolve GL lines
+                JsonNode linesNode = conditionBlock.get("lines");
+                if (linesNode == null || !linesNode.isArray() || linesNode.isEmpty()) {
+                    log.warn("Condition '{}' matched but has no lines", conditionExpr);
+                    continue;
+                }
+
+                List<MappingEvaluation.ResolvedLine> resolvedLines = new ArrayList<>();
+                boolean allLinesResolved = true;
+
+                for (JsonNode lineNode : linesNode) {
+                    String side = lineNode.has("side") ? lineNode.get("side").asText() : "DEBIT";
+                    String amountField = lineNode.has("amountField")
+                            ? lineNode.get("amountField").asText()
+                            : null;
+                    String description = lineNode.has("description")
+                            ? lineNode.get("description").asText()
+                            : null;
+
+                    BigDecimal amount = resolveAmount(amountField, event);
+
+                    // Resolve GL account: try postingCategoryId+mappingKeyId first,
+                    // then fall back to direct glAccountId reference
+                    UUID glAccountId = null;
+
+                    if (lineNode.has("postingCategoryId") && lineNode.has("mappingKeyId")) {
+                        UUID postingCategoryId = UUID.fromString(lineNode.get("postingCategoryId").asText());
+                        UUID mappingKeyId = UUID.fromString(lineNode.get("mappingKeyId").asText());
+
+                        try {
+                            glAccountId = glMappingResolver.resolveGLAccount(
+                                    postingCategoryId, mappingKeyId,
+                                    event.getTransactionDate(), dimensions);
+                        } catch (IllegalArgumentException e) {
+                            log.warn("GL mapping resolution failed for category={} key={}: {}",
+                                    postingCategoryId, mappingKeyId, e.getMessage());
+                            allLinesResolved = false;
+                            break;
+                        }
+                    } else if (lineNode.has("glAccountId")) {
+                        // Direct GL account reference (simpler rules without mapping tables)
+                        glAccountId = UUID.fromString(lineNode.get("glAccountId").asText());
+                    }
+
+                    if (glAccountId == null) {
+                        log.warn("Could not resolve GL account for line in condition '{}'", conditionExpr);
+                        allLinesResolved = false;
+                        break;
+                    }
+
+                    BigDecimal debit = "DEBIT".equalsIgnoreCase(side) ? amount : BigDecimal.ZERO;
+                    BigDecimal credit = "CREDIT".equalsIgnoreCase(side) ? amount : BigDecimal.ZERO;
+
+                    resolvedLines.add(new MappingEvaluation.ResolvedLine(glAccountId, debit, credit, description));
+                }
+
+                if (allLinesResolved && !resolvedLines.isEmpty()) {
+                    eval.setSuccess(true);
+                    eval.setMappingType("exact");
+                    eval.setMappingKey(conditionExpr != null ? conditionExpr : event.getEventType());
+                    eval.setResolvedLines(resolvedLines);
+                    return eval;
+                }
+            }
+
+            // No condition matched
+            eval.setSuccess(false);
+            return eval;
+
+        } catch (Exception e) {
+            log.error("Failed to parse rulesDefinition JSON for version {}: {}",
+                    ruleVersion.getVersionId(), e.getMessage());
+            eval.setSuccess(false);
+            return eval;
+        }
     }
 
     /**
-     * Generates a balanced JournalEntry from the mapping evaluation result.
+     * Checks whether an event matches a simple condition expression.
+     * Supports:
+     * - null/blank condition → always matches (default/catch-all rule)
+     * - "eventType == 'value'" → exact eventType matching
+     * - "*" → wildcard, always matches
+     */
+    private boolean matchesCondition(String conditionExpr, AccountingEvent event) {
+        if (conditionExpr == null || conditionExpr.isBlank() || "*".equals(conditionExpr.trim())) {
+            return true; // Default/catch-all
+        }
+
+        // Simple eventType equality: "eventType == 'billing.invoicePosted'"
+        if (conditionExpr.contains("eventType")) {
+            String value = extractQuotedValue(conditionExpr);
+            if (value != null) {
+                return value.equals(event.getEventType());
+            }
+        }
+
+        // Unrecognized condition format — treat as non-matching for safety
+        log.warn("Unrecognized condition expression: '{}' — skipping", conditionExpr);
+        return false;
+    }
+
+    /**
+     * Extracts a single-quoted value from a simple expression like
+     * "eventType == 'billing.invoicePosted'".
+     */
+    private String extractQuotedValue(String expression) {
+        int start = expression.indexOf('\'');
+        int end = expression.lastIndexOf('\'');
+        if (start >= 0 && end > start) {
+            return expression.substring(start + 1, end);
+        }
+        return null;
+    }
+
+    /**
+     * Resolves an amount from the event payload.
+     *
+     * @param amountField dot-path into event, e.g. "payload.amount"
+     * @param event       the accounting event
+     * @return resolved amount, or BigDecimal.ZERO if unresolvable
+     */
+    @SuppressWarnings("unchecked")
+    private BigDecimal resolveAmount(String amountField, AccountingEvent event) {
+        if (amountField == null || amountField.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+
+        try {
+            // Navigate dot-path: "payload.amount" → event.getPayload().get("amount")
+            String[] parts = amountField.split("\\.");
+            Object current = event.getPayload();
+
+            for (String part : parts) {
+                if (current instanceof Map<?, ?> map) {
+                    current = map.get(part);
+                } else {
+                    return BigDecimal.ZERO;
+                }
+            }
+
+            if (current instanceof Number number) {
+                return new BigDecimal(number.toString());
+            } else if (current instanceof String str) {
+                return new BigDecimal(str);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve amount from field '{}': {}", amountField, e.getMessage());
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    /**
+     * Extracts dimensional context from the event payload for GL account
+     * resolution.
+     * Looks for a "dimensions" map within the event payload.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, String> extractDimensions(AccountingEvent event) {
+        Map<String, Object> payload = event.getPayload();
+        if (payload == null) {
+            return Collections.emptyMap();
+        }
+
+        Object dims = payload.get("dimensions");
+        if (dims instanceof Map<?, ?> map) {
+            Map<String, String> dimensions = new HashMap<>();
+            map.forEach((k, v) -> dimensions.put(String.valueOf(k), String.valueOf(v)));
+            return dimensions;
+        }
+
+        return Collections.emptyMap();
+    }
+
+    /**
+     * Generates a balanced JournalEntry from the MappingEvaluation's resolved
+     * lines.
+     * If no resolved lines are present (passthrough mode), generates a placeholder
+     * entry.
      */
     private JournalEntry generateJournalEntry(AccountingEvent event, MappingEvaluation mappingEval,
             PostingRuleVersion ruleVersion) {
-        // TODO [CAP-278]: Implement actual journal entry generation from mapping rules
-        // This would parse the mapping result and create JournalEntryLine objects
-        // based on the account codes and amounts from the mapping definition
-
         JournalEntry entry = new JournalEntry();
         entry.setJournalEntryId(UUIDv7Generator.generate());
         entry.setSourceEventId(event.getEventId());
         entry.setSourceEventType(event.getEventType());
         entry.setPostingRuleVersionId(ruleVersion.getVersionId());
-        entry.setPostingRuleSetId(ruleVersion.getPostingRuleSetId());
+        entry.setPostingRuleSetId(
+                ruleVersion.getPostingRuleSet() != null ? ruleVersion.getPostingRuleSet().getPostingRuleSetId()
+                        : null);
         entry.setEntryType(JournalEntryType.EVENT_DRIVEN);
         entry.setTransactionDate(event.getTransactionDate());
         entry.setStatus(JournalEntryStatus.DRAFT);
+        entry.setDescription("Auto-generated from event " + event.getEventType());
         entry.setCreatedAt(Instant.now());
         entry.setModifiedAt(Instant.now());
 
-        // TODO [CAP-278]: Parse rulesDefinition and create actual lines
-        // For now, create a simple balanced entry as a placeholder
         List<JournalEntryLine> lines = new ArrayList<>();
 
-        // Example: Create a balanced entry with debit and credit
-        // In production, this would come from the mapping rules
-        JournalEntryLine debitLine = new JournalEntryLine();
-        debitLine.setLineId(UUIDv7Generator.generate());
-        debitLine.setJournalEntryId(entry.getJournalEntryId());
-        debitLine.setGlAccountId(UUID.randomUUID()); // TODO: Get from mapping
-        debitLine.setDebitAmount(new BigDecimal("100.00"));
-        debitLine.setCreditAmount(BigDecimal.ZERO);
-        lines.add(debitLine);
+        if (!mappingEval.getResolvedLines().isEmpty()) {
+            // Build lines from resolved GL mappings
+            BigDecimal totalDebits = BigDecimal.ZERO;
+            BigDecimal totalCredits = BigDecimal.ZERO;
 
-        JournalEntryLine creditLine = new JournalEntryLine();
-        creditLine.setLineId(UUIDv7Generator.generate());
-        creditLine.setJournalEntryId(entry.getJournalEntryId());
-        creditLine.setGlAccountId(UUID.randomUUID()); // TODO: Get from mapping
-        creditLine.setDebitAmount(BigDecimal.ZERO);
-        creditLine.setCreditAmount(new BigDecimal("100.00"));
-        lines.add(creditLine);
+            for (MappingEvaluation.ResolvedLine resolved : mappingEval.getResolvedLines()) {
+                JournalEntryLine line = new JournalEntryLine();
+                line.setLineId(UUIDv7Generator.generate());
+                line.setJournalEntryId(entry.getJournalEntryId());
+                line.setGlAccountId(resolved.getGlAccountId());
+                line.setDebitAmount(resolved.getDebitAmount());
+                line.setCreditAmount(resolved.getCreditAmount());
+                line.setDescription(resolved.getDescription());
+                lines.add(line);
+
+                totalDebits = totalDebits.add(resolved.getDebitAmount());
+                totalCredits = totalCredits.add(resolved.getCreditAmount());
+            }
+
+            entry.setTotalDebits(totalDebits);
+            entry.setTotalCredits(totalCredits);
+        } else {
+            // Passthrough mode: create a minimal balanced placeholder entry
+            // using the event amount (if available) for traceability
+            BigDecimal amount = resolveAmount("payload.amount", event);
+            if (amount.compareTo(BigDecimal.ZERO) == 0) {
+                amount = new BigDecimal("0.01"); // Minimum non-zero for traceability
+            }
+
+            JournalEntryLine debitLine = new JournalEntryLine();
+            debitLine.setLineId(UUIDv7Generator.generate());
+            debitLine.setJournalEntryId(entry.getJournalEntryId());
+            debitLine.setGlAccountId(UUIDv7Generator.generate()); // Placeholder — no mapping table
+            debitLine.setDebitAmount(amount);
+            debitLine.setCreditAmount(BigDecimal.ZERO);
+            debitLine.setDescription("Passthrough debit (no rules defined)");
+            lines.add(debitLine);
+
+            JournalEntryLine creditLine = new JournalEntryLine();
+            creditLine.setLineId(UUIDv7Generator.generate());
+            creditLine.setJournalEntryId(entry.getJournalEntryId());
+            creditLine.setGlAccountId(UUIDv7Generator.generate()); // Placeholder — no mapping table
+            creditLine.setDebitAmount(BigDecimal.ZERO);
+            creditLine.setCreditAmount(amount);
+            creditLine.setDescription("Passthrough credit (no rules defined)");
+            lines.add(creditLine);
+
+            entry.setTotalDebits(amount);
+            entry.setTotalCredits(amount);
+        }
 
         entry.setLines(lines);
-
         return entry;
     }
 

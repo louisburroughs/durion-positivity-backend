@@ -19,20 +19,23 @@ public interface PostingRuleVersionRepository extends JpaRepository<PostingRuleV
     /**
      * Find all versions for a given posting rule set.
      */
-    List<PostingRuleVersion> findByPostingRuleSetId(UUID postingRuleSetId);
+    List<PostingRuleVersion> findByPostingRuleSet_PostingRuleSetId(UUID postingRuleSetId);
 
     /**
      * Find all versions for a rule set with a specific state.
      */
-    List<PostingRuleVersion> findByPostingRuleSetIdAndState(UUID postingRuleSetId, PostingRuleSetState state);
+    List<PostingRuleVersion> findByPostingRuleSet_PostingRuleSetIdAndState(UUID postingRuleSetId,
+            PostingRuleSetState state);
 
     /**
      * Find the latest version number for a rule set.
      */
-    Optional<PostingRuleVersion> findTopByPostingRuleSetIdOrderByVersionNumberDesc(UUID postingRuleSetId);
+    Optional<PostingRuleVersion> findTopByPostingRuleSet_PostingRuleSetIdOrderByVersionNumberDesc(
+            UUID postingRuleSetId);
 
     /**
      * Find a specific version by rule set and version number.
      */
-    Optional<PostingRuleVersion> findByPostingRuleSetIdAndVersionNumber(UUID postingRuleSetId, Integer versionNumber);
+    Optional<PostingRuleVersion> findByPostingRuleSet_PostingRuleSetIdAndVersionNumber(UUID postingRuleSetId,
+            Integer versionNumber);
 }
