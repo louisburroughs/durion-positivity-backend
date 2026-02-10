@@ -19,6 +19,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,6 +54,14 @@ public class AccountingEvent {
     @Id
     @Column(name = "event_id", nullable = false, columnDefinition = "UUID")
     private UUID eventId;
+
+    /**
+     * Optimistic locking version field for concurrency control.
+     * Prevents concurrent reprocessing from creating duplicate postings (BR-3).
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @PrePersist
     public void onPrePersist() {
