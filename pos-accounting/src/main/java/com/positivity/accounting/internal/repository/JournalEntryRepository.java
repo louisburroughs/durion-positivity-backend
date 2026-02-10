@@ -59,4 +59,72 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
      */
     @Query("SELECT je FROM JournalEntry je WHERE je.status = 'DRAFT' ORDER BY je.createdAt DESC")
     Page<JournalEntry> findDraftEntries(Pageable pageable);
+
+    /**
+     * Sum net balance (debits - credits) for a GL account within date range (POSTED
+     * entries only).
+     * Used for financial reporting.
+     *
+     * @param glAccountId GL account ID (UUID)
+     * @param startDate period start date
+     * @param endDate   period end date
+     * @return net balance (sum of debits - sum of credits), or 0 if no entries
+     */
+    @Query("""
+                SELECT COALESCE(
+                    SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END) -
+                    SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END),
+                    0
+                )
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND jel.glAccountId = :glAccountId
+                  AND je.transactionDate >= :startDate
+                  AND je.transactionDate <= :endDate
+            """)
+    java.math.BigDecimal sumPostedBalanceForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
+     * Sum net balance for a GL account as of a specific date (POSTED entries only).
+     * Used for balance sheet generation.
+     *
+     * @param glAccountId GL account ID (UUID)
+     * @param asOfDate  reporting date (inclusive)
+     * @return net balance (sum of debits - sum of credits), or 0 if no entries
+     */
+    @Query("""
+                SELECT COALESCE(
+                    SUM(CASE WHEN jel.debitAmount IS NOT NULL THEN jel.debitAmount ELSE 0 END) -
+                    SUM(CASE WHEN jel.creditAmount IS NOT NULL THEN jel.creditAmount ELSE 0 END),
+                    0
+                )
+                FROM JournalEntry je
+                JOIN je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND jel.glAccountId = :glAccountId
+                  AND je.transactionDate <= :asOfDate
+            """)
+    java.math.BigDecimal sumPostedBalanceAsOf(UUID glAccountId, LocalDateTime asOfDate);
+
+    /**
+     * Find all POSTED journal lines for a GL account within date range.
+     * Used for drilldown reporting.
+     *
+     * @param glAccountId GL account ID (UUID)
+     * @param startDate period start date
+     * @param endDate   period end date
+     * @return list of journal entries with lines for this account
+     */
+    @Query("""
+                SELECT DISTINCT je
+                FROM JournalEntry je
+                JOIN FETCH je.lines jel
+                WHERE je.status = 'POSTED'
+                  AND jel.glAccountId = :glAccountId
+                  AND je.transactionDate >= :startDate
+                  AND je.transactionDate <= :endDate
+                ORDER BY je.transactionDate DESC
+            """)
+    List<JournalEntry> findPostedEntriesForAccount(UUID glAccountId, LocalDateTime startDate, LocalDateTime endDate);
 }
