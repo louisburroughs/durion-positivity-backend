@@ -1,18 +1,6 @@
 package com.positivity.accounting.controller;
 
 import com.positivity.accounting.BaseIntegrationTest;
-import com.positivity.accounting.internal.client.InvoiceServiceClient;
-import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
-import com.positivity.accounting.internal.dto.InvoiceDetails;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
-import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
-import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
-import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
-import com.positivity.accounting.internal.entity.PaymentApplication;
-import com.positivity.accounting.internal.entity.ReceivablePayment;
-import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
-import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
-import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,10 +8,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import com.positivity.accounting.internal.client.InvoiceServiceClient;
+import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
+import com.positivity.accounting.internal.dto.InvoiceDetails;
+import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
+import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
+import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
