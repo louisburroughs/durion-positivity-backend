@@ -64,10 +64,18 @@ public class GLMapping {
     @Column(name = "external_code", length = 100, nullable = false)
     private String externalCode;
 
-    @Column(name = "posting_category_id", nullable = false)
+    /**
+     * Optional: used for category-based mapping strategy.
+     * Null when using source system + external code strategy.
+     */
+    @Column(name = "posting_category_id")
     private UUID postingCategoryId;
 
-    @Column(name = "mapping_key_id", nullable = false)
+    /**
+     * Optional: used for key-based mapping strategy.
+     * Null when using source system + external code strategy.
+     */
+    @Column(name = "mapping_key_id")
     private UUID mappingKeyId;
 
     @Column(name = "gl_account_id", nullable = false)

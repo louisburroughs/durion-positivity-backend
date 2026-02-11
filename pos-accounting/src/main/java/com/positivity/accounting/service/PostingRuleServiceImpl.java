@@ -102,9 +102,15 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId) {
+    public List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId, int page, int size) {
         List<PostingRuleVersion> versions = listVersions(ruleSetId);
-        return versions.stream()
+        // Apply pagination
+        int fromIndex = page * size;
+        int toIndex = Math.min(fromIndex + size, versions.size());
+        if (fromIndex >= versions.size()) {
+            return List.of();
+        }
+        return versions.subList(fromIndex, toIndex).stream()
                 .map(PostingRuleMapper::toVersionResponse)
                 .toList();
     }
@@ -113,9 +119,6 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleSet createPostingRuleSet(PostingRuleSet ruleSet) {
-        ruleSet.setPostingRuleSetId(UUID.randomUUID());
-        ruleSet.setCreatedAt(Instant.now());
-        ruleSet.setModifiedAt(Instant.now());
         PostingRuleSet saved = ruleSetRepository.save(ruleSet);
         log.info("Created rule set: {}", saved.getName());
         return saved;

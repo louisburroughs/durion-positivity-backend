@@ -1,0 +1,178 @@
+# Default GL Mapping Feature Flags Configuration Example
+#
+# This file demonstrates how to configure feature flags for the Default GL Mapping
+# fallback system in the POS Accounting module.
+#
+# Configuration hierarchy:
+# 1. System defaults (in DefaultGLMappingProperties)
+# 2. application.yml (this file)
+# 3. Environment variables (e.g., POS_ACCOUNTING_DEFAULT_MAPPINGS_ENABLED=false)
+# 4. Command-line arguments (e.g., --pos.accounting.default-mappings.enabled=false)
+
+pos:
+  accounting:
+    default-mappings:
+      # ==============================================================================
+      # FEATURE: enabled
+      # ==============================================================================
+      # Master switch for default GL mapping fallback feature.
+      # 
+      # When enabled=true:
+      #   - If no posting rule exists for an event type, the system attempts to
+      #     resolve a default GL mapping (org-specific → global → fail)
+      # 
+      # When enabled=false:
+      #   - System fails immediately with UNMAPPED_EVENT_TYPE when no posting rule exists
+      #   - No default mapping lookup is performed
+      # 
+      # Use Cases:
+      #   - Development: enabled=true (allows rapid prototyping without posting rules)
+      #   - Staging: enabled=true (supports migration scenarios)
+      #   - Production: enabled=true (provides fallback for unconfigured event types)
+      #   - Strict Production: enabled=false (enforces explicit posting rules everywhere)
+      # 
+      # Default: true
+      # ------------------------------------------------------------------------------
+      enabled: true
+
+      # ==============================================================================
+      # FEATURE: allow-global-defaults
+      # ==============================================================================
+      # Whether to allow global (organization-agnostic) default mappings.
+      # 
+      # When allow-global-defaults=true:
+      #   Resolution priority:
+      #     1. Explicit posting rule (highest priority)
+      #     2. Organization-specific default mapping
+      #     3. Global default mapping (organizationId=null)
+      #     4. Fail with UNMAPPED_EVENT_TYPE
+      # 
+      # When allow-global-defaults=false:
+      #   Resolution priority:
+      #     1. Explicit posting rule (highest priority)
+      #     2. Organization-specific default mapping
+      #     3. Fail with UNMAPPED_EVENT_TYPE (no global fallback)
+      # 
+      # Use Cases:
+      #   - Multi-tenant SaaS: allow-global-defaults=true (standard GL accounts for all orgs)
+      #   - Enterprise/single-tenant: allow-global-defaults=false (enforce org-specific accounting)
+      #   - Migration scenarios: allow-global-defaults=true (temporary global defaults during onboarding)
+      # 
+      # Default: true
+      # ------------------------------------------------------------------------------
+      allow-global-defaults: true
+
+      # ==============================================================================
+      # FEATURE: require-amount-field
+      # ==============================================================================
+      # Whether to require the `payload.amount` field in events using default mappings.
+      # 
+      # When require-amount-field=true:
+      #   - Events MUST contain a `payload.amount` field to use default mappings
+      #   - Missing/zero amount throws IllegalArgumentException
+      #   - Ensures generated journal entries have valid transaction amounts
+      # 
+      # When require-amount-field=false:
+      #   - Missing/zero amount triggers a warning log
+      #   - System generates journal entries with 0.01 fallback amount (for traceability)
+      #   - NOT RECOMMENDED for production (creates invalid accounting entries)
+      # 
+      # Use Cases:
+      #   - Production: require-amount-field=true (data integrity enforcement)
+      #   - Development/Testing: require-amount-field=false (allows dummy events)
+      #   - Debugging: require-amount-field=false (trace event flow without amounts)
+      # 
+      # Default: true
+      # ------------------------------------------------------------------------------
+      require-amount-field: true
+
+# ==============================================================================
+# CONFIGURATION EXAMPLES FOR DIFFERENT ENVIRONMENTS
+# ==============================================================================
+
+# -----------------------------------------------------------------------------
+# Example 1: Strict Production (enforces explicit posting rules)
+# -----------------------------------------------------------------------------
+# pos:
+#   accounting:
+#     default-mappings:
+#       enabled: false                    # No fallback to default mappings
+#       allow-global-defaults: false       # Not relevant when disabled
+#       require-amount-field: true         # Not relevant when disabled
+
+# -----------------------------------------------------------------------------
+# Example 2: Flexible Production (allows org-specific defaults only)
+# -----------------------------------------------------------------------------
+# pos:
+#   accounting:
+#     default-mappings:
+#       enabled: true                      # Allow default mapping fallback
+#       allow-global-defaults: false       # Only org-specific defaults
+#       require-amount-field: true         # Enforce payload.amount
+
+# -----------------------------------------------------------------------------
+# Example 3: Multi-tenant SaaS (allows global defaults for common event types)
+# -----------------------------------------------------------------------------
+# pos:
+#   accounting:
+#     default-mappings:
+#       enabled: true                      # Allow default mapping fallback
+#       allow-global-defaults: true        # Allow global defaults
+#       require-amount-field: true         # Enforce payload.amount
+
+# -----------------------------------------------------------------------------
+# Example 4: Development/Testing (most permissive)
+# -----------------------------------------------------------------------------
+# pos:
+#   accounting:
+#     default-mappings:
+#       enabled: true                      # Allow default mapping fallback
+#       allow-global-defaults: true        # Allow global defaults
+#       require-amount-field: false        # Allow missing amounts (use 0.01 fallback)
+
+# ==============================================================================
+# MONITORING & OBSERVABILITY
+# ==============================================================================
+# 
+# Recommended metrics to track (via @EmitEvent annotations):
+#   - Count of events using default mappings vs explicit rules
+#   - Default mapping resolution failures
+#   - Feature flag state (enabled/disabled)
+# 
+# Recommended alerts:
+#   - Alert when event type has no rule AND no default mapping
+#   - Alert when default GL account becomes inactive
+#   - Alert on high volume of default mapping usage (may indicate missing rules)
+# 
+# Logs to monitor:
+#   - "Using default GL mapping X for eventType 'Y'" (INFO level)
+#   - "Event X has zero or missing amount" (WARN level when require-amount-field=false)
+#   - "No published rule version or default GL mapping found" (ERROR level)
+
+# ==============================================================================
+# MIGRATION STRATEGY
+# ==============================================================================
+# 
+# Phase 1: Development
+#   enabled: true
+#   allow-global-defaults: true
+#   require-amount-field: false
+#   => Deploy schema + code, configure global defaults for common event types
+# 
+# Phase 2: Staging/UAT
+#   enabled: true
+#   allow-global-defaults: true
+#   require-amount-field: true
+#   => Test with realistic event payloads, validate accounting accuracy
+# 
+# Phase 3: Production (Permissive)
+#   enabled: true
+#   allow-global-defaults: true
+#   require-amount-field: true
+#   => Monitor usage, identify missing posting rules
+# 
+# Phase 4: Production (Strict) - after all posting rules configured
+#   enabled: false
+#   allow-global-defaults: false
+#   require-amount-field: true
+#   => Enforce explicit posting rules everywhere

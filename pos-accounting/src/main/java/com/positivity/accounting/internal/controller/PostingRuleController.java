@@ -137,7 +137,7 @@ public class PostingRuleController {
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size) {
                 log.info("List posting rule versions - ruleSetId={}, page={}, size={}", postingRuleSetId, page, size);
                 List<PostingRuleVersionResponse> responses = postingRuleService
-                                .listVersionsAsResponse(postingRuleSetId);
+                                .listVersionsAsResponse(postingRuleSetId, page, size);
                 return ResponseEntity.ok(responses);
         }
 }

@@ -13,6 +13,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -57,14 +60,15 @@ public class PostingEngineOrchestrator {
     private final IdempotencyService idempotencyService;
     private final AccountingEventRepository accountingEventRepository;
     private final ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * Processes an accounting event through the posting engine.
      * Handles evaluation, idempotency, posting, and status updates.
      * 
      * Flow:
-     * 1. Check idempotency key
-     * 2. Create attempt history record
+     * 1. Create attempt history record (default to FAILURE)
+     * 2. Check idempotency key
      * 3. Evaluate posting rules
      * 4. On success: create/post journal entry
      * 5. Update event status and attempt history
@@ -85,30 +89,30 @@ public class PostingEngineOrchestrator {
 
         log.info("Processing event {} with autoPost={}", event.getEventId(), autoPost);
 
-        // 1. Idempotency check
-        String idempotencyKey = computePostingIdempotencyKey(event, mappingVersionToUse);
-        if (idempotencyService.isKeyProcessed(idempotencyKey)) {
-            log.info("Event {} already processed (idempotency key: {})", event.getEventId(), idempotencyKey);
-            String existingRef = event.getFinalPostingReferenceId();
-            if (existingRef != null) {
-                // Return success with existing reference info
-                return PostingResult.builder()
-                        .success(true)
-                        .mappingVersionUsed(mappingVersionToUse)
-                        .evaluationDetails(Map.of("postingReference", existingRef, "idempotent", true))
-                        .build();
-            }
-        }
-
-        // 2. Create attempt history record
+        // Create attempt history record (default to FAILURE, update on success)
         ReprocessingAttemptHistory attemptHistory = new ReprocessingAttemptHistory();
         attemptHistory.setAccountingEvent(event);
         attemptHistory.setTriggeredByUserId(triggeredByUserId);
         attemptHistory.setMappingVersionUsed(mappingVersionToUse != null ? mappingVersionToUse.toString() : null);
-        attemptHistory.setOutcome(ReprocessingOutcome.FAILURE); // Default to FAILURE, update on success
+        attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
 
         try {
-            // 3. Evaluate posting rules
+            // 1. Idempotency check
+            String idempotencyKey = computePostingIdempotencyKey(event, mappingVersionToUse);
+            if (idempotencyService.isKeyProcessed(idempotencyKey)) {
+                log.info("Event {} already processed (idempotency key: {})", event.getEventId(), idempotencyKey);
+                String existingRef = event.getFinalPostingReferenceId();
+                if (existingRef != null) {
+                    // Return success with existing reference info
+                    return PostingResult.builder()
+                            .success(true)
+                            .mappingVersionUsed(mappingVersionToUse)
+                            .evaluationDetails(Map.of("postingReference", existingRef, "idempotent", true))
+                            .build();
+                }
+            }
+
+            // 2. Evaluate posting rules
             log.debug("Evaluating posting rules for event {}", event.getEventId());
             PostingResult evaluationResult = postingRuleEvaluator.evaluateEvent(event, mappingVersionToUse);
 
@@ -135,7 +139,7 @@ public class PostingEngineOrchestrator {
                 return evaluationResult;
             }
 
-            // 4. Evaluation succeeded - create/post journal entry
+            // 3. Evaluation succeeded - create/post journal entry
             JournalEntry journalEntry = evaluationResult.getJournalEntryDraft();
             if (journalEntry == null) {
                 throw new IllegalStateException("Evaluation succeeded but no journal entry draft present");
@@ -155,7 +159,7 @@ public class PostingEngineOrchestrator {
                 postingReference = draftEntry.getJournalEntryId().toString();
             }
 
-            // 5. Update event status to PROCESSED
+            // 4. Update event status to PROCESSED
             event.setStatus(AccountingEventStatus.PROCESSED);
             event.setFinalPostingReferenceId(postingReference);
             event.setProcessedAt(java.time.Instant.now());
@@ -210,6 +214,9 @@ public class PostingEngineOrchestrator {
      * Computes idempotency key for posting operations.
      * Key format: SHA-256(eventPayload + mappingVersion + orgId + sourceSystem)
      * 
+     * Uses JSON serialization with sorted keys for deterministic payload
+     * representation.
+     * 
      * @param event               the accounting event
      * @param mappingVersionToUse the mapping version (null = "AUTO")
      * @return idempotency key (hex string)
@@ -219,8 +226,20 @@ public class PostingEngineOrchestrator {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
-            // Include event payload
-            String payloadStr = event.getPayload() != null ? event.getPayload().toString() : "";
+            // Include event payload - use JSON serialization with sorted keys for
+            // consistency
+            String payloadStr = "";
+            if (event.getPayload() != null) {
+                try {
+                    // Create ObjectMapper with sorted keys for deterministic output
+                    ObjectMapper sortedMapper = objectMapper.copy();
+                    sortedMapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+                    payloadStr = sortedMapper.writeValueAsString(event.getPayload());
+                } catch (JsonProcessingException e) {
+                    log.warn("Failed to serialize payload for event {}, using empty string", event.getEventId(), e);
+                    payloadStr = "";
+                }
+            }
             digest.update(payloadStr.getBytes(StandardCharsets.UTF_8));
 
             // Include mapping version (or "AUTO" if not specified)
