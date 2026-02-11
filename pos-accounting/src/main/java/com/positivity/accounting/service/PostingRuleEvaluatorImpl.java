@@ -371,7 +371,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             log.warn("Rules definition is empty for version {} - cannot generate valid journal entry",
                     ruleVersion.getVersionId());
             eval.setSuccess(false);
-            eval.getKeysEvaluated().add("(empty rulesDefinition)");
+            eval.addEvaluatedKey("(empty rulesDefinition)");
             return eval;
         }
 
@@ -383,7 +383,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                 log.warn("No conditions in rulesDefinition for version {} - cannot generate valid journal entry",
                         ruleVersion.getVersionId());
                 eval.setSuccess(false);
-                eval.getKeysEvaluated().add("(no conditions defined)");
+                eval.addEvaluatedKey("(no conditions defined)");
                 return eval;
             }
 
@@ -396,7 +396,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                         ? conditionBlock.get("condition").asText()
                         : null;
 
-                eval.getKeysEvaluated().add(conditionExpr != null ? conditionExpr : "(default)");
+                eval.addEvaluatedKey(conditionExpr != null ? conditionExpr : "(default)");
 
                 if (!matchesCondition(conditionExpr, event)) {
                     continue;

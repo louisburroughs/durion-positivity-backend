@@ -1,4 +1,4 @@
-package com.positivity.accounting;
+package com.positivity.accounting.contract;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;

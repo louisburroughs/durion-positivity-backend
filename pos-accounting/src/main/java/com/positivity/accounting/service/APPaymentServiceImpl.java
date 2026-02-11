@@ -26,6 +26,7 @@ import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
@@ -46,6 +47,7 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final APPaymentRepository paymentRepository;
     private final APPaymentAllocationRepository allocationRepository;
     private final VendorBillRepository billRepository;
+    private final PaymentGatewayProvider paymentGateway;
 
     @Override
     @Transactional
@@ -73,15 +75,44 @@ public class APPaymentServiceImpl implements APPaymentService {
         payment.setStatus(APPaymentStatus.INITIATED);
         payment.setCreatedBy(currentUser);
 
-        // Simulate gateway call (TODO: integrate actual payment gateway)
+        // Execute payment through gateway with idempotency
         payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
         payment = paymentRepository.save(payment);
 
         try {
-            // Simulate successful gateway response
-            payment.setGatewayTransactionId("sim_" + UUID.randomUUID().toString().substring(0, 8));
+            // Call payment gateway with idempotency key
+            var gatewayRequest = new PaymentGatewayProvider.GatewayPaymentRequest(
+                    request.getPaymentRef(), // Use paymentRef as idempotency key
+                    request.getGrossAmount(),
+                    request.getCurrency(),
+                    request.getPaymentMethod(),
+                    request.getVendorId().toString(),
+                    request.getMemo(),
+                    "ap_payment"); // metadata tags
+
+            PaymentGatewayProvider.GatewayPaymentResponse gatewayResponse = paymentGateway
+                    .executePayment(gatewayRequest);
+
+            // Capture gateway response
+            payment.setGatewayTransactionId(gatewayResponse.transactionId());
             payment.setGatewayTimestamp(Instant.now());
-            payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+            payment.setGatewayResponse(gatewayResponse.rawResponse());
+
+            // Map gateway status to payment status
+            switch (gatewayResponse.status()) {
+                case SUCCEEDED, AUTHORIZED -> payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+                case PENDING -> payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
+                case DECLINED, FAILED -> {
+                    payment.setStatus(APPaymentStatus.GATEWAY_FAILED);
+                    payment.setGatewayResponse(
+                            "Gateway declined: " + (gatewayResponse.failureReason() != null
+                                    ? gatewayResponse.failureReason()
+                                    : "Unknown reason"));
+                    throw new PaymentGatewayException(
+                            "Payment declined by gateway: " + gatewayResponse.failureReason());
+                }
+            }
+
             payment = paymentRepository.save(payment);
 
             // Apply allocations (validation errors bubble up as IllegalArgumentException)

@@ -1,4 +1,4 @@
-package com.positivity.accounting;
+package com.positivity.accounting.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;

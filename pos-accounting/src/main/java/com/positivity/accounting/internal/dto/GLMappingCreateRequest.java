@@ -25,9 +25,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GLMappingCreateRequest {
 
-    @NotNull(message = "Organization ID is required")
-    private UUID organizationId;
-
     @NotBlank(message = "Source system is required")
     private String sourceSystem;
 

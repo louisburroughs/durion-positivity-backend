@@ -69,7 +69,30 @@ public class MappingEvaluation {
     }
 
     /**
-     * Get an immutable view of evaluated keys.
+     * Add a single key to the evaluated keys list.
+     * <p>
+     * This is the preferred method for adding keys. Do NOT call
+     * {@code getKeysEvaluated().add(...)},
+     * as the getter returns an immutable list that will throw
+     * {@code UnsupportedOperationException}.
+     * 
+     * @param key the evaluated key to add
+     */
+    public void addEvaluatedKey(String key) {
+        this.keysEvaluated.add(key);
+    }
+
+    /**
+     * Returns an <strong>immutable</strong> view of evaluated keys.
+     * <p>
+     * <strong>WARNING:</strong> The returned list cannot be modified. Any attempt
+     * to call
+     * {@code add()}, {@code remove()}, or other mutation methods will throw
+     * {@code UnsupportedOperationException} at runtime.
+     * <p>
+     * To add keys, use {@link #addEvaluatedKey(String)} instead.
+     * 
+     * @return an immutable copy of the evaluated keys list (never null)
      */
     public List<String> getKeysEvaluated() {
         return List.copyOf(keysEvaluated);

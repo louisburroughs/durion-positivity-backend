@@ -1,18 +1,20 @@
-package com.positivity.accounting.integration;
+package com.positivity.accounting.controller;
 
-import com.positivity.accounting.internal.client.InvoiceServiceClient;
-import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
-import com.positivity.accounting.internal.dto.InvoiceDetails;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
-import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
-import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
-import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
-import com.positivity.accounting.internal.entity.PaymentApplication;
-import com.positivity.accounting.internal.entity.ReceivablePayment;
-import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
-import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
-import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
-import tools.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,24 +24,23 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
-
 import org.springframework.web.context.WebApplicationContext;
+
+import com.positivity.accounting.internal.client.InvoiceServiceClient;
+import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
+import com.positivity.accounting.internal.dto.InvoiceDetails;
+import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
+import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
+import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration tests for Payment Application REST API endpoints

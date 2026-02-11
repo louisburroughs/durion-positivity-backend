@@ -121,23 +121,14 @@ public class PostingRuleController {
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
                 log.info("Update posting rule set - ruleSetId={}, name={}", postingRuleSetId, request.getName());
-                try {
-                        // Fetch current ruleset
-                        PostingRuleSetResponse response = postingRuleService
-                                        .getPostingRuleSetAsResponse(postingRuleSetId);
-                        // Build update entity from request
-                        com.positivity.accounting.internal.entity.PostingRuleSet updateEntity = new com.positivity.accounting.internal.entity.PostingRuleSet();
-                        updateEntity.setName(request.getName());
-                        updateEntity.setEventType(request.getEventType());
-                        updateEntity.setDescription(request.getDescription());
-                        postingRuleService.updatePostingRuleSet(postingRuleSetId, updateEntity);
-                        response = postingRuleService.getPostingRuleSetAsResponse(postingRuleSetId);
-                        return ResponseEntity.ok(response);
-                } catch (IllegalStateException e) {
-                        // Convert to 409 Conflict for published ruleset
-                        log.warn("Cannot modify published rule set: {}", postingRuleSetId);
-                        return ResponseEntity.status(HttpStatus.CONFLICT).build();
-                }
+                // Build update entity from request
+                com.positivity.accounting.internal.entity.PostingRuleSet updateEntity = new com.positivity.accounting.internal.entity.PostingRuleSet();
+                updateEntity.setName(request.getName());
+                updateEntity.setEventType(request.getEventType());
+                updateEntity.setDescription(request.getDescription());
+                postingRuleService.updatePostingRuleSet(postingRuleSetId, updateEntity);
+                PostingRuleSetResponse response = postingRuleService.getPostingRuleSetAsResponse(postingRuleSetId);
+                return ResponseEntity.ok(response);
         }
 
         @PostMapping("/{postingRuleSetId}/archive")
