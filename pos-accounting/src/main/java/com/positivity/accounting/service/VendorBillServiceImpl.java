@@ -27,9 +27,9 @@ import lombok.extern.slf4j.Slf4j;
  * Receipt Accrual Workflow:
  * <ol>
  * <li>GoodsReceivedEvent → createsBill in PENDING_RECEIPT_MATCH</li>
- * <li>VendorInvoiceReceivedEvent → three-way match → MATCHED or
- * MATCH_EXCEPTION</li>
- * <li>Manual resolution (if needed) → APPROVED</li>
+ * <li>VendorInvoiceReceivedEvent → three-way match → APPROVED (on success) or
+ * MATCH_EXCEPTION (on discrepancy)</li>
+ * <li>Manual resolution (if MATCH_EXCEPTION) → APPROVED</li>
  * <li>Payment → PAID</li>
  * </ol>
  * 
@@ -130,7 +130,7 @@ public class VendorBillServiceImpl implements VendorBillService {
             return toResponse(bill);
         }
 
-        // Step 3: Match successful - transition to MATCHED → APPROVED
+        // Step 3: Match successful - auto-approve bill
         bill.setStatus(VendorBillStatus.APPROVED);
         bill.setBillNumber(event.getInvoiceReference());
         bill.setDueDate(event.getDueDate());
