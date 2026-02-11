@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -95,7 +96,6 @@ class AccountingServiceIntegrationTest {
 
   @Test
   @DisplayName("Should create GL account via REST wrapper")
-
   void testCreateGLAccount() throws Exception {
     String payload = """
         {
@@ -119,7 +119,6 @@ class AccountingServiceIntegrationTest {
 
   @Test
   @DisplayName("Should list GL accounts with pagination")
-
   void testListGLAccounts() throws Exception {
     mockMvc.perform(get(BASE_URL + "/gl-accounts")
         .header("X-Authorities", TEST_AUTHORITIES)
@@ -135,7 +134,6 @@ class AccountingServiceIntegrationTest {
 
   @Test
   @DisplayName("Should activate GL account (inactive → active)")
-
   void testActivateGLAccount() throws Exception {
     // Create account first with activation date in future
     GLAccount account = new GLAccount();
@@ -164,7 +162,6 @@ class AccountingServiceIntegrationTest {
 
   @Test
   @DisplayName("Should return 400 when activating without effective date")
-
   void testActivateGLAccountMissingDate() throws Exception {
     GLAccount account = new GLAccount();
     account.setGlAccountId(UUID.randomUUID());
@@ -299,7 +296,6 @@ class AccountingServiceIntegrationTest {
 
   @Test
   @DisplayName("Should post journal entry (DRAFT → POSTED)")
-
   void testPostJournalEntry() throws Exception {
     // Create GL accounts
     GLAccount account1 = new GLAccount();
@@ -351,7 +347,6 @@ class AccountingServiceIntegrationTest {
 
   @Test
   @DisplayName("Should return 409 when posting already-posted entry")
-
   void testPostAlreadyPostedEntry() throws Exception {
     // Create and post entry
     GLAccount account = new GLAccount();
@@ -403,7 +398,6 @@ class AccountingServiceIntegrationTest {
 
   @Test
   @DisplayName("Should create and publish posting rule set")
-
   void testCreateAndPublishRuleSet() throws Exception {
     // Create GL account for rule
     GLAccount arAccount = new GLAccount();
@@ -436,9 +430,14 @@ class AccountingServiceIntegrationTest {
         .andExpect(jsonPath("$.name").value("AR Auto-Post v1"))
         .andReturn();
 
-    // Debug: Print the response
+    // Verify response body contains expected fields
     String responseBody = createResult.getResponse().getContentAsString();
-    System.out.println("CREATE RESPONSE: " + responseBody);
+    var responseJson = objectMapper.readTree(responseBody);
+
+    // Assert response contains required fields
+    assert responseJson.has("postingRuleSetId") : "Response missing postingRuleSetId field";
+    assert responseJson.has("name") : "Response missing name field";
+    assert responseJson.get("name").asText().equals("AR Auto-Post v1") : "Unexpected name in response";
 
     // Now check versions
     mockMvc
@@ -461,10 +460,7 @@ class AccountingServiceIntegrationTest {
   }
 
   @Test
-  // @Disabled("Need to implement update/conflict detection for published rule
-  // sets")
   @DisplayName("Should return 409 when modifying published rule set")
-
   void testModifyPublishedRuleSetFails() throws Exception {
     String createPayload = """
         {
@@ -480,6 +476,7 @@ class AccountingServiceIntegrationTest {
         .header("X-User", TEST_USER)
         .contentType(MediaType.APPLICATION_JSON)
         .content(createPayload))
+        .andExpect(status().isCreated())
         .andReturn();
 
     UUID ruleSetId = UUID.fromString(objectMapper.readTree(createResult.getResponse().getContentAsString())
@@ -491,8 +488,22 @@ class AccountingServiceIntegrationTest {
         .header("X-User", TEST_USER))
         .andExpect(status().isOk());
 
-    // Try to update published set - would need PUT endpoint to test this
-    // For now this test is disabled since we don't have update endpoint yet
+    // Try to update published set - should return 409
+    String updatePayload = """
+        {
+          "name": "Updated Rules",
+          "eventType": "test.event.updated",
+          "rulesDefinition": "{}",
+          "createdBy": "testuser"
+        }
+        """;
+
+    mockMvc.perform(put(BASE_URL + "/posting-rules/" + ruleSetId.toString())
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(updatePayload))
+        .andExpect(status().isConflict());
   }
 
   // ============================================
