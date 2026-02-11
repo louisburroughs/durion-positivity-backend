@@ -32,7 +32,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /**
- * REST Controller for GL Account (Chart of Accounts management.
+ * REST Controller for GL Account (Chart of Accounts management).
  * Handles CRUD operations, activation/deactivation, and archival of GL
  * accounts.
  */
