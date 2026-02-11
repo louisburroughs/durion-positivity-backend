@@ -284,16 +284,19 @@ public class VendorBillServiceImpl implements VendorBillService {
         }
 
         /**
-         * Generate bill number with vendor prefix, date, and sequence.
+         * Generate bill number with vendor prefix, date, and database sequence.
          * Format: BILL_<VendorPrefix>_<YYYYMMDD>_<Sequence>
-         * Example: BILL_VEN001_20250211_001
+         * Example: BILL_A1B2C3D4_20250211_0001234
+         * 
+         * Uses PostgreSQL sequence for guaranteed uniqueness, cluster-awareness, and
+         * restart resilience. Survives service restarts and multi-instance deployments.
          */
         private @NonNull String generateBillNumber(@NonNull UUID vendorId) {
                 String vendorPrefix = vendorId.toString().substring(0, 8).toUpperCase();
                 String dateStamp = java.time.LocalDate.now().format(
                                 java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
-                long sequence = System.nanoTime() % 1000; // Last 3 digits of nanotime for uniqueness
-                return String.format("BILL_%s_%s_%03d", vendorPrefix, dateStamp, sequence);
+                long sequence = billRepository.getNextBillSequence();
+                return String.format("BILL_%s_%s_%07d", vendorPrefix, dateStamp, sequence);
         }
 
         /**

@@ -82,4 +82,21 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
          * @return Optional containing the bill if found
          */
         Optional<VendorBill> findByOriginEventId(UUID originEventId);
+
+        /**
+         * Get the next bill sequence number from PostgreSQL sequence.
+         * Guarantees unique, monotonically increasing bill numbers across service
+         * restarts
+         * and multi-instance deployments.
+         * 
+         * Note: Requires 'bill_number_seq' sequence to exist in the database:
+         * CREATE SEQUENCE IF NOT EXISTS bill_number_seq
+         * START WITH 1
+         * INCREMENT BY 1
+         * NO CYCLE;
+         * 
+         * @return Next sequence value for bill number generation
+         */
+        @Query(value = "SELECT nextval('bill_number_seq')", nativeQuery = true)
+        long getNextBillSequence();
 }
