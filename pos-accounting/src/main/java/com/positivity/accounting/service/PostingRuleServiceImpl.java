@@ -12,6 +12,10 @@ import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,9 +87,10 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     @Transactional(readOnly = true)
-    public PostingRuleSetListResponse listRuleSetsAsResponse(UUID organizationId, int page, int size) {
-        List<PostingRuleSet> ruleSets = listRuleSets(organizationId);
-        return PostingRuleMapper.toListResponse(ruleSets, page, size);
+    public PostingRuleSetListResponse listRuleSetsAsResponse(int page, int size, String sort) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sort));
+        Page<PostingRuleSet> ruleSetsPage = ruleSetRepository.findAll(pageable);
+        return PostingRuleMapper.toListResponse(ruleSetsPage);
     }
 
     @Override
@@ -226,10 +231,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PostingRuleSet> listRuleSets(UUID organizationId) {
-        // Organization filtering not supported at entity level
-        // Return all rule sets - filtering should be done at service/controller layer
-        // if needed
+    public List<PostingRuleSet> listRuleSets() {
         return ruleSetRepository.findAll();
     }
 
