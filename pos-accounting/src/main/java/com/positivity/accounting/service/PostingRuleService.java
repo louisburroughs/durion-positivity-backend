@@ -50,7 +50,7 @@ public interface PostingRuleService {
     /**
      * Lists versions of a posting rule set as response DTOs.
      */
-    List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId);
+    List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId, int page, int size);
 
     // ── Entity-based methods (used by internal services) ─────────────
 

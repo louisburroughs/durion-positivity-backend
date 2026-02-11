@@ -26,7 +26,6 @@ import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
-import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 
@@ -207,93 +206,74 @@ public class EventIngestionService {
     public AccountingEventResponse reprocessEvent(@NonNull UUID eventId, @NonNull ReprocessEventRequest request) {
         log.info("Reprocessing suspended event {} triggered by user {}", eventId, request.getTriggeredByUserId());
 
+        // Load the accounting event
+        AccountingEvent event = accountingEventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
+
+        // BR-3: Idempotency check - reject if already PROCESSED
+        if (event.getStatus() == AccountingEventStatus.PROCESSED) {
+            String msg = "Event " + eventId + " is already PROCESSED. Reprocessing would create duplicate posting.";
+            log.warn(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        // Verify event is SUSPENDED or FAILED (eligible for reprocessing)
+        if (event.getStatus() != AccountingEventStatus.SUSPENDED
+                && event.getStatus() != AccountingEventStatus.FAILED) {
+            String msg = "Event " + eventId + " has status " + event.getStatus()
+                    + " and cannot be reprocessed. Only SUSPENDED or FAILED events can be reprocessed.";
+            log.warn(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        // Increment attempt count
+        Integer currentAttemptCount = event.getAttemptCount();
+        int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;
+        event.setAttemptCount(nextAttemptCount);
+
+        // Attempt history is persisted inside PostingEngineOrchestrator.
         try {
-            // Load the accounting event
-            AccountingEvent event = accountingEventRepository.findById(eventId)
-                    .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
+            // Transition to PROCESSING before delegating to PostingEngineOrchestrator
+            event.setStatus(AccountingEventStatus.PROCESSING);
+            accountingEventRepository.save(event);
 
-            // BR-3: Idempotency check - reject if already PROCESSED
-            if (event.getStatus() == AccountingEventStatus.PROCESSED) {
-                String msg = "Event " + eventId + " is already PROCESSED. Reprocessing would create duplicate posting.";
-                log.warn(msg);
-                throw new IllegalStateException(msg);
+            log.info("Reprocessing event {} via PostingEngineOrchestrator", eventId);
+
+            // Parse mappingVersionToUse from String to UUID if present
+            UUID mappingVersion = null;
+            if (request.getMappingVersionToUse() != null && !request.getMappingVersionToUse().isBlank()) {
+                try {
+                    mappingVersion = UUID.fromString(request.getMappingVersionToUse());
+                } catch (IllegalArgumentException e) {
+                    String msg = "Invalid UUID format for mappingVersionToUse: '" + request.getMappingVersionToUse()
+                            + "'. Value must be a valid UUID or left empty to use the default active version.";
+                    log.warn(msg);
+                    throw new IllegalArgumentException(msg, e);
+                }
             }
 
-            // Verify event is SUSPENDED or FAILED (eligible for reprocessing)
-            if (event.getStatus() != AccountingEventStatus.SUSPENDED
-                    && event.getStatus() != AccountingEventStatus.FAILED) {
-                String msg = "Event " + eventId + " has status " + event.getStatus()
-                        + " and cannot be reprocessed. Only SUSPENDED or FAILED events can be reprocessed.";
-                log.warn(msg);
-                throw new IllegalStateException(msg);
-            }
-
-            // Increment attempt count
-            Integer currentAttemptCount = event.getAttemptCount();
-            int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;
-            event.setAttemptCount(nextAttemptCount);
-
-            // Create reprocessing attempt history record
-            ReprocessingAttemptHistory attemptHistory = new ReprocessingAttemptHistory(
+            PostingResult postingResult = postingEngineOrchestrator.processEvent(
                     event,
+                    mappingVersion,
                     request.getTriggeredByUserId(),
-                    ReprocessingOutcome.FAILURE, // Default to FAILURE, will update on success
-                    "Reprocessing attempt initiated");
+                    true // autoPost=true for reprocessing flow
+            );
 
-            if (request.getMappingVersionToUse() != null) {
-                attemptHistory.setMappingVersionUsed(request.getMappingVersionToUse());
+            boolean reprocessingSucceeded = postingResult.isSuccess();
+
+            if (reprocessingSucceeded) {
+                // Orchestrator already updated event status to PROCESSED,
+                // set finalPostingReferenceId, processedAt, and resolvedByUserId.
+                String finalPostingRef = (String) postingResult.getEvaluationDetails().get("postingReference");
+                log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
+            } else {
+                // Orchestrator already updated event status to SUSPENDED/FAILED
+                // with failureReasonCode and failureDetails.
+                log.warn("Reprocessing failed for event {}: {} - {}",
+                        eventId,
+                        postingResult.getFailureReason(),
+                        postingResult.getFailureDetails());
             }
-
-            try {
-                // Transition to PROCESSING before delegating to PostingEngineOrchestrator
-                event.setStatus(AccountingEventStatus.PROCESSING);
-                accountingEventRepository.save(event);
-
-                log.info("Reprocessing event {} via PostingEngineOrchestrator", eventId);
-
-                // Parse mappingVersionToUse from String to UUID if present
-                UUID mappingVersion = null;
-                if (request.getMappingVersionToUse() != null && !request.getMappingVersionToUse().isBlank()) {
-                    try {
-                        mappingVersion = UUID.fromString(request.getMappingVersionToUse());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid UUID format for mappingVersionToUse: {}", request.getMappingVersionToUse());
-                        // Leave as null, will use default active version
-                    }
-                }
-
-                PostingResult postingResult = postingEngineOrchestrator.processEvent(
-                        event,
-                        mappingVersion,
-                        request.getTriggeredByUserId(),
-                        true // autoPost=true for reprocessing flow
-                );
-
-                boolean reprocessingSucceeded = postingResult.isSuccess();
-
-                if (reprocessingSucceeded) {
-                    // Orchestrator already updated event status to PROCESSED,
-                    // set finalPostingReferenceId, processedAt, and resolvedByUserId.
-                    String finalPostingRef = (String) postingResult.getEvaluationDetails().get("postingReference");
-                    log.info("Reprocessing succeeded for event {}: posted with reference {}", eventId, finalPostingRef);
-                } else {
-                    // Orchestrator already updated event status to SUSPENDED/FAILED
-                    // with failureReasonCode and failureDetails.
-                    log.warn("Reprocessing failed for event {}: {} - {}",
-                            eventId,
-                            postingResult.getFailureReason(),
-                            postingResult.getFailureDetails());
-                }
-
-            } catch (Exception e) {
-                log.error("Exception during reprocessing for event {}", eventId, e);
-            }
-
-            // Reload event to get updates from orchestrator
-            event = accountingEventRepository.findById(eventId)
-                    .orElseThrow(() -> new EventNotFoundException("Event not found after reprocessing: " + eventId));
-
-            return AccountingEventMapper.toEventResponse(event);
 
         } catch (OptimisticLockingFailureException e) {
             // BR-3: Optimistic locking prevents concurrent reprocessing from creating
@@ -302,7 +282,17 @@ public class EventIngestionService {
                     + ". Another transaction has modified this event. Please retry.";
             log.warn(msg, e);
             throw new IllegalStateException(msg, e);
+        } catch (Exception e) {
+            log.error("Exception during reprocessing for event {}", eventId, e);
+            throw new IllegalStateException("Failed to reprocess event " + eventId + ": " + e.getMessage(), e);
         }
+
+        // Reload event to get updates from orchestrator
+        event = accountingEventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event not found after reprocessing: " + eventId));
+
+        return AccountingEventMapper.toEventResponse(event);
+
     }
 
     /**

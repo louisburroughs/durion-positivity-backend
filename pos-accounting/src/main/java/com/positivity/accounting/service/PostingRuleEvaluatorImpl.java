@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.accounting.internal.dto.MappingEvaluation;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
@@ -25,8 +26,10 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
+import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
@@ -84,6 +87,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     private final PostingRuleVersionRepository versionRepository;
     private final PostingRuleSetRepository ruleSetRepository;
     private final GLMappingResolver glMappingResolver;
+    private final DefaultGLMappingRepository defaultGLMappingRepository;
+    private final DefaultGLMappingProperties defaultGLMappingProperties;
     private final ObjectMapper objectMapper;
 
     private static final BigDecimal BALANCE_TOLERANCE = new BigDecimal("0.0001");
@@ -118,8 +123,40 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             // 1. Load applicable PostingRuleVersion
             PostingRuleVersion ruleVersion = loadRuleVersion(event, mappingVersionToUse);
             if (ruleVersion == null) {
-                String msg = String.format("No published rule version found for eventType '%s' on %s",
-                        event.getEventType(), event.getTransactionDate());
+                // Try fallback to default GL mapping (if feature is enabled)
+                if (defaultGLMappingProperties.isEnabled()) {
+                    DefaultGLMapping defaultMapping = loadDefaultGLMapping(event);
+                    if (defaultMapping != null) {
+                        log.debug("Using default GL mapping {} for eventType '{}'",
+                                defaultMapping.getMappingId(), event.getEventType());
+                        JournalEntry journalEntry = generateJournalEntryFromDefault(event, defaultMapping);
+
+                        if (!isBalanced(journalEntry)) {
+                            evaluationDetails.put("failureStep", "balanceValidation");
+                            evaluationDetails.put("debitTotal", calculateDebitTotal(journalEntry));
+                            evaluationDetails.put("creditTotal", calculateCreditTotal(journalEntry));
+                            return PostingResult.failure(
+                                    PostingFailureReason.UNBALANCED_JOURNAL,
+                                    "Generated journal entry from default mapping is not balanced",
+                                    evaluationDetails);
+                        }
+
+                        evaluationDetails.put("mappingType", "defaultGLMapping");
+                        evaluationDetails.put("defaultMappingId", defaultMapping.getMappingId());
+                        evaluationDetails.put("journalEntryLineCount", journalEntry.getLines().size());
+                        evaluationDetails.put("journalEntryAmount", calculateDebitTotal(journalEntry));
+
+                        log.info("Successfully evaluated event {} with default GL mapping {}",
+                                event.getEventId(), defaultMapping.getMappingId());
+                        return PostingResult.success(journalEntry, null, evaluationDetails);
+                    }
+                }
+
+                // No rule version and no default mapping (or feature disabled) - fail
+                String msg = String.format(
+                        "No published rule version or default GL mapping found for eventType '%s' on %s%s",
+                        event.getEventType(), event.getTransactionDate(),
+                        defaultGLMappingProperties.isEnabled() ? "" : " (default mappings disabled)");
                 evaluationDetails.put("failureStep", "loadRuleVersion");
                 return PostingResult.failure(PostingFailureReason.NO_RULE_VERSION, msg, evaluationDetails);
             }
@@ -217,6 +254,102 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     }
 
     /**
+     * Loads the default GL mapping for an event when no posting rule version
+     * exists.
+     * Resolution priority (when allowGlobalDefaults=true):
+     * 1. Exact match: eventType + organizationId
+     * 2. Global default: eventType + organizationId IS NULL
+     * 
+     * When allowGlobalDefaults=false, only org-specific mappings are returned.
+     * 
+     * @param event the accounting event
+     * @return default GL mapping if found, null otherwise
+     */
+    private DefaultGLMapping loadDefaultGLMapping(AccountingEvent event) {
+        if (defaultGLMappingProperties.isAllowGlobalDefaults()) {
+            return defaultGLMappingRepository
+                    .findActiveDefaultForEvent(event.getEventType(), event.getOrganizationId())
+                    .orElse(null);
+        } else {
+            // Only allow org-specific defaults (no global fallback)
+            return defaultGLMappingRepository
+                    .findActiveDefaultForEvent(event.getEventType(), event.getOrganizationId())
+                    .filter(mapping -> mapping.getOrganizationId() != null)
+                    .orElse(null);
+        }
+    }
+
+    /**
+     * Generates a simple balanced journal entry from a default GL mapping.
+     * Uses the event's payload.amount field for the transaction amount.
+     * 
+     * @param event          the accounting event
+     * @param defaultMapping the default GL mapping
+     * @return generated journal entry with two lines (debit + credit)
+     */
+    private JournalEntry generateJournalEntryFromDefault(AccountingEvent event, DefaultGLMapping defaultMapping) {
+        JournalEntry entry = new JournalEntry();
+        entry.setJournalEntryId(UUIDv7Generator.generate());
+        entry.setSourceEventId(event.getEventId());
+        entry.setSourceEventType(event.getEventType());
+        entry.setPostingRuleVersionId(null); // No rule version - using default mapping
+        entry.setPostingRuleSetId(null);
+        entry.setEntryType(JournalEntryType.EVENT_DRIVEN);
+        entry.setTransactionDate(event.getTransactionDate());
+        entry.setStatus(JournalEntryStatus.DRAFT);
+        entry.setDescription("Auto-generated from default GL mapping for " + event.getEventType());
+        entry.setCreatedAt(Instant.now());
+        entry.setModifiedAt(Instant.now());
+
+        // Resolve amount from event payload
+        BigDecimal amount = resolveAmount("payload.amount", event);
+        if (amount.compareTo(BigDecimal.ZERO) == 0) {
+            if (defaultGLMappingProperties.isRequireAmountField()) {
+                throw new IllegalArgumentException(
+                        "Event " + event.getEventId() + " has zero or missing payload.amount field, " +
+                                "which is required when using default GL mappings (pos.accounting.default-mappings.require-amount-field=true)");
+            }
+            log.warn("Event {} has zero or missing amount - using 0.01 for traceability", event.getEventId());
+            amount = new BigDecimal("0.01");
+        }
+
+        // Create debit line
+        JournalEntryLine debitLine = new JournalEntryLine();
+        debitLine.setLineId(UUIDv7Generator.generate());
+        debitLine.setJournalEntryId(entry.getJournalEntryId());
+        debitLine.setGlAccountId(defaultMapping.getDebitAccountId());
+        debitLine.setDebitAmount(amount);
+        debitLine.setCreditAmount(BigDecimal.ZERO);
+        debitLine.setDescription(defaultMapping.getDescription() != null
+                ? defaultMapping.getDescription() + " (DR)"
+                : "Default debit for " + event.getEventType());
+
+        // Create credit line
+        JournalEntryLine creditLine = new JournalEntryLine();
+        creditLine.setLineId(UUIDv7Generator.generate());
+        creditLine.setJournalEntryId(entry.getJournalEntryId());
+        creditLine.setGlAccountId(defaultMapping.getCreditAccountId());
+        creditLine.setDebitAmount(BigDecimal.ZERO);
+        creditLine.setCreditAmount(amount);
+        creditLine.setDescription(defaultMapping.getDescription() != null
+                ? defaultMapping.getDescription() + " (CR)"
+                : "Default credit for " + event.getEventType());
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+        lines.add(debitLine);
+        lines.add(creditLine);
+
+        entry.setLines(lines);
+        entry.setTotalDebits(amount);
+        entry.setTotalCredits(amount);
+
+        // Initialize line numbers
+        entry.initializeLines();
+
+        return entry;
+    }
+
+    /**
      * Evaluates mapping keys by parsing the rulesDefinition JSON from the rule
      * version
      * and resolving GL accounts via GLMappingResolver.
@@ -235,12 +368,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
         // Handle empty/null rules (e.g. newly-created stub rule sets)
         if (rulesJson == null || rulesJson.isBlank() || "{}".equals(rulesJson.trim())) {
-            log.debug("Rules definition is empty for version {}, using event-type passthrough",
+            log.warn("Rules definition is empty for version {} - cannot generate valid journal entry",
                     ruleVersion.getVersionId());
-            eval.setSuccess(true);
-            eval.setMappingType("passthrough");
-            eval.setMappingKey(event.getEventType());
-            eval.getKeysEvaluated().add(event.getEventType());
+            eval.setSuccess(false);
+            eval.getKeysEvaluated().add("(empty rulesDefinition)");
             return eval;
         }
 
@@ -249,10 +380,10 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             JsonNode conditions = root.get("conditions");
 
             if (conditions == null || !conditions.isArray() || conditions.isEmpty()) {
-                log.debug("No conditions in rulesDefinition for version {}", ruleVersion.getVersionId());
-                eval.setSuccess(true);
-                eval.setMappingType("passthrough");
-                eval.setMappingKey(event.getEventType());
+                log.warn("No conditions in rulesDefinition for version {} - cannot generate valid journal entry",
+                        ruleVersion.getVersionId());
+                eval.setSuccess(false);
+                eval.getKeysEvaluated().add("(no conditions defined)");
                 return eval;
             }
 
@@ -389,7 +520,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
     /**
      * Resolves an amount from the event payload.
      *
-     * @param amountField dot-path into event, e.g. "payload.amount"
+     * @param amountField dot-path into event, e.g. "payload.amount" or "amount"
      * @param event       the accounting event
      * @return resolved amount, or BigDecimal.ZERO if unresolvable
      */
@@ -400,8 +531,16 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         }
 
         try {
-            // Navigate dot-path: "payload.amount" → event.getPayload().get("amount")
-            String[] parts = amountField.split("\\.");
+            // Handle leading "payload." prefix - skip it since we start from
+            // event.getPayload()
+            String fieldPath = amountField;
+            if (fieldPath.startsWith("payload.")) {
+                fieldPath = fieldPath.substring("payload.".length());
+            }
+
+            // Navigate dot-path: "amount" → event.getPayload().get("amount")
+            // Or "nested.amount" → event.getPayload().get("nested").get("amount")
+            String[] parts = fieldPath.split("\\.");
             Object current = event.getPayload();
 
             for (String part : parts) {
@@ -492,37 +631,15 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
             entry.setTotalDebits(totalDebits);
             entry.setTotalCredits(totalCredits);
-        } else {
-            // Passthrough mode: create a minimal balanced placeholder entry
-            // using the event amount (if available) for traceability
-            BigDecimal amount = resolveAmount("payload.amount", event);
-            if (amount.compareTo(BigDecimal.ZERO) == 0) {
-                amount = new BigDecimal("0.01"); // Minimum non-zero for traceability
-            }
-
-            JournalEntryLine debitLine = new JournalEntryLine();
-            debitLine.setLineId(UUIDv7Generator.generate());
-            debitLine.setJournalEntryId(entry.getJournalEntryId());
-            debitLine.setGlAccountId(UUIDv7Generator.generate()); // Placeholder — no mapping table
-            debitLine.setDebitAmount(amount);
-            debitLine.setCreditAmount(BigDecimal.ZERO);
-            debitLine.setDescription("Passthrough debit (no rules defined)");
-            lines.add(debitLine);
-
-            JournalEntryLine creditLine = new JournalEntryLine();
-            creditLine.setLineId(UUIDv7Generator.generate());
-            creditLine.setJournalEntryId(entry.getJournalEntryId());
-            creditLine.setGlAccountId(UUIDv7Generator.generate()); // Placeholder — no mapping table
-            creditLine.setDebitAmount(BigDecimal.ZERO);
-            creditLine.setCreditAmount(amount);
-            creditLine.setDescription("Passthrough credit (no rules defined)");
-            lines.add(creditLine);
-
-            entry.setTotalDebits(amount);
-            entry.setTotalCredits(amount);
         }
+        // Note: If resolvedLines is empty, evaluateMappingKeys() should have returned
+        // failure. This code path should not be reached with empty lines.
 
         entry.setLines(lines);
+
+        // Initialize line numbers and parent references immediately
+        entry.initializeLines();
+
         return entry;
     }
 
