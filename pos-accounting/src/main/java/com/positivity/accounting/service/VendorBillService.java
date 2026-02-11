@@ -18,7 +18,7 @@ import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
  * <li>GoodsReceivedEvent creates bill in PENDING_RECEIPT_MATCH status</li>
  * <li>GL posting: Dr Inventory/Expense, Cr AP (provisional)</li>
  * <li>VendorInvoiceReceivedEvent triggers three-way match validation</li>
- * <li>If matched: bill transitions to MATCHED → APPROVED</li>
+ * <li>If matched: bill auto-transitions to APPROVED</li>
  * <li>If discrepancy: bill transitions to MATCH_EXCEPTION for manual
  * resolution</li>
  * </ol>
@@ -57,7 +57,7 @@ public interface VendorBillService {
      * <ul>
      * <li>Finds bill by vendor + invoice reference</li>
      * <li>Validates quantities (±0.1% tolerance) and prices (±5% tolerance)</li>
-     * <li>If matched: bill transitions to MATCHED → APPROVED</li>
+     * <li>If matched: bill auto-transitions to APPROVED</li>
      * <li>If discrepancy: bill transitions to MATCH_EXCEPTION</li>
      * </ul>
      * 

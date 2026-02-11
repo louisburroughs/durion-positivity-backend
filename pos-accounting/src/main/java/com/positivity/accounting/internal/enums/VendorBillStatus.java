@@ -8,9 +8,8 @@ package com.positivity.accounting.internal.enums;
  * <ol>
  * <li>PENDING_RECEIPT_MATCH: Created from GoodsReceivedEvent, awaiting
  * invoice</li>
- * <li>MATCHED: Invoice received and validated against receipt</li>
+ * <li>APPROVED: Three-way match successful, ready for payment</li>
  * <li>MATCH_EXCEPTION: Discrepancy detected, awaits manual resolution</li>
- * <li>APPROVED: Ready for payment</li>
  * <li>PAID: Payment processed</li>
  * <li>VOIDED: Cancelled/reversed</li>
  * </ol>
@@ -29,12 +28,6 @@ public enum VendorBillStatus {
      * GL posting: Dr Inventory/Expense, Cr AP (provisional).
      */
     PENDING_RECEIPT_MATCH,
-
-    /**
-     * Invoice received and validated against receipt. No discrepancies detected.
-     * Auto-transitions to APPROVED if no manual approval workflow required.
-     */
-    MATCHED,
 
     /**
      * Three-way match exception: quantity or price variance exceeds tolerance.
