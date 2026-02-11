@@ -1,14 +1,13 @@
 package com.positivity.accounting.internal.dto;
 
+import java.time.LocalDateTime;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Request to resolve an external code to a GL account.
@@ -19,9 +18,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GLMappingResolveRequest {
-
-    @NotNull(message = "Organization ID is required")
-    private UUID organizationId;
 
     @NotBlank(message = "Source system is required")
     private String sourceSystem;

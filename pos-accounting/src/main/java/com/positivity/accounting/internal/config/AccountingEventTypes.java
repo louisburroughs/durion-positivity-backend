@@ -118,7 +118,7 @@ public final class AccountingEventTypes {
                                                 "Resolve external code to GL account using effective-dated mapping")
                                                 .build(),
 
-                                // VendorBillService - 5 events (CAP-053 Issue #130)
+                                // VendorBillService - 6 events (CAP-053 Issue #130)
                                 EventTypeRegistration.write("ACCOUNTING_VENDOR_BILL_CREATE",
                                                 "Create vendor bill from goods received event (Receipt Accrual)")
                                                 .build(),
@@ -128,6 +128,8 @@ public final class AccountingEventTypes {
                                                 "Resolve vendor bill match exception (accept/correct/void)").build(),
                                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET",
                                                 "Get vendor bill details by ID").build(),
+                                EventTypeRegistration.write("VENDOR_BILL_GL_POSTING",
+                                                "Post vendor bill to GL (Dr Inventory/Expense, Cr AP)").build(),
                                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET_BY_EVENT",
                                                 "Get vendor bill by origin event ID (idempotency check)").build());
         }

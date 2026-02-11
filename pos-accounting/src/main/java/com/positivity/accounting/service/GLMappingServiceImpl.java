@@ -9,7 +9,6 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
-import com.positivity.events.EmitEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -35,7 +34,6 @@ public class GLMappingServiceImpl implements GLMappingService {
         private final GLAccountRepository glAccountRepository;
 
         @Override
-        @EmitEvent(id = "ACCOUNTING_GL_MAPPING_CREATE", apiVersion = "1")
         public @NonNull GLMappingCreateResponse createMapping(@NonNull GLMappingCreateRequest request) {
                 log.info("Creating GL mapping: sourceSystem={}, externalCode={}, glAccountId={}",
                                 request.getSourceSystem(), request.getExternalCode(), request.getGlAccountId());
@@ -103,7 +101,6 @@ public class GLMappingServiceImpl implements GLMappingService {
         }
 
         @Override
-        @EmitEvent(id = "ACCOUNTING_GL_MAPPING_RESOLVE", apiVersion = "1")
         public @NonNull GLMappingResolveResponse resolveMapping(@NonNull GLMappingResolveRequest request) {
                 log.info("Resolving GL mapping: sourceSystem={}, externalCode={}, transactionDate={}",
                                 request.getSourceSystem(), request.getExternalCode(), request.getTransactionDate());

@@ -1,4 +1,4 @@
-package com.positivity.accounting;
+package com.positivity.accounting.contract;
 
 import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;

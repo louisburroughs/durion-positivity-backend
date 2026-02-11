@@ -2,6 +2,8 @@ package com.positivity.accounting.integration;
 
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,7 +18,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,7 +76,6 @@ class AccountingServiceIntegrationTest {
   private static final UUID GL_AR_ID = UUID.fromString("00000000-0000-4000-a000-000000000001");
   private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-4000-a000-000000000002");
   private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-4000-a000-000000000003");
-  private static final UUID BILL_ID = UUID.fromString("00000000-0000-4000-a000-000000000004");
   private static final UUID VENDOR_ID = UUID.fromString("00000000-0000-4000-a000-000000000005");
 
   @BeforeEach
@@ -435,21 +435,21 @@ class AccountingServiceIntegrationTest {
     var responseJson = objectMapper.readTree(responseBody);
 
     // Assert response contains required fields
-    assert responseJson.has("postingRuleSetId") : "Response missing postingRuleSetId field";
-    assert responseJson.has("name") : "Response missing name field";
-    assert responseJson.get("name").asText().equals("AR Auto-Post v1") : "Unexpected name in response";
+    assertTrue(responseJson.has("postingRuleSetId"), "Response missing postingRuleSetId field");
+    assertTrue(responseJson.has("name"), "Response missing name field");
+    assertEquals("AR Auto-Post v1", responseJson.get("name").asString(), "Unexpected name in response");
 
     // Now check versions
     mockMvc
         .perform(
-            get(BASE_URL + "/posting-rules/" + objectMapper.readTree(responseBody).get("postingRuleSetId").asText())
+            get(BASE_URL + "/posting-rules/" + objectMapper.readTree(responseBody).get("postingRuleSetId").asString())
                 .header("X-Authorities", TEST_AUTHORITIES)
                 .header("X-User", TEST_USER))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.versions[0].state").value("DRAFT"));
 
     UUID ruleSetId = UUID.fromString(objectMapper.readTree(createResult.getResponse().getContentAsString())
-        .get("postingRuleSetId").asText());
+        .get("postingRuleSetId").asString());
 
     // Publish rule set
     mockMvc.perform(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")
@@ -480,7 +480,7 @@ class AccountingServiceIntegrationTest {
         .andReturn();
 
     UUID ruleSetId = UUID.fromString(objectMapper.readTree(createResult.getResponse().getContentAsString())
-        .get("postingRuleSetId").asText());
+        .get("postingRuleSetId").asString());
 
     // Publish
     mockMvc.perform(post(BASE_URL + "/posting-rules/" + ruleSetId.toString() + "/publish")
@@ -676,10 +676,11 @@ class AccountingServiceIntegrationTest {
   void testVendorBillWorkflow() throws Exception {
     UUID eventId = UUID.randomUUID();
     UUID vendorId = VENDOR_ID;
-    String purchaseOrderId = "PO-12345";
+    UUID purchaseOrderId = UUID.randomUUID();
+    UUID productId = UUID.randomUUID();
 
-    // Step 1: Publish GoodsReceivedEvent → create bill in PENDING_RECEIPT_MATCH
-    String goodsReceivedPayload = String.format("""
+    // Step 1: POST GoodsReceivedEvent → create bill in PENDING_RECEIPT_MATCH
+    String goodsReceivedPayload = """
         {
           "eventId": "%s",
           "purchaseOrderId": "%s",
@@ -688,7 +689,7 @@ class AccountingServiceIntegrationTest {
           "receivedDate": "2025-01-10T10:00:00",
           "lineItems": [
             {
-              "productId": "PROD-001",
+              "productId": "%s",
               "description": "Widget A",
               "quantity": 100,
               "unitPrice": 10.00,
@@ -696,20 +697,36 @@ class AccountingServiceIntegrationTest {
             }
           ]
         }
-        """, eventId, purchaseOrderId, vendorId);
+        """.formatted(eventId, purchaseOrderId, vendorId, productId);
 
-    // In production, this would be published via event bus
-    // For now, we'll call the service directly in the test setup
-    // TODO: Replace with actual event publishing once event infrastructure is in
-    // place
+    MvcResult createResult = mockMvc.perform(post(BASE_URL + "/vendor-bills")
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(goodsReceivedPayload))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.vendorBillId", notNullValue()))
+        .andExpect(jsonPath("$.vendorId").value(vendorId.toString()))
+        .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"))
+        .andExpect(jsonPath("$.totalAmount").value(1000.00))
+        .andExpect(jsonPath("$.originEventId").value(eventId.toString()))
+        .andReturn();
 
-    // Step 2: Verify bill created in PENDING_RECEIPT_MATCH status
-    // Note: This test requires event publishing infrastructure to be complete
-    // For now, marking as integration test that will validate the workflow
-    // when connected to actual event bus
+    UUID vendorBillId = UUID.fromString(
+        objectMapper.readTree(createResult.getResponse().getContentAsString())
+            .get("vendorBillId").asString());
 
-    // Step 3: Publish VendorInvoiceReceivedEvent → three-way match
-    String invoiceReceivedPayload = String.format("""
+    // Step 2: GET bill by eventId → verify persisted correctly
+    mockMvc.perform(get(BASE_URL + "/vendor-bills/event/" + eventId)
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId.toString()))
+        .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"));
+
+    // Step 3: POST VendorInvoiceReceivedEvent with matching quantities/prices →
+    // three-way match
+    String invoiceReceivedPayload = """
         {
           "eventId": "%s",
           "vendorId": "%s",
@@ -718,41 +735,106 @@ class AccountingServiceIntegrationTest {
           "dueDate": "2025-02-10T12:00:00",
           "lineItems": [
             {
-              "productId": "PROD-001",
+              "productId": "%s",
               "description": "Widget A",
               "quantity": 100,
               "unitPrice": 10.00
             }
           ]
         }
-        """, UUID.randomUUID(), vendorId);
+        """.formatted(UUID.randomUUID(), vendorId, productId);
 
-    // Step 4: Verify bill transitioned to APPROVED status (match successful)
+    mockMvc.perform(post(BASE_URL + "/vendor-bills/match")
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(invoiceReceivedPayload))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId.toString()))
+        .andExpect(jsonPath("$.status").value("APPROVED"))
+        .andExpect(jsonPath("$.billNumber").value("INV-98765"));
 
-    // Step 5: Test discrepancy scenario (price variance > 5%)
-    String discrepancyInvoicePayload = String.format("""
+    // Step 4: Create a second bill for the discrepancy scenario
+    UUID eventId2 = UUID.randomUUID();
+    UUID purchaseOrderId2 = UUID.randomUUID();
+
+    String goodsReceivedPayload2 = """
+        {
+          "eventId": "%s",
+          "purchaseOrderId": "%s",
+          "vendorId": "%s",
+          "vendorName": "Test Vendor Corp",
+          "receivedDate": "2025-01-12T10:00:00",
+          "lineItems": [
+            {
+              "productId": "%s",
+              "description": "Widget A",
+              "quantity": 100,
+              "unitPrice": 10.00,
+              "isInventoryItem": true
+            }
+          ]
+        }
+        """.formatted(eventId2, purchaseOrderId2, vendorId, productId);
+
+    MvcResult createResult2 = mockMvc.perform(post(BASE_URL + "/vendor-bills")
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(goodsReceivedPayload2))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.status").value("PENDING_RECEIPT_MATCH"))
+        .andReturn();
+
+    UUID vendorBillId2 = UUID.fromString(
+        objectMapper.readTree(createResult2.getResponse().getContentAsString())
+            .get("vendorBillId").asString());
+
+    // Step 5: POST invoice with price variance > 5% → MATCH_EXCEPTION
+    String discrepancyInvoicePayload = """
         {
           "eventId": "%s",
           "vendorId": "%s",
           "invoiceReference": "INV-99999",
-          "invoiceDate": "2025-01-12T12:00:00",
-          "dueDate": "2025-02-11T12:00:00",
+          "invoiceDate": "2025-01-13T12:00:00",
+          "dueDate": "2025-02-12T12:00:00",
           "lineItems": [
             {
-              "productId": "PROD-001",
+              "productId": "%s",
               "description": "Widget A",
               "quantity": 100,
               "unitPrice": 12.00
             }
           ]
         }
-        """, UUID.randomUUID(), vendorId);
+        """.formatted(UUID.randomUUID(), vendorId, productId);
 
-    // Step 6: Verify bill transitioned to MATCH_EXCEPTION status
+    mockMvc.perform(post(BASE_URL + "/vendor-bills/match")
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(discrepancyInvoicePayload))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
+        .andExpect(jsonPath("$.status").value("MATCH_EXCEPTION"));
 
-    // TODO: Complete test implementation when event publishing infrastructure is
-    // ready
-    // This test validates Issue #130 Receipt Accrual workflow
+    // Step 6: Resolve the match exception → ACCEPT → APPROVED
+    String resolvePayload = """
+        {
+          "resolutionAction": "ACCEPT",
+          "reason": "Price increase approved by AP manager",
+          "operatorId": "%s"
+        }
+        """.formatted(TEST_USER);
+
+    mockMvc.perform(post(BASE_URL + "/vendor-bills/" + vendorBillId2 + "/resolve-exception")
+        .header("X-Authorities", TEST_AUTHORITIES)
+        .header("X-User", TEST_USER)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(resolvePayload))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.vendorBillId").value(vendorBillId2.toString()))
+        .andExpect(jsonPath("$.status").value("APPROVED"));
   }
 
   @Test

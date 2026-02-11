@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/accounting/vendor-bills")
+@RequestMapping("/v1/accounting/vendor-bills")
 @RequiredArgsConstructor
 public class VendorBillController {
 
@@ -40,7 +40,7 @@ public class VendorBillController {
     /**
      * Create a vendor bill from a goods received event.
      * 
-     * POST /api/v1/accounting/vendor-bills
+     * POST /v1/accounting/vendor-bills
      * 
      * @param event the goods received event payload
      * @return created bill response with 201 status

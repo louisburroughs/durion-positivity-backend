@@ -111,9 +111,8 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("eventType"));
         Page<DefaultGLMapping> mappingsPage = repository.findAll(pageable);
 
-        List<DefaultGLMappingResponse> responses = mappingsPage.stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        // Batch-load GL accounts to avoid N+1 query pattern
+        List<DefaultGLMappingResponse> responses = toResponses(mappingsPage.getContent());
 
         return DefaultGLMappingListResponse.builder()
                 .mappings(responses)
@@ -138,27 +137,21 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     @NonNull
     @Transactional(readOnly = true)
     public List<DefaultGLMappingResponse> findByEventType(@NonNull String eventType) {
-        return repository.findByEventTypeAndActiveTrue(eventType).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        return toResponses(repository.findByEventTypeAndActiveTrue(eventType));
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
     public List<DefaultGLMappingResponse> findByOrganization(@NonNull UUID organizationId) {
-        return repository.findByOrganizationIdAndActiveTrue(organizationId).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        return toResponses(repository.findByOrganizationIdAndActiveTrue(organizationId));
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
     public List<DefaultGLMappingResponse> findAllGlobalDefaults() {
-        return repository.findAllGlobalDefaults().stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        return toResponses(repository.findAllGlobalDefaults());
     }
 
     /**
@@ -173,10 +166,40 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
     /**
      * Converts entity to response DTO with account details.
+     * For single mapping lookups (getDefaultMapping, findActiveDefaultForEvent).
      */
     private DefaultGLMappingResponse toResponse(DefaultGLMapping mapping) {
         GLAccount debitAccount = glAccountRepository.findById(mapping.getDebitAccountId()).orElse(null);
         GLAccount creditAccount = glAccountRepository.findById(mapping.getCreditAccountId()).orElse(null);
         return DefaultGLMappingMapper.toResponse(mapping, debitAccount, creditAccount);
+    }
+
+    /**
+     * Batch converts multiple mappings to response DTOs.
+     * Batch-loads all required GL accounts in a single query to avoid N+1 pattern.
+     * <p>
+     * For a page of 20 mappings, this reduces queries from 41 (1 + 2*20) to 2.
+     */
+    private List<DefaultGLMappingResponse> toResponses(List<DefaultGLMapping> mappings) {
+        if (mappings.isEmpty()) {
+            return List.of();
+        }
+
+        // Collect all distinct account IDs needed
+        var accountIds = mappings.stream()
+                .flatMap(m -> java.util.stream.Stream.of(m.getDebitAccountId(), m.getCreditAccountId()))
+                .collect(Collectors.toSet());
+
+        // Batch-load all accounts in one query
+        var accountMap = glAccountRepository.findAllById(accountIds).stream()
+                .collect(Collectors.toMap(GLAccount::getGlAccountId, acc -> acc));
+
+        // Map each mapping using the pre-loaded account map
+        return mappings.stream()
+                .map(mapping -> DefaultGLMappingMapper.toResponse(
+                        mapping,
+                        accountMap.get(mapping.getDebitAccountId()),
+                        accountMap.get(mapping.getCreditAccountId())))
+                .collect(Collectors.toList());
     }
 }

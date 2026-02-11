@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.dto.GLMappingCreateResponse;
 import com.positivity.accounting.internal.dto.GLMappingResolveRequest;
 import com.positivity.accounting.internal.dto.GLMappingResolveResponse;
 import com.positivity.accounting.service.GLMappingService;
+import com.positivity.events.EmitEvent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class GLMappingController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('accounting:gl-mapping:create')")
+    @EmitEvent(id = "ACCOUNTING_GL_MAPPING_CREATE", apiVersion = "1")
     public ResponseEntity<GLMappingCreateResponse> createGLMapping(
             @Valid @RequestBody GLMappingCreateRequest request) {
         log.info("Create GL mapping request: sourceSystem={}, externalCode={}",
@@ -51,6 +53,7 @@ public class GLMappingController {
      */
     @PostMapping("/resolve")
     @PreAuthorize("hasAuthority('accounting:gl-mapping:resolve')")
+    @EmitEvent(id = "ACCOUNTING_GL_MAPPING_RESOLVE", apiVersion = "1")
     public ResponseEntity<GLMappingResolveResponse> resolveGLMapping(
             @Valid @RequestBody GLMappingResolveRequest request) {
         log.info("Resolve GL mapping request: sourceSystem={}, externalCode={}, transactionDate={}",

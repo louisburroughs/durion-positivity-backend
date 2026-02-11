@@ -61,6 +61,16 @@ pos:
       # Required: GL account for accounts receivable reductions (typically 1200-1299 range)
       ar-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
 
+# Payment Gateway Configuration
+payment:
+  gateway:
+    provider: ${PAYMENT_GATEWAY_PROVIDER:stripe}
+
+stripe:
+  api-key: ${STRIPE_API_KEY}
+  connect-account: ${STRIPE_CONNECT_ACCOUNT:}
+  idempotency-window-hours: ${STRIPE_IDEMPOTENCY_WINDOW_HOURS:24}
+
 logging:
   level:
     root: INFO
