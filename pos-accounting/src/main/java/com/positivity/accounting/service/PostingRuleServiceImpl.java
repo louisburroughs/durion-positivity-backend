@@ -134,6 +134,18 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     public PostingRuleSet updatePostingRuleSet(UUID ruleSetId, PostingRuleSet updates) {
         PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
+
+        // Check if ruleset has a PUBLISHED version - cannot modify published rulesets
+        List<PostingRuleVersion> versions = versionRepository
+                .findByPostingRuleSet_PostingRuleSetId(ruleSetId);
+        boolean hasPublished = versions.stream()
+                .anyMatch(v -> v.getState() == PostingRuleSetState.PUBLISHED);
+
+        if (hasPublished) {
+            throw new IllegalStateException(
+                    "Cannot modify published rule set. Create a new version or archive the current one: " + ruleSetId);
+        }
+
         ruleSet.setName(updates.getName());
         ruleSet.setEventType(updates.getEventType());
         ruleSet.setDescription(updates.getDescription());
