@@ -58,7 +58,7 @@ public class AccountingExceptionHandler {
                 .orElse("unknown");
         String message = fieldName + " is required";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(EnvelopeErrorResponse.of("MISSING_REQUIRED_FIELD", message));
+                .body(EnvelopeErrorResponse.of("ARGUMENT_NOT_VALID", message));
     }
 
     @ExceptionHandler(IllegalStateException.class)

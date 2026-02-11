@@ -40,7 +40,7 @@ public interface PostingRuleService {
     /**
      * Lists posting rule sets as a paginated response DTO.
      */
-    PostingRuleSetListResponse listRuleSetsAsResponse(UUID organizationId, int page, int size);
+    PostingRuleSetListResponse listRuleSetsAsResponse(int page, int size, String sort);
 
     /**
      * Retrieves a posting rule set as a response DTO.
@@ -91,9 +91,9 @@ public interface PostingRuleService {
     PostingRuleVersion archiveVersion(UUID versionId);
 
     /**
-     * Lists all rule sets for an organization.
+     * Lists all rule sets.
      */
-    List<PostingRuleSet> listRuleSets(UUID organizationId);
+    List<PostingRuleSet> listRuleSets();
 
     /**
      * Lists all versions of a rule set.

@@ -83,23 +83,20 @@ public final class PostingRuleMapper {
     }
 
     /**
-     * Convert list of entities to list response DTO.
+     * Convert Page of entities to list response DTO with proper pagination
+     * metadata.
      */
-    public static PostingRuleSetListResponse toListResponse(List<PostingRuleSet> entities,
-            int page, int size) {
-        List<PostingRuleSetResponse> responses = entities.stream()
+    public static PostingRuleSetListResponse toListResponse(org.springframework.data.domain.Page<PostingRuleSet> page) {
+        List<PostingRuleSetResponse> responses = page.getContent().stream()
                 .map(PostingRuleMapper::toResponse)
                 .collect(Collectors.toList());
 
-        int totalElements = entities.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-
         return PostingRuleSetListResponse.builder()
                 .ruleSets(responses)
-                .totalElements(totalElements)
-                .totalPages(totalPages)
-                .currentPage(page)
-                .pageSize(size)
+                .totalElements((int) page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .currentPage(page.getNumber())
+                .pageSize(page.getSize())
                 .build();
     }
 }

@@ -67,4 +67,18 @@ public class MappingEvaluation {
             this.description = description;
         }
     }
+
+    /**
+     * Get an immutable view of evaluated keys.
+     */
+    public List<String> getKeysEvaluated() {
+        return List.copyOf(keysEvaluated);
+    }
+
+    /**
+     * Set evaluated keys (for deserialization or reconstruction).
+     */
+    public void setKeysEvaluated(List<String> keysEvaluated) {
+        this.keysEvaluated = keysEvaluated != null ? new ArrayList<>(keysEvaluated) : new ArrayList<>();
+    }
 }

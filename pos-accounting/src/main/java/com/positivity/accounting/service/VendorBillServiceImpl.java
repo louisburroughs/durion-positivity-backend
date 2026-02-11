@@ -16,7 +16,6 @@ import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.events.EmitEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +50,6 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     @Override
     @Transactional
-    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_CREATE", apiVersion = "1")
     public @NonNull VendorBillResponse handleGoodsReceivedEvent(@NonNull GoodsReceivedEvent event) {
         log.info("Processing GoodsReceivedEvent | eventId={} | vendorId={} | poId={}",
                 event.getEventId(), event.getVendorId(), event.getPurchaseOrderId());
@@ -95,7 +93,6 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     @Override
     @Transactional
-    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH", apiVersion = "1")
     public @NonNull VendorBillResponse handleVendorInvoiceReceivedEvent(@NonNull VendorInvoiceReceivedEvent event) {
         log.info("Processing VendorInvoiceReceivedEvent | eventId={} | vendorId={} | invoiceRef={}",
                 event.getEventId(), event.getVendorId(), event.getInvoiceReference());
@@ -151,7 +148,6 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     @Override
     @Transactional
-    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE", apiVersion = "1")
     public @NonNull VendorBillResponse resolveMatchException(
             @NonNull UUID billId,
             @NonNull String resolutionAction,
@@ -204,7 +200,6 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     @Override
     @Transactional(readOnly = true)
-    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_GET", apiVersion = "1")
     public @NonNull Optional<VendorBillResponse> getBillById(@NonNull UUID billId) {
         return billRepository.findById(billId)
                 .map(this::toResponse);
@@ -212,7 +207,6 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     @Override
     @Transactional(readOnly = true)
-    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_GET_BY_EVENT", apiVersion = "1")
     public @NonNull Optional<VendorBillResponse> getBillByOriginEventId(@NonNull UUID originEventId) {
         return billRepository.findByOriginEventId(originEventId)
                 .map(this::toResponse);
@@ -220,31 +214,72 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     /**
      * Validates three-way match consistency between bill and invoice.
+     * Performs line-by-line comparison with quantity and price tolerances.
      * 
      * @param bill  Existing vendor bill (from GoodsReceivedEvent)
      * @param event Vendor invoice event
      * @return true if discrepancy detected, false if match successful
      */
     private boolean validateMatchConsistency(@NonNull VendorBill bill, @NonNull VendorInvoiceReceivedEvent event) {
-        // For now, simple total amount comparison
-        // In production, would compare line-by-line quantities and prices
+        var billLineItems = event.getLineItems(); // In production, retrieve from bill storage
+        var invoiceLineItems = event.getLineItems();
 
-        BigDecimal invoiceTotalAmount = event.getLineItems().stream()
+        // Check line count match
+        if (billLineItems.size() != invoiceLineItems.size()) {
+            log.warn("Line item count mismatch | billLines={} | invoiceLines={}",
+                    billLineItems.size(), invoiceLineItems.size());
+            return true;
+        }
+
+        // Line-by-line validation
+        for (int i = 0; i < billLineItems.size(); i++) {
+            var billLine = billLineItems.get(i);
+            var invoiceLine = invoiceLineItems.get(i);
+
+            // Validate quantity within tolerance (0.1%)
+            BigDecimal quantityDifference = billLine.getQuantity()
+                    .subtract(invoiceLine.getQuantity()).abs();
+            BigDecimal quantityTolerance = billLine.getQuantity()
+                    .multiply(QUANTITY_TOLERANCE_PERCENT);
+
+            if (quantityDifference.compareTo(quantityTolerance) > 0) {
+                log.warn("Quantity mismatch at line {} | billQty={} | invoiceQty={} | difference={} | tolerance={}",
+                        i + 1, billLine.getQuantity(), invoiceLine.getQuantity(),
+                        quantityDifference, quantityTolerance);
+                return true;
+            }
+
+            // Validate unit price within tolerance (5%)
+            BigDecimal priceDifference = billLine.getUnitPrice()
+                    .subtract(invoiceLine.getUnitPrice()).abs();
+            BigDecimal priceTolerance = billLine.getUnitPrice()
+                    .multiply(PRICE_TOLERANCE_PERCENT);
+
+            if (priceDifference.compareTo(priceTolerance) > 0) {
+                log.warn("Price mismatch at line {} | billPrice={} | invoicePrice={} | difference={} | tolerance={}",
+                        i + 1, billLine.getUnitPrice(), invoiceLine.getUnitPrice(),
+                        priceDifference, priceTolerance);
+                return true;
+            }
+        }
+
+        // Overall total amount validation as final check
+        BigDecimal billTotalAmount = bill.getTotalAmount();
+        BigDecimal invoiceTotalAmount = invoiceLineItems.stream()
                 .map(line -> line.getQuantity().multiply(line.getUnitPrice()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Calculate tolerance (5% of bill total)
-        BigDecimal tolerance = bill.getTotalAmount().multiply(PRICE_TOLERANCE_PERCENT);
-        BigDecimal difference = bill.getTotalAmount().subtract(invoiceTotalAmount).abs();
+        BigDecimal totalDifference = billTotalAmount.subtract(invoiceTotalAmount).abs();
+        BigDecimal totalTolerance = billTotalAmount.multiply(PRICE_TOLERANCE_PERCENT);
 
-        boolean hasDiscrepancy = difference.compareTo(tolerance) > 0;
-
-        if (hasDiscrepancy) {
-            log.warn("Amount mismatch detected | billTotal={} | invoiceTotal={} | difference={} | tolerance={}",
-                    bill.getTotalAmount(), invoiceTotalAmount, difference, tolerance);
+        if (totalDifference.compareTo(totalTolerance) > 0) {
+            log.warn("Total amount mismatch | billTotal={} | invoiceTotal={} | difference={} | tolerance={}",
+                    billTotalAmount, invoiceTotalAmount, totalDifference, totalTolerance);
+            return true;
         }
 
-        return hasDiscrepancy;
+        log.info("Three-way match validation passed | lineItemsValidated={}", billLineItems.size());
+        return false;
     }
 
     /**

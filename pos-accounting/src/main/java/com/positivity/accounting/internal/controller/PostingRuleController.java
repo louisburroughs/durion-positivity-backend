@@ -59,7 +59,7 @@ public class PostingRuleController {
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "createdAt") String sort) {
                 log.info("List posting rule sets - page={}, size={}, sort={}", page, size, sort);
-                PostingRuleSetListResponse response = postingRuleService.listRuleSetsAsResponse(null, page, size);
+                PostingRuleSetListResponse response = postingRuleService.listRuleSetsAsResponse(page, size, sort);
                 return ResponseEntity.ok(response);
         }
 
