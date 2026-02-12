@@ -1,11 +1,10 @@
 package com.positivity.accounting.internal.dto;
 
-import com.positivity.accounting.internal.entity.PostingRuleSet;
-import com.positivity.accounting.internal.entity.PostingRuleVersion;
-
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
+
+import com.positivity.accounting.internal.entity.PostingRuleSet;
+import com.positivity.accounting.internal.entity.PostingRuleVersion;
 
 /**
  * Mapper for converting between Posting Rule entities and DTOs.

@@ -3,7 +3,6 @@ package com.pos.agent.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Security context for agent requests.

@@ -1,12 +1,15 @@
 package com.pos.agent.discovery;
 
-import com.pos.agent.core.Agent;
-import com.pos.agent.core.AgentRequest;
-
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+
+import com.pos.agent.core.Agent;
+import com.pos.agent.core.AgentRequest;
 
 /**
  * Discovers agents based on objective keywords and patterns in request

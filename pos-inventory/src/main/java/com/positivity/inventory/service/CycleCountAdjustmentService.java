@@ -1,11 +1,16 @@
 package com.positivity.inventory.service;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.inventory.internal.dto.cyclecount.*;
+import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
+import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
+import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
+import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.model.InventoryLedgerEntry;
 import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
@@ -14,10 +19,8 @@ import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for managing cycle count adjustments.

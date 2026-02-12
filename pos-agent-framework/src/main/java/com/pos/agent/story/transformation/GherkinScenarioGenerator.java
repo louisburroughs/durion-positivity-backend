@@ -1,12 +1,13 @@
 package com.pos.agent.story.transformation;
 
-import com.pos.agent.story.models.GherkinScenario;
-import com.pos.agent.story.models.Requirement;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+
+import com.pos.agent.story.models.GherkinScenario;
+import com.pos.agent.story.models.Requirement;
 
 /**
  * Generates Gherkin scenarios from requirements.

@@ -1,5 +1,18 @@
 package com.pos.agent.core;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
+
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.context.CICDContext;
 import com.pos.agent.context.EventDrivenContext;
@@ -13,20 +26,6 @@ import com.pos.agent.framework.model.AgentType;
 import com.pos.agent.framework.service.ServiceAgentMapping;
 import com.pos.agent.impl.ArchitectureAgent;
 import com.pos.agent.impl.StoryValidationAgent;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * Manages agent lifecycle and request processing.

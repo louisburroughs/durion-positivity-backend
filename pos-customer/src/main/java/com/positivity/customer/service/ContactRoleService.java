@@ -1,21 +1,27 @@
 package com.positivity.customer.service;
 
-import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
-import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
-import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
-import com.positivity.customer.internal.entity.*;
-import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
-import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
+import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
+import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.ContactRole;
+import com.positivity.customer.internal.entity.ContactRoleAssignment;
+import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ContactPointRepository;
+import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
+import com.positivity.customer.internal.repository.PersonRepository;
 
 /**
  * Service for managing contact role assignments.

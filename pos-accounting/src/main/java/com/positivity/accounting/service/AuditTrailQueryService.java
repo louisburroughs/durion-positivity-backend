@@ -1,18 +1,19 @@
 package com.positivity.accounting.service;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.accounting.internal.audit.dto.AuditTrailResponse;
 import com.positivity.accounting.internal.audit.entity.AuditTrailEntry;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service for querying audit trail entries.
