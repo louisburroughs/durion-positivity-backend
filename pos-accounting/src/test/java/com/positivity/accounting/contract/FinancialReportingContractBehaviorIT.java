@@ -55,9 +55,7 @@ class FinancialReportingContractBehaviorIT extends BaseIntegrationTest {
         private static final UUID EQUITY_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000005");
 
         @BeforeEach
-        @Override
-        public void setUpMockMvc() {
-                super.setUpMockMvc();
+        void setUp() {
                 // Create sample statement line mappings for testing
                 createSampleStatementLineMappings();
         }
