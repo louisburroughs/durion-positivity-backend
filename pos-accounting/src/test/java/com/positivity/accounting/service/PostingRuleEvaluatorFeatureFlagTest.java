@@ -21,6 +21,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
 import com.positivity.accounting.internal.dto.PostingResult;
@@ -47,7 +49,7 @@ import tools.jackson.databind.ObjectMapper;
  * <li>{@code requireAmountField} — whether payload.amount is mandatory</li>
  * </ul>
  */
-@Disabled("Pending resolution of PostingResult API changes")
+@ExtendWith(MockitoExtension.class)
 class PostingRuleEvaluatorFeatureFlagTest {
 
     @Mock
