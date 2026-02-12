@@ -15,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.regex.Pattern;
+
 /**
  * REST controller for billing rules management.
  * CAP:092 - Preferences & Billing Rules
@@ -25,7 +27,10 @@ import org.springframework.web.bind.annotation.*;
 public class BillingRulesController {
 
     private static final Logger log = LoggerFactory.getLogger(BillingRulesController.class);
-    private static final String DEFAULT_USER = "api-user";
+
+    // Pattern for valid UUID format to prevent injection attacks
+    private static final Pattern VALID_UUID_PATTERN = Pattern.compile(
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final BillingRulesService billingRulesService;
 
@@ -35,13 +40,16 @@ public class BillingRulesController {
 
     @GetMapping("/{partyId}")
     @EmitEvent(id = "BILLING_RULES_GET", apiVersion = "1")
-    @Operation(summary = "Get billing rules for a party/customer",
-               description = "Retrieve the current billing rules configuration for a commercial account")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Billing rules found"),
-        @ApiResponse(responseCode = "404", description = "No billing rules configured for this party")
-    })
+    @Operation(summary = "Get billing rules for a party/customer", description = "Retrieve the current billing rules configuration for a commercial account")
+    @ApiResponse(responseCode = "200", description = "Billing rules found")
+    @ApiResponse(responseCode = "404", description = "No billing rules configured for this party")
     public ResponseEntity<BillingRulesDTO> getBillingRules(@PathVariable @NonNull String partyId) {
+        // Validate partyId format
+        if (!VALID_UUID_PATTERN.matcher(partyId).matches()) {
+            log.warn("Invalid partyId format in getBillingRules");
+            return ResponseEntity.badRequest().build();
+        }
+
         log.debug("GET /v1/billing/rules/{}", partyId);
 
         return billingRulesService.getBillingRules(partyId)
@@ -51,19 +59,25 @@ public class BillingRulesController {
 
     @PutMapping("/{partyId}")
     @EmitEvent(id = "BILLING_RULES_UPSERT", apiVersion = "1")
-    @Operation(summary = "Create or update billing rules",
-               description = "Idempotent upsert of billing rules for a commercial account")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Billing rules updated"),
-        @ApiResponse(responseCode = "201", description = "Billing rules created"),
-        @ApiResponse(responseCode = "400", description = "Invalid billing rules data")
-    })
+    @Operation(summary = "Create or update billing rules", description = "Idempotent upsert of billing rules for a commercial account")
+    @ApiResponse(responseCode = "200", description = "Billing rules updated")
+    @ApiResponse(responseCode = "201", description = "Billing rules created")
+    @ApiResponse(responseCode = "400", description = "Invalid billing rules data")
     public ResponseEntity<BillingRulesDTO> upsertBillingRules(
             @PathVariable @NonNull String partyId,
-            @Valid @RequestBody @NonNull BillingRulesDTO billingRulesDTO,
-            @RequestHeader(value = "X-User-Id", required = false, defaultValue = DEFAULT_USER) String userId) {
+            @Valid @RequestBody @NonNull BillingRulesDTO billingRulesDTO) {
 
-        log.debug("PUT /v1/billing/rules/{} by user={}", partyId, userId);
+        // Validate partyId format
+        if (!VALID_UUID_PATTERN.matcher(partyId).matches()) {
+            log.warn("Invalid partyId format in upsertBillingRules");
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Get userId from SecurityContext via service
+        String userId = billingRulesService.getCurrentUserId();
+        // Sanitize userId for logging (prevent log injection)
+        String sanitizedUserId = sanitizeForLogging(userId);
+        log.debug("PUT /v1/billing/rules/{} by user={}", partyId, sanitizedUserId);
 
         // Override partyId from path to ensure consistency
         billingRulesDTO.setPartyId(partyId);
@@ -73,5 +87,17 @@ public class BillingRulesController {
 
         HttpStatus status = isNew ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(saved);
+    }
+
+    /**
+     * 
+     * to prevent log injection attacks.
+     */
+    private String sanitizeForLogging(String input) {
+        if (input == null) {
+            return "null";
+        }
+        // Replace newlines, carriage returns, and other control characters
+        return input.replaceAll("[\\r\\n\\t]", "_").replaceAll("[\\p{Cntrl}]", "");
     }
 }

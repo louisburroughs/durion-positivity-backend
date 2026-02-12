@@ -31,6 +31,8 @@ import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 @Service
 public class MappingKeyService {
 
+        private static final String MAPPING_KEY_NOT_FOUND = "Mapping key not found: ";
+
         private static final String POSTING_CATEGORY_NOT_FOUND = "Posting category not found: ";
 
         private static final Logger log = LoggerFactory.getLogger(MappingKeyService.class);
@@ -104,7 +106,7 @@ public class MappingKeyService {
 
                 MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Mapping key not found: " + mappingKeyId));
+                                                MAPPING_KEY_NOT_FOUND + mappingKeyId));
 
                 PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -131,7 +133,7 @@ public class MappingKeyService {
 
                 MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Mapping key not found: " + mappingKeyId));
+                                                MAPPING_KEY_NOT_FOUND + mappingKeyId));
 
                 PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -176,8 +178,11 @@ public class MappingKeyService {
                         int size,
                         @NonNull String sort,
                         Boolean isActive) {
-                log.info("Listing mapping keys for category: {}, page={}, size={}, sort={}, isActive={}",
-                                postingCategoryId, page, size, sort, isActive);
+
+                if (log.isInfoEnabled()) {
+                        log.info("Listing mapping keys for category: {}, page={}, size={}, isActive={}",
+                                        maskUUID(postingCategoryId), page, size, isActive);
+                }
 
                 // Validate category exists
                 PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
@@ -222,11 +227,13 @@ public class MappingKeyService {
          */
         @Transactional
         public MappingKeyResponse deactivateMappingKey(@NonNull UUID mappingKeyId) {
-                log.info("Deactivating mapping key: {}", mappingKeyId);
+                if (log.isInfoEnabled()) {
+                        log.info("Deactivating mapping key: {}", maskUUID(mappingKeyId));
+                }
 
                 MappingKey mappingKey = mappingKeyRepository.findById(mappingKeyId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Mapping key not found: " + mappingKeyId));
+                                                MAPPING_KEY_NOT_FOUND + mappingKeyId));
 
                 // Fetch category for response
                 PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
@@ -265,5 +272,26 @@ public class MappingKeyService {
                                 mappingKey.getCreatedBy(),
                                 mappingKey.getModifiedAt(),
                                 mappingKey.getModifiedBy());
+        }
+
+        /**
+         * Masks a UUID for safe logging purposes.
+         * Returns a format like "uuid-****-****-****-abcd" showing first segment and
+         * last 4 chars.
+         * This preserves enough information for correlation while preventing
+         * information disclosure.
+         * 
+         * @param uuid the UUID to mask
+         * @return masked UUID string, or "null" if input is null
+         */
+        private String maskUUID(UUID uuid) {
+                if (uuid == null) {
+                        return "null";
+                }
+                String uuidString = uuid.toString();
+                // Format: show first 8 chars (first segment) + last 4 chars for correlation
+                // Example: "8f47e0c1-****-****-****-a1b2" from
+                // "8f47e0c1-1234-5678-9abc-a1b2c3d4e5f6"
+                return uuidString.substring(0, 8) + "-****-****-****-" + uuidString.substring(32);
         }
 }

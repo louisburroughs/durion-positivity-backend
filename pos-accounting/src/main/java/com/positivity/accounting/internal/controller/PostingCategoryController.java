@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -29,6 +30,15 @@ import java.util.UUID;
 public class PostingCategoryController {
 
         private static final Logger log = LoggerFactory.getLogger(PostingCategoryController.class);
+
+        // Allowed sort fields for listPostingCategories to prevent injection attacks
+        private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+                        "categoryName",
+                        "categoryCode",
+                        "description",
+                        "isActive",
+                        "createdAt",
+                        "updatedAt");
 
         private final PostingCategoryService postingCategoryService;
 
@@ -89,8 +99,15 @@ public class PostingCategoryController {
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "categoryName") String sort,
                         @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive) {
                 log.info("List posting categories");
-                PostingCategoryListResponse response = postingCategoryService.listPostingCategories(page, size, sort,
-                                isActive);
+
+                // Sanitize sort parameter - use default if not in allowed list
+                String sanitizedSort = ALLOWED_SORT_FIELDS.contains(sort) ? sort : "categoryName";
+                if (!sort.equals(sanitizedSort)) {
+                        log.warn("Invalid sort field '{}' requested, defaulting to '{}'", sort, sanitizedSort);
+                }
+
+                PostingCategoryListResponse response = postingCategoryService.listPostingCategories(page, size,
+                                sanitizedSort, isActive);
                 return ResponseEntity.ok(response);
         }
 
