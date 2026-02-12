@@ -19,16 +19,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.positivity.accounting.internal.audit.entity.AuditTrail;
+import com.positivity.accounting.internal.audit.entity.AuditTrailEntry;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
-import com.positivity.accounting.internal.audit.repository.AuditTrailRepository;
+import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
 
 /**
  * Contract Behavioral Integration Tests for Audit Trail operations.
  *
  * <p>
- * This test suite validates the behavioral contracts for Audit Trail REST endpoints
- * including recording price overrides, refunds, cancellations, and querying audit entries.
+ * This test suite validates the behavioral contracts for Audit Trail REST
+ * endpoints
+ * including recording price overrides, refunds, cancellations, and querying
+ * audit entries.
  *
  * <p>
  * Tests verify:
@@ -42,7 +44,7 @@ import com.positivity.accounting.internal.audit.repository.AuditTrailRepository;
 public class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
-    private AuditTrailRepository auditTrailRepository;
+    private AuditTrailEntryRepository auditTrailRepository;
 
     private static final String API_V1_AUDIT = "/v1/accounting/audit";
 
@@ -359,7 +361,8 @@ public class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
                 .param("endDate", endDate.toString())))
                 .andReturn();
 
-        // Accept either 200 (if validation not implemented) or 400 (if validation rejects)
+        // Accept either 200 (if validation not implemented) or 400 (if validation
+        // rejects)
         int statusCode = result.getResponse().getStatus();
         assertThat(statusCode).isIn(200, 400);
     }
@@ -372,7 +375,7 @@ public class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
      * Creates a test audit trail entry.
      */
     private void createTestAuditEntry(UUID orderId, UUID invoiceId, ExceptionType type) {
-        AuditTrail entry = new AuditTrail();
+        AuditTrailEntry entry = new AuditTrailEntry();
         entry.setAuditId(UUID.randomUUID());
         entry.setOrderId(orderId);
         entry.setInvoiceId(invoiceId);
@@ -380,8 +383,8 @@ public class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
         entry.setActorId(testActorId);
         entry.setTimestamp(Instant.now());
         entry.setReason("Test audit entry");
-        entry.setOriginalAmount(new BigDecimal("100.00"));
-        entry.setAdjustedAmount(new BigDecimal("80.00"));
+        entry.setOriginalPrice(new BigDecimal("100.00"));
+        entry.setAdjustedPrice(new BigDecimal("80.00"));
         auditTrailRepository.save(entry);
     }
 }
