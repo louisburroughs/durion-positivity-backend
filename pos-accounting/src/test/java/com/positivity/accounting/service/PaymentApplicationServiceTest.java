@@ -3,6 +3,7 @@ package com.positivity.accounting.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +29,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
+import com.positivity.accounting.internal.client.InvoiceServiceException;
+import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceRequest;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
@@ -72,6 +77,12 @@ class PaymentApplicationServiceTest {
 
         @InjectMocks
         private PaymentApplicationService service;
+
+        @Captor
+        private ArgumentCaptor<PaymentApplication> paymentApplicationCaptor;
+
+        @Captor
+        private ArgumentCaptor<ApplyPaymentToInvoiceRequest> invoiceRequestCaptor;
 
         private UUID testPaymentId;
         private UUID testCustomerId;
@@ -171,18 +182,12 @@ class PaymentApplicationServiceTest {
                                 .thenReturn(false);
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
                 when(paymentApplicationRepository.save(any(PaymentApplication.class)))
-                                .thenAnswer(invocation -> {
-                                        PaymentApplication app = invocation.getArgument(0);
-                                        if (app.getPaymentApplicationId() == null) {
-                                                app.setPaymentApplicationId(UUID.randomUUID());
-                                        }
-                                        return app;
-                                });
+                                .thenAnswer(invocation -> invocation.getArgument(0));
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
                                 createTestInvoiceDetails(testInvoiceId, InvoiceStatus.OPEN, "USD", "1000.00"));
-                when(invoiceServiceClient.applyPaymentToInvoice(any(), any())).thenReturn(
+                when(invoiceServiceClient.applyPaymentToInvoice(eq(testInvoiceId), any())).thenReturn(
                                 createApplyPaymentResponse(testInvoiceId, "1000.00", "500.00"));
 
                 // Act
@@ -197,8 +202,19 @@ class PaymentApplicationServiceTest {
                 assertThat(response.getApplications()).hasSize(1);
                 assertThat(response.getCustomerCredit()).isNull();
 
-                verify(paymentApplicationRepository).save(any(PaymentApplication.class));
+                // Verify invoice service called before entity save (new ordering)
+                verify(invoiceServiceClient).applyPaymentToInvoice(eq(testInvoiceId), any());
+                verify(paymentApplicationRepository).save(paymentApplicationCaptor.capture());
                 verify(receivablePaymentRepository).save(testPayment);
+
+                // Verify entity has pre-generated ID (not null before save)
+                PaymentApplication savedApp = paymentApplicationCaptor.getValue();
+                assertThat(savedApp.getPaymentApplicationId()).isNotNull();
+
+                // Verify invoice balance snapshot is persisted on entity
+                assertThat(savedApp.getInvoiceBalanceBefore()).isEqualByComparingTo("1000.00");
+                assertThat(savedApp.getInvoiceBalanceAfter()).isEqualByComparingTo("500.00");
+                assertThat(savedApp.getInvoiceStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID);
         }
 
         @Test
@@ -217,13 +233,7 @@ class PaymentApplicationServiceTest {
                                 .thenReturn(false);
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
                 when(paymentApplicationRepository.save(any(PaymentApplication.class)))
-                                .thenAnswer(invocation -> {
-                                        PaymentApplication app = invocation.getArgument(0);
-                                        if (app.getPaymentApplicationId() == null) {
-                                                app.setPaymentApplicationId(UUID.randomUUID());
-                                        }
-                                        return app;
-                                });
+                                .thenAnswer(invocation -> invocation.getArgument(0));
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
@@ -240,7 +250,15 @@ class PaymentApplicationServiceTest {
                 assertThat(response.getRemainingAmount()).isEqualByComparingTo("300.00");
                 assertThat(response.getApplications()).hasSize(2);
 
-                verify(paymentApplicationRepository, times(2)).save(any(PaymentApplication.class));
+                // Verify both applications have pre-generated IDs and balance snapshots
+                verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+                List<PaymentApplication> savedApps = paymentApplicationCaptor.getAllValues();
+                for (PaymentApplication app : savedApps) {
+                        assertThat(app.getPaymentApplicationId()).isNotNull();
+                        assertThat(app.getInvoiceBalanceBefore()).isNotNull();
+                        assertThat(app.getInvoiceBalanceAfter()).isNotNull();
+                        assertThat(app.getInvoiceStatus()).isNotNull();
+                }
         }
 
         @Test
@@ -255,13 +273,7 @@ class PaymentApplicationServiceTest {
                                 .thenReturn(false);
                 when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
                 when(paymentApplicationRepository.save(any(PaymentApplication.class)))
-                                .thenAnswer(invocation -> {
-                                        PaymentApplication app = invocation.getArgument(0);
-                                        if (app.getPaymentApplicationId() == null) {
-                                                app.setPaymentApplicationId(UUID.randomUUID());
-                                        }
-                                        return app;
-                                });
+                                .thenAnswer(invocation -> invocation.getArgument(0));
                 when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
                 when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
@@ -301,7 +313,7 @@ class PaymentApplicationServiceTest {
                 existingApplication.setCurrency("USD");
                 existingApplication.setApplicationRequestId(testApplicationRequestId);
                 existingApplication.setApplicationTimestamp(Instant.now());
-                // Set invoice balance/status (persisted for idempotent retries)
+                // Balance snapshot persisted from original application
                 existingApplication.setInvoiceBalanceBefore(new BigDecimal("1000.00"));
                 existingApplication.setInvoiceBalanceAfter(new BigDecimal("500.00"));
                 existingApplication.setInvoiceStatus(InvoiceStatus.PARTIALLY_PAID);
@@ -322,6 +334,143 @@ class PaymentApplicationServiceTest {
                 // Assert
                 assertThat(response).isNotNull();
                 assertThat(response.getPaymentId()).isEqualTo(testPaymentId);
+
+                // Verify balance data returned from persisted entity (no invoice service call)
+                assertThat(response.getApplications()).hasSize(1);
+                PaymentApplicationResponse.ApplicationDetail detail = response.getApplications().get(0);
+                assertThat(detail.getInvoiceBalanceBefore()).isEqualByComparingTo("1000.00");
+                assertThat(detail.getInvoiceBalanceAfter()).isEqualByComparingTo("500.00");
+                assertThat(detail.getInvoiceStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID);
+
+                verify(paymentApplicationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Should use pre-generated ID as idempotency key for invoice service")
+        void testApplyPaymentToInvoices_PreGeneratedIdUsedAsIdempotencyKey() {
+                // Arrange
+                ApplyPaymentToInvoiceResponse invoiceResponse = new ApplyPaymentToInvoiceResponse();
+                invoiceResponse.setBalanceBefore(new BigDecimal("1000.00"));
+                invoiceResponse.setBalanceAfter(new BigDecimal("500.00"));
+                invoiceResponse.setStatus(InvoiceStatus.PARTIALLY_PAID);
+
+                when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                                .thenReturn(false);
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
+                                createTestInvoiceDetails(testInvoiceId, InvoiceStatus.OPEN, "USD", "1000.00"));
+                when(invoiceServiceClient.applyPaymentToInvoice(eq(testInvoiceId),
+                                any(ApplyPaymentToInvoiceRequest.class)))
+                                .thenReturn(invoiceResponse);
+                when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+                when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                PaymentApplicationRequest request = createApplicationRequest(
+                                testApplicationRequestId,
+                                List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+                // Act
+                service.applyPaymentToInvoices(testPaymentId, request);
+
+                // Assert — the pre-generated ID sent to invoice service matches the persisted
+                // entity ID
+                verify(invoiceServiceClient).applyPaymentToInvoice(eq(testInvoiceId), invoiceRequestCaptor.capture());
+                verify(paymentApplicationRepository).save(paymentApplicationCaptor.capture());
+
+                UUID idSentToInvoiceService = invoiceRequestCaptor.getValue().getPaymentApplicationId();
+                UUID idPersistedOnEntity = paymentApplicationCaptor.getValue().getPaymentApplicationId();
+
+                assertThat(idSentToInvoiceService).isNotNull();
+                assertThat(idPersistedOnEntity).isNotNull();
+                assertThat(idSentToInvoiceService).isEqualTo(idPersistedOnEntity);
+        }
+
+        @Test
+        @DisplayName("Should persist balance snapshot for idempotent retries")
+        void testApplyPaymentToInvoices_BalanceSnapshotPersistedForIdempotentRetries() {
+                // Arrange
+                ApplyPaymentToInvoiceResponse invoiceResponse = new ApplyPaymentToInvoiceResponse();
+                invoiceResponse.setBalanceBefore(new BigDecimal("1000.00"));
+                invoiceResponse.setBalanceAfter(new BigDecimal("500.00"));
+                invoiceResponse.setStatus(InvoiceStatus.PARTIALLY_PAID);
+
+                when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                                .thenReturn(false);
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(invoiceServiceClient.getInvoiceDetails(any())).thenReturn(
+                                createTestInvoiceDetails(testInvoiceId, InvoiceStatus.OPEN, "USD", "1000.00"));
+                when(invoiceServiceClient.applyPaymentToInvoice(eq(testInvoiceId),
+                                any(ApplyPaymentToInvoiceRequest.class)))
+                                .thenReturn(invoiceResponse);
+                when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+                when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                PaymentApplicationRequest request = createApplicationRequest(
+                                testApplicationRequestId,
+                                List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+                // Act
+                PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+                // Assert — response contains balance data
+                assertThat(response.getApplications()).hasSize(1);
+                PaymentApplicationResponse.ApplicationDetail detail = response.getApplications().get(0);
+                assertThat(detail.getInvoiceBalanceBefore()).isEqualByComparingTo("1000.00");
+                assertThat(detail.getInvoiceBalanceAfter()).isEqualByComparingTo("500.00");
+                assertThat(detail.getInvoiceStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID);
+
+                // Assert — entity has balance snapshot persisted
+                verify(paymentApplicationRepository).save(paymentApplicationCaptor.capture());
+                PaymentApplication saved = paymentApplicationCaptor.getValue();
+                assertThat(saved.getInvoiceBalanceBefore()).isEqualByComparingTo("1000.00");
+                assertThat(saved.getInvoiceBalanceAfter()).isEqualByComparingTo("500.00");
+                assertThat(saved.getInvoiceStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID);
+        }
+
+        @Test
+        @DisplayName("Should return persisted balance data on idempotent retry without calling invoice service")
+        void testApplyPaymentToInvoices_IdempotentRetryReturnsPersistedBalanceData() {
+                // Arrange — simulate a retry where the application already exists with balance
+                // data
+                PaymentApplication existingApplication = new PaymentApplication();
+                existingApplication.setPaymentApplicationId(UUID.randomUUID());
+                existingApplication.setPaymentId(testPaymentId);
+                existingApplication.setCustomerId(testCustomerId);
+                existingApplication.setInvoiceId(testInvoiceId);
+                existingApplication.setAppliedAmount(new BigDecimal("500.00"));
+                existingApplication.setCurrency("USD");
+                existingApplication.setApplicationRequestId(testApplicationRequestId);
+                existingApplication.setApplicationTimestamp(Instant.now());
+                existingApplication.setInvoiceBalanceBefore(new BigDecimal("2000.00"));
+                existingApplication.setInvoiceBalanceAfter(new BigDecimal("1500.00"));
+                existingApplication.setInvoiceStatus(InvoiceStatus.PARTIALLY_PAID);
+
+                when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                                .thenReturn(true);
+                when(paymentApplicationRepository.findAllByApplicationRequestId(testApplicationRequestId))
+                                .thenReturn(List.of(existingApplication));
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+
+                PaymentApplicationRequest request = createApplicationRequest(
+                                testApplicationRequestId,
+                                List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+                // Act
+                PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+                // Assert — balance data comes from persisted entity
+                assertThat(response.getApplications()).hasSize(1);
+                PaymentApplicationResponse.ApplicationDetail detail = response.getApplications().get(0);
+                assertThat(detail.getInvoiceBalanceBefore()).isEqualByComparingTo("2000.00");
+                assertThat(detail.getInvoiceBalanceAfter()).isEqualByComparingTo("1500.00");
+                assertThat(detail.getInvoiceStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID);
+
+                // Verify invoice service was NOT called (idempotent retry)
+                verify(invoiceServiceClient, never()).applyPaymentToInvoice(any(), any());
                 verify(paymentApplicationRepository, never()).save(any());
         }
 
@@ -582,6 +731,99 @@ class PaymentApplicationServiceTest {
                                 .isEqualTo(HttpStatus.CONFLICT);
 
                 verify(paymentApplicationReversalRepository, never()).save(any(PaymentApplicationReversal.class));
+        }
+
+        @Test
+        @DisplayName("Should fail and roll back local changes when invoice service fails during reversal")
+        void testReversePaymentApplication_InvoiceServiceFailure() {
+                // Arrange
+                UUID applicationId = UUID.randomUUID();
+                PaymentApplication application = new PaymentApplication();
+                application.setPaymentApplicationId(applicationId);
+                application.setPaymentId(testPaymentId);
+                application.setCustomerId(testCustomerId);
+                application.setInvoiceId(testInvoiceId);
+                application.setAppliedAmount(new BigDecimal("500.00"));
+                application.setCurrency("USD");
+                application.setApplicationRequestId(testApplicationRequestId);
+                application.setApplicationTimestamp(Instant.now());
+
+                testPayment.setUnappliedAmount(new BigDecimal("500.00"));
+
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                                .thenReturn(false);
+                when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationReversalRepository.save(any(PaymentApplicationReversal.class)))
+                                .thenAnswer(invocation -> {
+                                        PaymentApplicationReversal rev = invocation.getArgument(0);
+                                        if (rev.getReversalId() == null) {
+                                                rev.setReversalId(UUID.randomUUID());
+                                        }
+                                        return rev;
+                                });
+                when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+                when(invoiceServiceClient.reversePaymentApplication(any(), any()))
+                                .thenThrow(new InvoiceServiceException("Invoice service unavailable", 503));
+
+                // Act & Assert — should throw SERVICE_UNAVAILABLE, triggering @Transactional
+                // rollback
+                assertThatThrownBy(() -> service.reversePaymentApplication(
+                                applicationId,
+                                "Customer disputed charge"))
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("Failed to restore invoice")
+                                .hasMessageContaining(testInvoiceId.toString())
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+
+                // Verify invoice service was called
+                verify(invoiceServiceClient).reversePaymentApplication(eq(testInvoiceId), any());
+        }
+
+        @Test
+        @DisplayName("Should propagate 4xx status from invoice service during reversal")
+        void testReversePaymentApplication_InvoiceServiceClientError() {
+                // Arrange
+                UUID applicationId = UUID.randomUUID();
+                PaymentApplication application = new PaymentApplication();
+                application.setPaymentApplicationId(applicationId);
+                application.setPaymentId(testPaymentId);
+                application.setCustomerId(testCustomerId);
+                application.setInvoiceId(testInvoiceId);
+                application.setAppliedAmount(new BigDecimal("500.00"));
+                application.setCurrency("USD");
+                application.setApplicationRequestId(testApplicationRequestId);
+                application.setApplicationTimestamp(Instant.now());
+
+                testPayment.setUnappliedAmount(new BigDecimal("500.00"));
+
+                when(paymentApplicationReversalRepository.existsByOriginalPaymentApplicationId(applicationId))
+                                .thenReturn(false);
+                when(paymentApplicationRepository.findById(applicationId)).thenReturn(Optional.of(application));
+                when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+                when(paymentApplicationReversalRepository.save(any(PaymentApplicationReversal.class)))
+                                .thenAnswer(invocation -> {
+                                        PaymentApplicationReversal rev = invocation.getArgument(0);
+                                        if (rev.getReversalId() == null) {
+                                                rev.setReversalId(UUID.randomUUID());
+                                        }
+                                        return rev;
+                                });
+                when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+                when(invoiceServiceClient.reversePaymentApplication(any(), any()))
+                                .thenThrow(new InvoiceServiceException("Invoice not found", 404));
+
+                // Act & Assert — should propagate 404 from invoice service
+                assertThatThrownBy(() -> service.reversePaymentApplication(
+                                applicationId,
+                                "Customer disputed charge"))
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("Failed to restore invoice")
+                                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                                .isEqualTo(HttpStatus.NOT_FOUND);
         }
 
         // ========================================

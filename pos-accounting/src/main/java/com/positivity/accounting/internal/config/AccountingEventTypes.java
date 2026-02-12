@@ -17,7 +17,8 @@ public final class AccountingEventTypes {
 
         /**
          * All event type registrations for the accounting module.
-         * Total: 35 event types (updated for CAP:055).
+         * Total: 42 event types (updated for CAP-053 Vendor Bill workflow + GL
+         * Mapping).
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -108,6 +109,38 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.fastRead("REPORT_DRILLDOWN_ACCOUNTS",
                                                 "Drill down from statement line to contributing GL accounts").build(),
                                 EventTypeRegistration.fastRead("REPORT_DRILLDOWN_JOURNAL_LINES",
-                                                "Drill down from GL account to source journal entries").build());
+                                                "Drill down from GL account to source journal entries").build(),
+
+                                // GLMappingController - 2 events (GL Mapping)
+                                EventTypeRegistration.write("ACCOUNTING_GL_MAPPING_CREATE",
+                                                "Create GL mapping from external code to GL account").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_GL_MAPPING_RESOLVE",
+                                                "Resolve external code to GL account using effective-dated mapping")
+                                                .build(),
+
+                                // VendorBillService - 6 events (CAP-053 Issue #130)
+                                EventTypeRegistration.write("ACCOUNTING_VENDOR_BILL_CREATE",
+                                                "Create vendor bill from goods received event (Receipt Accrual)")
+                                                .build(),
+                                EventTypeRegistration.write("ACCOUNTING_VENDOR_BILL_MATCH",
+                                                "Three-way match vendor invoice to existing bill").build(),
+                                EventTypeRegistration.approval("ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE",
+                                                "Resolve vendor bill match exception (accept/correct/void)").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET",
+                                                "Get vendor bill details by ID").build(),
+                                EventTypeRegistration.write("VENDOR_BILL_GL_POSTING",
+                                                "Post vendor bill to GL (Dr Inventory/Expense, Cr AP)").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET_BY_EVENT",
+                                                "Get vendor bill by origin event ID (idempotency check)").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST",
+                                                "List unresolved match candidates for ambiguous invoice match")
+                                                .build(),
+                                EventTypeRegistration.approval("ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT",
+                                                "Select match candidate to approve vendor bill from ambiguous match")
+                                                .build(),
+
+                                // AP Payment GL Posting - 1 event (Issue #128)
+                                EventTypeRegistration.write("AP_PAYMENT_GL_POSTING",
+                                                "Post AP payment to GL (Dr AP, Cr Cash/Bank)").build());
         }
 }

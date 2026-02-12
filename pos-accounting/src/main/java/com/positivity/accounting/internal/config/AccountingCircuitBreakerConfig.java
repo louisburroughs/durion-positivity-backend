@@ -50,8 +50,7 @@ public class AccountingCircuitBreakerConfig {
                                 .recordExceptions(Exception.class) // Record all exceptions
                                 .build();
 
-                CircuitBreakerRegistry registry = CircuitBreakerRegistry.of(defaultConfig);
-                return registry;
+                return CircuitBreakerRegistry.of(defaultConfig);
         }
 
         /**

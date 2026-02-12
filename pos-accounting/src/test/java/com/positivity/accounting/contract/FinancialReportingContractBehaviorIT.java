@@ -1,4 +1,6 @@
-package com.positivity.accounting;
+package com.positivity.accounting.contract;
+
+import com.positivity.accounting.BaseIntegrationTest;
 
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.OperationType;

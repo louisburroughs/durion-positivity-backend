@@ -2,6 +2,8 @@ package com.positivity.accounting.internal.config;
 
 import com.positivity.accounting.internal.dto.PaymentClearedEvent;
 import com.positivity.accounting.service.PaymentApplicationService;
+
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -37,6 +39,7 @@ import org.springframework.stereotype.Component;
  * @see PaymentApplicationService#handlePaymentCleared
  * @see com.positivity.accounting.internal.entity.ReceivablePayment
  */
+@NoArgsConstructor(access = lombok.AccessLevel.PRIVATE)
 @Configuration
 @ConditionalOnProperty(prefix = "pos.accounting.event-listener", name = "enabled", havingValue = "true", matchIfMissing = false)
 public class PaymentEventListenerConfig {
@@ -96,20 +99,20 @@ public class PaymentEventListenerConfig {
                         event.getEventId() // sourceEventId for idempotency
                 );
 
-               log.info("Successfully processed PaymentCleared event {} for payment {}",
-                       event.getEventId(), event.getPaymentId());
+                log.info("Successfully processed PaymentCleared event {} for payment {}",
+                        event.getEventId(), event.getPaymentId());
 
-           } catch (IllegalArgumentException e) {
-               log.error("Invalid PaymentCleared event {} for payment {}", event.getEventId(),
-                       event.getPaymentId(), e);
-               // Skip invalid events (don't rethrow to prevent retry loop)
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid PaymentCleared event {} for payment {}", event.getEventId(),
+                        event.getPaymentId(), e);
+                // Skip invalid events (don't rethrow to prevent retry loop)
 
-           } catch (Exception e) {
-               log.error("Error processing PaymentCleared event {} for payment {}", event.getEventId(),
-                       event.getPaymentId(), e);
-               // Rethrow to trigger retry mechanism (if configured)
-               throw e;
-           }
-       }
-   }
+            } catch (Exception e) {
+                log.error("Error processing PaymentCleared event {} for payment {}", event.getEventId(),
+                        event.getPaymentId(), e);
+                // Rethrow to trigger retry mechanism (if configured)
+                throw e;
+            }
+        }
+    }
 }

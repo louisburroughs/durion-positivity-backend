@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.positivity.shared.id.UUIDv7Generator;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -237,23 +239,13 @@ public class PaymentApplicationService {
                                         continue;
                                 }
 
-                                PaymentApplication application = new PaymentApplication();
-                                application.setPaymentId(paymentId);
-                                application.setInvoiceId(invoiceApp.getInvoiceId());
-                                application.setCustomerId(payment.getCustomerId());
-                                application.setCurrency(payment.getCurrency());
-                                application.setAppliedAmount(amountToApply);
-                                application.setApplicationTimestamp(applicationTimestamp);
-                                application.setApplicationRequestId(request.getApplicationRequestId());
-                                application.setCreatedAt(applicationTimestamp);
-                                application.setCreatedBy(currentUser);
+                                // Pre-generate ID so we can use it as the idempotency key
+                                // for the invoice service call before persisting the entity
+                                UUID applicationId = UUIDv7Generator.generate();
 
-                                PaymentApplication saved = paymentApplicationRepository.save(application);
-
-                                // Apply payment to invoice via service client
-                                // Uses paymentApplicationId as idempotency key on Invoice service side
+                                // Call invoice service first to obtain balance before/after
                                 ApplyPaymentToInvoiceRequest invoiceRequest = ApplyPaymentToInvoiceRequest.builder()
-                                                .paymentApplicationId(saved.getPaymentApplicationId())
+                                                .paymentApplicationId(applicationId)
                                                 .amountApplied(amountToApply)
                                                 .appliedAt(applicationTimestamp)
                                                 .currency(payment.getCurrency())
@@ -266,8 +258,26 @@ public class PaymentApplicationService {
                                                 invoiceRequest);
 
                                 log.info("Applied payment {} to invoice {} via service call, new balance: {} (was {})",
-                                                saved.getPaymentApplicationId(), invoiceApp.getInvoiceId(),
+                                                applicationId, invoiceApp.getInvoiceId(),
                                                 invoiceResponse.getBalanceAfter(), invoiceResponse.getBalanceBefore());
+
+                                // Build entity with invoice balance snapshot from the service response
+                                PaymentApplication application = new PaymentApplication();
+                                application.setPaymentApplicationId(applicationId);
+                                application.setPaymentId(paymentId);
+                                application.setInvoiceId(invoiceApp.getInvoiceId());
+                                application.setCustomerId(payment.getCustomerId());
+                                application.setCurrency(payment.getCurrency());
+                                application.setAppliedAmount(amountToApply);
+                                application.setInvoiceBalanceBefore(invoiceResponse.getBalanceBefore());
+                                application.setInvoiceBalanceAfter(invoiceResponse.getBalanceAfter());
+                                application.setInvoiceStatus(invoiceResponse.getStatus());
+                                application.setApplicationTimestamp(applicationTimestamp);
+                                application.setApplicationRequestId(request.getApplicationRequestId());
+                                application.setCreatedAt(applicationTimestamp);
+                                application.setCreatedBy(currentUser);
+
+                                PaymentApplication saved = paymentApplicationRepository.save(application);
 
                                 // Track successful application for potential compensating reversal
                                 successfulApplications.add(saved);
@@ -426,7 +436,7 @@ public class PaymentApplicationService {
                 payment.setModifiedBy(reversedBy);
                 receivablePaymentRepository.save(payment);
 
-                // 5. TODO: Restore invoice balance via service client
+                // 5. Restore invoice balance via service client
                 ReversePaymentApplicationRequest invoiceRequest = ReversePaymentApplicationRequest.builder()
                                 .paymentApplicationId(original.getPaymentApplicationId())
                                 .reversalId(saved.getReversalId())
@@ -435,15 +445,35 @@ public class PaymentApplicationService {
                                 .reversedBy(reversedBy)
                                 .build();
 
-                var invoiceResponse = invoiceServiceClient.reversePaymentApplication(
-                                original.getInvoiceId(),
-                                invoiceRequest);
+                try {
+                        var invoiceResponse = invoiceServiceClient.reversePaymentApplication(
+                                        original.getInvoiceId(),
+                                        invoiceRequest);
 
-                log.info("Reversed invoice balance for invoice {} via service call, restored amount: {} (reason: {})",
-                                original.getInvoiceId(), original.getAppliedAmount(), reason);
-                log.info("Invoice {} new balance: {} (was {})",
-                                original.getInvoiceId(), invoiceResponse.getBalanceDue(),
-                                invoiceResponse.getBalanceBefore());
+                        log.info("Reversed invoice balance for invoice {} via service call, restored amount: {} (reason: {})",
+                                        original.getInvoiceId(), original.getAppliedAmount(), reason);
+                        log.info("Invoice {} new balance: {} (was {})",
+                                        original.getInvoiceId(), invoiceResponse.getBalanceDue(),
+                                        invoiceResponse.getBalanceBefore());
+                } catch (InvoiceServiceException e) {
+                        // Invoice service call failed — allow DB transaction to roll back
+                        // so local reversal record + payment unapplied amount are NOT persisted.
+                        // This keeps Accounting and Invoice services in sync.
+                        log.error("Failed to restore invoice {} balance during reversal of payment application {} "
+                                        + "(amount: {}, reversalId: {}). Local changes will be rolled back.",
+                                        original.getInvoiceId(), paymentApplicationId,
+                                        original.getAppliedAmount(), saved.getReversalId(), e);
+
+                        HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
+                        if (status == null || status.is5xxServerError()) {
+                                status = HttpStatus.SERVICE_UNAVAILABLE;
+                        }
+                        throw new ResponseStatusException(status,
+                                        String.format("Failed to restore invoice %s balance during reversal of payment application %s. "
+                                                        + "Local changes have been rolled back.",
+                                                        original.getInvoiceId(), paymentApplicationId),
+                                        e);
+                }
 
                 log.info("Created reversal {} for application {} by {} (reason: {})",
                                 saved.getReversalId(), paymentApplicationId, reversedBy, reason);
@@ -536,7 +566,6 @@ public class PaymentApplicationService {
                         UUID invoiceId,
                         ApplyPaymentToInvoiceResponse invoiceResponse) {
 
-                // TODO #3: Fetch actual invoice balance before/after
                 return PaymentApplicationResponse.ApplicationDetail.builder()
                                 .paymentApplicationId(application.getPaymentApplicationId())
                                 .invoiceId(invoiceId)

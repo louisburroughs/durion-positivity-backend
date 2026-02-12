@@ -59,7 +59,7 @@ public class PostingRuleSet {
     @Column(name = "description", length = 500)
     private String description;
 
-    @OneToMany(mappedBy = "postingRuleSetId", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "postingRuleSet", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("versionNumber DESC")
     private List<PostingRuleVersion> versions = new ArrayList<>();
 

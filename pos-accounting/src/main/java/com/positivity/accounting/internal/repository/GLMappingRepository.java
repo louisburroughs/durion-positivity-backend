@@ -54,6 +54,20 @@ public interface GLMappingRepository extends JpaRepository<GLMapping, UUID> {
                         LocalDateTime transactionDate);
 
         /**
+         * Find all GL mappings by posting category and mapping key effective at a
+         * specific date.
+         * Returns all candidates (with and without dimensions) for in-memory
+         * dimensional matching.
+         */
+        @Query("SELECT glm FROM GLMapping glm " +
+                        "WHERE glm.postingCategoryId = :postingCategoryId " +
+                        "AND glm.mappingKeyId = :mappingKeyId " +
+                        "AND glm.effectiveStartDate <= :transactionDate " +
+                        "AND (glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > :transactionDate)")
+        List<GLMapping> findAllEffectiveMappings(UUID postingCategoryId, UUID mappingKeyId,
+                        LocalDateTime transactionDate);
+
+        /**
          * Find all active mappings (no end date or end date in future).
          */
         @Query("SELECT glm FROM GLMapping glm WHERE glm.effectiveEndDate IS NULL OR glm.effectiveEndDate > CURRENT_TIMESTAMP")

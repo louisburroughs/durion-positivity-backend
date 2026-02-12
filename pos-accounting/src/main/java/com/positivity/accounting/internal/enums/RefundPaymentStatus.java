@@ -13,5 +13,13 @@ public enum RefundPaymentStatus {
     /**
      * Payment has been settled.
      */
-    SETTLED
+    SETTLED,
+    /**
+     * Payment settlement failed.
+     */
+    FAILED,
+    /**
+     * Payment has been authorized but not yet settled.
+     */
+    AUTHORIZED
 }

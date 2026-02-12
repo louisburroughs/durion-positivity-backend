@@ -37,7 +37,8 @@ import lombok.ToString;
         @Index(name = "idx_vendor_bill_status", columnList = "status"),
         @Index(name = "idx_vendor_bill_number", columnList = "bill_number"),
         @Index(name = "idx_vendor_bill_due_date", columnList = "due_date"),
-        @Index(name = "idx_vendor_bill_origin_event", columnList = "origin_event_id")
+        @Index(name = "idx_vendor_bill_origin_event", columnList = "origin_event_id"),
+        @Index(name = "idx_vendor_bill_po", columnList = "purchase_order_id")
 })
 public class VendorBill {
 
@@ -77,6 +78,13 @@ public class VendorBill {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private VendorBillStatus status = VendorBillStatus.PENDING_REVIEW;
+
+    // Purchase Order reference (for three-way matching)
+    @Column(name = "purchase_order_id")
+    private UUID purchaseOrderId;
+
+    @Column(name = "purchase_order_number", length = 50)
+    private String purchaseOrderNumber;
 
     // Traceability
     @Column(name = "origin_event_id")

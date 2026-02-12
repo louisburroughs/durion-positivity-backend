@@ -28,6 +28,7 @@ import org.springframework.data.domain.Pageable;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 
 /**
@@ -39,222 +40,236 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
 @DisplayName("EventIngestionService Unit Tests")
 class EventIngestionServiceTest {
 
-    @Mock
-    private JournalEntryService journalEntryService;
+        @Mock
+        private AccountingEventRepository accountingEventRepository;
 
-    @Mock
-    private AccountingEventRepository accountingEventRepository;
+        @Mock
+        private com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
 
-    @InjectMocks
-    private EventIngestionService service;
+        @Mock
+        private IdempotencyService idempotencyService;
 
-    private UUID testOrganizationId;
-    private UUID testEventId;
-    private AccountingEvent testEvent;
-    private Map<String, Object> testEventMap;
+        @Mock
+        private com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository auditTrailEntryRepository;
 
-    @BeforeEach
-    void setUp() {
-        testOrganizationId = UUID.randomUUID();
-        testEventId = UUID.randomUUID();
+        @Mock
+        private PostingEngineOrchestrator postingEngineOrchestrator;
 
-        testEvent = new AccountingEvent();
-        testEvent.setEventId(testEventId);
-        testEvent.setOrganizationId(testOrganizationId);
-        testEvent.setEventType("INVOICE_RECEIVED");
-        testEvent.setTransactionDate(LocalDateTime.now());
-        testEvent.setPayload(Map.of("amount", "1500.00"));
-        testEvent.setStatus(AccountingEventStatus.RECEIVED);
-        testEvent.setReceivedAt(Instant.now());
+        @InjectMocks
+        private EventIngestionService service;
 
-        testEventMap = Map.of(
-                "eventId", testEventId,
-                "organizationId", testOrganizationId,
-                "eventType", "INVOICE_RECEIVED",
-                "sourceSystem", "MYOB",
-                "transactionDate", LocalDateTime.now(),
-                "payload", Map.of("amount", "1500.00"));
-    }
+        private UUID testOrganizationId;
+        private UUID testEventId;
+        private AccountingEvent testEvent;
+        private Map<String, Object> testEventMap;
 
-    @Test
-    @DisplayName("listEvents should return paginated events for organization")
-    void testListEvents_WithOrganizationId() {
-        // Arrange
-        List<AccountingEvent> events = List.of(testEvent);
-        Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
-        Pageable pageable = PageRequest.of(0, 20);
+        @BeforeEach
+        void setUp() {
+                testOrganizationId = UUID.randomUUID();
+                testEventId = UUID.randomUUID();
 
-        when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
-                .thenReturn(eventPage);
+                testEvent = new AccountingEvent();
+                testEvent.setEventId(testEventId);
+                testEvent.setOrganizationId(testOrganizationId);
+                testEvent.setEventType("INVOICE_RECEIVED");
+                testEvent.setTransactionDate(LocalDateTime.now());
+                testEvent.setPayload(Map.of("amount", "1500.00"));
+                testEvent.setStatus(AccountingEventStatus.RECEIVED);
+                testEvent.setReceivedAt(Instant.now());
 
-        // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
+                testEventMap = Map.of(
+                                "eventId", testEventId,
+                                "organizationId", testOrganizationId,
+                                "eventType", "INVOICE_RECEIVED",
+                                "sourceSystem", "MYOB",
+                                "transactionDate", LocalDateTime.now(),
+                                "payload", Map.of("amount", "1500.00"));
+        }
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).getEventId()).isEqualTo(testEventId);
-        assertThat(result.getContent().get(0).getEventType()).isEqualTo("INVOICE_RECEIVED");
-        assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+        @Test
+        @DisplayName("listEvents should return paginated events for organization")
+        void testListEvents_WithOrganizationId() {
+                // Arrange
+                List<AccountingEvent> events = List.of(testEvent);
+                Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
+                Pageable pageable = PageRequest.of(0, 20);
 
-        verify(accountingEventRepository).findByOrganizationId(testOrganizationId, pageable);
-    }
+                when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
+                                .thenReturn(eventPage);
 
-    @Test
-    @DisplayName("listEvents should filter by status when provided")
-    void testListEvents_WithStatusFilter() {
-        // Arrange
-        List<AccountingEvent> events = List.of(testEvent);
-        Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
-        Pageable pageable = PageRequest.of(0, 20);
+                // Act
+                Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
 
-        when(accountingEventRepository.findByOrganizationIdAndStatus(
-                testOrganizationId, AccountingEventStatus.RECEIVED, pageable))
-                .thenReturn(eventPage);
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result.getContent()).hasSize(1);
+                assertThat(result.getContent().get(0).getEventId()).isEqualTo(testEventId);
+                assertThat(result.getContent().get(0).getEventType()).isEqualTo("INVOICE_RECEIVED");
+                assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
-        // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "RECEIVED", pageable);
+                verify(accountingEventRepository).findByOrganizationId(testOrganizationId, pageable);
+        }
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+        @Test
+        @DisplayName("listEvents should filter by status when provided")
+        void testListEvents_WithStatusFilter() {
+                // Arrange
+                List<AccountingEvent> events = List.of(testEvent);
+                Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
+                Pageable pageable = PageRequest.of(0, 20);
 
-        verify(accountingEventRepository).findByOrganizationIdAndStatus(
-                testOrganizationId, AccountingEventStatus.RECEIVED, pageable);
-    }
+                when(accountingEventRepository.findByOrganizationIdAndStatus(
+                                testOrganizationId, AccountingEventStatus.RECEIVED, pageable))
+                                .thenReturn(eventPage);
 
-    @Test
-    @DisplayName("listEvents should handle invalid status filter gracefully")
-    void testListEvents_WithInvalidStatusFilter() {
-        // Arrange
-        List<AccountingEvent> events = List.of(testEvent);
-        Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
-        Pageable pageable = PageRequest.of(0, 20);
+                // Act
+                Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "RECEIVED", pageable);
 
-        when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
-                .thenReturn(eventPage);
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result.getContent()).hasSize(1);
+                assertThat(result.getContent().get(0).getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
-        // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "INVALID_STATUS", pageable);
+                verify(accountingEventRepository).findByOrganizationIdAndStatus(
+                                testOrganizationId, AccountingEventStatus.RECEIVED, pageable);
+        }
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).hasSize(1);
+        @Test
+        @DisplayName("listEvents should handle invalid status filter gracefully")
+        void testListEvents_WithInvalidStatusFilter() {
+                // Arrange
+                List<AccountingEvent> events = List.of(testEvent);
+                Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
+                Pageable pageable = PageRequest.of(0, 20);
 
-        // Should fall back to listing all events without status filter
-        verify(accountingEventRepository).findByOrganizationId(testOrganizationId, pageable);
-    }
+                when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
+                                .thenReturn(eventPage);
 
-    @Test
-    @DisplayName("listEvents should return empty page when no events found")
-    void testListEvents_NoEventsFound() {
-        // Arrange
-        Page<AccountingEvent> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
-        Pageable pageable = PageRequest.of(0, 20);
+                // Act
+                Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, "INVALID_STATUS",
+                                pageable);
 
-        when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
-                .thenReturn(emptyPage);
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result.getContent()).hasSize(1);
 
-        // Act
-        Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
+                // Should fall back to listing all events without status filter
+                verify(accountingEventRepository).findByOrganizationId(testOrganizationId, pageable);
+        }
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.getContent()).isEmpty();
-        assertThat(result.getTotalElements()).isEqualTo(0);
-    }
+        @Test
+        @DisplayName("listEvents should return empty page when no events found")
+        void testListEvents_NoEventsFound() {
+                // Arrange
+                Page<AccountingEvent> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+                Pageable pageable = PageRequest.of(0, 20);
 
-    @Test
-    @DisplayName("getEventById should return event when found")
-    void testGetEventById_Found() {
-        // Arrange
-        when(accountingEventRepository.findById(testEventId))
-                .thenReturn(Optional.of(testEvent));
+                when(accountingEventRepository.findByOrganizationId(testOrganizationId, pageable))
+                                .thenReturn(emptyPage);
 
-        // Act
-        AccountingEventResponse result = service.getEventById(testEventId);
+                // Act
+                Page<AccountingEventResponse> result = service.listEvents(testOrganizationId, null, pageable);
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.getEventId()).isEqualTo(testEventId);
-        assertThat(result.getEventType()).isEqualTo("INVOICE_RECEIVED");
-        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result.getContent()).isEmpty();
+                assertThat(result.getTotalElements()).isEqualTo(0);
+        }
 
-        verify(accountingEventRepository).findById(testEventId);
-    }
+        @Test
+        @DisplayName("getEventById should return event when found")
+        void testGetEventById_Found() {
+                // Arrange
+                when(accountingEventRepository.findById(testEventId))
+                                .thenReturn(Optional.of(testEvent));
 
-    @Test
-    @DisplayName("getEventById should throw exception when event not found")
-    void testGetEventById_NotFound() {
-        // Arrange
-        when(accountingEventRepository.findById(testEventId))
-                .thenReturn(Optional.empty());
+                // Act
+                AccountingEventResponse result = service.getEventById(testEventId);
 
-        // Act & Assert
-        assertThatThrownBy(() -> service.getEventById(testEventId))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Event not found");
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result.getEventId()).isEqualTo(testEventId);
+                assertThat(result.getEventType()).isEqualTo("INVOICE_RECEIVED");
+                assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
 
-        verify(accountingEventRepository).findById(testEventId);
-    }
+                verify(accountingEventRepository).findById(testEventId);
+        }
 
-    @Test
-    @DisplayName("getEvent should return event payload when found")
-    void testGetEvent_Found() {
-        // Arrange
-        when(accountingEventRepository.findById(testEventId))
-                .thenReturn(Optional.of(testEvent));
+        @Test
+        @DisplayName("getEventById should throw exception when event not found")
+        void testGetEventById_NotFound() {
+                // Arrange
+                when(accountingEventRepository.findById(testEventId))
+                                .thenReturn(Optional.empty());
 
-        // Act
-        Map<String, Object> result = service.getEvent(testEventId);
+                // Act & Assert
+                assertThatThrownBy(() -> service.getEventById(testEventId))
+                                .isInstanceOf(EventNotFoundException.class)
+                                .hasMessageContaining("Event not found");
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result).containsEntry("amount", "1500.00");
+                verify(accountingEventRepository).findById(testEventId);
+        }
 
-        verify(accountingEventRepository).findById(testEventId);
-    }
+        @Test
+        @DisplayName("getEvent should return event payload when found")
+        void testGetEvent_Found() {
+                // Arrange
+                when(accountingEventRepository.findById(testEventId))
+                                .thenReturn(Optional.of(testEvent));
 
-    @Test
-    @DisplayName("getEvent should return empty map when event not found")
-    void testGetEvent_NotFound() {
-        // Arrange
-        when(accountingEventRepository.findById(testEventId))
-                .thenReturn(Optional.empty());
+                // Act
+                Map<String, Object> result = service.getEvent(testEventId);
 
-        // Act
-        Map<String, Object> result = service.getEvent(testEventId);
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result).containsEntry("amount", "1500.00");
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result).isEmpty();
+                verify(accountingEventRepository).findById(testEventId);
+        }
 
-        verify(accountingEventRepository).findById(testEventId);
-    }
+        @Test
+        @DisplayName("getEvent should return empty map when event not found")
+        void testGetEvent_NotFound() {
+                // Arrange
+                when(accountingEventRepository.findById(testEventId))
+                                .thenReturn(Optional.empty());
 
-    @Test
-    @DisplayName("submitEvent should persist event to database")
-    void testSubmitEvent_PersistsEvent() {
-        // Arrange
-        AccountingEvent savedEvent = new AccountingEvent();
-        savedEvent.setEventId(testEventId);
-        savedEvent.setOrganizationId(testOrganizationId);
-        savedEvent.setEventType("INVOICE_RECEIVED");
-        savedEvent.setStatus(AccountingEventStatus.RECEIVED);
-        savedEvent.setReceivedAt(Instant.now());
+                // Act
+                Map<String, Object> result = service.getEvent(testEventId);
 
-        when(accountingEventRepository.save(any(AccountingEvent.class)))
-                .thenReturn(savedEvent);
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result).isEmpty();
 
-        // Act
-        AccountingEventResponse result = service.submitEvent(testEventMap);
+                verify(accountingEventRepository).findById(testEventId);
+        }
 
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.getEventId()).isEqualTo(testEventId);
-        assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+        @Test
+        @DisplayName("submitEvent should persist event to database")
+        void testSubmitEvent_PersistsEvent() {
+                // Arrange
+                AccountingEvent savedEvent = new AccountingEvent();
+                savedEvent.setEventId(testEventId);
+                savedEvent.setOrganizationId(testOrganizationId);
+                savedEvent.setEventType("INVOICE_RECEIVED");
+                savedEvent.setStatus(AccountingEventStatus.RECEIVED);
+                savedEvent.setReceivedAt(Instant.now());
 
-        verify(accountingEventRepository).save(any(AccountingEvent.class));
-    }
+                when(idempotencyService.isKeyProcessed(any(String.class)))
+                                .thenReturn(false); // Not a duplicate
+                when(accountingEventRepository.save(any(AccountingEvent.class)))
+                                .thenReturn(savedEvent);
+
+                // Act
+                AccountingEventResponse result = service.submitEvent(testEventMap);
+
+                // Assert
+                assertThat(result).isNotNull();
+                assertThat(result.getEventId()).isEqualTo(testEventId);
+                assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+
+                verify(idempotencyService).isKeyProcessed(any(String.class));
+                verify(accountingEventRepository).save(any(AccountingEvent.class));
+                verify(idempotencyService).registerKey(any(String.class), any(UUID.class));
+        }
 }
