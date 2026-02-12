@@ -12,5 +12,9 @@ public enum CancellationType {
     /**
      * Invoice cancellation.
      */
-    INVOICE_CANCELLED
+    INVOICE_CANCELLED,
+    /**
+     * Payment failure.
+     */
+    PAYMENT_FAILED
 }
