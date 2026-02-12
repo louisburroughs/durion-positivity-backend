@@ -63,9 +63,7 @@ public class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
     private UUID revenueAccountId;
 
     @BeforeEach
-    @Override
-    public void setUpMockMvc() {
-        super.setUpMockMvc();
+    void setUp() {
         // Clean up before each test
         journalEntryRepository.deleteAll();
         glAccountRepository.deleteAll();

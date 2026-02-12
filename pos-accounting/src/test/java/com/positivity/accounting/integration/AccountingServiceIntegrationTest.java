@@ -44,9 +44,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
   private static final UUID VENDOR_ID = UUID.fromString("00000000-0000-4000-a000-000000000005");
 
   @BeforeEach
-  @Override
-  public void setUpMockMvc() {
-    super.setUpMockMvc();
+  void setUp() {
     glAccountRepository.deleteAll();
   }
 
