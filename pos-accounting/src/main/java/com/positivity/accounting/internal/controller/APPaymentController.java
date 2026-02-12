@@ -106,6 +106,18 @@ public class APPaymentController {
         public @NonNull ResponseEntity<APPaymentResponse> getPaymentByRef(
                         @PathVariable @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NonNull String paymentRef) {
 
+                // Validate paymentRef to prevent log injection (S5145):
+                // Must be 1-100 characters and not contain control characters (newlines, carriage returns)
+                // to prevent CRLF injection that could create fake log entries or manipulate audit trails
+                if (paymentRef == null || paymentRef.isEmpty() || paymentRef.length() > 100) {
+                        throw new IllegalArgumentException(
+                                        "Invalid payment reference: must be 1-100 characters");
+                }
+                if (paymentRef.matches(".*[\\r\\n].*")) {
+                        throw new IllegalArgumentException(
+                                        "Invalid payment reference: must not contain newline characters");
+                }
+
                 return apPaymentService.getPaymentByRef(paymentRef)
                                 .map(ResponseEntity::ok)
                                 .orElse(ResponseEntity.notFound().build());
