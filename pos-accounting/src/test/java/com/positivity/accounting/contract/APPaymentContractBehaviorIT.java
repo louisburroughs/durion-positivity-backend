@@ -71,7 +71,9 @@ public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
         private VendorBill bill2; // Due newer
 
         @BeforeEach
-        void setUp() {
+        @Override
+        public void setUpMockMvc() {
+                super.setUpMockMvc();
                 // Clean up any existing test data
                 allocationRepository.deleteAll();
                 apPaymentRepository.deleteAll();
