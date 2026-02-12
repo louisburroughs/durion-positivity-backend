@@ -276,7 +276,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                             .statementLineCode(statementLineCode)
                             .build();
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -323,7 +323,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                                 .sourceEventId(entry.getSourceEventId())
                                 .sourceEventType(entry.getSourceEventType())
                                 .build()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     // ========== Private Helper Methods ==========

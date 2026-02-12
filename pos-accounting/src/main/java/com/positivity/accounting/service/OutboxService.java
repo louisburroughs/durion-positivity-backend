@@ -73,7 +73,7 @@ public class OutboxService {
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize event to JSON | eventId={} | eventType={}",
                     eventId, eventType, e);
-            throw new IllegalStateException("Failed to serialize event for outbox", e);
+            throw new IllegalArgumentException("Failed to serialize event for outbox", e);
         }
     }
 
