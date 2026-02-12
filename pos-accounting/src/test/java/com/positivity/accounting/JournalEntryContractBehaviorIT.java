@@ -18,15 +18,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import tools.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
@@ -53,17 +46,8 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
  * - GL account validation
  * - Pagination and sorting
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
 @DisplayName("Journal Entry Backend Contract Behavioral Tests")
-public class JournalEntryContractBehaviorIT {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+public class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
     private JournalEntryRepository journalEntryRepository;
@@ -74,38 +58,25 @@ public class JournalEntryContractBehaviorIT {
     private static final String API_V1_JOURNAL_ENTRIES = "/v1/accounting/journal-entries";
     private static final String API_V1_GL_ACCOUNTS = "/v1/accounting/gl-accounts";
 
-    // Gateway header values — mirrors what pos-api-gateway injects after JWT validation
-    private static final String TEST_USER = "testuser";
-    private static final String TEST_AUTHORITIES = String.join(",",
-            "accounting:je:view",
-            "accounting:je:create",
-            "accounting:je:post",
-            "accounting:je:reverse",
-            "accounting:coa:create");
-
     // Test data
     private UUID cashAccountId;
     private UUID revenueAccountId;
 
-    /**
-     * Adds gateway authentication headers to a request builder.
-     * Mirrors the headers injected by pos-api-gateway after JWT validation.
-     */
-    private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-        return builder
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", TEST_AUTHORITIES);
-    }
-
     @BeforeEach
-    void setUp() throws Exception {
+    @Override
+    public void setUpMockMvc() {
+        super.setUpMockMvc();
         // Clean up before each test
         journalEntryRepository.deleteAll();
         glAccountRepository.deleteAll();
 
         // Create test GL accounts
-        cashAccountId = createGLAccount("1000", "Cash", AccountType.ASSET);
-        revenueAccountId = createGLAccount("4000", "Revenue", AccountType.REVENUE);
+        try {
+            cashAccountId = createGLAccount("1000", "Cash", AccountType.ASSET);
+            revenueAccountId = createGLAccount("4000", "Revenue", AccountType.REVENUE);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create test GL accounts", e);
+        }
     }
 
     @AfterEach

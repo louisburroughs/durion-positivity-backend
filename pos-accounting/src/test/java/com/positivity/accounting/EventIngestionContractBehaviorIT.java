@@ -17,15 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import tools.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
@@ -48,46 +41,21 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
  * - Idempotency constraints
  * - Error handling (404, 409)
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
 @DisplayName("Event Ingestion Backend Contract Behavioral Tests")
-public class EventIngestionContractBehaviorIT {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+public class EventIngestionContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
     private AccountingEventRepository accountingEventRepository;
 
     private static final String API_V1_EVENTS = "/v1/accounting/events";
 
-    // Gateway header values — mirrors what pos-api-gateway injects after JWT validation
-    private static final String TEST_USER = "testuser";
-    private static final String TEST_AUTHORITIES = String.join(",",
-            "accounting:events:view",
-            "accounting:events:submit",
-            "accounting:events:retry",
-            "accounting:events:reprocess");
-
     // Test data
     private UUID testOrganizationId;
 
-    /**
-     * Adds gateway authentication headers to a request builder.
-     * Mirrors the headers injected by pos-api-gateway after JWT validation.
-     */
-    private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-        return builder
-                .header("X-User", TEST_USER)
-                .header("X-Authorities", TEST_AUTHORITIES);
-    }
-
     @BeforeEach
-    void setUp() {
+    @Override
+    public void setUpMockMvc() {
+        super.setUpMockMvc();
         // Clean up before each test
         accountingEventRepository.deleteAll();
         testOrganizationId = UUID.randomUUID();

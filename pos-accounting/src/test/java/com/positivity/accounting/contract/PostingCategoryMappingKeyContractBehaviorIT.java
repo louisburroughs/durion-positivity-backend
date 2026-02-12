@@ -4,14 +4,10 @@ import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
-import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.Map;
@@ -33,16 +29,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * Tests run against the actual service in test mode (not mocked).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("Posting Category and Mapping Key Contract Behavioral Tests")
-public class PostingCategoryMappingKeyContractBehaviorIT {
-
-        @Autowired
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
+public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegrationTest {
 
         private static final String API_V1 = "/v1/accounting";
 
