@@ -131,6 +131,10 @@ public final class AccountingEventTypes {
                                 EventTypeRegistration.write("VENDOR_BILL_GL_POSTING",
                                                 "Post vendor bill to GL (Dr Inventory/Expense, Cr AP)").build(),
                                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET_BY_EVENT",
-                                                "Get vendor bill by origin event ID (idempotency check)").build());
+                                                "Get vendor bill by origin event ID (idempotency check)").build(),
+
+                                // AP Payment GL Posting - 1 event (Issue #128)
+                                EventTypeRegistration.write("AP_PAYMENT_GL_POSTING",
+                                                "Post AP payment to GL (Dr AP, Cr Cash/Bank)").build());
         }
 }

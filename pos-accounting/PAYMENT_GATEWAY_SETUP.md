@@ -95,6 +95,7 @@ APPaymentResponse response = apPaymentService.executePayment(
         grossAmount = BigDecimal.valueOf(10000.00),
         currency = "USD",
         paymentMethod = PaymentMethod.ACH,
+        paymentSource = "tok_visa", // Stripe token from frontend tokenization
         memo = "Invoice #INV-2026-001"
     ),
     currentUser = "user@example.com"
@@ -184,7 +185,7 @@ public class SquarePaymentGateway implements PaymentGatewayProvider {
 }
 ```
 
-2. **Add dependencies** to `pom.xml`:
+1. **Add dependencies** to `pom.xml`:
 
 ```xml
 <dependency>
@@ -194,7 +195,7 @@ public class SquarePaymentGateway implements PaymentGatewayProvider {
 </dependency>
 ```
 
-3. **Configure in application.yml**:
+1. **Configure in application.yml**:
 
 ```yaml
 payment:
@@ -206,7 +207,7 @@ square:
   environment: sandbox  # or production
 ```
 
-4. **Switch provider** via environment:
+1. **Switch provider** via environment:
 
 ```bash
 export PAYMENT_GATEWAY_PROVIDER=square
@@ -225,20 +226,22 @@ export PAYMENT_GATEWAY_PROVIDER=square
 
 - **Never collect raw card data** in your application
 - Use Stripe's tokenization flow:
-  - Frontend collects card → Creates a token
-  - Send token to backend
-  - Backend passes token to Stripe API
+  - Frontend collects card → Creates a token (e.g., `tok_visa`)
+  - Send token to backend as `paymentSource`
+  - Backend passes `paymentSource` to Stripe API via `GatewayPaymentRequest`
 - All card data remains within the Stripe/gateway network
 
 ### Logging
 
 The integration logs:
+
 - Payment initiation (no sensitive data)
 - Gateway transaction IDs
 - Status changes
 - Failures and retry attempts
 
 **Sensitive data is never logged**:
+
 - API keys
 - Card numbers
 - Cardholder data
@@ -314,6 +317,7 @@ class StripePaymentGatewayIT {
             "USD",
             PaymentMethod.CREDIT_CARD,
             "vendor_123",
+            "tok_visa", // Stripe test token
             "Test payment"
         );
         
@@ -332,6 +336,7 @@ class StripePaymentGatewayIT {
 **Cause**: Missing `STRIPE_API_KEY` environment variable or `stripe.api-key` property
 
 **Solution**:
+
 ```bash
 # Set the environment variable
 export STRIPE_API_KEY="sk_test_..."
@@ -344,6 +349,7 @@ stripe:
 ### `PaymentGatewayException: Stripe payment failed`
 
 Check the error message for the underlying issue:
+
 - Insufficient funds
 - Card declined
 - Invalid card details
@@ -352,6 +358,7 @@ Check the error message for the underlying issue:
 ### `Idempotency conflict detected`
 
 The same `paymentRef` was submitted within the idempotency window. This is **safe** and expected behavior:
+
 - Application will return the existing payment
 - No duplicate charge occurs
 - Normal retry scenarios are protected
@@ -359,6 +366,7 @@ The same `paymentRef` was submitted within the idempotency window. This is **saf
 ## Monitoring & Observability
 
 The integration includes:
+
 - Info-level logs for successful payments
 - Error-level logs for failures
 - Gateway transaction IDs in response (for reconciliation with Stripe dashboard)

@@ -60,6 +60,11 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional
 public class EventIngestionService {
 
+    private static final String EVENT_SPACE = "Event ";
+    private static final String EVENT_TYPE = "eventType";
+    private static final String TRANSACTION_DATE = "transactionDate";
+    private static final String ORGANIZATION_ID = "organizationId";
+    private static final String SOURCE_SYSTEM = "sourceSystem";
     private final AccountingEventRepository accountingEventRepository;
     private final com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
     private final IdempotencyService idempotencyService;
@@ -95,10 +100,10 @@ public class EventIngestionService {
      * @throws IllegalArgumentException if event is invalid or rule set not found
      */
     public AccountingEventResponse submitEvent(Map<String, Object> event) {
-        UUID organizationId = (UUID) event.get("organizationId");
-        String sourceSystem = (String) event.get("sourceSystem");
-        LocalDateTime transactionDate = (LocalDateTime) event.get("transactionDate");
-        String eventType = (String) event.get("eventType");
+        UUID organizationId = (UUID) event.get(ORGANIZATION_ID);
+        String sourceSystem = (String) event.get(SOURCE_SYSTEM);
+        LocalDateTime transactionDate = (LocalDateTime) event.get(TRANSACTION_DATE);
+        String eventType = (String) event.get(EVENT_TYPE);
 
         log.info("Processing event type {} for org {} from {} on {}",
                 eventType, organizationId, sourceSystem, transactionDate);
@@ -212,7 +217,7 @@ public class EventIngestionService {
 
         // BR-3: Idempotency check - reject if already PROCESSED
         if (event.getStatus() == AccountingEventStatus.PROCESSED) {
-            String msg = "Event " + eventId + " is already PROCESSED. Reprocessing would create duplicate posting.";
+            String msg = EVENT_SPACE + eventId + " is already PROCESSED. Reprocessing would create duplicate posting.";
             log.warn(msg);
             throw new IllegalStateException(msg);
         }
@@ -220,7 +225,7 @@ public class EventIngestionService {
         // Verify event is SUSPENDED or FAILED (eligible for reprocessing)
         if (event.getStatus() != AccountingEventStatus.SUSPENDED
                 && event.getStatus() != AccountingEventStatus.FAILED) {
-            String msg = "Event " + eventId + " has status " + event.getStatus()
+            String msg = EVENT_SPACE + eventId + " has status " + event.getStatus()
                     + " and cannot be reprocessed. Only SUSPENDED or FAILED events can be reprocessed.";
             log.warn(msg);
             throw new IllegalStateException(msg);
@@ -324,7 +329,7 @@ public class EventIngestionService {
 
         if (auditEntries.isEmpty()) {
             log.debug("No audit trail entries found for event {}", eventId);
-            return List.of("Event " + eventId + ": No processing log entries found");
+            return List.of(EVENT_SPACE + eventId + ": No processing log entries found");
         }
 
         // Format audit entries as log messages
@@ -455,16 +460,16 @@ public class EventIngestionService {
     public List<String> validateEvent(Map<String, Object> event) {
         List<String> errors = new java.util.ArrayList<>();
 
-        if (event.get("organizationId") == null) {
+        if (event.get(ORGANIZATION_ID) == null) {
             errors.add("organizationId is required");
         }
-        if (event.get("sourceSystem") == null) {
+        if (event.get(SOURCE_SYSTEM) == null) {
             errors.add("sourceSystem is required");
         }
-        if (event.get("transactionDate") == null) {
+        if (event.get(TRANSACTION_DATE) == null) {
             errors.add("transactionDate is required");
         }
-        if (event.get("eventType") == null) {
+        if (event.get(EVENT_TYPE) == null) {
             errors.add("eventType is required");
         }
         if (event.get("payload") == null) {
@@ -479,10 +484,10 @@ public class EventIngestionService {
      * Uses organizationId, sourceSystem, eventType, transactionDate, and payload.
      */
     private String computeEventHash(Map<String, Object> event) {
-        String content = String.valueOf(event.get("organizationId"))
-                + "|" + event.get("sourceSystem")
-                + "|" + event.get("eventType")
-                + "|" + event.get("transactionDate")
+        String content = String.valueOf(event.get(ORGANIZATION_ID))
+                + "|" + event.get(SOURCE_SYSTEM)
+                + "|" + event.get(EVENT_TYPE)
+                + "|" + event.get(TRANSACTION_DATE)
                 + "|" + event.get("payload");
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

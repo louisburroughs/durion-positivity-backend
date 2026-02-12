@@ -12,10 +12,12 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
@@ -48,6 +50,7 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final APPaymentAllocationRepository allocationRepository;
     private final VendorBillRepository billRepository;
     private final PaymentGatewayProvider paymentGateway;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -87,6 +90,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                     request.getCurrency(),
                     request.getPaymentMethod(),
                     request.getVendorId().toString(),
+                    request.getPaymentSource(),
                     request.getMemo(),
                     "ap_payment"); // metadata tags
 
@@ -118,9 +122,47 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Apply allocations (validation errors bubble up as IllegalArgumentException)
             applyAllocations(payment, request);
 
-            // Emit event for GL posting (TODO: integrate with outbox pattern)
+            // Emit event for GL posting
+            // TODO: integrate with outbox pattern for at-least-once delivery guarantee
             payment.setStatus(APPaymentStatus.GL_POST_PENDING);
             payment = paymentRepository.save(payment);
+
+            List<APPaymentAllocation> savedAllocations = allocationRepository
+                    .findByPaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+
+            APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
+                    .eventId(UUID.randomUUID())
+                    .paymentId(payment.getPaymentId())
+                    .paymentRef(payment.getPaymentRef())
+                    .vendorId(payment.getVendorId())
+                    .vendorName(payment.getVendorName())
+                    .grossAmount(payment.getGrossAmount())
+                    .feeAmount(payment.getFeeAmount())
+                    .netAmount(payment.getNetAmount())
+                    .unappliedAmount(payment.getUnappliedAmount())
+                    .currency(payment.getCurrency())
+                    .paymentMethod(payment.getPaymentMethod() != null
+                            ? payment.getPaymentMethod().name()
+                            : null)
+                    .gatewayTransactionId(payment.getGatewayTransactionId())
+                    .gatewayTimestamp(payment.getGatewayTimestamp())
+                    .memo(payment.getMemo())
+                    .allocations(savedAllocations.stream()
+                            .map(a -> APPaymentGLPostingEvent.AllocationLine.builder()
+                                    .allocationId(a.getAllocationId())
+                                    .vendorBillId(a.getVendorBillId())
+                                    .appliedAmount(a.getAppliedAmount())
+                                    .allocationSequence(
+                                            a.getAllocationSequence() != null
+                                                    ? a.getAllocationSequence()
+                                                    : 0)
+                                    .build())
+                            .collect(Collectors.toList()))
+                    .build();
+
+            eventPublisher.publishEvent(glPostingEvent);
+            log.info("GL posting event emitted | paymentId={} | eventId={} | grossAmount={}",
+                    payment.getPaymentId(), glPostingEvent.getEventId(), payment.getGrossAmount());
 
             log.info("Payment {} executed successfully for vendor {}, amount {}",
                     payment.getPaymentRef(), payment.getVendorId(), payment.getGrossAmount());

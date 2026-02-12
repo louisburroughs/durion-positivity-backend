@@ -82,9 +82,23 @@ public class JournalEntryService {
 
     /**
      * Retrieves an existing journal entry by ID.
+     *
+     * <p>
+     * <strong>Note:</strong> Internal callers within this class must use
+     * {@link #findById(UUID)} instead, because self-invocation bypasses the
+     * Spring proxy and the {@code readOnly} hint would not be applied.
+     * </p>
      */
     @Transactional(readOnly = true)
     public JournalEntry getJournalEntry(UUID journalEntryId) {
+        return findById(journalEntryId);
+    }
+
+    /**
+     * Internal lookup — no transactional annotation so it inherits the caller's
+     * transaction context without the proxy-bypass pitfall.
+     */
+    private JournalEntry findById(UUID journalEntryId) {
         return journalEntryRepository.findById(journalEntryId)
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
     }
@@ -99,7 +113,7 @@ public class JournalEntryService {
      * @throws IllegalStateException if entry is not in DRAFT status
      */
     public JournalEntry updateJournalEntry(UUID journalEntryId, JournalEntry updates) {
-        JournalEntry entry = getJournalEntry(journalEntryId);
+        JournalEntry entry = findById(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
             String msg = "Cannot update " + entry.getStatus() + " journal entry " + journalEntryId;
@@ -133,7 +147,7 @@ public class JournalEntryService {
      *                               unbalanced
      */
     public JournalEntry postJournalEntry(UUID journalEntryId) {
-        JournalEntry entry = getJournalEntry(journalEntryId);
+        JournalEntry entry = findById(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
             String msg = "Cannot post " + entry.getStatus() + " journal entry " + journalEntryId;
@@ -169,7 +183,7 @@ public class JournalEntryService {
      * @throws IllegalArgumentException if original entry not found or not POSTED
      */
     public JournalEntry reverseJournalEntry(UUID originalEntryId, String reversalReason) {
-        JournalEntry original = getJournalEntry(originalEntryId);
+        JournalEntry original = findById(originalEntryId);
 
         if (original.getStatus() != JournalEntryStatus.POSTED) {
             String msg = "Cannot reverse " + original.getStatus() + " entry; only POSTED entries can be reversed";

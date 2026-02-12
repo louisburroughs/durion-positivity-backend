@@ -96,7 +96,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public PostingRuleSetResponse getPostingRuleSetAsResponse(UUID ruleSetId) {
-        PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
+        PostingRuleSet ruleSet = findRuleSetById(ruleSetId);
         return PostingRuleMapper.toResponse(ruleSet);
     }
 
@@ -127,13 +127,21 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public PostingRuleSet getPostingRuleSet(UUID ruleSetId) {
+        return findRuleSetById(ruleSetId);
+    }
+
+    /**
+     * Internal lookup — no transactional annotation so it inherits the caller's
+     * transaction context without the proxy-bypass pitfall.
+     */
+    private PostingRuleSet findRuleSetById(UUID ruleSetId) {
         return ruleSetRepository.findByIdWithVersions(ruleSetId)
                 .orElseThrow(() -> new IllegalArgumentException("Posting rule set not found: " + ruleSetId));
     }
 
     @Override
     public PostingRuleSet updatePostingRuleSet(UUID ruleSetId, PostingRuleSet updates) {
-        PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
+        PostingRuleSet ruleSet = findRuleSetById(ruleSetId);
 
         // Check if ruleset has a PUBLISHED version - cannot modify published rulesets
         List<PostingRuleVersion> versions = versionRepository
@@ -157,7 +165,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersion createVersion(UUID ruleSetId, PostingRuleVersion version) {
-        PostingRuleSet ruleSet = getPostingRuleSet(ruleSetId);
+        PostingRuleSet ruleSet = findRuleSetById(ruleSetId);
         List<PostingRuleVersion> existing = versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId);
         int maxVersion = existing.stream()
                 .map(PostingRuleVersion::getVersionNumber)
