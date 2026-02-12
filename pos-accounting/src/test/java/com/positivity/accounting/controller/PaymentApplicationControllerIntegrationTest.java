@@ -3,30 +3,17 @@ package com.positivity.accounting.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.web.context.WebApplicationContext;
-
+import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
@@ -39,6 +26,12 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -47,18 +40,8 @@ import tools.jackson.databind.ObjectMapper;
  * 
  * Tests full request/response cycle with actual database and Spring Security.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("Payment Application Controller Integration Tests")
-class PaymentApplicationControllerIntegrationTest {
-
-        @Autowired
-        private WebApplicationContext context;
-
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
+class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
         @Autowired
         private ReceivablePaymentRepository receivablePaymentRepository;
@@ -70,11 +53,6 @@ class PaymentApplicationControllerIntegrationTest {
         private InvoiceServiceClient invoiceServiceClient;
 
         private static final String API_V1 = "/v1/accounting";
-        private static final String TEST_USER = "testuser";
-        private static final String TEST_AUTHORITIES = String.join(",",
-                        "accounting:payment:apply",
-                        "accounting:payment:reverse",
-                        "ACCOUNTING_ADMIN");
 
         private UUID testPaymentId;
         private UUID testCustomerId;
@@ -82,14 +60,9 @@ class PaymentApplicationControllerIntegrationTest {
         private UUID testInvoice2Id;
 
         @BeforeEach
-        void setUp() {
-                // Initialize MockMvc with the production security filter chain.
-                // GatewayAuthoritiesFilter reads X-Authorities / X-User headers to populate
-                // SecurityContext — tests send those headers just as the API gateway would.
-                this.mockMvc = webAppContextSetup(context)
-                                .apply(springSecurity())
-                                .build();
-
+        @Override
+        public void setUpMockMvc() {
+                super.setUpMockMvc();
                 // Clean up test data
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();
@@ -140,15 +113,6 @@ class PaymentApplicationControllerIntegrationTest {
                                         .balanceDue(req.getAmountToRestore())
                                         .build();
                 });
-        }
-
-        /**
-         * Adds gateway authentication headers to a request builder.
-         */
-        private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-                return builder
-                                .header("X-User", TEST_USER)
-                                .header("X-Authorities", TEST_AUTHORITIES);
         }
 
         // ========================================

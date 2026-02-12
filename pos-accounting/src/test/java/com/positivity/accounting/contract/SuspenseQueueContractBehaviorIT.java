@@ -13,14 +13,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
@@ -41,40 +35,13 @@ import java.time.Instant;
  * 
  * Each test maps to an acceptance criterion defined in issue #122.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("Suspense Queue Reprocessing Contract Behavioral Tests (CAP:055)")
-public class SuspenseQueueContractBehaviorIT {
-
-        @Autowired
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
+public class SuspenseQueueContractBehaviorIT extends BaseIntegrationTest {
 
         @Autowired
         private AccountingEventRepository accountingEventRepository;
 
         private static final String API_V1 = "/v1/accounting/events";
-
-        // Gateway header values — mirrors what pos-api-gateway injects after JWT
-        // validation
-        private static final String TEST_USER = "testuser";
-        private static final String TEST_AUTHORITIES = String.join(",",
-                        "accounting:events:view",
-                        "accounting:events:submit",
-                        "accounting:events:retry",
-                        "accounting:events:reprocess");
-
-        /**
-         * Adds gateway authentication headers to a request builder.
-         * Mirrors the headers injected by pos-api-gateway after JWT validation.
-         */
-        private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-                return builder
-                                .header("X-User", TEST_USER)
-                                .header("X-Authorities", TEST_AUTHORITIES);
-        }
 
         // ===============================================
         // HAPPY PATH SCENARIOS

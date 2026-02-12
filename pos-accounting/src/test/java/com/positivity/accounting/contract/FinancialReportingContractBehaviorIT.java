@@ -39,13 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author Louis Burroughs
  * @since 2025-01-01
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Transactional
-class FinancialReportingContractBehaviorIT {
-
-        @Autowired
-        private MockMvc mockMvc;
+class FinancialReportingContractBehaviorIT extends BaseIntegrationTest {
 
         @Autowired
         private StatementLineMappingRepository statementLineMappingRepository;
@@ -58,7 +53,9 @@ class FinancialReportingContractBehaviorIT {
         private static final UUID EQUITY_ACCOUNT_ID = UUID.fromString("10000000-0000-0000-0000-000000000005");
 
         @BeforeEach
-        void setUp() {
+        @Override
+        public void setUpMockMvc() {
+                super.setUpMockMvc();
                 // Create sample statement line mappings for testing
                 createSampleStatementLineMappings();
         }
