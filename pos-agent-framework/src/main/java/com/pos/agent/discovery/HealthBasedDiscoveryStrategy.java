@@ -42,7 +42,7 @@ public class HealthBasedDiscoveryStrategy implements AgentDiscoveryStrategy {
     public List<Agent> filterHealthyAgents(List<Agent> agents) {
         return agents.stream()
                 .filter(Agent::isHealthy)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

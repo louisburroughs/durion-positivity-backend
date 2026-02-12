@@ -114,7 +114,7 @@ public class VehicleApplicabilityHintService {
 
         return hints.stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -148,7 +148,7 @@ public class VehicleApplicabilityHintService {
         // Convert Long IDs to String for response
         List<String> productIdStrings = productIdList.stream()
                 .map(String::valueOf)
-                .collect(Collectors.toList());
+                .toList();
         return new FilterProductsResponse(productIdStrings, productIdStrings.size());
     }
 
@@ -231,7 +231,7 @@ public class VehicleApplicabilityHintService {
 
         List<FitmentTagDto> tagDtos = hint.getFitmentTags().stream()
                 .map(tag -> new FitmentTagDto(tag.getTagType(), tag.getTagValue()))
-                .collect(Collectors.toList());
+                .toList();
 
         response.setFitmentTags(tagDtos);
 

@@ -182,11 +182,11 @@ public class PartyService {
         List<CommercialParty> allParties = partyRepository.findAll();
         List<CommercialParty> filtered = allParties.stream()
                 .filter(p -> matchesSearchCriteria(p, searchRequest))
-                .collect(Collectors.toList());
+                .toList();
 
         List<SearchPartiesResponse.PartySummary> summaries = filtered.stream()
                 .map(this::mapToPartySummary)
-                .collect(Collectors.toList());
+                .toList();
 
         log.debug("Found {} parties matching search criteria", summaries.size());
 
@@ -380,7 +380,7 @@ public class PartyService {
     public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO buildSnapshotForParty(String partyId) {
         log.debug("Building CRM snapshot for party: {}", partyId);
         CommercialParty party = findPartyById(partyId);
-        
+
         if (party == null) {
             return null;
         }
@@ -391,8 +391,10 @@ public class PartyService {
     private com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO assembleSnapshot(CommercialParty party) {
         com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta = createMetadata();
         com.positivity.customer.internal.dto.snapshot.AccountSummary acct = buildAccountSummary(party);
-        java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary> contacts = buildContactSummaries(party);
-        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(party);
+        java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary> contacts = buildContactSummaries(
+                party);
+        java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(
+                party);
         com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.BillingPreferences prefs = buildBillingPreferences();
 
         return new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs);
@@ -400,33 +402,33 @@ public class PartyService {
 
     private com.positivity.customer.internal.dto.snapshot.SnapshotMetadata createMetadata() {
         return new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
-            java.util.UUID.randomUUID(),
-            java.time.Instant.now(),
-            "1.0.0"
-        );
+                java.util.UUID.randomUUID(),
+                java.time.Instant.now(),
+                "1.0.0");
     }
 
     private com.positivity.customer.internal.dto.snapshot.AccountSummary buildAccountSummary(CommercialParty party) {
         String id = party.getPartyId().toString();
         String num = party.getPartyNumber() != null ? party.getPartyNumber() : "N/A";
-        String name = party.getDisplayName() != null && !party.getDisplayName().isBlank() 
-            ? party.getDisplayName() 
-            : (party.getLegalName() != null ? party.getLegalName() : "Unnamed Party");
+        String name = party.getDisplayName() != null && !party.getDisplayName().isBlank()
+                ? party.getDisplayName()
+                : (party.getLegalName() != null ? party.getLegalName() : "Unnamed Party");
         String type = party.getPartyType() != null ? party.getPartyType().name() : "UNKNOWN";
-        
+
         return new com.positivity.customer.internal.dto.snapshot.AccountSummary(id, num, name, type);
     }
 
-    private java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary> buildContactSummaries(CommercialParty party) {
+    private java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary> buildContactSummaries(
+            CommercialParty party) {
         java.util.List<Contact> contacts = findContactsByParty(party);
-        
+
         if (contacts == null || contacts.isEmpty()) {
             return java.util.Collections.emptyList();
         }
 
         return contacts.stream()
                 .map(this::convertContactToSummary)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     private com.positivity.customer.internal.dto.snapshot.ContactSummary convertContactToSummary(Contact contact) {
@@ -443,51 +445,57 @@ public class PartyService {
 
     private String formatContactName(Contact contact) {
         StringBuilder nameBuilder = new StringBuilder();
-        
+
         if (contact.getFirstName() != null && !contact.getFirstName().isBlank()) {
             nameBuilder.append(contact.getFirstName());
         }
-        
+
         if (contact.getLastName() != null && !contact.getLastName().isBlank()) {
             if (nameBuilder.length() > 0) {
                 nameBuilder.append(" ");
             }
             nameBuilder.append(contact.getLastName());
         }
-        
+
         return nameBuilder.length() > 0 ? nameBuilder.toString() : "Unknown Contact";
     }
 
-    private java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary.PhoneNumberDTO> buildPhoneList(Contact contact) {
+    private java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary.PhoneNumberDTO> buildPhoneList(
+            Contact contact) {
         java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary.PhoneNumberDTO> phones = new java.util.ArrayList<>();
-        
+
         if (contact.getPhoneNumber() != null && !contact.getPhoneNumber().isBlank()) {
-            phones.add(new com.positivity.customer.internal.dto.snapshot.ContactSummary.PhoneNumberDTO("PRIMARY", contact.getPhoneNumber()));
+            phones.add(new com.positivity.customer.internal.dto.snapshot.ContactSummary.PhoneNumberDTO("PRIMARY",
+                    contact.getPhoneNumber()));
         }
-        
+
         return phones;
     }
 
-    private java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary.EmailAddressDTO> buildEmailList(Contact contact) {
+    private java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary.EmailAddressDTO> buildEmailList(
+            Contact contact) {
         java.util.List<com.positivity.customer.internal.dto.snapshot.ContactSummary.EmailAddressDTO> emails = new java.util.ArrayList<>();
-        
+
         if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
-            emails.add(new com.positivity.customer.internal.dto.snapshot.ContactSummary.EmailAddressDTO("PRIMARY", contact.getEmail()));
+            emails.add(new com.positivity.customer.internal.dto.snapshot.ContactSummary.EmailAddressDTO("PRIMARY",
+                    contact.getEmail()));
         }
-        
+
         return emails;
     }
 
-    private java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(CommercialParty party) {
-        // Note: Vehicle summaries are currently not populated in party-initiated snapshots
+    private java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> buildVehicleSummaries(
+            CommercialParty party) {
+        // Note: Vehicle summaries are currently not populated in party-initiated
+        // snapshots
         // to avoid circular dependency between PartyService and CrmVehicleService.
-        // Vehicle snapshots requested via /vehicle/{id} endpoint include full vehicle details.
+        // Vehicle snapshots requested via /vehicle/{id} endpoint include full vehicle
+        // details.
         return new java.util.ArrayList<>();
     }
 
     private com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.BillingPreferences buildBillingPreferences() {
-        com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.BillingPreferences prefs = 
-            new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.BillingPreferences();
+        com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.BillingPreferences prefs = new com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.BillingPreferences();
         prefs.setMarketingOptOut(false);
         prefs.setDoNotContact(false);
         prefs.setInvoiceDeliveryMethod(null);

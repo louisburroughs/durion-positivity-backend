@@ -135,7 +135,7 @@ public class APPaymentGLPostingEventHandler {
                     allocItem.put("allocationSequence", alloc.getAllocationSequence());
                     return allocItem;
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         paymentDetails.put("allocations", allocationItems);
         payload.put("payload", paymentDetails);

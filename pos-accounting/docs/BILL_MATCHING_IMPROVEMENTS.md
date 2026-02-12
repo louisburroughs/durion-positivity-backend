@@ -72,11 +72,11 @@ private double calculateLineItemSimilarity(
     
     Set<String> billSkus = billLines.stream()
         .map(VendorBillLine::getSku)
-        .collect(Collectors.toSet());
+        .toSet();
     
     Set<String> invoiceSkus = invoiceLines.stream()
         .map(InvoiceLineItem::getSku)
-        .collect(Collectors.toSet());
+        .toSet();
     
     Set<String> intersection = new HashSet<>(billSkus);
     intersection.retainAll(invoiceSkus);

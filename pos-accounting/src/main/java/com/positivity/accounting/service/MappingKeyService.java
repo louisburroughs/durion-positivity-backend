@@ -203,7 +203,7 @@ public class MappingKeyService {
                 MappingKeyListResponse response = new MappingKeyListResponse();
                 response.setResults(keyPage.getContent().stream()
                                 .map(mk -> toResponse(mk, category.getCategoryName()))
-                                .collect(Collectors.toList()));
+                                .toList());
                 response.setTotalCount(keyPage.getTotalElements());
                 response.setPageNumber(page);
                 response.setPageSize(size);

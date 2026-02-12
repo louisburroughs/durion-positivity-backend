@@ -93,7 +93,7 @@ public class ObjectiveBasedDiscoveryStrategy implements AgentDiscoveryStrategy {
                 .map(agent -> new AgentScore(
                         agent,
                         calculateObjectiveScore(agent, objective)))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private int calculateObjectiveScore(Agent agent, String objective) {

@@ -1,9 +1,7 @@
 package com.positivity.accounting.service;
 
-import com.positivity.accounting.internal.dto.*;
-import com.positivity.accounting.internal.entity.PostingCategory;
-import com.positivity.accounting.internal.repository.GLMappingRepository;
-import com.positivity.accounting.internal.repository.PostingCategoryRepository;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,8 +14,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.UUID;
-import java.util.stream.Collectors;
+import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
+import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
+import com.positivity.accounting.internal.dto.PostingCategoryResponse;
+import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
+import com.positivity.accounting.internal.entity.PostingCategory;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 
 /**
  * Service for Posting Category management.
@@ -156,7 +159,7 @@ public class PostingCategoryService {
         PostingCategoryListResponse response = new PostingCategoryListResponse();
         response.setResults(categoryPage.getContent().stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList()));
+                .toList());
         response.setTotalCount(categoryPage.getTotalElements());
         response.setPageNumber(page);
         response.setPageSize(size);

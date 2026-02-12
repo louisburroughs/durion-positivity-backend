@@ -115,6 +115,6 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .map(SimpleGrantedAuthority::new)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

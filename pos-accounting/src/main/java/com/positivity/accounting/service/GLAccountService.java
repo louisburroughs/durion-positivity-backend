@@ -44,6 +44,8 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class GLAccountService {
 
+    private static final String GL_ACCOUNT_NOT_FOUND = "GL account not found: ";
+
     private static final String SYSTEM = "SYSTEM";
 
     private static final Logger log = LoggerFactory.getLogger(GLAccountService.class);
@@ -110,7 +112,7 @@ public class GLAccountService {
         log.debug("Retrieving GL account: id={}", glAccountId);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
-                .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
+                .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         return toResponse(account);
     }
@@ -128,7 +130,7 @@ public class GLAccountService {
         log.info("Updating GL account: id={}", glAccountId);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
-                .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
+                .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Update mutable fields
         if (request.getAccountName() != null) {
@@ -171,7 +173,7 @@ public class GLAccountService {
         log.info("Activating GL account: id={}, effectiveDate={}", glAccountId, effectiveDate);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
-                .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
+                .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Set activation date to provided effective date
         account.setActivationDate(effectiveDate);
@@ -201,7 +203,7 @@ public class GLAccountService {
         log.info("Deactivating GL account: id={}", glAccountId);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
-                .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
+                .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Verify zero balance
         BigDecimal balance = journalEntryLineRepository.getAccountBalance(glAccountId);
@@ -235,7 +237,7 @@ public class GLAccountService {
         log.info("Archiving GL account: id={}", glAccountId);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
-                .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
+                .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Verify account is INACTIVE
         String status = account.getDerivedStatus();
@@ -274,7 +276,7 @@ public class GLAccountService {
         log.debug("Getting balance for GL account: id={}", glAccountId);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
-                .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
+                .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         BigDecimal balance = journalEntryLineRepository.getAccountBalance(glAccountId);
 
@@ -312,7 +314,7 @@ public class GLAccountService {
                 .map(this::toResponse)
                 .filter(response -> status == null || status.isBlank() ||
                         response.getStatus().name().equalsIgnoreCase(status))
-                .collect(Collectors.toList());
+                .toList();
 
         // Note: This in-memory filtering affects pagination accuracy
         // For production, consider adding a computed column or view for status
@@ -350,10 +352,8 @@ public class GLAccountService {
         }
 
         // Validate parent account exists if specified
-        if (request.getParentAccountId() != null) {
-            if (!glAccountRepository.existsById(request.getParentAccountId())) {
-                throw new IllegalArgumentException("Parent account not found: " + request.getParentAccountId());
-            }
+        if (request.getParentAccountId() != null && !glAccountRepository.existsById(request.getParentAccountId())) {
+            throw new IllegalArgumentException("Parent account not found: " + request.getParentAccountId());
         }
     }
 
@@ -370,7 +370,7 @@ public class GLAccountService {
         log.debug("Validating GL account for posting: id={}, date={}", glAccountId, transactionDate);
 
         GLAccount account = glAccountRepository.findById(glAccountId)
-                .orElseThrow(() -> new GLAccountNotFoundException("GL account not found: " + glAccountId));
+                .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Check if account is active on transaction date
         if (account.getActivationDate() != null && account.getActivationDate().isAfter(transactionDate)) {

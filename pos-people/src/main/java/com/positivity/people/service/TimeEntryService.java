@@ -36,7 +36,7 @@ public class TimeEntryService {
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()
                 .map(UUID::fromString)
-                .collect(Collectors.toList());
+                .toList();
         List<TimeEntry> entries = repository.findByTimeEntryIdIn(uuidIds);
         // Map by String representation for lookup
         Map<String, TimeEntry> byId = entries.stream()
@@ -129,7 +129,7 @@ public class TimeEntryService {
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()
                 .map(UUID::fromString)
-                .collect(Collectors.toList());
+                .toList();
         List<TimeEntry> entries = repository.findByTimeEntryIdIn(uuidIds);
         // Map by String representation for lookup
         Map<String, TimeEntry> byId = entries.stream()

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Tag(name = "User API", description = "Endpoints for user management and authentication")
@@ -40,7 +41,7 @@ public class UserController {
         List<?> rolesList = (List<?>) payload.get("roles");
         Set<String> roles = rolesList.stream()
                 .map(Object::toString)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
         User user = userService.createUser(username, password, roles);
         return ResponseEntity.ok(user);
     }
@@ -59,7 +60,7 @@ public class UserController {
         if (!passwordEncoder.matches(password, user.getPassword())) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
         }
-        Set<String> roles = user.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
+        Set<String> roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
         String token = jwtService.generateToken(username, roles);
         return ResponseEntity.ok(Map.of("token", token));
     }
@@ -117,7 +118,7 @@ public class UserController {
         List<?> rolesList = (List<?>) payload.get("roles");
         Set<String> roles = rolesList.stream()
                 .map(Object::toString)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
         User user = userService.assignRoles(username, roles);
         return ResponseEntity.ok(user);
     }

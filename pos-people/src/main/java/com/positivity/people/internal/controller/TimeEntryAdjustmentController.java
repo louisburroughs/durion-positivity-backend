@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -143,7 +144,7 @@ public class TimeEntryAdjustmentController {
         java.util.Set<String> perms = null;
         if (permissionsHeader != null && !permissionsHeader.isBlank()) {
             perms = java.util.Arrays.stream(permissionsHeader.split(",")).map(String::trim)
-                    .collect(java.util.stream.Collectors.toSet());
+                    .collect(Collectors.toSet());
         }
         String actor = userId != null ? userId : "system";
         boolean ok = adjustmentService.approveAdjustment(adjustmentId, actor, perms, correlationId);

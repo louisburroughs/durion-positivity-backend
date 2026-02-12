@@ -313,7 +313,7 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
                     return agentCapabilities != null &&
                             agentCapabilities.stream().anyMatch(capabilities::contains);
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -323,7 +323,7 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
                     AgentType agentTechnicalDomain = agent.getTechnicalDomain();
                     return agentTechnicalDomain != null && agentTechnicalDomain.equalsIgnoreCase(technicalDomain);
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -333,7 +333,7 @@ public class AgentManager implements AgentRegistry, ContextCoordinator {
                     AgentType agentTechnicalDomain = agent.getTechnicalDomain();
                     return agentTechnicalDomain != null && agentTechnicalDomain.equals(searchAgentType);
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

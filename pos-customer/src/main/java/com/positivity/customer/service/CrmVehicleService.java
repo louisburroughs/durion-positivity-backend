@@ -351,6 +351,6 @@ public class CrmVehicleService {
         return party.getVehicleVins().stream()
                 .map(this::fetchVehicleSummaryByVin)
                 .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 }
