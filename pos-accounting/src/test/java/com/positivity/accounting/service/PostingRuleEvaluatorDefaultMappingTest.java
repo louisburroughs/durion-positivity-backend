@@ -22,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
 import com.positivity.accounting.internal.dto.PostingResult;
@@ -56,7 +58,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@link PostingRuleEvaluatorFeatureFlagTest}.
  * </p>
  */
-@Disabled("Pending resolution of PostingResult API changes")
+@ExtendWith(MockitoExtension.class)
 class PostingRuleEvaluatorDefaultMappingTest {
 
     @Mock

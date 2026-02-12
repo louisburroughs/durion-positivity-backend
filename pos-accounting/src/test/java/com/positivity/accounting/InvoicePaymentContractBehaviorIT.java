@@ -39,12 +39,10 @@ import com.positivity.accounting.internal.repository.PaymentAppliedEventReposito
  * - Error handling (400, 404, 500)
  *
  * <p>
- * Note: The /v1/accounting/invoices/{invoiceId}/pay endpoint is DEPRECATED.
- * New payment-centric API is at
+ * Payment-centric API is at
  * /v1/accounting/payments/{paymentId}/applications.
  * Both endpoints are tested for backward compatibility.
  */
-@Disabled("InvoicePayment entity removed — legacy invoice-centric API replaced by payment-centric PaymentApplication API")
 @DisplayName("Invoice Payment Backend Contract Behavioral Tests")
 class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
 

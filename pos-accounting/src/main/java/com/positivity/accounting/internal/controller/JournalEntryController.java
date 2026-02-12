@@ -11,7 +11,6 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.jspecify.annotations.NonNull;
@@ -54,10 +53,8 @@ public class JournalEntryController {
         @GetMapping
         @PreAuthorize("hasAuthority('accounting:je:view')")
         @Operation(summary = "List journal entries", description = "Retrieve paginated journal entries.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Journal entries listed"),
-                        @ApiResponse(responseCode = "403", description = "Forbidden")
-        })
+        @ApiResponse(responseCode = "200", description = "Journal entries listed")
+        @ApiResponse(responseCode = "403", description = "Forbidden")
         @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_LIST", apiVersion = "1")
         public ResponseEntity<PagedResponse<JournalEntryResponse>> listJournalEntries(
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
@@ -81,10 +78,8 @@ public class JournalEntryController {
         @GetMapping("/{journalEntryId}")
         @PreAuthorize("hasAuthority('accounting:je:view')")
         @Operation(summary = "Get journal entry", description = "Retrieve a journal entry by identifier.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Journal entry returned"),
-                        @ApiResponse(responseCode = "404", description = "Journal entry not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Journal entry returned")
+        @ApiResponse(responseCode = "404", description = "Journal entry not found")
         public ResponseEntity<JournalEntryResponse> getJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
                 log.debug("Getting journal entry: {}", journalEntryId);
@@ -95,10 +90,8 @@ public class JournalEntryController {
         @PostMapping
         @PreAuthorize("hasAuthority('accounting:je:create')")
         @Operation(summary = "Create journal entry", description = "Create a new journal entry.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "201", description = "Journal entry created"),
-                        @ApiResponse(responseCode = "400", description = "Invalid request")
-        })
+        @ApiResponse(responseCode = "201", description = "Journal entry created")
+        @ApiResponse(responseCode = "400", description = "Invalid request")
         @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_CREATE", apiVersion = "1")
         public ResponseEntity<JournalEntryResponse> createJournalEntry(
                         @Valid @RequestBody JournalEntryCreateRequest request) {
@@ -111,10 +104,8 @@ public class JournalEntryController {
         @PutMapping("/{journalEntryId}")
         @PreAuthorize("hasAuthority('accounting:je:create')")
         @Operation(summary = "Update journal entry", description = "Update an existing journal entry.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Journal entry updated"),
-                        @ApiResponse(responseCode = "404", description = "Journal entry not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Journal entry updated")
+        @ApiResponse(responseCode = "404", description = "Journal entry not found")
         @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_UPDATE", apiVersion = "1")
         public ResponseEntity<JournalEntryResponse> updateJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
@@ -128,10 +119,8 @@ public class JournalEntryController {
         @PostMapping("/{journalEntryId}/post")
         @PreAuthorize("hasAuthority('accounting:je:post')")
         @Operation(summary = "Post journal entry", description = "Post a draft journal entry to the ledger.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Journal entry posted"),
-                        @ApiResponse(responseCode = "404", description = "Journal entry not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Journal entry posted")
+        @ApiResponse(responseCode = "404", description = "Journal entry not found")
         @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_POST", apiVersion = "1")
         public ResponseEntity<JournalEntryResponse> postJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
@@ -144,10 +133,8 @@ public class JournalEntryController {
         @PostMapping("/{journalEntryId}/reverse")
         @PreAuthorize("hasAuthority('accounting:je:reverse')")
         @Operation(summary = "Reverse journal entry", description = "Reverse a posted journal entry.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Journal entry reversed"),
-                        @ApiResponse(responseCode = "404", description = "Journal entry not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Journal entry reversed")
+        @ApiResponse(responseCode = "404", description = "Journal entry not found")
         @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")
         public ResponseEntity<JournalEntryResponse> reverseJournalEntry(
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,

@@ -25,12 +25,15 @@ import tools.jackson.databind.ObjectMapper;
  * </ul>
  *
  * <p>
- * Spring Boot 4.0 Note: @AutoConfigureMockMvc has been removed in Spring Boot 4.0.
- * MockMvc must be manually configured via WebApplicationContext + springSecurity().
+ * Spring Boot 4.0 Note: @AutoConfigureMockMvc has been removed in Spring Boot
+ * 4.0.
+ * MockMvc must be manually configured via WebApplicationContext +
+ * springSecurity().
  * This base class centralizes that configuration for all integration tests.
  *
  * <p>
  * Usage:
+ * 
  * <pre>
  * &#64;DisplayName("My Controller Tests")
  * public class MyControllerIT extends BaseIntegrationTest {
@@ -38,7 +41,9 @@ import tools.jackson.databind.ObjectMapper;
  * }
  * </pre>
  *
- * @see <a href="https://spring.io/blog/2025/01/23/spring-boot-4-0-0-available-now">Spring Boot 4.0 Migration</a>
+ * @see <a href=
+ *      "https://spring.io/blog/2025/01/23/spring-boot-4-0-0-available-now">Spring
+ *      Boot 4.0 Migration</a>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -52,7 +57,8 @@ public abstract class BaseIntegrationTest {
 
     protected MockMvc mockMvc;
 
-    // Gateway header values — mirrors what pos-api-gateway injects after JWT validation
+    // Gateway header values — mirrors what pos-api-gateway injects after JWT
+    // validation
     protected static final String TEST_USER = "testuser";
     protected static final String TEST_AUTHORITIES = String.join(",",
             "accounting:je:view",
@@ -78,6 +84,8 @@ public abstract class BaseIntegrationTest {
             "accounting:vendor-bill:read",
             "accounting:mappings:view",
             "accounting:mappings:create",
+            "accounting:gl-mapping:create",
+            "accounting:gl-mapping:resolve",
             "accounting:audit:view",
             "accounting:credit-memo:view",
             "accounting:credit-memo:create",
@@ -87,6 +95,8 @@ public abstract class BaseIntegrationTest {
             "accounting:invoice-payment:create",
             "accounting:payment-application:view",
             "accounting:payment-application:apply",
+            "accounting:payment:apply",
+            "accounting:payment:reverse",
             "accounting:financial-reporting:view",
             "accounting:posting-category:view",
             "accounting:posting-category:create");
@@ -102,6 +112,7 @@ public abstract class BaseIntegrationTest {
      * <p>
      * Subclasses can override this method to add additional MockMvc configuration,
      * but should call super.setUpMockMvc() first:
+     * 
      * <pre>
      * &#64;BeforeEach
      * void setUp() {
@@ -127,11 +138,12 @@ public abstract class BaseIntegrationTest {
      *
      * <p>
      * Usage:
+     * 
      * <pre>
      * mockMvc.perform(withAuth(post("/v1/accounting/journal-entries"))
      *         .contentType(MediaType.APPLICATION_JSON)
      *         .content(payload))
-     *     .andExpect(status().isCreated());
+     *         .andExpect(status().isCreated());
      * </pre>
      *
      * @param builder the MockMvc request builder to augment
@@ -144,21 +156,24 @@ public abstract class BaseIntegrationTest {
     }
 
     /**
-     * Adds gateway authentication headers with custom authorities to a request builder.
+     * Adds gateway authentication headers with custom authorities to a request
+     * builder.
      *
      * <p>
-     * Useful for testing authorization boundaries where specific permissions are needed.
+     * Useful for testing authorization boundaries where specific permissions are
+     * needed.
      *
      * <p>
      * Usage:
+     * 
      * <pre>
      * mockMvc.perform(withAuth(post("/v1/accounting/journal-entries"), "accounting:je:view")
      *         .contentType(MediaType.APPLICATION_JSON)
      *         .content(payload))
-     *     .andExpect(status().isForbidden());
+     *         .andExpect(status().isForbidden());
      * </pre>
      *
-     * @param builder the MockMvc request builder to augment
+     * @param builder     the MockMvc request builder to augment
      * @param authorities comma-separated authority strings
      * @return the builder with X-User and custom X-Authorities headers added
      */
