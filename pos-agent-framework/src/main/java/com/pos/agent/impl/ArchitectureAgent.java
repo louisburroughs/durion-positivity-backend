@@ -1,5 +1,11 @@
 package com.pos.agent.impl;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.pos.agent.context.AgentContext;
 import com.pos.agent.context.ArchitectureContext;
 import com.pos.agent.context.CICDContext;
@@ -7,14 +13,10 @@ import com.pos.agent.context.ConfigurationContext;
 import com.pos.agent.context.EventDrivenContext;
 import com.pos.agent.context.ResilienceContext;
 import com.pos.agent.core.AbstractAgent;
+import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.core.AgentRequest;
 import com.pos.agent.core.AgentResponse;
-import com.pos.agent.core.AgentProcessingState;
 import com.pos.agent.framework.model.AgentType;
-
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * ArchitectureAgent provides architectural guidance and recommendations

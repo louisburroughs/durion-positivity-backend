@@ -1,17 +1,19 @@
 package com.positivity.vehicle.service;
 
-import com.positivity.vehicle.internal.dto.*;
-import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.jspecify.annotations.NonNull;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
+import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
+import com.positivity.vehicle.internal.dto.VehicleSummary;
+import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for vehicle search and lookup (CAP:091 Story #103).

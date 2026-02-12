@@ -1,11 +1,13 @@
 package com.pos.agent.discovery;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+
 import com.pos.agent.core.Agent;
 import com.pos.agent.core.AgentRequest;
-
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * Composite discovery engine that applies multiple strategies in priority
