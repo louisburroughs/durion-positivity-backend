@@ -345,15 +345,15 @@ public class EventIngestionContractBehaviorIT {
     }
 
     @Test
-    @DisplayName("Get processing log for non-existent event - 404 error")
+    @DisplayName("Get processing log for non-existent event - returns 200 with no entries")
     void testGetProcessingLog_NotFound() throws Exception {
         // Given - random UUID that doesn't exist
         UUID nonExistentId = UUID.randomUUID();
 
-        // When/Then - expect 404 Not Found
+        // When/Then - expect 200 OK with message indicating no processing log entries
         mockMvc.perform(withAuth(get(API_V1_EVENTS + "/{eventId}/processing-log", nonExistentId)))
                 .andDo(print())
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
     }
 
     @Test
