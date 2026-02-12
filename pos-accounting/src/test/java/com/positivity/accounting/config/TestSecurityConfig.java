@@ -62,6 +62,7 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("accounting:events:view"),
             new SimpleGrantedAuthority("accounting:events:submit"),
             new SimpleGrantedAuthority("accounting:events:retry"),
+            new SimpleGrantedAuthority("accounting:events:reprocess"),
             new SimpleGrantedAuthority("accounting:posting_rules:view"),
             new SimpleGrantedAuthority("accounting:posting_rules:create"),
             new SimpleGrantedAuthority("accounting:posting_rules:publish"),
