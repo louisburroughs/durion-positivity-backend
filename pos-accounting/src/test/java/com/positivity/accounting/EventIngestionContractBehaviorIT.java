@@ -1,13 +1,11 @@
 package com.positivity.accounting;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -19,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
+
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
@@ -29,8 +28,10 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
  * Contract Behavioral Integration Tests for Event Ingestion operations.
  *
  * <p>
- * This test suite validates the behavioral contracts for Accounting Event Ingestion
- * REST endpoints including event submission, retrieval, retry, and reprocessing.
+ * This test suite validates the behavioral contracts for Accounting Event
+ * Ingestion
+ * REST endpoints including event submission, retrieval, retry, and
+ * reprocessing.
  *
  * <p>
  * Tests verify:
@@ -42,7 +43,7 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
  * - Error handling (404, 409)
  */
 @DisplayName("Event Ingestion Backend Contract Behavioral Tests")
-public class EventIngestionContractBehaviorIT extends BaseIntegrationTest {
+class EventIngestionContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
     private AccountingEventRepository accountingEventRepository;
@@ -364,7 +365,6 @@ public class EventIngestionContractBehaviorIT extends BaseIntegrationTest {
                 .andReturn();
 
         String responseBody = result.getResponse().getContentAsString();
-        @SuppressWarnings("unchecked")
         var response = objectMapper.readValue(responseBody, java.util.Map.class);
         return UUID.fromString(response.get("eventId").toString());
     }
