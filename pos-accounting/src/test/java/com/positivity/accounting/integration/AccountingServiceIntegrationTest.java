@@ -132,7 +132,6 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should return 403 when user lacks accounting:coa:create permission")
-
   void testCreateGLAccountUnauthorized() throws Exception {
     // Send X-Authorities WITHOUT accounting:coa:create so @PreAuthorize rejects
     String insufficientAuthorities = "accounting:je:view";
@@ -158,7 +157,6 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should create journal entry with balanced lines")
-
   void testCreateBalancedJournalEntry() throws Exception {
     // Setup GL accounts
     GLAccount cashAccount = new GLAccount();
@@ -206,7 +204,6 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should return 422 when journal entry is unbalanced")
-
   void testCreateUnbalancedJournalEntry() throws Exception {
     GLAccount account1 = new GLAccount();
     account1.setGlAccountId(UUID.randomUUID());
