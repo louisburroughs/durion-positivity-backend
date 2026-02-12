@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -47,5 +48,33 @@ public class AccountingExceptionHandler {
     public ResponseEntity<EnvelopeErrorResponse> handleUnbalancedEntry(UnbalancedEntryException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(EnvelopeErrorResponse.of("UNBALANCED_ENTRY", ex.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<EnvelopeErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+        String fieldName = ex.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(fe -> fe.getField())
+                .orElse("unknown");
+        String message = fieldName + " is required";
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(EnvelopeErrorResponse.of("ARGUMENT_NOT_VALID", message));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<EnvelopeErrorResponse> handleIllegalState(IllegalStateException ex) {
+        String code = resolveStateErrorCode(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(EnvelopeErrorResponse.of(code, ex.getMessage()));
+    }
+
+    private String resolveStateErrorCode(String message) {
+        if (message != null && message.startsWith("Cannot post POSTED")) {
+            return "ENTRY_ALREADY_POSTED";
+        }
+        if (message != null && message.startsWith("Cannot post REVERSED")) {
+            return "ENTRY_ALREADY_POSTED";
+        }
+        return "ILLEGAL_STATE";
     }
 }

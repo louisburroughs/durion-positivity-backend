@@ -1,16 +1,24 @@
-package com.positivity.accounting.integration;
+package com.positivity.accounting.controller;
+
+import com.positivity.accounting.BaseIntegrationTest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
-import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
 import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,19 +27,43 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MvcResult;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.client.InvoiceServiceClient;
+import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
+import com.positivity.accounting.internal.dto.InvoiceDetails;
+import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
+import com.positivity.accounting.internal.dto.ReversePaymentApplicationResponse;
+import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.InvoiceStatus;
+import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.context.WebApplicationContext;
+
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration tests for Payment Application REST API endpoints
@@ -39,7 +71,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests full request/response cycle with actual database and Spring Security.
  */
 @DisplayName("Payment Application Controller Integration Tests")
-class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
+class PaymentApplicationControllerIntegrationTest {
+
+        @Autowired
+        private WebApplicationContext context;
+
+        private MockMvc mockMvc;
+
+        @Autowired
+        private ObjectMapper objectMapper;
 
         @Autowired
         private ReceivablePaymentRepository receivablePaymentRepository;
@@ -58,7 +98,9 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         private UUID testInvoice2Id;
 
         @BeforeEach
-        void setUp() {
+	void setUp() {
+		// MockMvc with Spring Security is configured by BaseIntegrationTest.setUpMockMvc()
+
                 // Clean up test data
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();
@@ -127,7 +169,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                                 createInvoiceApplication(testInvoice1Id, "500.00")));
 
                 // Act: POST to apply payment endpoint
-                MvcResult result = mockMvc
+                mockMvc
                                 .perform(withAuth(post(API_V1 + "/payments/" + testPaymentId + "/applications"))
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(objectMapper.writeValueAsString(request)))
@@ -141,8 +183,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.applications.length()").value(1))
                                 .andExpect(jsonPath("$.applications[0].invoiceId").value(testInvoice1Id.toString()))
                                 .andExpect(jsonPath("$.applications[0].appliedAmount").value(500.00))
-                                .andExpect(jsonPath("$.customerCredit").doesNotExist())
-                                .andReturn();
+                                .andExpect(jsonPath("$.customerCredit").doesNotExist());
 
                 // Assert: Verify database state
                 List<PaymentApplication> applications = paymentApplicationRepository.findByPaymentId(testPaymentId);

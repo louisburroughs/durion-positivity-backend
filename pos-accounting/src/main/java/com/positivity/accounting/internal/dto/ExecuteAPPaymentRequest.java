@@ -85,6 +85,13 @@ public class ExecuteAPPaymentRequest {
     @JsonProperty("paymentMethod")
     private PaymentMethod paymentMethod;
 
+    @NonNull
+    @NotEmpty(message = "Payment source is required")
+    @Size(max = 255, message = "Payment source must not exceed 255 characters")
+    @Schema(description = "Payment source token or identifier from the payment provider (e.g., Stripe token, bank account ID)", example = "tok_visa", requiredMode = Schema.RequiredMode.REQUIRED)
+    @JsonProperty("paymentSource")
+    private String paymentSource;
+
     @Nullable
     @Size(max = 1000, message = "Memo must not exceed 1000 characters")
     @Schema(description = "Optional payment memo/notes", example = "Monthly supplier payment")

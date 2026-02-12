@@ -1,0 +1,666 @@
+package com.positivity.accounting.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.accounting.internal.dto.PostingResult;
+import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.enums.ReprocessingOutcome;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
+
+/**
+ * Unit tests for PostingEngineOrchestrator
+ * 
+ * Tests posting engine orchestration including:
+ * - Idempotency checks
+ * - Rule evaluation
+ * - Journal entry creation and posting
+ * - Status transitions
+ * - Error handling
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("PostingEngineOrchestrator Unit Tests")
+class PostingEngineOrchestratorTest {
+
+    @Mock
+    private PostingRuleEvaluator postingRuleEvaluator;
+
+    @Mock
+    private JournalEntryService journalEntryService;
+
+    @Mock
+    private IdempotencyService idempotencyService;
+
+    @Mock
+    private AccountingEventRepository accountingEventRepository;
+
+    @Mock
+    private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+
+    private ObjectMapper objectMapper;
+    private PostingEngineOrchestrator orchestrator;
+
+    @Captor
+    private ArgumentCaptor<AccountingEvent> eventCaptor;
+
+    @Captor
+    private ArgumentCaptor<ReprocessingAttemptHistory> attemptHistoryCaptor;
+
+    private UUID testOrganizationId;
+    private UUID testEventId;
+    private UUID testMappingVersion;
+    private UUID testJournalEntryId;
+    private String testUserId;
+    private AccountingEvent testEvent;
+    private JournalEntry testJournalEntry;
+    private Map<String, Object> testPayload;
+
+    @BeforeEach
+    void setUp() {
+        // Create orchestrator with all dependencies
+        objectMapper = new ObjectMapper();
+        orchestrator = new PostingEngineOrchestrator(
+                postingRuleEvaluator,
+                journalEntryService,
+                idempotencyService,
+                accountingEventRepository,
+                reprocessingAttemptHistoryRepository,
+                objectMapper);
+
+        testOrganizationId = UUID.randomUUID();
+        testEventId = UUID.randomUUID();
+        testMappingVersion = UUID.randomUUID();
+        testJournalEntryId = UUID.randomUUID();
+        testUserId = "test-user-123";
+
+        // Setup test payload
+        testPayload = new HashMap<>();
+        testPayload.put("amount", "1000.00");
+        testPayload.put("invoiceId", "INV-001");
+
+        // Setup test event
+        testEvent = new AccountingEvent();
+        testEvent.setEventId(testEventId);
+        testEvent.setOrganizationId(testOrganizationId);
+        testEvent.setEventType("INVOICE_RECEIVED");
+        testEvent.setTransactionDate(LocalDateTime.now());
+        testEvent.setPayload(testPayload);
+        testEvent.setStatus(AccountingEventStatus.RECEIVED);
+        testEvent.setReceivedAt(Instant.now());
+        testEvent.setSourceSystem("TEST_SYSTEM");
+
+        // Setup test journal entry
+        testJournalEntry = new JournalEntry();
+        testJournalEntry.setJournalEntryId(testJournalEntryId);
+        testJournalEntry.setTransactionDate(LocalDateTime.now());
+        testJournalEntry.setDescription("Test journal entry");
+        testJournalEntry.setStatus(JournalEntryStatus.DRAFT);
+        testJournalEntry.setLines(createBalancedLines());
+    }
+
+    private List<JournalEntryLine> createBalancedLines() {
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        JournalEntryLine debitLine = new JournalEntryLine();
+        debitLine.setGlAccountId(UUID.randomUUID());
+        debitLine.setAccountCode("1000");
+        debitLine.setAccountName("Cash");
+        debitLine.setDebitAmount(new BigDecimal("1000.00"));
+        debitLine.setCreditAmount(BigDecimal.ZERO);
+        lines.add(debitLine);
+
+        JournalEntryLine creditLine = new JournalEntryLine();
+        creditLine.setGlAccountId(UUID.randomUUID());
+        creditLine.setAccountCode("2000");
+        creditLine.setAccountName("Accounts Payable");
+        creditLine.setDebitAmount(BigDecimal.ZERO);
+        creditLine.setCreditAmount(new BigDecimal("1000.00"));
+        lines.add(creditLine);
+
+        return lines;
+    }
+
+    @Nested
+    @DisplayName("Idempotency Tests")
+    class IdempotencyTests {
+
+        @Test
+        @DisplayName("Should return existing result when event already processed with posting reference")
+        void shouldReturnExistingResultWhenEventAlreadyProcessed() {
+            // Given
+            String existingPostingRef = "existing-journal-entry-id";
+            testEvent.setFinalPostingReferenceId(existingPostingRef);
+
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(true);
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getEvaluationDetails())
+                    .containsEntry("postingReference", existingPostingRef)
+                    .containsEntry("idempotent", true);
+
+            verify(postingRuleEvaluator, never()).evaluateEvent(any(), any());
+            verify(journalEntryService, never()).createJournalEntry(any());
+        }
+
+        @Test
+        @DisplayName("Should proceed with processing when idempotency key not found")
+        void shouldProceedWhenIdempotencyKeyNotFound() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
+
+            // Then
+            assertThat(result.isSuccess()).isTrue();
+            verify(postingRuleEvaluator).evaluateEvent(testEvent, testMappingVersion);
+            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(idempotencyService).registerKey(anyString(), eq(testEventId));
+        }
+    }
+
+    @Nested
+    @DisplayName("Evaluation Failure Tests")
+    class EvaluationFailureTests {
+
+        @Test
+        @DisplayName("Should suspend event when evaluation fails")
+        void shouldSuspendEventWhenEvaluationFails() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult failureResult = PostingResult.failure(
+                    PostingFailureReason.UNMAPPED_EVENT_TYPE,
+                    "No mapping found for event type INVOICE_RECEIVED");
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(failureResult);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.UNMAPPED_EVENT_TYPE);
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(savedEvent.getFailureReasonCode()).isEqualTo("UNMAPPED_EVENT_TYPE");
+            assertThat(savedEvent.getFailureDetails()).contains("No mapping found");
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+            assertThat(savedHistory.getOutcomeDetails()).contains("Evaluation failed");
+
+            verify(journalEntryService, never()).createJournalEntry(any());
+            verify(idempotencyService, never()).registerKey(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Should include mapping version in attempt history when evaluation fails")
+        void shouldIncludeMappingVersionInAttemptHistory() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult failureResult = PostingResult.failure(
+                    PostingFailureReason.VALIDATION_ERROR,
+                    "Required field missing");
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(failureResult);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getMappingVersionUsed()).isEqualTo(testMappingVersion.toString());
+            assertThat(savedHistory.getTriggeredByUserId()).isEqualTo(testUserId);
+        }
+    }
+
+    @Nested
+    @DisplayName("Auto-Post Success Tests")
+    class AutoPostSuccessTests {
+
+        @Test
+        @DisplayName("Should create and post journal entry when autoPost is true")
+        void shouldCreateAndPostJournalEntryWhenAutoPostTrue() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            createdEntry.setStatus(JournalEntryStatus.DRAFT);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+
+            JournalEntry postedEntry = new JournalEntry();
+            postedEntry.setJournalEntryId(testJournalEntryId);
+            postedEntry.setStatus(JournalEntryStatus.POSTED);
+            when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(postedEntry);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getEvaluationDetails())
+                    .containsEntry("postingReference", testJournalEntryId.toString())
+                    .containsEntry("autoPosted", true);
+
+            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).postJournalEntry(testJournalEntryId);
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+            assertThat(savedEvent.getFinalPostingReferenceId()).isEqualTo(testJournalEntryId.toString());
+            assertThat(savedEvent.getProcessedAt()).isNotNull();
+            assertThat(savedEvent.getResolvedByUserId()).isEqualTo(testUserId);
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.SUCCESS);
+            assertThat(savedHistory.getOutcomeDetails()).contains("posted");
+
+            verify(idempotencyService).registerKey(anyString(), eq(testEventId));
+        }
+
+        @Test
+        @DisplayName("Should preserve evaluation details in result when auto-posting")
+        void shouldPreserveEvaluationDetailsWhenAutoPosting() {
+            // Given
+            Map<String, Object> evaluationDetails = new HashMap<>();
+            evaluationDetails.put("mappingKey", "INVOICE_RECEIVED");
+            evaluationDetails.put("ruleVersion", "v1.0");
+
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.builder()
+                    .success(true)
+                    .journalEntryDraft(testJournalEntry)
+                    .mappingVersionUsed(testMappingVersion)
+                    .evaluationDetails(evaluationDetails)
+                    .build();
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+
+            JournalEntry postedEntry = new JournalEntry();
+            postedEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(postedEntry);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getEvaluationDetails())
+                    .containsEntry("mappingKey", "INVOICE_RECEIVED")
+                    .containsEntry("ruleVersion", "v1.0")
+                    .containsEntry("postingReference", testJournalEntryId.toString())
+                    .containsEntry("autoPosted", true);
+        }
+    }
+
+    @Nested
+    @DisplayName("Draft-Only Success Tests")
+    class DraftOnlySuccessTests {
+
+        @Test
+        @DisplayName("Should create draft journal entry when autoPost is false")
+        void shouldCreateDraftJournalEntryWhenAutoPostFalse() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            JournalEntry createdDraft = new JournalEntry();
+            createdDraft.setJournalEntryId(testJournalEntryId);
+            createdDraft.setStatus(JournalEntryStatus.DRAFT);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdDraft);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
+
+            // Then
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getEvaluationDetails())
+                    .containsEntry("postingReference", testJournalEntryId.toString())
+                    .containsEntry("autoPosted", false);
+
+            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService, never()).postJournalEntry(any());
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+            assertThat(savedEvent.getFinalPostingReferenceId()).isEqualTo(testJournalEntryId.toString());
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.SUCCESS);
+            assertThat(savedHistory.getOutcomeDetails()).contains("created draft");
+
+            verify(idempotencyService).registerKey(anyString(), eq(testEventId));
+        }
+    }
+
+    @Nested
+    @DisplayName("Error Handling Tests")
+    class ErrorHandlingTests {
+
+        @Test
+        @DisplayName("Should handle exception during rule evaluation and mark event as FAILED")
+        void shouldHandleExceptionDuringEvaluation() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenThrow(new RuntimeException("Database connection error"));
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.INTERNAL_ERROR);
+            assertThat(result.getFailureDetails()).contains("Database connection error");
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+            assertThat(savedEvent.getFailureDetails()).contains("Posting engine error");
+            assertThat(savedEvent.getErrorMessage()).contains("Database connection error");
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+            assertThat(savedHistory.getOutcomeDetails()).contains("Exception during processing");
+
+            verify(journalEntryService, never()).createJournalEntry(any());
+            verify(idempotencyService, never()).registerKey(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Should handle exception during journal entry creation")
+        void shouldHandleExceptionDuringJournalEntryCreation() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            when(journalEntryService.createJournalEntry(testJournalEntry))
+                    .thenThrow(new RuntimeException("Failed to save journal entry"));
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
+
+            // Then
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.INTERNAL_ERROR);
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+
+            verify(idempotencyService, never()).registerKey(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("Should throw IllegalStateException when evaluation succeeds but no journal entry draft present")
+        void shouldThrowWhenNoJournalEntryDraft() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            // Create success result without journal entry draft
+            PostingResult evaluationResult = PostingResult.builder()
+                    .success(true)
+                    .journalEntryDraft(null) // Missing draft!
+                    .mappingVersionUsed(testMappingVersion)
+                    .build();
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
+
+            // Then - should handle the IllegalStateException
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.INTERNAL_ERROR);
+
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            AccountingEvent savedEvent = eventCaptor.getValue();
+            assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+        }
+    }
+
+    @Nested
+    @DisplayName("Null Mapping Version Tests")
+    class NullMappingVersionTests {
+
+        @Test
+        @DisplayName("Should handle null mapping version and use AUTO in idempotency key")
+        void shouldHandleNullMappingVersion() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, null);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, null)).thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, null, testUserId, false);
+
+            // Then
+            assertThat(result.isSuccess()).isTrue();
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getMappingVersionUsed()).isNull();
+
+            verify(idempotencyService).registerKey(anyString(), eq(testEventId));
+        }
+    }
+
+    @Nested
+    @DisplayName("Attempt History Tests")
+    class AttemptHistoryTests {
+
+        @Test
+        @DisplayName("Should create attempt history with correct fields for successful processing")
+        void shouldCreateAttemptHistoryForSuccess() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
+
+            // Then
+            verify(reprocessingAttemptHistoryRepository, times(1)).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+
+            assertThat(savedHistory.getAccountingEvent()).isEqualTo(testEvent);
+            assertThat(savedHistory.getTriggeredByUserId()).isEqualTo(testUserId);
+            assertThat(savedHistory.getMappingVersionUsed()).isEqualTo(testMappingVersion.toString());
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.SUCCESS);
+            assertThat(savedHistory.getOutcomeDetails()).contains("created draft");
+        }
+
+        @Test
+        @DisplayName("Should save attempt history exactly once for success case")
+        void shouldSaveAttemptHistoryOnceForSuccess() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
+
+            // Then - verify both repository saves happened exactly once
+            verify(accountingEventRepository, times(1)).save(any(AccountingEvent.class));
+            verify(reprocessingAttemptHistoryRepository, times(1)).save(any(ReprocessingAttemptHistory.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("Transaction Flow Integration Tests")
+    class TransactionFlowTests {
+
+        @Test
+        @DisplayName("Should complete full transaction flow for auto-post scenario")
+        void shouldCompleteFullFlowForAutoPost() {
+            // Given
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion)).thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+
+            JournalEntry postedEntry = new JournalEntry();
+            postedEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(postedEntry);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, true);
+
+            // Then - verify the complete flow
+            // 1. Idempotency check
+            verify(idempotencyService).isKeyProcessed(anyString());
+
+            // 2. Rule evaluation
+            verify(postingRuleEvaluator).evaluateEvent(testEvent, testMappingVersion);
+
+            // 3. Journal entry creation and posting
+            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).postJournalEntry(testJournalEntryId);
+
+            // 4. Event status update
+            verify(accountingEventRepository).save(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().getStatus()).isEqualTo(AccountingEventStatus.PROCESSED);
+
+            // 5. Attempt history creation
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            assertThat(attemptHistoryCaptor.getValue().getOutcome()).isEqualTo(ReprocessingOutcome.SUCCESS);
+
+            // 6. Idempotency registration
+            verify(idempotencyService).registerKey(anyString(), eq(testEventId));
+
+            // 7. Result validation
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getJournalEntryDraft()).isEqualTo(testJournalEntry);
+            assertThat(result.getMappingVersionUsed()).isEqualTo(testMappingVersion);
+        }
+    }
+}

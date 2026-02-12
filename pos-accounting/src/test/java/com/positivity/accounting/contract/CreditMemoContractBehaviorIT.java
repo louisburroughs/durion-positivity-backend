@@ -1,4 +1,6 @@
-package com.positivity.accounting;
+package com.positivity.accounting.contract;
+
+import com.positivity.accounting.BaseIntegrationTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

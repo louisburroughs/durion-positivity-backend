@@ -56,8 +56,9 @@ public class PostingRuleVersion {
         this.modifiedAt = now;
     }
 
-    @Column(name = "posting_rule_set_id", nullable = false)
-    private UUID postingRuleSetId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "posting_rule_set_id", nullable = false)
+    private PostingRuleSet postingRuleSet;
 
     @Column(name = "version_number", nullable = false)
     private Integer versionNumber;

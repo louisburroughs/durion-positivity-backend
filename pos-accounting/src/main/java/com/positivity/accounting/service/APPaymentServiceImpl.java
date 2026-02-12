@@ -12,10 +12,12 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
@@ -26,6 +28,7 @@ import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
@@ -46,6 +49,8 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final APPaymentRepository paymentRepository;
     private final APPaymentAllocationRepository allocationRepository;
     private final VendorBillRepository billRepository;
+    private final PaymentGatewayProvider paymentGateway;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -73,23 +78,91 @@ public class APPaymentServiceImpl implements APPaymentService {
         payment.setStatus(APPaymentStatus.INITIATED);
         payment.setCreatedBy(currentUser);
 
-        // Simulate gateway call (TODO: integrate actual payment gateway)
+        // Execute payment through gateway with idempotency
         payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
         payment = paymentRepository.save(payment);
 
         try {
-            // Simulate successful gateway response
-            payment.setGatewayTransactionId("sim_" + UUID.randomUUID().toString().substring(0, 8));
+            // Call payment gateway with idempotency key
+            var gatewayRequest = new PaymentGatewayProvider.GatewayPaymentRequest(
+                    request.getPaymentRef(), // Use paymentRef as idempotency key
+                    request.getGrossAmount(),
+                    request.getCurrency(),
+                    request.getPaymentMethod(),
+                    request.getVendorId().toString(),
+                    request.getPaymentSource(),
+                    request.getMemo(),
+                    "ap_payment"); // metadata tags
+
+            PaymentGatewayProvider.GatewayPaymentResponse gatewayResponse = paymentGateway
+                    .executePayment(gatewayRequest);
+
+            // Capture gateway response
+            payment.setGatewayTransactionId(gatewayResponse.transactionId());
             payment.setGatewayTimestamp(Instant.now());
-            payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+            payment.setGatewayResponse(gatewayResponse.rawResponse());
+
+            // Map gateway status to payment status
+            switch (gatewayResponse.status()) {
+                case SUCCEEDED, AUTHORIZED -> payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+                case PENDING -> payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
+                case DECLINED, FAILED -> {
+                    payment.setStatus(APPaymentStatus.GATEWAY_FAILED);
+                    payment.setGatewayResponse(
+                            "Gateway declined: " + (gatewayResponse.failureReason() != null
+                                    ? gatewayResponse.failureReason()
+                                    : "Unknown reason"));
+                    throw new PaymentGatewayException(
+                            "Payment declined by gateway: " + gatewayResponse.failureReason());
+                }
+            }
+
             payment = paymentRepository.save(payment);
 
             // Apply allocations (validation errors bubble up as IllegalArgumentException)
             applyAllocations(payment, request);
 
-            // Emit event for GL posting (TODO: integrate with outbox pattern)
+            // Emit event for GL posting
+            // TODO: integrate with outbox pattern for at-least-once delivery guarantee
             payment.setStatus(APPaymentStatus.GL_POST_PENDING);
             payment = paymentRepository.save(payment);
+
+            List<APPaymentAllocation> savedAllocations = allocationRepository
+                    .findByPaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+
+            APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
+                    .eventId(UUID.randomUUID())
+                    .paymentId(payment.getPaymentId())
+                    .paymentRef(payment.getPaymentRef())
+                    .vendorId(payment.getVendorId())
+                    .vendorName(payment.getVendorName())
+                    .grossAmount(payment.getGrossAmount())
+                    .feeAmount(payment.getFeeAmount())
+                    .netAmount(payment.getNetAmount())
+                    .unappliedAmount(payment.getUnappliedAmount())
+                    .currency(payment.getCurrency())
+                    .paymentMethod(payment.getPaymentMethod() != null
+                            ? payment.getPaymentMethod().name()
+                            : null)
+                    .gatewayTransactionId(payment.getGatewayTransactionId())
+                    .gatewayTimestamp(payment.getGatewayTimestamp())
+                    .memo(payment.getMemo())
+                    .allocations(savedAllocations.stream()
+                            .map(a -> APPaymentGLPostingEvent.AllocationLine.builder()
+                                    .allocationId(a.getAllocationId())
+                                    .vendorBillId(a.getVendorBillId())
+                                    .appliedAmount(a.getAppliedAmount())
+                                    .allocationSequence(
+                                            a.getAllocationSequence() != null
+                                                    ? a.getAllocationSequence()
+                                                    : 0)
+                                    .build())
+                            .collect(Collectors.toList()))
+                    .build();
+
+            eventPublisher.publishEvent(glPostingEvent);
+            log.info("GL posting event emitted | paymentId={} | eventId={} | grossAmount={}",
+                    payment.getPaymentId(), glPostingEvent.getEventId(), payment.getGrossAmount());
 
             log.info("Payment {} executed successfully for vendor {}, amount {}",
                     payment.getPaymentRef(), payment.getVendorId(), payment.getGrossAmount());

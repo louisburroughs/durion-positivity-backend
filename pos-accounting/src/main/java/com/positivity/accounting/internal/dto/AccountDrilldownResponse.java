@@ -1,10 +1,13 @@
 package com.positivity.accounting.internal.dto;
 
-import lombok.*;
+import java.math.BigDecimal;
+
 import org.jspecify.annotations.NonNull;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Drilldown response showing a GL account that contributes to a statement line.

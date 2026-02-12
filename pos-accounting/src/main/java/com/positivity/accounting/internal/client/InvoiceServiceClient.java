@@ -94,8 +94,8 @@ public class InvoiceServiceClient {
         try {
             return invoiceServiceCircuitBreaker.executeSupplier(invokeRemote);
         } catch (Exception e) {
-            if (e instanceof InvoiceServiceException) {
-                throw (InvoiceServiceException) e;
+            if (e instanceof InvoiceServiceException invoiceServiceException) {
+                throw invoiceServiceException;
             }
             log.error("Circuit breaker open for getInvoiceDetails({}): {}", invoiceId, e.getMessage());
             throw new InvoiceServiceException(
@@ -158,8 +158,8 @@ public class InvoiceServiceClient {
         try {
             return invoiceServiceCircuitBreaker.executeSupplier(invokeRemote);
         } catch (Exception e) {
-            if (e instanceof InvoiceServiceException) {
-                throw (InvoiceServiceException) e;
+            if (e instanceof InvoiceServiceException invoiceServiceException) {
+                throw invoiceServiceException;
             }
             log.error("Circuit breaker open for applyPaymentToInvoice({}): {}",
                     invoiceId, e.getMessage());
@@ -223,8 +223,8 @@ public class InvoiceServiceClient {
         try {
             return invoiceServiceCircuitBreaker.executeSupplier(invokeRemote);
         } catch (Exception e) {
-            if (e instanceof InvoiceServiceException) {
-                throw (InvoiceServiceException) e;
+            if (e instanceof InvoiceServiceException invoiceServiceException) {
+                throw invoiceServiceException;
             }
             log.error("Circuit breaker open for reversePaymentApplication({}): {}",
                     invoiceId, e.getMessage());
@@ -286,8 +286,8 @@ public class InvoiceServiceClient {
         try {
             return invoiceServiceCircuitBreaker.executeSupplier(invokeRemote);
         } catch (Exception e) {
-            if (e instanceof InvoiceServiceException) {
-                throw (InvoiceServiceException) e;
+            if (e instanceof InvoiceServiceException invoiceServiceException) {
+                throw invoiceServiceException;
             }
             log.error("Circuit breaker open for applyCreditMemo({}): {}",
                     invoiceId, e.getMessage());

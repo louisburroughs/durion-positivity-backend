@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +37,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class GLMappingResolver {
+
+    /**
+     * Dimensional hierarchy from least specific to most specific.
+     * During fallback, dimensions are removed from most specific (last) first.
+     */
+    private static final List<String> DIMENSION_HIERARCHY = List.of(
+            "businessUnitId", "locationId", "departmentId", "costCenterId");
 
     private final GLMappingRepository mappingRepository;
 
@@ -99,7 +108,8 @@ public class GLMappingResolver {
 
     /**
      * Attempt resolution with exact dimensional matching.
-     * All dimensions in context must match dimensions in mapping.
+     * All dimensions in the mapping must exactly equal the provided context.
+     * Among matches, the mapping with the most dimensions wins (most specific).
      */
     private Optional<UUID> resolveWithDimensions(UUID postingCategoryId, UUID mappingKeyId,
             LocalDateTime transactionDate,
@@ -108,16 +118,32 @@ public class GLMappingResolver {
             return Optional.empty();
         }
 
-        // TODO: Implement exact dimensional matching
-        // Would query mappings by postingCategoryId+mappingKeyId+dimensions
-        // and match transaction date range (effectiveFrom <= transactionDate <
-        // effectiveTo)
-        return Optional.empty();
+        List<GLMapping> candidates = mappingRepository.findAllEffectiveMappings(
+                postingCategoryId, mappingKeyId, transactionDate);
+
+        return candidates.stream()
+                .filter(m -> m.getDimensions() != null && !m.getDimensions().isEmpty())
+                .filter(m -> dimensionContext.equals(m.getDimensions()))
+                .max((a, b) -> Integer.compare(
+                        a.getDimensions().size(),
+                        b.getDimensions().size()))
+                .map(match -> {
+                    log.debug("Exact dimensional match found: mapping={}, dimensions={}",
+                            match.getGlMappingId(), match.getDimensions());
+                    return match.getGlAccountId();
+                });
     }
 
     /**
      * Attempt resolution with dimensional fallback.
-     * Try progressively less specific dimensional combinations until match found.
+     * Progressively removes the most-specific dimension and checks for a mapping
+     * whose dimensions exactly match the reduced context.
+     *
+     * Removal order (most specific first): costCenterId → departmentId → locationId
+     * → businessUnitId.
+     *
+     * Among matches at the same fallback level, the mapping with the most
+     * dimensions wins.
      */
     private Optional<UUID> resolveFallback(UUID postingCategoryId, UUID mappingKeyId,
             LocalDateTime transactionDate,
@@ -126,10 +152,50 @@ public class GLMappingResolver {
             return Optional.empty();
         }
 
-        // TODO: Implement dimensional fallback strategy
-        // Start with all dimensions, progressively remove least-specific
-        // (businessUnitId, then locationId, then departmentId, then costCenterId)
-        // until finding a match within the effective date range
+        List<GLMapping> candidates = mappingRepository.findAllEffectiveMappings(
+                postingCategoryId, mappingKeyId, transactionDate);
+
+        // Only consider mappings that have dimensions (non-null, non-empty)
+        List<GLMapping> dimensioned = candidates.stream()
+                .filter(m -> m.getDimensions() != null && !m.getDimensions().isEmpty())
+                .toList();
+
+        if (dimensioned.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Build a mutable copy of the context, then strip dimensions from
+        // most-specific to least-specific until we find a match
+        Map<String, String> reducedContext = new HashMap<>(dimensionContext);
+
+        // Iterate from most-specific (last in hierarchy) to least-specific (first)
+        for (int i = DIMENSION_HIERARCHY.size() - 1; i >= 0; i--) {
+            String dimensionToRemove = DIMENSION_HIERARCHY.get(i);
+            if (reducedContext.remove(dimensionToRemove) == null) {
+                // This dimension wasn't in the context; skip to next
+                continue;
+            }
+
+            if (reducedContext.isEmpty()) {
+                // All dimensions removed — category default handled by caller
+                break;
+            }
+
+            // Check if any mapping's dimensions match the reduced context
+            Map<String, String> snapshot = Map.copyOf(reducedContext);
+            Optional<GLMapping> match = dimensioned.stream()
+                    .filter(m -> snapshot.equals(m.getDimensions()))
+                    .max((a, b) -> Integer.compare(
+                            a.getDimensions().size(),
+                            b.getDimensions().size()));
+
+            if (match.isPresent()) {
+                log.debug("Dimensional fallback match found after removing '{}': mapping={}, dimensions={}",
+                        dimensionToRemove, match.get().getGlMappingId(), match.get().getDimensions());
+                return Optional.of(match.get().getGlAccountId());
+            }
+        }
+
         return Optional.empty();
     }
 

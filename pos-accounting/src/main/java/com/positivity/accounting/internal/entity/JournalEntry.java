@@ -71,8 +71,9 @@ public class JournalEntry {
     /**
      * Initialize lines with proper parent reference and sequential line numbers.
      * Called automatically during @PrePersist, but can be called manually if needed.
+     * Public to allow explicit initialization in service layer before persistence.
      */
-    private void initializeLines() {
+    public void initializeLines() {
         if (lines != null && !lines.isEmpty()) {
             int lineNumber = 1;
             for (JournalEntryLine line : lines) {
