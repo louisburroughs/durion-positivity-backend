@@ -18,7 +18,7 @@
         </pluginRepository>
         <pluginRepository>
             <id>springdoc-repo</id>
-            <url>https://repo1.maven.org/maven2</url>
+            <url>https://repo.springdoc.org</url>
         </pluginRepository>
     </pluginRepositories>
 
@@ -216,7 +216,10 @@
                                         <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
                                         <argument>--server.ssl.enabled=false</argument>
+                                        <argument>--security.jwt.secret=openapi-docs-placeholder-key-01234567890123456789</argument>
                                     </arguments>
+                                    <wait>8000</wait>
+                                    <maxAttempts>180</maxAttempts>
                                 </configuration>
                             </execution>
                             <execution>
@@ -238,6 +241,9 @@
                                 <goals>
                                     <goal>generate</goal>
                                 </goals>
+                                <configuration>
+                                    <apiDocsUrl>http://localhost:8081/v3/api-docs</apiDocsUrl>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>

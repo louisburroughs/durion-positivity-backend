@@ -1,1130 +1,2308 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "POS Security Service API",
-    "description": "Central security service for JWT authentication, user management, role/permission management, and authorization.",
-    "version": "1.0.0",
-    "contact": {
-      "name": "Durion Platform Team",
-      "url": "https://github.com/louisburroughs/durion-positivity-backend"
-    }
-  },
-  "servers": [
-    {
-      "url": "http://localhost:8083",
-      "description": "Local development server"
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Security Service API",
+        "description": "API for security and authentication in the POS system",
+        "version": "1.0"
     },
-    {
-      "url": "http://api-gateway:8080/security",
-      "description": "API Gateway (production)"
-    }
-  ],
-  "tags": [
-    {
-      "name": "JWT API",
-      "description": "Endpoints for JWT authentication and token management"
-    },
-    {
-      "name": "User API",
-      "description": "Endpoints for user management and authentication"
-    },
-    {
-      "name": "Role Management",
-      "description": "Manage roles, permissions, and user assignments"
-    },
-    {
-      "name": "Permission Registry",
-      "description": "Central permission registry for all services"
-    }
-  ],
-  "paths": {
-    "/v1/auth/login": {
-      "post": {
-        "tags": ["JWT API"],
-        "summary": "Authenticate user and issue JWT",
-        "description": "Authenticate with username and password to receive a JWT token.",
-        "operationId": "generateToken",
-        "parameters": [
-          {
-            "name": "subject",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Username or subject identifier"
-          },
-          {
-            "name": "roles",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "description": "Optional set of roles"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "JWT token issued successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "token": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid credentials"
-          }
+    "servers": [
+        {
+            "url": "http://localhost:8081",
+            "description": "Generated server url"
         }
-      }
-    },
-    "/v1/auth/token-pair": {
-      "post": {
-        "tags": ["JWT API"],
-        "summary": "Generate access and refresh token pair",
-        "operationId": "generateTokenPair",
-        "parameters": [
-          {
-            "name": "subject",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "roles",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Token pair generated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenPair"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/auth/refresh": {
-      "post": {
-        "tags": ["JWT API"],
-        "summary": "Refresh access token",
-        "operationId": "refreshAccessToken",
-        "parameters": [
-          {
-            "name": "refreshToken",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Access token refreshed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenPair"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or expired refresh token"
-          }
-        }
-      }
-    },
-    "/v1/auth/validate": {
-      "get": {
-        "tags": ["JWT API"],
-        "summary": "Validate JWT token",
-        "description": "Validate a JWT token and return its claims if valid.",
-        "operationId": "validateToken",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Token validation result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "valid": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/auth/delete": {
-      "delete": {
-        "tags": ["JWT API"],
-        "summary": "Delete/revoke a JWT token",
-        "operationId": "deleteToken",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Token deleted successfully"
-          }
-        }
-      }
-    },
-    "/v1/auth/roles": {
-      "get": {
-        "tags": ["JWT API"],
-        "summary": "Get roles from token",
-        "operationId": "getRoles",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Roles extracted from token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid token"
-          }
-        }
-      }
-    },
-    "/v1/auth/authorities": {
-      "get": {
-        "tags": ["JWT API"],
-        "summary": "Get authorities from token",
-        "operationId": "getAuthorities",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Authorities extracted from token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid token"
-          }
-        }
-      }
-    },
-    "/v1/auth/subject": {
-      "get": {
-        "tags": ["JWT API"],
-        "summary": "Get subject from token",
-        "operationId": "getSubject",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Subject extracted from token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid token"
-          }
-        }
-      }
-    },
-    "/v1/users": {
-      "post": {
-        "tags": ["User API"],
-        "summary": "Create a new user",
-        "description": "Creates a new user with username, password, and roles.",
-        "operationId": "createUser",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateUserRequest"
-              }
-            }
-          }
+    ],
+    "tags": [
+        {
+            "name": "JWT API",
+            "description": "Endpoints for JWT authentication and token management per ADR-0011"
         },
-        "responses": {
-          "200": {
-            "description": "User created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/User"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": ["User API"],
-        "summary": "Get all users",
-        "description": "Retrieve a list of all users.",
-        "operationId": "getAllUsers",
-        "responses": {
-          "200": {
-            "description": "List of users returned successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/User"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/users/login": {
-      "post": {
-        "tags": ["User API"],
-        "summary": "User login",
-        "description": "Authenticates a user and returns a JWT token.",
-        "operationId": "login",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          }
+        {
+            "name": "Role Management",
+            "description": "Manage roles, permissions, and user assignments"
         },
-        "responses": {
-          "200": {
-            "description": "Login successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "token": {
-                      "type": "string"
+        {
+            "name": "User API",
+            "description": "Endpoints for user management and authentication"
+        },
+        {
+            "name": "Permission Registry",
+            "description": "Central permission registry for all services"
+        }
+    ],
+    "paths": {
+        "/v1/users/{username}/roles": {
+            "put": {
+                "tags": [
+                    "User API"
+                ],
+                "operationId": "assignRoles",
+                "parameters": [
+                    {
+                        "name": "username",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
-                  }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        }
+                    }
                 }
-              }
             }
-          },
-          "401": {
-            "description": "Invalid credentials",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
+        },
+        "/v1/users/{id}": {
+            "get": {
+                "tags": [
+                    "User API"
+                ],
+                "summary": "Get user by ID",
+                "description": "Retrieve a user by their unique ID.",
+                "operationId": "getUserById",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID of the user to retrieve",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        },
+                        "example": 1
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "User not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "User found and returned.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "User API"
+                ],
+                "summary": "Update an existing user",
+                "description": "Update the details of an existing user.",
+                "operationId": "updateUser",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID of the user to update",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        },
+                        "example": 1
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/User"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "User not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "User updated successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "User API"
+                ],
+                "summary": "Delete a user",
+                "description": "Delete a user by their unique ID.",
+                "operationId": "deleteUser",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID of the user to delete",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        },
+                        "example": 1
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "User not found."
+                    },
+                    "204": {
+                        "description": "User deleted successfully."
+                    }
+                }
+            }
+        },
+        "/v1/roles/permissions": {
+            "put": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Update role permissions",
+                "description": "Assigns a set of permissions to a role",
+                "operationId": "updateRolePermissions",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RolePermissionsRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/users": {
+            "get": {
+                "tags": [
+                    "User API"
+                ],
+                "summary": "Get all users",
+                "description": "Retrieve a list of all users.",
+                "operationId": "getAllUsers",
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "List of users returned successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/User"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "User API"
+                ],
+                "summary": "Create a new user",
+                "description": "Creates a new user with username, password, and roles.",
+                "operationId": "createUser",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "User created successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/users/login": {
+            "post": {
+                "tags": [
+                    "User API"
+                ],
+                "summary": "User login",
+                "description": "Authenticates a user and returns a JWT token.",
+                "operationId": "login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/roles": {
+            "get": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Get all roles",
+                "description": "Returns all roles in the system",
+                "operationId": "getAllRoles",
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Role"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Create a new role",
+                "description": "Creates a new role with the specified name and description",
+                "operationId": "createRole",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/roles/assignments": {
+            "post": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Create role assignment",
+                "description": "Assigns a role to a user with optional scope and effective dates",
+                "operationId": "createRoleAssignment",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RoleAssignment"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/permissions/register": {
+            "post": {
+                "tags": [
+                    "Permission Registry"
+                ],
+                "summary": "Register permissions from a service",
+                "description": "Services call this endpoint to register their available permissions",
+                "operationId": "registerPermissions",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PermissionRegistrationRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PermissionRegistrationResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/token-pair": {
+            "post": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Issue JWT token pair (access + refresh)",
+                "description": "Authenticate and receive both access token (1-hour) and refresh token (7-day). See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full specification.",
+                "operationId": "generateTokenPair",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenPairRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request (blank username or empty roles)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Token pair issued successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenPairResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/refresh": {
+            "post": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Refresh access token using refresh token",
+                "description": "Exchange a valid refresh token for a new access token and refresh token. Old tokens are immediately revoked. See BACKEND_CONTRACT_GUIDE.md §Refresh Endpoint for full specification.",
+                "operationId": "refreshAccessToken",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RefreshTokenRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid refresh token",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Concurrency conflict during token revocation",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "New token pair issued successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenPairResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/login": {
+            "post": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Issue JWT access token",
+                "description": "Authenticate and receive a JWT access token (1-hour expiration). See BACKEND_CONTRACT_GUIDE.md §Login Endpoint for full specification.",
+                "operationId": "login_1",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request (blank username or empty roles)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "JWT token issued successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/roles/{name}": {
+            "get": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Get role by name",
+                "description": "Returns a specific role by its name",
+                "operationId": "getRoleByName",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/roles/permissions/user/{userId}": {
+            "get": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Get user permissions",
+                "description": "Returns all permissions for a user from their role assignments",
+                "operationId": "getUserPermissions",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Permission"
+                                    },
+                                    "uniqueItems": true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/roles/check-permission": {
+            "get": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Check user permission",
+                "description": "Checks if a user has a specific permission for a location",
+                "operationId": "checkUserPermission",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "permission",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "locationId",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/roles/assignments/user/{userId}": {
+            "get": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Get user role assignments",
+                "description": "Returns all effective role assignments for a user",
+                "operationId": "getUserRoleAssignments",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RoleAssignment"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/permissions": {
+            "get": {
+                "tags": [
+                    "Permission Registry"
+                ],
+                "summary": "Get all registered permissions",
+                "description": "Returns all permissions in the registry",
+                "operationId": "getAllPermissions",
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Permission"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/permissions/validate/{permissionName}": {
+            "get": {
+                "tags": [
+                    "Permission Registry"
+                ],
+                "summary": "Validate permission name format",
+                "description": "Checks if a permission name follows the domain:resource:action format",
+                "operationId": "validatePermissionName",
+                "parameters": [
+                    {
+                        "name": "permissionName",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/permissions/exists/{permissionName}": {
+            "get": {
+                "tags": [
+                    "Permission Registry"
+                ],
+                "summary": "Check if permission exists",
+                "description": "Returns true if the permission is registered",
+                "operationId": "permissionExists",
+                "parameters": [
+                    {
+                        "name": "permissionName",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/permissions/domain/{domain}": {
+            "get": {
+                "tags": [
+                    "Permission Registry"
+                ],
+                "summary": "Get permissions by domain",
+                "description": "Returns all permissions for a specific domain/service",
+                "operationId": "getPermissionsByDomain",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Permission"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/validate": {
+            "get": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Validate JWT token",
+                "description": "Check if a JWT token is valid (signature, expiration, revocation)",
+                "operationId": "validateToken",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Validation result returned",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidateResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/subject": {
+            "get": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Extract subject from JWT token",
+                "description": "Get the subject (username) from a JWT token",
+                "operationId": "getSubject",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Subject extracted successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Token invalid or expired",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/roles": {
+            "get": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Extract roles from JWT token",
+                "description": "Get the roles claim from a JWT token",
+                "operationId": "getRoles",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Roles extracted successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Token invalid or expired",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/authorities": {
+            "get": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Extract authorities from JWT token",
+                "description": "Get the authorities claim from a JWT token (expanded by gateway)",
+                "operationId": "getAuthorities",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Authorities extracted successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Token invalid or expired",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/roles/assignments/{assignmentId}": {
+            "delete": {
+                "tags": [
+                    "Role Management"
+                ],
+                "summary": "Revoke role assignment",
+                "description": "Revokes a role assignment by setting its end date",
+                "operationId": "revokeRoleAssignment",
+                "parameters": [
+                    {
+                        "name": "assignmentId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/v1/auth/revoke": {
+            "delete": {
+                "tags": [
+                    "JWT API"
+                ],
+                "summary": "Revoke JWT token",
+                "description": "Revoke a JWT token immediately (Redis cache + database)",
+                "operationId": "revokeToken",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "Token revoked successfully"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ErrorResponse": {
+                "type": "object",
+                "description": "Standardized error response with correlation ID",
+                "properties": {
                     "error": {
-                      "type": "string"
+                        "type": "string",
+                        "description": "Error code for client processing"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Human-readable error message"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                    },
+                    "correlationId": {
+                        "type": "string",
+                        "description": "Unique request correlation ID for tracking"
                     }
-                  }
                 }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/users/{id}": {
-      "get": {
-        "tags": ["User API"],
-        "summary": "Get user by ID",
-        "description": "Retrieve a user by their unique ID.",
-        "operationId": "getUserById",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
             },
-            "description": "ID of the user to retrieve",
-            "example": 1
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User found and returned",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/User"
+            "Permission": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "domain": {
+                        "type": "string"
+                    },
+                    "resource": {
+                        "type": "string"
+                    },
+                    "action": {
+                        "type": "string"
+                    },
+                    "registeredAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "registeredByService": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
+                    }
                 }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found"
-          }
-        }
-      },
-      "put": {
-        "tags": ["User API"],
-        "summary": "Update an existing user",
-        "description": "Update the details of an existing user.",
-        "operationId": "updateUser",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
             },
-            "description": "ID of the user to update",
-            "example": 1
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/User"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "User updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/User"
+            "Role": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Permission"
+                        },
+                        "uniqueItems": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    },
+                    "lastModifiedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "lastModifiedBy": {
+                        "type": "string"
+                    }
                 }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["User API"],
-        "summary": "Delete a user",
-        "description": "Delete a user by their ID.",
-        "operationId": "deleteUser",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
             },
-            "description": "ID of the user to delete"
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "User deleted successfully"
-          },
-          "404": {
-            "description": "User not found"
-          }
-        }
-      }
-    },
-    "/v1/roles": {
-      "post": {
-        "tags": ["Role Management"],
-        "summary": "Create a new role",
-        "description": "Creates a new role with the specified name and description",
-        "operationId": "createRole",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateRoleRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Role created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Role"
+            "User": {
+                "type": "object",
+                "description": "Updated user object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    },
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Role"
+                        },
+                        "uniqueItems": true
+                    }
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request"
-          },
-          "403": {
-            "description": "Requires ADMIN role"
-          }
-        }
-      }
-    },
-    "/v1/roles/permissions": {
-      "put": {
-        "tags": ["Role Management"],
-        "summary": "Update role permissions",
-        "description": "Assigns a set of permissions to a role",
-        "operationId": "updateRolePermissions",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RolePermissionsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Permissions updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Role"
+            },
+            "RolePermissionsRequest": {
+                "type": "object",
+                "properties": {
+                    "roleId": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "permissionNames": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "uniqueItems": true
+                    }
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request"
-          },
-          "403": {
-            "description": "Requires ADMIN role"
-          }
-        }
-      }
-    },
-    "/v1/roles/assignments": {
-      "post": {
-        "tags": ["Role Management"],
-        "summary": "Create role assignment",
-        "description": "Assigns a role to a user with optional scope and effective dates",
-        "operationId": "createRoleAssignment",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RoleAssignmentRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Role assignment created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RoleAssignment"
+            },
+            "RoleAssignmentRequest": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "roleId": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "scopeType": {
+                        "type": "string",
+                        "enum": [
+                            "GLOBAL",
+                            "LOCATION"
+                        ]
+                    },
+                    "scopeLocationIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "uniqueItems": true
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    }
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request"
-          },
-          "403": {
-            "description": "Requires ADMIN or MANAGER role"
-          }
-        }
-      }
-    },
-    "/v1/roles/assignments/user/{userId}": {
-      "get": {
-        "tags": ["Role Management"],
-        "summary": "Get user role assignments",
-        "description": "Returns all effective role assignments for a user",
-        "operationId": "getUserRoleAssignments",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Role assignments returned",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RoleAssignment"
-                  }
+            },
+            "RoleAssignment": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/User"
+                    },
+                    "role": {
+                        "$ref": "#/components/schemas/Role"
+                    },
+                    "scopeType": {
+                        "type": "string",
+                        "enum": [
+                            "GLOBAL",
+                            "LOCATION"
+                        ]
+                    },
+                    "scopeLocationIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "uniqueItems": true
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    },
+                    "lastModifiedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "lastModifiedBy": {
+                        "type": "string"
+                    },
+                    "effective": {
+                        "type": "boolean"
+                    }
                 }
-              }
-            }
-          },
-          "403": {
-            "description": "Requires ADMIN or MANAGER role"
-          }
-        }
-      }
-    },
-    "/v1/permissions/register": {
-      "post": {
-        "tags": ["Permission Registry"],
-        "summary": "Register permissions from a service",
-        "description": "Services call this endpoint to register their available permissions",
-        "operationId": "registerPermissions",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PermissionRegistrationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Permissions registered successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PermissionRegistrationResponse"
+            },
+            "PermissionDefinition": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "Registration failed"
-          }
-        }
-      }
-    },
-    "/v1/permissions": {
-      "get": {
-        "tags": ["Permission Registry"],
-        "summary": "Get all registered permissions",
-        "description": "Returns all permissions in the registry",
-        "operationId": "getAllPermissions",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Permissions returned",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Permission"
-                  }
+            },
+            "PermissionRegistrationRequest": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string"
+                    },
+                    "serviceName": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PermissionDefinition"
+                        }
+                    },
+                    "version": {
+                        "type": "string"
+                    }
                 }
-              }
-            }
-          },
-          "403": {
-            "description": "Requires ADMIN role"
-          }
-        }
-      }
-    },
-    "/v1/permissions/domain/{domain}": {
-      "get": {
-        "tags": ["Permission Registry"],
-        "summary": "Get permissions by domain",
-        "description": "Returns all permissions for a specific domain/service",
-        "operationId": "getPermissionsByDomain",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "domain",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Domain permissions returned",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Permission"
-                  }
+            },
+            "PermissionRegistrationResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "totalPermissions": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "registeredPermissions": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "updatedPermissions": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "skippedPermissions": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
                 }
-              }
-            }
-          },
-          "403": {
-            "description": "Requires ADMIN or MANAGER role"
-          }
-        }
-      }
-    },
-    "/v1/permissions/validate/{permissionName}": {
-      "get": {
-        "tags": ["Permission Registry"],
-        "summary": "Validate permission name format",
-        "description": "Checks if a permission name follows the domain:resource:action format",
-        "operationId": "validatePermissionName",
-        "parameters": [
-          {
-            "name": "permissionName",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Validation result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "boolean"
+            },
+            "TokenPairRequest": {
+                "type": "object",
+                "description": "Request to generate an access token and refresh token pair",
+                "properties": {
+                    "subject": {
+                        "type": "string",
+                        "description": "User identifier (subject claim)",
+                        "example": "user123"
+                    },
+                    "roles": {
+                        "type": "array",
+                        "description": "Optional set of role names to include in token",
+                        "example": [
+                            "SHOP_MGR"
+                        ],
+                        "items": {
+                            "type": "string"
+                        },
+                        "uniqueItems": true
+                    }
+                },
+                "required": [
+                    "subject"
+                ]
+            },
+            "TokenPairResponse": {
+                "type": "object",
+                "description": "Response containing both access and refresh JWT tokens",
+                "properties": {
+                    "accessToken": {
+                        "type": "string",
+                        "description": "Short-lived JWT access token (1 hour expiration)",
+                        "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    },
+                    "refreshToken": {
+                        "type": "string",
+                        "description": "Long-lived JWT refresh token (7 days expiration)",
+                        "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    }
                 }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/permissions/exists/{permissionName}": {
-      "get": {
-        "tags": ["Permission Registry"],
-        "summary": "Check if permission exists",
-        "description": "Returns true if the permission is registered",
-        "operationId": "permissionExists",
-        "parameters": [
-          {
-            "name": "permissionName",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Existence check result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "boolean"
+            },
+            "RefreshTokenRequest": {
+                "type": "object",
+                "description": "Request to refresh an access token using a refresh token",
+                "properties": {
+                    "refreshToken": {
+                        "type": "string",
+                        "description": "Long-lived refresh token"
+                    }
+                },
+                "required": [
+                    "refreshToken"
+                ]
+            },
+            "LoginRequest": {
+                "type": "object",
+                "description": "Request to generate a single JWT token for user authentication",
+                "properties": {
+                    "subject": {
+                        "type": "string",
+                        "description": "User identifier (subject claim)",
+                        "example": "user123"
+                    },
+                    "roles": {
+                        "type": "array",
+                        "description": "Optional set of role names to include in token",
+                        "example": [
+                            "SHOP_MGR",
+                            "ACCOUNTING_CLERK"
+                        ],
+                        "items": {
+                            "type": "string"
+                        },
+                        "uniqueItems": true
+                    }
+                },
+                "required": [
+                    "subject"
+                ]
+            },
+            "TokenResponse": {
+                "type": "object",
+                "description": "Response containing a JWT access token",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "description": "JWT token (Bearer token for Authorization header)",
+                        "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    }
                 }
-              }
+            },
+            "ValidateResponse": {
+                "type": "object",
+                "description": "Token validation result",
+                "properties": {
+                    "valid": {
+                        "type": "boolean",
+                        "description": "Whether the token is valid"
+                    }
+                }
             }
-          }
         }
-      }
     }
-  },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
-    },
-    "schemas": {
-      "TokenPair": {
-        "type": "object",
-        "properties": {
-          "accessToken": {
-            "type": "string",
-            "description": "Short-lived access token"
-          },
-          "refreshToken": {
-            "type": "string",
-            "description": "Long-lived refresh token"
-          },
-          "expiresIn": {
-            "type": "integer",
-            "description": "Access token expiration in seconds"
-          }
-        }
-      },
-      "User": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "username": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string",
-            "writeOnly": true
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Role"
-            }
-          }
-        }
-      },
-      "Role": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "permissions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Permission"
-            }
-          }
-        }
-      },
-      "Permission": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "name": {
-            "type": "string",
-            "description": "Permission name in domain:resource:action format"
-          },
-          "domain": {
-            "type": "string"
-          },
-          "resource": {
-            "type": "string"
-          },
-          "action": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          }
-        }
-      },
-      "RoleAssignment": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "userId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "roleId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "scopeType": {
-            "type": "string",
-            "enum": ["GLOBAL", "ORGANIZATION", "LOCATION", "WORKORDER"]
-          },
-          "scopeId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "effectiveFrom": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "effectiveTo": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "CreateUserRequest": {
-        "type": "object",
-        "required": ["username", "password", "roles"],
-        "properties": {
-          "username": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "LoginRequest": {
-        "type": "object",
-        "required": ["username", "password"],
-        "properties": {
-          "username": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string"
-          }
-        }
-      },
-      "CreateRoleRequest": {
-        "type": "object",
-        "required": ["name"],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          }
-        }
-      },
-      "RolePermissionsRequest": {
-        "type": "object",
-        "required": ["roleId", "permissionIds"],
-        "properties": {
-          "roleId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "permissionIds": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        }
-      },
-      "RoleAssignmentRequest": {
-        "type": "object",
-        "required": ["userId", "roleId"],
-        "properties": {
-          "userId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "roleId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "scopeType": {
-            "type": "string",
-            "enum": ["GLOBAL", "ORGANIZATION", "LOCATION", "WORKORDER"]
-          },
-          "scopeId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "effectiveFrom": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "effectiveTo": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "PermissionRegistrationRequest": {
-        "type": "object",
-        "required": ["serviceName", "permissions"],
-        "properties": {
-          "serviceName": {
-            "type": "string",
-            "description": "Name of the service registering permissions"
-          },
-          "permissions": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["name", "domain", "resource", "action"],
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "domain": {
-                  "type": "string"
-                },
-                "resource": {
-                  "type": "string"
-                },
-                "action": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "PermissionRegistrationResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean"
-          },
-          "message": {
-            "type": "string"
-          },
-          "registeredCount": {
-            "type": "integer"
-          },
-          "updatedCount": {
-            "type": "integer"
-          }
-        }
-      }
-    }
-  }
 }
