@@ -334,12 +334,12 @@ public class JournalEntryContractBehaviorIT {
     }
 
     @Test
-    @DisplayName("Get non-existent journal entry - 404 error")
+    @DisplayName("Get non-existent journal entry - 400 bad request")
     void testGetJournalEntry_NotFound() throws Exception {
         // Given - random UUID that doesn't exist
         UUID nonExistentId = UUID.randomUUID();
 
-        // When/Then - expect 404 Not Found
+        // When/Then - Service throws IllegalArgumentException which maps to 400 via APPaymentExceptionHandler
         mockMvc.perform(withAuth(get(API_V1_JOURNAL_ENTRIES + "/{journalEntryId}", nonExistentId)))
                 .andDo(print())
                 .andExpect(status().isBadRequest()); // Service throws IllegalArgumentException which maps to 400
