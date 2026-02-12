@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.service.VendorBillService;
@@ -139,6 +141,70 @@ public class VendorBillController {
         return vendorBillService.getBillByOriginEventId(eventId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * List unresolved match candidates for an ambiguous invoice match.
+     *
+     * GET /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}
+     *
+     * @param invoiceEventId the invoice event that triggered the ambiguous match
+     * @return list of scored candidates ordered by score descending
+     */
+    @GetMapping("/match-candidates/{invoiceEventId}")
+    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST", apiVersion = "1")
+    public ResponseEntity<List<VendorBillMatchCandidateResponse>> listMatchCandidates(
+            @NonNull @PathVariable UUID invoiceEventId) {
+        log.info("Received request to list match candidates | invoiceEventId={}", invoiceEventId);
+
+        List<VendorBillMatchCandidateResponse> candidates = vendorBillService
+                .listMatchCandidates(invoiceEventId);
+        return ResponseEntity.ok(candidates);
+    }
+
+    /**
+     * Select a match candidate to approve the corresponding vendor bill.
+     *
+     * POST /v1/accounting/vendor-bills/match-candidates/{candidateId}/select
+     *
+     * @param candidateId the candidate to select
+     * @param request     selection request with operator ID
+     * @return updated vendor bill response
+     */
+    @PostMapping("/match-candidates/{candidateId}/select")
+    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT", apiVersion = "1")
+    public ResponseEntity<VendorBillResponse> selectMatchCandidate(
+            @NonNull @PathVariable UUID candidateId,
+            @NonNull @Valid @RequestBody CandidateSelectionRequest request) {
+        log.info("Received request to select match candidate | candidateId={} | operator={}",
+                candidateId, request.getOperatorId());
+
+        VendorBillResponse response = vendorBillService.selectMatchCandidate(
+                candidateId, request.getOperatorId());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * DTO for match candidate selection requests.
+     */
+    public static class CandidateSelectionRequest {
+        private String operatorId;
+
+        public CandidateSelectionRequest() {
+        }
+
+        public CandidateSelectionRequest(@NonNull String operatorId) {
+            this.operatorId = operatorId;
+        }
+
+        @NonNull
+        public String getOperatorId() {
+            return operatorId;
+        }
+
+        public void setOperatorId(@NonNull String operatorId) {
+            this.operatorId = operatorId;
+        }
     }
 
     /**

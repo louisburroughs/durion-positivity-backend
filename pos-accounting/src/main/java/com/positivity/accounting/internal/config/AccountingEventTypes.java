@@ -132,6 +132,12 @@ public final class AccountingEventTypes {
                                                 "Post vendor bill to GL (Dr Inventory/Expense, Cr AP)").build(),
                                 EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_GET_BY_EVENT",
                                                 "Get vendor bill by origin event ID (idempotency check)").build(),
+                                EventTypeRegistration.fastRead("ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST",
+                                                "List unresolved match candidates for ambiguous invoice match")
+                                                .build(),
+                                EventTypeRegistration.approval("ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT",
+                                                "Select match candidate to approve vendor bill from ambiguous match")
+                                                .build(),
 
                                 // AP Payment GL Posting - 1 event (Issue #128)
                                 EventTypeRegistration.write("AP_PAYMENT_GL_POSTING",
