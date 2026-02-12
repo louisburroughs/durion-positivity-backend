@@ -65,7 +65,7 @@ public class TimeEntryApprovalController {
         // Merge header-provided permissions if present
         if (permissionsHeader != null && !permissionsHeader.isBlank()) {
             Set<String> headerPerms = java.util.Arrays.stream(permissionsHeader.split(","))
-                    .map(String::trim).collect(java.util.stream.Collectors.toSet());
+                    .map(String::trim).collect(Collectors.toSet());
             if (perms == null)
                 perms = headerPerms;
             else {
@@ -127,7 +127,7 @@ public class TimeEntryApprovalController {
         // Merge header-provided permissions if present
         if (permissionsHeader != null && !permissionsHeader.isBlank()) {
             Set<String> headerPerms = java.util.Arrays.stream(permissionsHeader.split(","))
-                    .map(String::trim).collect(java.util.stream.Collectors.toSet());
+                    .map(String::trim).collect(Collectors.toSet());
             if (perms == null)
                 perms = headerPerms;
             else {

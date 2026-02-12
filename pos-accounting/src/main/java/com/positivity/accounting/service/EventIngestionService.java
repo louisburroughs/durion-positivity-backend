@@ -178,9 +178,9 @@ public class EventIngestionService {
      * Useful when posting rules have been updated or temporary errors resolved.
      */
     public AccountingEventResponse retryEventProcessing(UUID eventId) {
-        Map<String, Object> record = getEvent(eventId);
+        Map<String, Object> eventRecord = getEvent(eventId);
         log.info("Retrying event {}", eventId);
-        return submitEvent(record);
+        return submitEvent(eventRecord);
     }
 
     /**

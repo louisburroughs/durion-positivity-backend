@@ -95,7 +95,7 @@ public class CompositeAgentDiscovery implements AgentDiscovery {
     public List<AgentDiscoveryStrategy> getStrategiesByPriority() {
         return strategies.stream()
                 .sorted((a, b) -> Integer.compare(b.getPriority(), a.getPriority()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private void sortStrategiesByPriority() {

@@ -200,6 +200,6 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
                         mapping,
                         accountMap.get(mapping.getDebitAccountId()),
                         accountMap.get(mapping.getCreditAccountId())))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

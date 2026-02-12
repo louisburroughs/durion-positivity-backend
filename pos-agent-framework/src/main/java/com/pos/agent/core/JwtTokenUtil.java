@@ -165,9 +165,9 @@ public final class JwtTokenUtil {
             String serviceType) {
         public SecurityPayload {
             roles = roles == null ? Collections.emptyList()
-                    : roles.stream().filter(Objects::nonNull).collect(Collectors.toList());
+                    : roles.stream().filter(Objects::nonNull).toList();
             permissions = permissions == null ? Collections.emptyList()
-                    : permissions.stream().filter(Objects::nonNull).collect(Collectors.toList());
+                    : permissions.stream().filter(Objects::nonNull).toList();
         }
     }
 }

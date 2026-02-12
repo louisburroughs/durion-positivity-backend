@@ -11,18 +11,16 @@ import java.util.stream.Collectors;
  */
 public class SecurityContext {
     private final String jwtToken;
-    
 
     private SecurityContext(Builder builder) {
         this.jwtToken = builder.jwtToken;
-        
+
     }
 
     public String getJwtToken() {
         return jwtToken;
     }
 
-   
     public static Builder builder() {
         return new Builder();
     }
@@ -103,7 +101,7 @@ public class SecurityContext {
             if (values == null) {
                 return new ArrayList<>();
             }
-            return values.stream().filter(Objects::nonNull).map(Enum::name).collect(Collectors.toList());
+            return values.stream().filter(Objects::nonNull).map(Enum::name).toList();
         }
 
         private List<Roles> toRoles(List<String> names) {

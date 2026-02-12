@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
  * Utility class for accessing security context information.
  *
  * <h2>Usage</h2>
+ * 
  * <pre>{@code
  * // Get current username
  * String user = SecurityContextHelper.getCurrentUsername().orElse("anonymous");
@@ -83,7 +84,8 @@ public final class SecurityContextHelper {
     /**
      * Check if the current user has a specific authority.
      *
-     * @param authority Authority to check (e.g., "catalog:product:view" or "ROLE_ADMIN")
+     * @param authority Authority to check (e.g., "catalog:product:view" or
+     *                  "ROLE_ADMIN")
      * @return true if user has the authority
      */
     public static boolean hasAuthority(@NonNull String authority) {
@@ -129,8 +131,8 @@ public final class SecurityContextHelper {
      * @return true if user has the role
      */
     public static boolean hasRole(@NonNull String role) {
-        String roleAuthority = role.startsWith(GatewaySecurityConstants.ROLE_PREFIX) 
-                ? role 
+        String roleAuthority = role.startsWith(GatewaySecurityConstants.ROLE_PREFIX)
+                ? role
                 : GatewaySecurityConstants.ROLE_PREFIX + role;
         return hasAuthority(roleAuthority);
     }
@@ -142,7 +144,7 @@ public final class SecurityContextHelper {
      */
     public static boolean isAuthenticated() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && authentication.isAuthenticated() 
+        return authentication != null && authentication.isAuthenticated()
                 && !GatewaySecurityConstants.ANONYMOUS_USER.equals(authentication.getPrincipal());
     }
 }

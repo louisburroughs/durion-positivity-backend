@@ -14,41 +14,45 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * Support class for registering service permissions with pos-security-service at startup.
+ * Support class for registering service permissions with pos-security-service
+ * at startup.
  *
  * <h2>Usage</h2>
  * <p>
  * Extend this class in each service to register its permissions:
  * </p>
- * <pre>{@code
- * @Component
- * public class CatalogPermissionRegistration extends PermissionRegistrationSupport {
+ * 
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Component
+ *     public class CatalogPermissionRegistration extends PermissionRegistrationSupport {
  *
- *     public CatalogPermissionRegistration(RestClient.Builder builder,
- *             @Value("${pos.security.base-url}") String securityServiceUrl) {
- *         super(builder, securityServiceUrl, "catalog", "pos-catalog");
- *     }
+ *         public CatalogPermissionRegistration(RestClient.Builder builder,
+ *                 &#64;Value("${pos.security.base-url}") String securityServiceUrl) {
+ *             super(builder, securityServiceUrl, "catalog", "pos-catalog");
+ *         }
  *
- *     @Override
- *     protected List<PermissionDefinition> getPermissions() {
- *         return List.of(
- *             PermissionDefinition.of("catalog:product:view", "View products"),
- *             PermissionDefinition.of("catalog:product:create", "Create products"),
- *             PermissionDefinition.of("catalog:product:edit", "Edit products"),
- *             PermissionDefinition.of("catalog:product:delete", "Delete products")
- *         );
+ *         @Override
+ *         protected List<PermissionDefinition> getPermissions() {
+ *             return List.of(
+ *                     PermissionDefinition.of("catalog:product:view", "View products"),
+ *                     PermissionDefinition.of("catalog:product:create", "Create products"),
+ *                     PermissionDefinition.of("catalog:product:edit", "Edit products"),
+ *                     PermissionDefinition.of("catalog:product:delete", "Delete products"));
+ *         }
  *     }
  * }
- * }</pre>
+ * </pre>
  *
  * <h2>Permission Naming Convention</h2>
  * <p>
  * Permissions follow the pattern: {@code domain:resource:action}
  * </p>
  * <ul>
- *   <li>{@code domain} - Service domain (e.g., catalog, crm, pricing)</li>
- *   <li>{@code resource} - Resource type (e.g., product, party, price_book)</li>
- *   <li>{@code action} - Action type (e.g., view, create, edit, delete)</li>
+ * <li>{@code domain} - Service domain (e.g., catalog, crm, pricing)</li>
+ * <li>{@code resource} - Resource type (e.g., product, party, price_book)</li>
+ * <li>{@code action} - Action type (e.g., view, create, edit, delete)</li>
  * </ul>
  *
  * @see PermissionDefinition
@@ -67,10 +71,13 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
     /**
      * Create a new permission registration support instance.
      *
-     * @param restClientBuilder RestClient builder for HTTP requests
-     * @param securityServiceUrl Base URL of pos-security-service (e.g., http://pos-security-service:8086)
-     * @param domain Domain name for permissions (e.g., "catalog", "crm")
-     * @param serviceName Name of the registering service (e.g., "pos-catalog")
+     * @param restClientBuilder  RestClient builder for HTTP requests
+     * @param securityServiceUrl Base URL of pos-security-service (e.g.,
+     *                           http://pos-security-service:8086)
+     * @param domain             Domain name for permissions (e.g., "catalog",
+     *                           "crm")
+     * @param serviceName        Name of the registering service (e.g.,
+     *                           "pos-catalog")
      */
     protected PermissionRegistrationSupport(
             RestClient.Builder restClientBuilder,
@@ -83,11 +90,14 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
     /**
      * Create a new permission registration support instance.
      *
-     * @param restClientBuilder RestClient builder for HTTP requests
-     * @param securityServiceUrl Base URL of pos-security-service (e.g., http://pos-security-service:8086)
-     * @param domain Domain name for permissions (e.g., "catalog", "crm")
-     * @param serviceName Name of the registering service (e.g., "pos-catalog")
-     * @param enabled Whether permission registration is enabled
+     * @param restClientBuilder  RestClient builder for HTTP requests
+     * @param securityServiceUrl Base URL of pos-security-service (e.g.,
+     *                           http://pos-security-service:8086)
+     * @param domain             Domain name for permissions (e.g., "catalog",
+     *                           "crm")
+     * @param serviceName        Name of the registering service (e.g.,
+     *                           "pos-catalog")
+     * @param enabled            Whether permission registration is enabled
      */
     protected PermissionRegistrationSupport(
             RestClient.Builder restClientBuilder,
@@ -124,7 +134,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
             return;
         }
 
-        log.info("[{}] Registering {} permissions with security service...", 
+        log.info("[{}] Registering {} permissions with security service...",
                 serviceName, permissions.size());
 
         registerWithRetry(permissions);
@@ -141,7 +151,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
                 // Convert to the format expected by pos-security-service
                 List<PermissionDto> permissionDtos = permissions.stream()
                         .map(p -> new PermissionDto(p.name(), p.description()))
-                        .collect(Collectors.toList());
+                        .toList();
 
                 PermissionRegistrationRequest request = new PermissionRegistrationRequest(
                         domain, serviceName, permissionDtos, "1.0");
@@ -152,7 +162,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
                         .retrieve()
                         .toBodilessEntity();
 
-                log.info("[{}] Successfully registered {} permissions", 
+                log.info("[{}] Successfully registered {} permissions",
                         serviceName, permissions.size());
                 return;
 
@@ -185,14 +195,14 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
             String domain,
             String serviceName,
             Collection<PermissionDto> permissions,
-            String version
-    ) {}
+            String version) {
+    }
 
     /**
      * Permission definition DTO (matches pos-security-service DTO).
      */
     public record PermissionDto(
             String name,
-            String description
-    ) {}
+            String description) {
+    }
 }

@@ -54,7 +54,7 @@ public class VehicleSearchService {
         List<VehicleSummary> candidates = vehicleRepository.searchByQuery(normalizedQuery)
                 .stream()
                 .map(this::toVehicleSummary)
-                .collect(Collectors.toList());
+                .toList();
 
         // Rank candidates by relevance
         List<VehicleSummary> ranked = rankCandidates(candidates, normalizedQuery, searchType,
@@ -64,7 +64,7 @@ public class VehicleSearchService {
         int limit = Math.min(request.getLimit(), MAX_LIMIT);
         List<VehicleSummary> results = ranked.stream()
                 .limit(limit)
-                .collect(Collectors.toList());
+                .toList();
 
         log.info("Search returned {} results (limit={})", results.size(), limit);
 

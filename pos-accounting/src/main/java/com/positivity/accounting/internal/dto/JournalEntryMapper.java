@@ -42,7 +42,7 @@ public final class JournalEntryMapper {
         if (entity.getLines() != null) {
             response.setLines(entity.getLines().stream()
                     .map(JournalEntryMapper::toLineResponse)
-                    .collect(Collectors.toList()));
+                    .toList());
 
             // Calculate totals
             BigDecimal totalDebits = entity.getLines().stream()
@@ -77,7 +77,7 @@ public final class JournalEntryMapper {
         if (request.getLines() != null) {
             entity.setLines(request.getLines().stream()
                     .map(JournalEntryMapper::toLineEntity)
-                    .collect(Collectors.toList()));
+                    .toList());
         }
 
         return entity;

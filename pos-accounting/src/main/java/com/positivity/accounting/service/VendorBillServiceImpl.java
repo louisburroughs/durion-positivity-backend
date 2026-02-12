@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
@@ -548,11 +549,11 @@ public class VendorBillServiceImpl implements VendorBillService {
 
                 java.util.Set<UUID> billProducts = billLines.stream()
                                 .map(VendorBillLine::getProductId)
-                                .collect(java.util.stream.Collectors.toSet());
+                                .collect(Collectors.toSet());
 
                 java.util.Set<UUID> invoiceProducts = invoiceLines.stream()
                                 .map(VendorInvoiceReceivedEvent.InvoiceLineItem::getProductId)
-                                .collect(java.util.stream.Collectors.toSet());
+                                .collect(Collectors.toSet());
 
                 java.util.Set<UUID> intersection = new java.util.HashSet<>(billProducts);
                 intersection.retainAll(invoiceProducts);
