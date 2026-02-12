@@ -74,7 +74,9 @@ class PriceOverrideAuthorizationServiceTest {
     @DisplayName("validate - approves override at exact absolute threshold")
     void validate_atAbsoluteThreshold_approved() {
         // Arrange
-        BigDecimal adjustedPrice = new BigDecimal("50.00"); // Exactly $50 discount
+        // Original: $100, threshold: $50 absolute OR 25% off
+        // To stay within both thresholds: adjust to $75 (25% off, $25 discount)
+        BigDecimal adjustedPrice = new BigDecimal("75.00"); // Exactly 25% off = $25 discount
         when(policyRepository.findCurrentActiveByRole(testRole)).thenReturn(Optional.of(testPolicy));
 
         // Act
