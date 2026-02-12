@@ -60,9 +60,7 @@ class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
         private UUID testInvoice2Id;
 
         @BeforeEach
-        @Override
-        public void setUpMockMvc() {
-                super.setUpMockMvc();
+        void setUp() {
                 // Clean up test data
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();

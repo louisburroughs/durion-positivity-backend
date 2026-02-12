@@ -52,9 +52,7 @@ public class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
     private UUID testActorId;
 
     @BeforeEach
-    @Override
-    public void setUpMockMvc() {
-        super.setUpMockMvc();
+    void setUp() {
         // Clean up any existing test data
         auditTrailRepository.deleteAll();
 
