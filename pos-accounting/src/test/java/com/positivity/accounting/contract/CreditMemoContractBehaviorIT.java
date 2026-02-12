@@ -67,7 +67,9 @@ public class CreditMemoContractBehaviorIT extends BaseIntegrationTest {
         private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
 
         @BeforeEach
-        void setUp() {
+        @Override
+        public void setUpMockMvc() {
+                super.setUpMockMvc();
                 // Clean up any existing test data
                 creditMemoRepository.deleteAll();
 

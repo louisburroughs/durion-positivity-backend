@@ -53,7 +53,9 @@ public class EventIngestionContractBehaviorIT extends BaseIntegrationTest {
     private UUID testOrganizationId;
 
     @BeforeEach
-    void setUp() {
+    @Override
+    public void setUpMockMvc() {
+        super.setUpMockMvc();
         // Clean up before each test
         accountingEventRepository.deleteAll();
         testOrganizationId = UUID.randomUUID();
