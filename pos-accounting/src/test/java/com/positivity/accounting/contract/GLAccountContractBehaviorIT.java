@@ -10,9 +10,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.accounting.BaseIntegrationTest;
 
 import com.positivity.accounting.internal.dto.GLAccountBalanceResponse;
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
@@ -37,10 +37,8 @@ import com.positivity.accounting.service.GLAccountService;
  * - Derived status calculation
  * - Balance queries
  */
-@SpringBootTest
-@ActiveProfiles("test")
 @Transactional
-public class GLAccountContractBehaviorIT {
+public class GLAccountContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
     private GLAccountService glAccountService;
