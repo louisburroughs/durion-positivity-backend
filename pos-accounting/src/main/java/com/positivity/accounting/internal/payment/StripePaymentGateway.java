@@ -66,7 +66,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             var chargeParams = new java.util.HashMap<String, Object>();
             chargeParams.put("amount", amountInCents);
             chargeParams.put("currency", request.currency().toLowerCase());
-            chargeParams.put("source", "tok_visa"); // TODO: Replace with actual payment source from request
+            chargeParams.put("source", request.paymentSource());
             chargeParams.put("description", request.memo());
             chargeParams.put("metadata", buildMetadata(request));
 

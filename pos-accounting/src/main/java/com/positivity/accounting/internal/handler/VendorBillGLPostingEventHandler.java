@@ -101,7 +101,6 @@ public class VendorBillGLPostingEventHandler {
         payload.put("eventId", event.getEventId());
         payload.put("eventType", "VENDOR_BILL_GL_POSTING");
         payload.put("sourceSystem", "POS");
-        payload.put("organizationId", null); // TODO: Extract from context or event
         payload.put("transactionDate", event.getBillDate());
 
         // Vendor bill details

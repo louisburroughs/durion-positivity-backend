@@ -59,7 +59,8 @@ public class GLAccountController {
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "accountCode") String sort,
                         @Parameter(description = "Filter by account status") @RequestParam(required = false) String status) {
-                log.info("List GL accounts: page={}, size={}, sort={}, status={}", page, size, sort, status);
+                log.info("List GL accounts: page={}, size={}", page, size);
+                log.debug("List GL accounts filter: sort={}, status={}", sort, status);
                 GLAccountListResponse response = glAccountService.listGLAccounts(page, size, sort, status);
                 return ResponseEntity.ok(response);
         }
@@ -87,7 +88,8 @@ public class GLAccountController {
         })
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_CREATE", apiVersion = "1")
         public ResponseEntity<GLAccountResponse> createGLAccount(@Valid @RequestBody GLAccountCreateRequest request) {
-                log.info("Create GL account: code={}, type={}", request.getAccountCode(), request.getAccountType());
+                log.info("Create GL account request received");
+                log.debug("Create GL account: code={}, type={}", request.getAccountCode(), request.getAccountType());
                 GLAccountResponse response = glAccountService.createGLAccount(request);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
@@ -120,8 +122,8 @@ public class GLAccountController {
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @Valid @RequestBody com.positivity.accounting.internal.dto.GLAccountActivateRequest request) {
                 log.info("Activate GL account: id={}, effectiveDate={}", glAccountId, request.getEffectiveDate());
-                GLAccountResponse response = glAccountService.activateGLAccount(glAccountId, 
-                        request.getEffectiveDate().atStartOfDay());
+                GLAccountResponse response = glAccountService.activateGLAccount(glAccountId,
+                                request.getEffectiveDate().atStartOfDay());
                 return ResponseEntity.ok(response);
         }
 

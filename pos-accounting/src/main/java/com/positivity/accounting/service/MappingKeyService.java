@@ -32,6 +32,8 @@ import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 @Service
 public class MappingKeyService {
 
+        private static final String POSTING_CATEGORY_NOT_FOUND = "Posting category not found: ";
+
         private static final Logger log = LoggerFactory.getLogger(MappingKeyService.class);
 
         private final MappingKeyRepository mappingKeyRepository;
@@ -63,7 +65,7 @@ public class MappingKeyService {
                 // Validate posting category exists
                 PostingCategory category = postingCategoryRepository.findById(request.getPostingCategoryId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Posting category not found: " + request.getPostingCategoryId()));
+                                                POSTING_CATEGORY_NOT_FOUND + request.getPostingCategoryId()));
 
                 // Validate uniqueness within category
                 String trimmedName = request.getKeyName().trim();
@@ -107,7 +109,7 @@ public class MappingKeyService {
 
                 PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Posting category not found: " + mappingKey.getPostingCategoryId()));
+                                                POSTING_CATEGORY_NOT_FOUND + mappingKey.getPostingCategoryId()));
 
                 return toResponse(mappingKey, category.getCategoryName());
         }
@@ -134,7 +136,7 @@ public class MappingKeyService {
 
                 PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Posting category not found: " + mappingKey.getPostingCategoryId()));
+                                                POSTING_CATEGORY_NOT_FOUND + mappingKey.getPostingCategoryId()));
 
                 // Validate uniqueness if name is changing
                 String trimmedName = request.getKeyName().trim();
@@ -181,7 +183,7 @@ public class MappingKeyService {
                 // Validate category exists
                 PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Posting category not found: " + postingCategoryId));
+                                                POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(sort));
                 Page<MappingKey> keyPage;
@@ -230,7 +232,7 @@ public class MappingKeyService {
                 // Fetch category for response
                 PostingCategory category = postingCategoryRepository.findById(mappingKey.getPostingCategoryId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Posting category not found: " + mappingKey.getPostingCategoryId()));
+                                                POSTING_CATEGORY_NOT_FOUND + mappingKey.getPostingCategoryId()));
 
                 // Check for active mappings
                 long activeMappingCount = glMappingRepository.countByMappingKeyIdAndDeactivatedAtIsNull(mappingKeyId);

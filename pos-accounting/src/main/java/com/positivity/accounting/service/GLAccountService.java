@@ -30,6 +30,7 @@ import com.positivity.accounting.internal.exception.DuplicateAccountCodeExceptio
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
+import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,6 +43,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional
 public class GLAccountService {
+
+    private static final String SYSTEM = "SYSTEM";
 
     private static final Logger log = LoggerFactory.getLogger(GLAccountService.class);
 
@@ -83,9 +86,11 @@ public class GLAccountService {
             account.setActivationDate(LocalDateTime.now());
         }
 
-        // Set audit fields
-        account.setCreatedBy("SYSTEM"); // TODO: Get from security context
-        account.setModifiedBy("SYSTEM");
+        // Set audit fields from authenticated user (falls back to SYSTEM for
+        // non-authenticated contexts)
+        String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
+        account.setCreatedBy(currentUser);
+        account.setModifiedBy(currentUser);
 
         account = glAccountRepository.save(account);
 
@@ -133,7 +138,7 @@ public class GLAccountService {
             account.setDescription(request.getDescription());
         }
 
-        account.setModifiedBy("SYSTEM"); // TODO: Get from security context
+        account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
 
         account = glAccountRepository.save(account);
 
@@ -157,7 +162,7 @@ public class GLAccountService {
     /**
      * Activates a GL account with a specific effective date.
      *
-     * @param glAccountId account identifier
+     * @param glAccountId   account identifier
      * @param effectiveDate date when account becomes active
      * @return activated GL account response
      * @throws GLAccountNotFoundException if account not found
@@ -173,7 +178,7 @@ public class GLAccountService {
 
         // Clear deactivation date to reactivate
         account.setDeactivationDate(null);
-        account.setModifiedBy("SYSTEM"); // TODO: Get from security context
+        account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
 
         account = glAccountRepository.save(account);
 
@@ -207,7 +212,7 @@ public class GLAccountService {
         }
 
         account.setDeactivationDate(LocalDateTime.now());
-        account.setModifiedBy("SYSTEM"); // TODO: Get from security context
+        account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
 
         account = glAccountRepository.save(account);
 
@@ -249,7 +254,7 @@ public class GLAccountService {
             account.setDescription("[ARCHIVED] " + account.getDescription());
         }
 
-        account.setModifiedBy("SYSTEM"); // TODO: Get from security context
+        account.setModifiedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM));
 
         account = glAccountRepository.save(account);
 
