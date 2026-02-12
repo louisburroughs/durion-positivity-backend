@@ -1,30 +1,27 @@
 package com.positivity.accounting.contract;
 
-import com.positivity.accounting.BaseIntegrationTest;
-
-import com.positivity.accounting.internal.entity.StatementLineMapping;
-import com.positivity.accounting.internal.enums.OperationType;
-import com.positivity.accounting.internal.enums.StatementType;
-import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.entity.StatementLineMapping;
+import com.positivity.accounting.internal.enums.OperationType;
+import com.positivity.accounting.internal.enums.StatementType;
+import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 
 /**
  * Contract behavior tests for Financial Reporting API (CAP-054).

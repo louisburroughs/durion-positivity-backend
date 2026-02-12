@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -42,61 +41,6 @@ public class InvoicePaymentController {
     }
 
     /**
-     * Apply a payment to an invoice and update status (LEGACY - for invoice-centric
-     * workflow).
-     * 
-     * <p>
-     * <strong>BACKWARD COMPATIBILITY:</strong> This endpoint is maintained at its
-     * original
-     * path {@code /v1/accounting/invoices/{invoiceId}/pay} for existing clients.
-     * The new
-     * payment-centric API is available at
-     * {@code /v1/accounting/payments/{paymentId}/applications}.
-     * Both endpoints are supported; this legacy endpoint will be removed in a
-     * future major version.
-     * 
-     * @deprecated Use PaymentApplicationController for new payment-centric API
-     * @param request Payment details including idempotency key
-     * @return Updated invoice status
-     */
-    @Deprecated(since = "0.2.0", forRemoval = true)
-    @PostMapping("/v1/accounting/invoices/{invoiceId}/pay")
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
-    @Operation(summary = "Apply payment (LEGACY)", description = "Apply a payment to an invoice (invoice-centric workflow). Use /payments/{paymentId}/applications for new API.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Payment applied", content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid payment request"),
-            @ApiResponse(responseCode = "500", description = "Processing error")
-    })
-    @EmitEvent(id = "ACCOUNTING_INVOICE_PAY", apiVersion = "1")
-    public ResponseEntity<InvoiceStatusResponse> applyPayment(
-            @Parameter(description = "Invoice identifier (LEGACY - kept for backward compatibility)") @PathVariable UUID invoiceId,
-            @Valid @RequestBody @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Payment application payload", required = true, content = @Content(schema = @Schema(implementation = PaymentAppliedRequest.class))) PaymentAppliedRequest request) {
-
-        log.info("Received payment application for invoice {}", request.getInvoiceId());
-
-        if (!invoiceId.equals(request.getInvoiceId())) {
-            log.warn(
-                    "invoiceId path param does not match invoiceId in body (path={}, body={})",
-                    invoiceId,
-                    request.getInvoiceId());
-            return ResponseEntity.badRequest().build();
-        }
-
-        try {
-            InvoiceStatusResponse response = paymentStatusService.processPaymentApplied(request);
-            log.info("Successfully processed payment for invoice {} - status: {}",
-                    request.getInvoiceId(), response.getStatus());
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("Error processing payment for invoice {}: {}",
-                    request.getInvoiceId(), e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    /**
      * Get current payment status of an invoice.
      * 
      * @param invoiceId Invoice identifier
@@ -105,11 +49,9 @@ public class InvoicePaymentController {
     @GetMapping("/v1/accounting/invoice/{invoiceId}/status")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Get invoice status", description = "Retrieve current payment status for an invoice.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Invoice status returned", content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Invoice not found"),
-            @ApiResponse(responseCode = "500", description = "Error retrieving invoice status")
-    })
+    @ApiResponse(responseCode = "200", description = "Invoice status returned", content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Invoice not found")
+    @ApiResponse(responseCode = "500", description = "Error retrieving invoice status")
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
             @Parameter(description = "Invoice identifier") @PathVariable UUID invoiceId) {
 
@@ -133,10 +75,8 @@ public class InvoicePaymentController {
     @PostMapping("/v1/accounting/invoice/invoices")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Regenerate invoice from workorder", description = "Regenerate an invoice from a workorder.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "202", description = "Invoice regeneration accepted"),
-            @ApiResponse(responseCode = "400", description = "Invalid request")
-    })
+    @ApiResponse(responseCode = "202", description = "Invoice regeneration accepted")
+    @ApiResponse(responseCode = "400", description = "Invalid request")
     @EmitEvent(id = "ACCOUNTING_INVOICE_REGENERATE", apiVersion = "1")
     public ResponseEntity<Void> regenerateInvoiceFromWorkorder(@RequestBody(required = false) Object body) {
         log.info("Stub regenerateInvoiceFromWorkorder");
@@ -146,10 +86,8 @@ public class InvoicePaymentController {
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Get billing rules", description = "Retrieve billing rules for a customer.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Billing rules returned"),
-            @ApiResponse(responseCode = "404", description = "Customer not found")
-    })
+    @ApiResponse(responseCode = "200", description = "Billing rules returned")
+    @ApiResponse(responseCode = "404", description = "Customer not found")
     public ResponseEntity<Void> getBillingRules(
             @Parameter(description = "Customer identifier") @PathVariable UUID customerId) {
         log.info("Stub getBillingRules customerId={}", customerId);

@@ -1,9 +1,16 @@
 package com.positivity.accounting.contract;
 
-import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
-import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
-import com.positivity.accounting.internal.enums.AccountType;
-import tools.jackson.databind.ObjectMapper;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,13 +21,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.UUID;
+import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.enums.AccountType;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Contract Behavioral Integration Tests for Accounting Service

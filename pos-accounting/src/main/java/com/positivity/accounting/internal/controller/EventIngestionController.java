@@ -33,7 +33,6 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -57,10 +56,8 @@ public class EventIngestionController {
         @GetMapping
         @PreAuthorize("hasAuthority('accounting:events:view')")
         @Operation(summary = "List events", description = "Retrieve paginated accounting events with optional filters.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Events listed"),
-                        @ApiResponse(responseCode = "403", description = "Forbidden")
-        })
+        @ApiResponse(responseCode = "200", description = "Events listed")
+        @ApiResponse(responseCode = "403", description = "Forbidden")
         @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
         public ResponseEntity<PagedResponse<AccountingEventResponse>> listEvents(
                         @Parameter(description = "Organization identifier") @RequestParam UUID organizationId,
@@ -74,7 +71,7 @@ public class EventIngestionController {
                 Page<AccountingEventResponse> eventPage = eventIngestionService.listEvents(organizationId, status,
                                 pageable);
 
-                PagedResponse<AccountingEventResponse> response = new PagedResponse<AccountingEventResponse>(
+                PagedResponse<AccountingEventResponse> response = new PagedResponse<>(
                                 eventPage.getContent(),
                                 eventPage.getNumber(),
                                 eventPage.getSize(),
@@ -86,10 +83,8 @@ public class EventIngestionController {
         @GetMapping("/{eventId}")
         @PreAuthorize("hasAuthority('accounting:events:view')")
         @Operation(summary = "Get event", description = "Retrieve details for an accounting event.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Event returned"),
-                        @ApiResponse(responseCode = "404", description = "Event not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Event returned")
+        @ApiResponse(responseCode = "404", description = "Event not found")
         public ResponseEntity<AccountingEventResponse> getEvent(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
                 log.debug("Getting accounting event: {}", eventId);
@@ -100,10 +95,8 @@ public class EventIngestionController {
         @PostMapping
         @PreAuthorize("hasAuthority('accounting:events:submit')")
         @Operation(summary = "Submit event", description = "Submit a new accounting event for processing.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "202", description = "Event accepted for processing"),
-                        @ApiResponse(responseCode = "400", description = "Invalid request")
-        })
+        @ApiResponse(responseCode = "202", description = "Event accepted for processing")
+        @ApiResponse(responseCode = "400", description = "Invalid request")
         @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
         public ResponseEntity<AccountingEventResponse> submitEvent(
                         @Valid @RequestBody AccountingEventSubmitRequest request) {
@@ -116,10 +109,8 @@ public class EventIngestionController {
         @PostMapping("/{eventId}/retry")
         @PreAuthorize("hasAuthority('accounting:events:retry')")
         @Operation(summary = "Retry event processing", description = "Retry processing for a failed accounting event.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "202", description = "Retry scheduled"),
-                        @ApiResponse(responseCode = "404", description = "Event not found")
-        })
+        @ApiResponse(responseCode = "202", description = "Retry scheduled")
+        @ApiResponse(responseCode = "404", description = "Event not found")
         @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
         public ResponseEntity<AccountingEventResponse> retryEventProcessing(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId,
@@ -132,13 +123,11 @@ public class EventIngestionController {
         @PostMapping("/{eventId}/reprocess")
         @PreAuthorize("hasAuthority('accounting:events:reprocess')")
         @Operation(summary = "Reprocess suspended event", description = "Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Reprocessing completed successfully"),
-                        @ApiResponse(responseCode = "202", description = "Reprocessing accepted"),
-                        @ApiResponse(responseCode = "400", description = "Invalid request"),
-                        @ApiResponse(responseCode = "404", description = "Event not found"),
-                        @ApiResponse(responseCode = "409", description = "Event already PROCESSED (idempotency violation)")
-        })
+        @ApiResponse(responseCode = "200", description = "Reprocessing completed successfully")
+        @ApiResponse(responseCode = "202", description = "Reprocessing accepted")
+        @ApiResponse(responseCode = "400", description = "Invalid request")
+        @ApiResponse(responseCode = "404", description = "Event not found")
+        @ApiResponse(responseCode = "409", description = "Event already PROCESSED (idempotency violation)")
         @EmitEvent(id = "ACCOUNTING_EVENT_REPROCESS", apiVersion = "1")
         public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId,
@@ -164,9 +153,7 @@ public class EventIngestionController {
         @GetMapping("/{eventId}/reprocessing-history")
         @PreAuthorize("hasAuthority('accounting:events:view')")
         @Operation(summary = "Get reprocessing history", description = "Retrieve all reprocessing attempts for a suspended accounting event. Returns an empty list if the event does not exist or has no reprocessing history.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Reprocessing history returned (may be empty list)")
-        })
+        @ApiResponse(responseCode = "200", description = "Reprocessing history returned (may be empty list)")
         public ResponseEntity<List<ReprocessingAttemptHistoryResponse>> getReprocessingHistory(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
                 log.debug("Getting reprocessing history for event: {}", eventId);
@@ -182,10 +169,8 @@ public class EventIngestionController {
         @GetMapping("/{eventId}/processing-log")
         @PreAuthorize("hasAuthority('accounting:events:view')")
         @Operation(summary = "Get event processing log", description = "Retrieve the processing log for an accounting event.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Processing log returned"),
-                        @ApiResponse(responseCode = "404", description = "Event not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Processing log returned")
+        @ApiResponse(responseCode = "404", description = "Event not found")
         public ResponseEntity<String> getEventProcessingLog(
                         @Parameter(description = "Event identifier") @PathVariable UUID eventId) {
                 log.debug("Getting processing log for event: {}", eventId);
