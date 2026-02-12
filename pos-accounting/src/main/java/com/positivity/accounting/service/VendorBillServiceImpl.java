@@ -16,13 +16,16 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.accounting.internal.dto.BillMatchResult;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
+import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
+import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
+import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -52,6 +55,7 @@ public class VendorBillServiceImpl implements VendorBillService {
 
         private final VendorBillRepository billRepository;
         private final VendorBillLineRepository billLineRepository;
+        private final VendorBillMatchCandidateRepository matchCandidateRepository;
         private final ApplicationEventPublisher eventPublisher;
 
         // Tolerance thresholds for three-way matching
@@ -167,11 +171,15 @@ public class VendorBillServiceImpl implements VendorBillService {
                                         event.getVendorId(), event.getInvoiceReference(),
                                         matchResult.getAlternativeCandidates().size(),
                                         matchResult.getMatchingDetails());
-                        // TODO: Create approval task with all candidates for manual selection
-                        // For now, proceed with best match but mark for review
+                        // Persist all candidates for manual selection by operator
+                        persistMatchCandidates(event.getEventId(), event.getVendorId(),
+                                        matchResult.getAlternativeCandidates());
+
+                        // Mark best-match bill as MATCH_EXCEPTION awaiting operator selection
                         VendorBill bill = matchResult.getBestMatch();
                         bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
                         bill.setRejectionReason("Ambiguous match - multiple candidates found. "
+                                        + "Use /match-candidates/{invoiceEventId} to list and select. "
                                         + matchResult.getMatchingDetails());
                         bill.setModifiedBy("system");
                         billRepository.save(bill);
@@ -558,6 +566,110 @@ public class VendorBillServiceImpl implements VendorBillService {
                                 java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
                 long sequence = billRepository.getNextBillSequence();
                 return String.format("BILL_%s_%s_%07d", vendorPrefix, dateStamp, sequence);
+        }
+
+        // ===== Match Candidate Persistence & Selection =====
+
+        /**
+         * Persist all scored candidates for an ambiguous invoice match.
+         * Denormalizes key bill fields for efficient listing without joins.
+         */
+        private void persistMatchCandidates(@NonNull UUID invoiceEventId,
+                        @NonNull UUID vendorId,
+                        @NonNull List<BillMatchResult.ScoredBill> candidates) {
+                for (BillMatchResult.ScoredBill scored : candidates) {
+                        VendorBillMatchCandidate candidate = new VendorBillMatchCandidate();
+                        candidate.setInvoiceEventId(invoiceEventId);
+                        candidate.setVendorBillId(scored.getBill().getVendorBillId());
+                        candidate.setVendorId(vendorId);
+                        candidate.setBillNumber(scored.getBill().getBillNumber());
+                        candidate.setBillTotalAmount(scored.getBill().getTotalAmount());
+                        candidate.setMatchScore(scored.getTotalScore());
+                        candidate.setScoreBreakdown(scored.getScoreBreakdown());
+                        matchCandidateRepository.save(candidate);
+                }
+                log.info("Persisted {} match candidates | invoiceEventId={}", candidates.size(), invoiceEventId);
+        }
+
+        @Override
+        @Transactional(readOnly = true)
+        public @NonNull List<VendorBillMatchCandidateResponse> listMatchCandidates(@NonNull UUID invoiceEventId) {
+                List<VendorBillMatchCandidate> candidates = matchCandidateRepository
+                                .findByInvoiceEventIdAndResolvedFalseOrderByMatchScoreDesc(invoiceEventId);
+                return candidates.stream()
+                                .map(this::toCandidateResponse)
+                                .toList();
+        }
+
+        @Override
+        @Transactional
+        public @NonNull VendorBillResponse selectMatchCandidate(@NonNull UUID candidateId,
+                        @NonNull String operatorId) {
+
+                // Step 1: Load and validate the selected candidate
+                VendorBillMatchCandidate selected = matchCandidateRepository.findById(candidateId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Match candidate not found: " + candidateId));
+
+                if (selected.isResolved()) {
+                        throw new IllegalArgumentException(
+                                        "Match candidate already resolved: " + candidateId);
+                }
+
+                // Step 2: Mark all candidates for this invoice event as resolved
+                List<VendorBillMatchCandidate> allCandidates = matchCandidateRepository
+                                .findByInvoiceEventIdAndResolvedFalseOrderByMatchScoreDesc(
+                                                selected.getInvoiceEventId());
+
+                Instant now = Instant.now();
+                for (VendorBillMatchCandidate candidate : allCandidates) {
+                        candidate.setResolved(true);
+                        candidate.setResolvedBy(operatorId);
+                        candidate.setResolvedAt(now);
+                        candidate.setSelected(candidate.getCandidateId().equals(candidateId));
+                        matchCandidateRepository.save(candidate);
+                }
+
+                // Step 3: Transition the selected bill from MATCH_EXCEPTION to APPROVED
+                VendorBill bill = billRepository.findById(selected.getVendorBillId())
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Vendor bill not found: " + selected.getVendorBillId()));
+
+                bill.setStatus(VendorBillStatus.APPROVED);
+                bill.setApprovedBy(operatorId);
+                bill.setApprovedAt(now);
+                bill.setApprovalJustification(String.format(
+                                "Manually selected from %d candidates (score=%d). %s",
+                                allCandidates.size(), selected.getMatchScore(),
+                                selected.getScoreBreakdown()));
+                bill.setModifiedBy(operatorId);
+                VendorBill savedBill = billRepository.save(bill);
+
+                log.info("Match candidate selected | candidateId={} | billId={} | operator={} | score={} | totalCandidates={}",
+                                candidateId, selected.getVendorBillId(), operatorId,
+                                selected.getMatchScore(), allCandidates.size());
+
+                return toResponse(savedBill);
+        }
+
+        /**
+         * Map VendorBillMatchCandidate entity to response DTO.
+         */
+        private @NonNull VendorBillMatchCandidateResponse toCandidateResponse(
+                        @NonNull VendorBillMatchCandidate candidate) {
+                return VendorBillMatchCandidateResponse.builder()
+                                .candidateId(candidate.getCandidateId())
+                                .invoiceEventId(candidate.getInvoiceEventId())
+                                .vendorBillId(candidate.getVendorBillId())
+                                .vendorId(candidate.getVendorId())
+                                .billNumber(candidate.getBillNumber())
+                                .billTotalAmount(candidate.getBillTotalAmount())
+                                .matchScore(candidate.getMatchScore())
+                                .scoreBreakdown(candidate.getScoreBreakdown())
+                                .resolved(candidate.isResolved())
+                                .selected(candidate.isSelected())
+                                .createdAt(candidate.getCreatedAt())
+                                .build();
         }
 
         /**

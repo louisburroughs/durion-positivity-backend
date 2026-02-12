@@ -1,11 +1,13 @@
 package com.positivity.accounting.service;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 
@@ -101,4 +103,37 @@ public interface VendorBillService {
      */
     @NonNull
     Optional<VendorBillResponse> getBillByOriginEventId(@NonNull UUID originEventId);
+
+    /**
+     * List unresolved match candidates for an ambiguous invoice match.
+     *
+     * <p>
+     * When a vendor invoice matches multiple pending bills, candidates are
+     * persisted for manual selection. This method returns all unresolved
+     * candidates for a given invoice event, ordered by score descending.
+     * </p>
+     *
+     * @param invoiceEventId the invoice event that triggered the ambiguous match
+     * @return list of match candidates with scores
+     */
+    @NonNull
+    List<VendorBillMatchCandidateResponse> listMatchCandidates(@NonNull UUID invoiceEventId);
+
+    /**
+     * Select a specific match candidate for an ambiguous invoice match.
+     *
+     * <p>
+     * Operator picks one candidate from the list. The selected bill is
+     * transitioned from MATCH_EXCEPTION and the three-way match validation
+     * proceeds. All other candidates for the same invoice are marked as
+     * resolved (not selected).
+     * </p>
+     *
+     * @param candidateId the candidate record ID to select
+     * @param operatorId  the operator performing the selection
+     * @return the updated vendor bill response
+     * @throws IllegalArgumentException if candidate not found or already resolved
+     */
+    @NonNull
+    VendorBillResponse selectMatchCandidate(@NonNull UUID candidateId, @NonNull String operatorId);
 }
