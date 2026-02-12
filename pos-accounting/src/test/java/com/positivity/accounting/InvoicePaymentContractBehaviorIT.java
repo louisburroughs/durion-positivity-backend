@@ -57,9 +57,7 @@ public class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
     private String testIdempotencyKey;
 
     @BeforeEach
-    @Override
-    public void setUpMockMvc() {
-        super.setUpMockMvc();
+    void setUp() {
         // Clean up any existing test data
         invoicePaymentRepository.deleteAll();
 
