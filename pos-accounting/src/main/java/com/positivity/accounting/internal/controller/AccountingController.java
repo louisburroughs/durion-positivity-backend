@@ -4,7 +4,6 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,10 +35,8 @@ public class AccountingController {
         @GetMapping("/traceability/{journalEntryId}")
         @PreAuthorize("hasAuthority('accounting:je:view')")
         @Operation(summary = "Get journal traceability", description = "Trace a journal entry across related records.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Traceability returned"),
-                        @ApiResponse(responseCode = "404", description = "Journal entry not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Traceability returned")
+        @ApiResponse(responseCode = "404", description = "Journal entry not found")
         public ResponseEntity<Void> getJournalTraceability(
                         @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
                 log.info("Stub getJournalTraceability journalEntryId={}", journalEntryId);
@@ -49,10 +46,8 @@ public class AccountingController {
         @GetMapping("/payments/{paymentId}/status")
         @PreAuthorize("hasAuthority('accounting:ap:view')")
         @Operation(summary = "Get payment status", description = "Retrieve status for an accounts payable payment.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Payment status returned"),
-                        @ApiResponse(responseCode = "404", description = "Payment not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Payment status returned")
+        @ApiResponse(responseCode = "404", description = "Payment not found")
         public ResponseEntity<Void> getPaymentStatus(
                         @Parameter(description = "Payment identifier") @PathVariable UUID paymentId) {
                 log.info("Stub getPaymentStatus paymentId={}", paymentId);
@@ -62,10 +57,8 @@ public class AccountingController {
         @PostMapping("/payments/{paymentId}/void")
         @PreAuthorize("hasAuthority('accounting:ap:pay')")
         @Operation(summary = "Void payment", description = "Void a payment before settlement.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Payment voided"),
-                        @ApiResponse(responseCode = "404", description = "Payment not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Payment voided")
+        @ApiResponse(responseCode = "404", description = "Payment not found")
         @EmitEvent(id = "ACCOUNTING_PAYMENT_VOID", apiVersion = "1")
         public ResponseEntity<Void> voidPayment(
                         @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
@@ -77,10 +70,8 @@ public class AccountingController {
         @PostMapping("/payments/{paymentId}/reverse")
         @PreAuthorize("hasAuthority('accounting:ap:pay')")
         @Operation(summary = "Reverse payment", description = "Reverse a previously applied payment.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Payment reversed"),
-                        @ApiResponse(responseCode = "404", description = "Payment not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Payment reversed")
+        @ApiResponse(responseCode = "404", description = "Payment not found")
         @EmitEvent(id = "ACCOUNTING_PAYMENT_REVERSE", apiVersion = "1")
         public ResponseEntity<Void> reversePayment(
                         @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
@@ -92,10 +83,8 @@ public class AccountingController {
         @PostMapping("/glAccounts")
         @PreAuthorize("hasAuthority('accounting:coa:create')")
         @Operation(summary = "Create GL account (legacy path)", description = "Create a GL account via the legacy endpoint.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "201", description = "GL account created"),
-                        @ApiResponse(responseCode = "400", description = "Invalid request")
-        })
+        @ApiResponse(responseCode = "201", description = "GL account created")
+        @ApiResponse(responseCode = "400", description = "Invalid request")
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_CREATE_LEGACY", apiVersion = "1")
         public ResponseEntity<Void> createGlAccount(@RequestBody(required = false) Object request) {
                 log.info("Stub createGlAccount");
@@ -105,10 +94,8 @@ public class AccountingController {
         @GetMapping("/glAccounts/{accountId}")
         @PreAuthorize("hasAuthority('accounting:coa:view')")
         @Operation(summary = "Get GL account (legacy path)", description = "Retrieve a GL account by identifier.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "GL account returned"),
-                        @ApiResponse(responseCode = "404", description = "GL account not found")
-        })
+        @ApiResponse(responseCode = "200", description = "GL account returned")
+        @ApiResponse(responseCode = "404", description = "GL account not found")
         public ResponseEntity<Void> getGlAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID accountId) {
                 log.info("Stub getGlAccount accountId={}", accountId);
@@ -118,10 +105,8 @@ public class AccountingController {
         @PutMapping("/glAccounts/{accountId}")
         @PreAuthorize("hasAuthority('accounting:coa:edit')")
         @Operation(summary = "Update GL account (legacy path)", description = "Update a GL account via the legacy endpoint.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "GL account updated"),
-                        @ApiResponse(responseCode = "404", description = "GL account not found")
-        })
+        @ApiResponse(responseCode = "200", description = "GL account updated")
+        @ApiResponse(responseCode = "404", description = "GL account not found")
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_UPDATE_LEGACY", apiVersion = "1")
         public ResponseEntity<Void> manageGlAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID accountId,

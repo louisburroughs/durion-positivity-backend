@@ -20,7 +20,6 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -44,80 +43,76 @@ import lombok.extern.slf4j.Slf4j;
 @Tag(name = "Payment Applications", description = "Manage payment applications to invoices (AR)")
 public class PaymentApplicationController {
 
-    private final PaymentApplicationService paymentApplicationService;
+        private final PaymentApplicationService paymentApplicationService;
 
-    /**
-     * Apply a payment to one or more invoices.
-     * 
-     * Business Rules (from Issue #114):
-     * - Payment must be AVAILABLE with sufficient funds
-     * - Each invoice must be applicable (not PaidInFull/Voided/Cancelled)
-     * - Applications are atomic across all target invoices
-     * - Idempotent via applicationRequestId
-     * - Overpayments create CustomerCredit
-     * 
-     * @param paymentId payment to apply
-     * @param request   application request with invoices and amounts
-     * @return application response with details
-     */
-    @PostMapping("/payments/{paymentId}/applications")
-    @PreAuthorize("hasAuthority('accounting:payment:apply')")
-    @Operation(summary = "Apply payment", description = "Apply a payment to an invoice and update its status.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Payment applied successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid request or insufficient funds"),
-            @ApiResponse(responseCode = "404", description = "Payment not found"),
-            @ApiResponse(responseCode = "409", description = "Currency mismatch or invoice not applicable")
-    })
-    @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
-    public ResponseEntity<PaymentApplicationResponse> applyPayment(
-            @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
-            @Valid @RequestBody PaymentApplicationRequest request) {
+        /**
+         * Apply a payment to one or more invoices.
+         * 
+         * Business Rules (from Issue #114):
+         * - Payment must be AVAILABLE with sufficient funds
+         * - Each invoice must be applicable (not PaidInFull/Voided/Cancelled)
+         * - Applications are atomic across all target invoices
+         * - Idempotent via applicationRequestId
+         * - Overpayments create CustomerCredit
+         * 
+         * @param paymentId payment to apply
+         * @param request   application request with invoices and amounts
+         * @return application response with details
+         */
+        @PostMapping("/payments/{paymentId}/applications")
+        @PreAuthorize("hasAuthority('accounting:payment:apply')")
+        @Operation(summary = "Apply payment", description = "Apply a payment to an invoice and update its status.")
+        @ApiResponse(responseCode = "201", description = "Payment applied successfully")
+        @ApiResponse(responseCode = "400", description = "Invalid request or insufficient funds")
+        @ApiResponse(responseCode = "404", description = "Payment not found")
+        @ApiResponse(responseCode = "409", description = "Currency mismatch or invoice not applicable")
+        @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLY", apiVersion = "1")
+        public ResponseEntity<PaymentApplicationResponse> applyPayment(
+                        @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
+                        @Valid @RequestBody PaymentApplicationRequest request) {
 
-        log.info("Applying payment {} to {} invoices (request: {})",
-                paymentId, request.getApplications().size(), request.getApplicationRequestId());
+                log.info("Applying payment {} to {} invoices (request: {})",
+                                paymentId, request.getApplications().size(), request.getApplicationRequestId());
 
-        PaymentApplicationResponse response = paymentApplicationService.applyPaymentToInvoices(
-                paymentId, request);
+                PaymentApplicationResponse response = paymentApplicationService.applyPaymentToInvoices(
+                                paymentId, request);
 
-        log.info("Successfully applied payment {} with total {} to {} invoices",
-                paymentId, response.getAppliedAmount(), response.getApplications().size());
+                log.info("Successfully applied payment {} with total {} to {} invoices",
+                                paymentId, response.getAppliedAmount(), response.getApplications().size());
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
 
-    /**
-     * Reverse a payment application (compensating transaction).
-     * 
-     * Business Rules (from Issue #114):
-     * - Requires elevated permission (ACCOUNTING_ADMIN or AR_MANAGER)
-     * - Requires non-empty reason for audit trail
-     * - Reversals are NEW records, not deletions
-     * - Restores invoice balance and payment unappliedAmount
-     * 
-     * @param applicationId application to reverse
-     * @param request       reversal request with reason
-     * @return 204 No Content on success
-     */
-    @PostMapping("/payment-applications/{applicationId}/reverse")
-    @PreAuthorize("hasAnyAuthority('accounting:payment:reverse', 'ACCOUNTING_ADMIN', 'AR_MANAGER')")
-    @Operation(summary = "Reverse payment application", description = "Reverse a payment application with compensating transaction (no deletion).")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Payment application reversed"),
-            @ApiResponse(responseCode = "400", description = "Invalid request or already reversed"),
-            @ApiResponse(responseCode = "404", description = "Payment application not found")
-    })
-    @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLICATION_REVERSE", apiVersion = "1")
-    public ResponseEntity<Void> reversePaymentApplication(
-            @Parameter(description = "Payment application identifier") @PathVariable UUID applicationId,
-            @Valid @RequestBody PaymentApplicationReversalRequest request) {
+        /**
+         * Reverse a payment application (compensating transaction).
+         * 
+         * Business Rules (from Issue #114):
+         * - Requires elevated permission (ACCOUNTING_ADMIN or AR_MANAGER)
+         * - Requires non-empty reason for audit trail
+         * - Reversals are NEW records, not deletions
+         * - Restores invoice balance and payment unappliedAmount
+         * 
+         * @param applicationId application to reverse
+         * @param request       reversal request with reason
+         * @return 204 No Content on success
+         */
+        @PostMapping("/payment-applications/{applicationId}/reverse")
+        @PreAuthorize("hasAnyAuthority('accounting:payment:reverse', 'ACCOUNTING_ADMIN', 'AR_MANAGER')")
+        @Operation(summary = "Reverse payment application", description = "Reverse a payment application with compensating transaction (no deletion).")
+        @ApiResponse(responseCode = "204", description = "Payment application reversed")
+        @ApiResponse(responseCode = "400", description = "Invalid request or already reversed")
+        @ApiResponse(responseCode = "404", description = "Payment application not found")
+        @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLICATION_REVERSE", apiVersion = "1")
+        public ResponseEntity<Void> reversePaymentApplication(
+                        @Parameter(description = "Payment application identifier") @PathVariable UUID applicationId,
+                        @Valid @RequestBody PaymentApplicationReversalRequest request) {
 
-        log.info("Reversing payment application {} with reason: {}", applicationId, request.getReason());
+                log.info("Reversing payment application {} with reason: {}", applicationId, request.getReason());
 
-        paymentApplicationService.reversePaymentApplication(applicationId, request.getReason());
+                paymentApplicationService.reversePaymentApplication(applicationId, request.getReason());
 
-        log.info("Successfully reversed payment application {}", applicationId);
+                log.info("Successfully reversed payment application {}", applicationId);
 
-        return ResponseEntity.noContent().build();
-    }
+                return ResponseEntity.noContent().build();
+        }
 }

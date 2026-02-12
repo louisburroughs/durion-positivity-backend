@@ -28,7 +28,6 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -52,10 +51,8 @@ public class PostingRuleController {
         @GetMapping
         @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
         @Operation(summary = "List posting rule sets", description = "Retrieve paginated posting rule sets.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Posting rule sets listed"),
-                        @ApiResponse(responseCode = "403", description = "Forbidden")
-        })
+        @ApiResponse(responseCode = "200", description = "Posting rule sets listed")
+        @ApiResponse(responseCode = "403", description = "Forbidden")
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_LIST", apiVersion = "1")
         public ResponseEntity<PostingRuleSetListResponse> listPostingRuleSets(
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
@@ -69,10 +66,8 @@ public class PostingRuleController {
         @GetMapping("/{postingRuleSetId}")
         @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
         @Operation(summary = "Get posting rule set", description = "Retrieve a posting rule set by identifier.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Posting rule set returned"),
-                        @ApiResponse(responseCode = "404", description = "Posting rule set not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Posting rule set returned")
+        @ApiResponse(responseCode = "404", description = "Posting rule set not found")
         public ResponseEntity<PostingRuleSetResponse> getPostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
                 log.info("Get posting rule set - ruleSetId={}", postingRuleSetId);
@@ -83,10 +78,8 @@ public class PostingRuleController {
         @PostMapping
         @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
         @Operation(summary = "Create posting rule set", description = "Create a new posting rule set with initial DRAFT version.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "201", description = "Posting rule set created"),
-                        @ApiResponse(responseCode = "400", description = "Invalid request")
-        })
+        @ApiResponse(responseCode = "201", description = "Posting rule set created")
+        @ApiResponse(responseCode = "400", description = "Invalid request")
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_CREATE", apiVersion = "1")
         public ResponseEntity<PostingRuleSetResponse> createPostingRuleSet(
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
@@ -98,11 +91,9 @@ public class PostingRuleController {
         @PostMapping("/{postingRuleSetId}/publish")
         @PreAuthorize("hasAuthority('accounting:posting_rules:publish')")
         @Operation(summary = "Publish posting rule set", description = "Publish the latest DRAFT version.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Posting rule set published"),
-                        @ApiResponse(responseCode = "404", description = "Posting rule set not found"),
-                        @ApiResponse(responseCode = "400", description = "No DRAFT version to publish")
-        })
+        @ApiResponse(responseCode = "200", description = "Posting rule set published")
+        @ApiResponse(responseCode = "404", description = "Posting rule set not found")
+        @ApiResponse(responseCode = "400", description = "No DRAFT version to publish")
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_PUBLISH", apiVersion = "1")
         public ResponseEntity<PostingRuleVersionResponse> publishPostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
@@ -114,11 +105,9 @@ public class PostingRuleController {
         @PutMapping("/{postingRuleSetId}")
         @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
         @Operation(summary = "Update posting rule set metadata", description = "Update a posting rule set (only possible if no PUBLISHED version exists).")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Posting rule set updated"),
-                        @ApiResponse(responseCode = "404", description = "Posting rule set not found"),
-                        @ApiResponse(responseCode = "409", description = "Cannot modify published rule set")
-        })
+        @ApiResponse(responseCode = "200", description = "Posting rule set updated")
+        @ApiResponse(responseCode = "404", description = "Posting rule set not found")
+        @ApiResponse(responseCode = "409", description = "Cannot modify published rule set")
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_UPDATE", apiVersion = "1")
         public ResponseEntity<PostingRuleSetResponse> updatePostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
@@ -133,11 +122,9 @@ public class PostingRuleController {
         @PostMapping("/{postingRuleSetId}/archive")
         @PreAuthorize("hasAuthority('accounting:posting_rules:archive')")
         @Operation(summary = "Archive posting rule set", description = "Archive the PUBLISHED version.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Posting rule set archived"),
-                        @ApiResponse(responseCode = "404", description = "Posting rule set not found"),
-                        @ApiResponse(responseCode = "400", description = "No PUBLISHED version to archive")
-        })
+        @ApiResponse(responseCode = "200", description = "Posting rule set archived")
+        @ApiResponse(responseCode = "404", description = "Posting rule set not found")
+        @ApiResponse(responseCode = "400", description = "No PUBLISHED version to archive")
         @EmitEvent(id = "ACCOUNTING_POSTING_RULE_ARCHIVE", apiVersion = "1")
         public ResponseEntity<PostingRuleVersionResponse> archivePostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
@@ -149,10 +136,8 @@ public class PostingRuleController {
         @GetMapping("/{postingRuleSetId}/versions")
         @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
         @Operation(summary = "List posting rule versions", description = "List versions for a posting rule set.")
-        @ApiResponses({
-                        @ApiResponse(responseCode = "200", description = "Posting rule versions listed"),
-                        @ApiResponse(responseCode = "404", description = "Posting rule set not found")
-        })
+        @ApiResponse(responseCode = "200", description = "Posting rule versions listed")
+        @ApiResponse(responseCode = "404", description = "Posting rule set not found")
         public ResponseEntity<List<PostingRuleVersionResponse>> listPostingRuleVersions(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
