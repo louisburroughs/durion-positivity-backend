@@ -9,10 +9,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.positivity.accounting.BaseIntegrationTest;
 
 import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.MappingKeyListResponse;
@@ -33,10 +33,8 @@ import com.positivity.accounting.service.PostingCategoryService;
  * - 1:1 deterministic mapping (one key -> one category)
  * - Deactivation rules (no active mappings check)
  */
-@SpringBootTest
-@ActiveProfiles("test")
 @Transactional
-public class MappingKeyContractBehaviorIT {
+public class MappingKeyContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
     private MappingKeyService mappingKeyService;

@@ -1,5 +1,6 @@
 package com.positivity.accounting.integration;
 
+import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyPaymentToInvoiceResponse;
 import com.positivity.accounting.internal.dto.InvoiceDetails;
@@ -12,18 +13,13 @@ import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
-import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -42,16 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 
  * Tests full request/response cycle with actual database and Spring Security.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("Payment Application Controller Integration Tests")
-class PaymentApplicationControllerIntegrationTest {
-
-        @Autowired
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
+class PaymentApplicationControllerIntegrationTest extends BaseIntegrationTest {
 
         @Autowired
         private ReceivablePaymentRepository receivablePaymentRepository;
@@ -63,11 +51,6 @@ class PaymentApplicationControllerIntegrationTest {
         private InvoiceServiceClient invoiceServiceClient;
 
         private static final String API_V1 = "/v1/accounting";
-        private static final String TEST_USER = "testuser";
-        private static final String TEST_AUTHORITIES = String.join(",",
-                        "accounting:payment:apply",
-                        "accounting:payment:reverse",
-                        "ACCOUNTING_ADMIN");
 
         private UUID testPaymentId;
         private UUID testCustomerId;
@@ -75,7 +58,9 @@ class PaymentApplicationControllerIntegrationTest {
         private UUID testInvoice2Id;
 
         @BeforeEach
-        void setUp() {
+        @Override
+        public void setUpMockMvc() {
+                super.setUpMockMvc();
                 // Clean up test data
                 paymentApplicationRepository.deleteAll();
                 receivablePaymentRepository.deleteAll();
@@ -126,15 +111,6 @@ class PaymentApplicationControllerIntegrationTest {
                                         .balanceDue(req.getAmountToRestore())
                                         .build();
                 });
-        }
-
-        /**
-         * Adds gateway authentication headers to a request builder.
-         */
-        private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-                return builder
-                                .header("X-User", TEST_USER)
-                                .header("X-Authorities", TEST_AUTHORITIES);
         }
 
         // ========================================
