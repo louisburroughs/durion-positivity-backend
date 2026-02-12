@@ -8,10 +8,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.positivity.accounting.BaseIntegrationTest;
 
 import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
@@ -28,10 +28,8 @@ import com.positivity.accounting.service.PostingCategoryService;
  * - Deactivation rules (no active mappings check)
  * - Pagination and filtering
  */
-@SpringBootTest
-@ActiveProfiles("test")
 @Transactional
-public class PostingCategoryContractBehaviorIT {
+public class PostingCategoryContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
     private PostingCategoryService postingCategoryService;
