@@ -1,16 +1,16 @@
 package com.positivity.accounting.internal.dto;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.jspecify.annotations.NonNull;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Event payload for PaymentCleared domain event.
@@ -34,6 +34,12 @@ public class PaymentClearedEvent {
      */
     @JsonProperty("eventId")
     private UUID eventId;
+
+    /**
+     * Organization ID.
+     */
+    @JsonProperty("organizationId")
+    private UUID organizationId;
 
     /**
      * Payment ID from Payment domain.
@@ -91,6 +97,9 @@ public class PaymentClearedEvent {
     public void validate() {
         if (eventId == null) {
             throw new IllegalArgumentException("eventId is required");
+        }
+        if (organizationId == null) {
+            throw new IllegalArgumentException("organizationId is required");
         }
         if (paymentId == null) {
             throw new IllegalArgumentException("paymentId is required");

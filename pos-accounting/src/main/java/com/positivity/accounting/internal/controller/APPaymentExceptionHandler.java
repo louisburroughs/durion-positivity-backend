@@ -15,7 +15,8 @@ import com.positivity.accounting.internal.exception.PaymentGatewayException;
 /**
  * Global exception handler for AP Payment operations.
  * 
- * Maps domain exceptions to appropriate HTTP status codes using standard ErrorResponse format:
+ * Maps domain exceptions to appropriate HTTP status codes using standard
+ * ErrorResponse format:
  * - EventNotFoundException → 404 Not Found
  * - IdempotencyConflictException → 409 Conflict
  * - PaymentGatewayException → 502 Bad Gateway
@@ -48,7 +49,11 @@ public class APPaymentExceptionHandler {
 
     @ExceptionHandler(PaymentGatewayException.class)
     public ResponseEntity<ErrorResponse> handlePaymentGatewayException(PaymentGatewayException ex) {
-        log.error("Payment gateway error: {}", ex.getMessage(), ex);
+        if (ex.getPaymentRef() != null) {
+            log.error("Payment gateway error for payment {}: {}", ex.getPaymentRef(), ex.getMessage(), ex);
+        } else {
+            log.error("Payment gateway error: {}", ex.getMessage(), ex);
+        }
         ErrorResponse body = ErrorResponse.builder()
                 .errorCode("PAYMENT_GATEWAY_FAILURE")
                 .message(ex.getMessage())

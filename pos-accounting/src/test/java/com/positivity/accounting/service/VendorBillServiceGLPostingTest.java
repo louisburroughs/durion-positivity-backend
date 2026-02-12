@@ -63,6 +63,7 @@ class VendorBillServiceGLPostingTest {
 
         testEvent = GoodsReceivedEvent.builder()
                 .eventId(UUID.randomUUID())
+                .organizationId(UUID.randomUUID())
                 .purchaseOrderId(testPoId)
                 .vendorId(testVendorId)
                 .vendorName("Test Vendor Inc")
@@ -107,6 +108,7 @@ class VendorBillServiceGLPostingTest {
         assertThat(emittedEvent.getEventId()).isNotNull();
         assertThat(emittedEvent.getVendorBillId()).isEqualTo(savedBill.getVendorBillId());
         assertThat(emittedEvent.getVendorId()).isEqualTo(testVendorId);
+        assertThat(emittedEvent.getOrganizationId()).isEqualTo(testEvent.getOrganizationId());
         assertThat(emittedEvent.getVendorName()).isEqualTo("Test Vendor Inc");
         assertThat(emittedEvent.getPurchaseOrderId()).isEqualTo(testPoId);
         assertThat(emittedEvent.getTotalAmount()).isEqualByComparingTo("1300.00"); // 100*12.50 + 1*50.00

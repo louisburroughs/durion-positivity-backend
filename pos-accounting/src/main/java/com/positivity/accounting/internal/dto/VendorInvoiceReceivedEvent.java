@@ -34,22 +34,27 @@ import lombok.NoArgsConstructor;
 public class VendorInvoiceReceivedEvent {
 
     @NotNull
-    @Schema(description = "Event UUID (idempotency key)", example = "01936e5d-5678-7a3d-8b6e-456789012345", required = true)
+    @Schema(description = "Event UUID (idempotency key)", example = "01936e5d-5678-7a3d-8b6e-456789012345")
     @JsonProperty("eventId")
     private UUID eventId;
 
     @NotNull
-    @Schema(description = "Vendor UUID", example = "01936e5a-7890-7a3d-8b6e-2b3456789012", required = true)
+    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010")
+    @JsonProperty("organizationId")
+    private UUID organizationId;
+
+    @NotNull
+    @Schema(description = "Vendor UUID", example = "01936e5a-7890-7a3d-8b6e-2b3456789012")
     @JsonProperty("vendorId")
     private UUID vendorId;
 
     @NotBlank
-    @Schema(description = "Vendor invoice number", example = "INV-2026-001234", required = true)
+    @Schema(description = "Vendor invoice number", example = "INV-2026-001234")
     @JsonProperty("invoiceReference")
     private String invoiceReference;
 
     @NotNull
-    @Schema(description = "Invoice date", example = "2026-01-16T00:00:00", required = true)
+    @Schema(description = "Invoice date", example = "2026-01-16T00:00:00")
     @JsonProperty("invoiceDate")
     private LocalDateTime invoiceDate;
 
@@ -59,7 +64,7 @@ public class VendorInvoiceReceivedEvent {
     private LocalDateTime dueDate;
 
     @NotNull
-    @Schema(description = "Invoice line items", required = true)
+    @Schema(description = "Invoice line items")
     @JsonProperty("lineItems")
     private List<InvoiceLineItem> lineItems;
 
@@ -71,24 +76,24 @@ public class VendorInvoiceReceivedEvent {
     public static class InvoiceLineItem {
 
         @NotNull
-        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123", required = true)
+        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123")
         @JsonProperty("productId")
         private UUID productId;
 
         @NotBlank
-        @Schema(description = "Product description", example = "Widget Type A", required = true)
+        @Schema(description = "Product description", example = "Widget Type A")
         @JsonProperty("description")
         private String description;
 
         @NotNull
         @Positive
-        @Schema(description = "Invoiced quantity", example = "100.00", required = true)
+        @Schema(description = "Invoiced quantity", example = "100.00")
         @JsonProperty("quantity")
         private BigDecimal quantity;
 
         @NotNull
         @Positive
-        @Schema(description = "Unit price from invoice", example = "12.50", required = true)
+        @Schema(description = "Unit price from invoice", example = "12.50")
         @JsonProperty("unitPrice")
         private BigDecimal unitPrice;
     }

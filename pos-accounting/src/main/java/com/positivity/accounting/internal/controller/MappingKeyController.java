@@ -44,8 +44,7 @@ public class MappingKeyController {
         @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_CREATE", apiVersion = "1")
         public ResponseEntity<MappingKeyResponse> createMappingKey(
                         @Valid @RequestBody MappingKeyCreateRequest request) {
-                log.info("Create mapping key request: {} for category: {}", request.getKeyName(),
-                                request.getPostingCategoryId());
+                log.info("Create mapping key request");
                 MappingKeyResponse response = mappingKeyService.createMappingKey(request);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
@@ -57,7 +56,7 @@ public class MappingKeyController {
         @ApiResponse(responseCode = "404", description = "Mapping key not found")
         public ResponseEntity<MappingKeyResponse> getMappingKey(
                         @Parameter(description = "Mapping key identifier") @PathVariable UUID mappingKeyId) {
-                log.info("Get mapping key: {}", mappingKeyId);
+                log.info("Get mapping key");
                 MappingKeyResponse response = mappingKeyService.getMappingKey(mappingKeyId);
                 return ResponseEntity.ok(response);
         }
@@ -72,7 +71,7 @@ public class MappingKeyController {
         public ResponseEntity<MappingKeyResponse> updateMappingKey(
                         @Parameter(description = "Mapping key identifier") @PathVariable UUID mappingKeyId,
                         @Valid @RequestBody MappingKeyUpdateRequest request) {
-                log.info("Update mapping key: {}", mappingKeyId);
+                log.info("Update mapping key");
                 MappingKeyResponse response = mappingKeyService.updateMappingKey(mappingKeyId, request);
                 return ResponseEntity.ok(response);
         }
@@ -90,8 +89,7 @@ public class MappingKeyController {
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "keyName") String sort,
                         @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive) {
-                log.info("List mapping keys for category: {}, page={}, size={}, sort={}, isActive={}",
-                                postingCategoryId, page, size, sort, isActive);
+                log.info("List mapping keys for category");
                 MappingKeyListResponse response = mappingKeyService.listMappingKeysByCategory(postingCategoryId, page,
                                 size,
                                 sort, isActive);
@@ -107,7 +105,7 @@ public class MappingKeyController {
         @EmitEvent(id = "ACCOUNTING_MAPPING_KEY_DEACTIVATE", apiVersion = "1")
         public ResponseEntity<Void> deactivateMappingKey(
                         @Parameter(description = "Mapping key identifier") @PathVariable UUID mappingKeyId) {
-                log.info("Deactivate mapping key: {}", mappingKeyId);
+                log.info("Deactivate mapping key");
                 mappingKeyService.deactivateMappingKey(mappingKeyId);
                 return ResponseEntity.noContent().build();
         }

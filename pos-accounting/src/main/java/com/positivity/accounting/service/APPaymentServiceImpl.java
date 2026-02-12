@@ -7,12 +7,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
@@ -50,10 +51,19 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final APPaymentAllocationRepository allocationRepository;
     private final VendorBillRepository billRepository;
     private final PaymentGatewayProvider paymentGateway;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxService outboxService;
+
+    // Self-injection for accessing proxied @Transactional methods
+    // Field injection required for self-reference; constructor injection not
+    // applicable
+    @SuppressWarnings("java:S6813")
+    @Autowired
+    @Lazy
+    private APPaymentService self;
 
     @Override
     @Transactional
+    @SuppressWarnings({ "java:S1181", "java:S2221" }) // Catching Exception is intentional for gateway-level failures
     public @NonNull APPaymentResponse executePayment(@NonNull ExecuteAPPaymentRequest request,
             @NonNull String currentUser) {
         // Check idempotency: if paymentRef exists, validate payload match and return
@@ -122,8 +132,7 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Apply allocations (validation errors bubble up as IllegalArgumentException)
             applyAllocations(payment, request);
 
-            // Emit event for GL posting
-            // TODO: integrate with outbox pattern for at-least-once delivery guarantee
+            // Persist event to outbox for at-least-once delivery guarantee
             payment.setStatus(APPaymentStatus.GL_POST_PENDING);
             payment = paymentRepository.save(payment);
 
@@ -143,7 +152,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                     .currency(payment.getCurrency())
                     .paymentMethod(payment.getPaymentMethod() != null
                             ? payment.getPaymentMethod().name()
-                            : null)
+                            : PaymentMethod.OTHER.name())
                     .gatewayTransactionId(payment.getGatewayTransactionId())
                     .gatewayTimestamp(payment.getGatewayTimestamp())
                     .memo(payment.getMemo())
@@ -157,11 +166,18 @@ public class APPaymentServiceImpl implements APPaymentService {
                                                     ? a.getAllocationSequence()
                                                     : 0)
                                     .build())
-                            .collect(Collectors.toList()))
+                            .toList())
                     .build();
 
-            eventPublisher.publishEvent(glPostingEvent);
-            log.info("GL posting event emitted | paymentId={} | eventId={} | grossAmount={}",
+            // Save to outbox for reliable delivery (atomic with payment transaction)
+            outboxService.saveToOutbox(
+                    glPostingEvent.getEventId(),
+                    "APPayment",
+                    payment.getPaymentId(),
+                    glPostingEvent.getClass().getName(),
+                    glPostingEvent);
+
+            log.info("GL posting event persisted to outbox | paymentId={} | eventId={} | grossAmount={}",
                     payment.getPaymentId(), glPostingEvent.getEventId(), payment.getGrossAmount());
 
             log.info("Payment {} executed successfully for vendor {}, amount {}",
@@ -176,9 +192,12 @@ public class APPaymentServiceImpl implements APPaymentService {
         } catch (Exception e) {
             // Gateway-level failures: persist failure state in separate transaction for
             // audit/idempotency
-            persistGatewayFailure(payment.getPaymentId(), e.getMessage());
-            log.error("Payment {} gateway failed: {}", request.getPaymentRef(), e.getMessage(), e);
-            throw new PaymentGatewayException("Gateway failure: " + e.getMessage(), e);
+            // Use self-reference to invoke through Spring proxy for REQUIRES_NEW
+            // propagation
+            ((APPaymentServiceImpl) self).persistGatewayFailure(payment.getPaymentId(), e.getMessage());
+            // Exception carries context and will be logged in exception handler
+            throw new PaymentGatewayException(
+                    "Payment gateway communication failure", request.getPaymentRef(), e);
         }
     }
 
@@ -195,6 +214,7 @@ public class APPaymentServiceImpl implements APPaymentService {
      * @param errorMessage the error message from the gateway
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @SuppressWarnings({ "java:S1181", "java:S2221" }) // Catching Exception intentional for best-effort persistence
     protected void persistGatewayFailure(@NonNull UUID paymentId, String errorMessage) {
         try {
             Optional<APPayment> paymentOpt = paymentRepository.findById(paymentId);
@@ -209,10 +229,30 @@ public class APPaymentServiceImpl implements APPaymentService {
             }
         } catch (Exception ex) {
             log.error("Failed to persist gateway failure for payment {}: {}", paymentId, ex.getMessage(), ex);
-            // Don't throw - this is best-effort persistence
+            // Exception is logged; not rethrown as this is best-effort persistence
+            // Throwing here would cause the parent transaction to fail
         }
     }
 
+    /**
+     * Validates that a duplicate payment request is truly idempotent by comparing
+     * all key
+     * financial fields.
+     * <p>
+     * Verifies that vendorId, grossAmount, currency, paymentMethod, feeAmount, and
+     * netAmount
+     * match the existing payment. If any field differs, throws
+     * IdempotencyConflictException.
+     * <p>
+     * Note: Allocations are not compared as they may vary during automatic
+     * allocation;
+     * the critical financial amounts above ensure the effective payment is the
+     * same.
+     *
+     * @param existing the existing payment record
+     * @param request  the incoming payment request
+     * @throws IdempotencyConflictException if key fields do not match
+     */
     private void validateIdempotency(@NonNull APPayment existing, @NonNull ExecuteAPPaymentRequest request) {
         // Validate all key fields match to ensure true idempotency
         boolean vendorMatch = existing.getVendorId().equals(request.getVendorId());
@@ -234,75 +274,72 @@ public class APPaymentServiceImpl implements APPaymentService {
                             + ". Idempotent replay must match vendorId, grossAmount, currency, paymentMethod, "
                             + "feeAmount, and netAmount.");
         }
-
-        // Note: Allocations are not compared as they may vary during automatic
-        // allocation;
-        // the critical financial amounts above ensure the effective payment is the
-        // same.
     }
 
+    /**
+     * Applies payment allocations to vendor bills based on the request.
+     * Uses explicit allocations if provided, otherwise performs automatic
+     * allocation to oldest bills first.
+     *
+     * @param payment the payment to allocate
+     * @param request the payment request containing optional explicit allocations
+     */
     private void applyAllocations(@NonNull APPayment payment, @NonNull ExecuteAPPaymentRequest request) {
+        List<APPaymentAllocation> allocations = hasExplicitAllocations(request)
+                ? createExplicitAllocations(payment, request)
+                : createAutomaticAllocations(payment);
+
+        BigDecimal totalAllocated = allocations.stream()
+                .map(APPaymentAllocation::getAppliedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        validateTotalAllocations(totalAllocated, payment.getGrossAmount());
+
+        payment.setUnappliedAmount(payment.getGrossAmount().subtract(totalAllocated));
+        allocationRepository.saveAll(allocations);
+        paymentRepository.save(payment);
+    }
+
+    private boolean hasExplicitAllocations(@NonNull ExecuteAPPaymentRequest request) {
+        List<ExecuteAPPaymentRequest.AllocationLineRequest> allocations = request.getAllocations();
+        return allocations != null && !allocations.isEmpty();
+    }
+
+    private @NonNull List<APPaymentAllocation> createExplicitAllocations(@NonNull APPayment payment,
+            @NonNull ExecuteAPPaymentRequest request) {
         List<APPaymentAllocation> allocations = new ArrayList<>();
-        BigDecimal totalAllocated = BigDecimal.ZERO;
+        int sequence = 1;
 
-        if (request.getAllocations() != null && !request.getAllocations().isEmpty()) {
-            // Explicit allocations provided
-            int sequence = 1;
-            for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : request.getAllocations()) {
-                // Validate bill exists and is payable
-                VendorBill bill = billRepository.findById(allocationLine.getVendorBillId())
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "Bill not found: " + allocationLine.getVendorBillId()));
+        for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : request.getAllocations()) {
+            validateBillForAllocation(allocationLine.getVendorBillId(), payment.getVendorId());
 
-                if (bill.getStatus() != VendorBillStatus.APPROVED) {
-                    throw new IllegalArgumentException(
-                            "Bill " + allocationLine.getVendorBillId() + " is not approved for payment");
-                }
+            APPaymentAllocation allocation = new APPaymentAllocation(
+                    payment.getPaymentId(),
+                    allocationLine.getVendorBillId(),
+                    allocationLine.getAppliedAmount());
+            allocation.setAllocationSequence(sequence++);
+            allocations.add(allocation);
+        }
 
-                if (!bill.getVendorId().equals(payment.getVendorId())) {
-                    throw new IllegalArgumentException(
-                            "Bill " + allocationLine.getVendorBillId() + " does not belong to vendor "
-                                    + payment.getVendorId());
-                }
-                APPaymentAllocation allocation = new APPaymentAllocation(
-                        payment.getPaymentId(),
-                        allocationLine.getVendorBillId(),
-                        allocationLine.getAppliedAmount());
-                allocation.setAllocationSequence(sequence++);
-                allocations.add(allocation);
-                totalAllocated = totalAllocated.add(allocationLine.getAppliedAmount());
+        return allocations;
+    }
+
+    private @NonNull List<APPaymentAllocation> createAutomaticAllocations(@NonNull APPayment payment) {
+        List<VendorBill> eligibleBills = getEligibleBillsSortedByDueDate(payment.getVendorId());
+        List<APPaymentAllocation> allocations = new ArrayList<>();
+        BigDecimal remaining = payment.getGrossAmount();
+        int sequence = 1;
+
+        for (VendorBill bill : eligibleBills) {
+            // Stop if no remaining amount to allocate
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+                break;
             }
-        } else {
-            // Automatic allocation: oldest due first
-            List<VendorBill> eligibleBills = billRepository.findByVendorIdAndStatus(
-                    payment.getVendorId(), VendorBillStatus.APPROVED);
 
-            // Sort by due date (nulls last), then bill date, then bill ID
-            eligibleBills.sort(Comparator
-                    .comparing(VendorBill::getDueDate, Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparing(VendorBill::getBillDate, Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparing(VendorBill::getVendorBillId));
-
-            BigDecimal remaining = payment.getGrossAmount();
-            int sequence = 1;
-
-            for (VendorBill bill : eligibleBills) {
-                if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
-                    break;
-                }
-
-                // Calculate actual open amount (totalAmount - sum of prior allocations)
-                BigDecimal billOpen = calculateOpenAmount(bill.getVendorBillId());
-                // Skip bills that are fully paid or over-allocated (no positive open amount)
-                if (billOpen == null || billOpen.compareTo(BigDecimal.ZERO) <= 0) {
-                    continue;
-                }
-
+            BigDecimal billOpen = calculateOpenAmount(bill.getVendorBillId());
+            // Process only bills with positive open amount
+            if (billOpen.compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal toApply = remaining.min(billOpen);
-                // Only create allocations with a strictly positive applied amount
-                if (toApply.compareTo(BigDecimal.ZERO) <= 0) {
-                    continue;
-                }
 
                 APPaymentAllocation allocation = new APPaymentAllocation(
                         payment.getPaymentId(),
@@ -311,23 +348,40 @@ public class APPaymentServiceImpl implements APPaymentService {
                 allocation.setAllocationSequence(sequence++);
                 allocations.add(allocation);
 
-                totalAllocated = totalAllocated.add(toApply);
                 remaining = remaining.subtract(toApply);
             }
         }
 
-        // Validate sum of allocations <= gross amount
-        if (totalAllocated.compareTo(payment.getGrossAmount()) > 0) {
-            throw new IllegalArgumentException("Total allocations exceed gross payment amount");
+        return allocations;
+    }
+
+    private void validateBillForAllocation(@NonNull UUID vendorBillId, @NonNull UUID expectedVendorId) {
+        VendorBill bill = billRepository.findById(vendorBillId)
+                .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));
+
+        if (bill.getStatus() != VendorBillStatus.APPROVED) {
+            throw new IllegalArgumentException("Bill " + vendorBillId + " is not approved for payment");
         }
 
-        // Calculate unapplied remainder
-        BigDecimal unapplied = payment.getGrossAmount().subtract(totalAllocated);
-        payment.setUnappliedAmount(unapplied);
+        if (!bill.getVendorId().equals(expectedVendorId)) {
+            throw new IllegalArgumentException(
+                    "Bill " + vendorBillId + " does not belong to vendor " + expectedVendorId);
+        }
+    }
 
-        // Save allocations
-        allocationRepository.saveAll(allocations);
-        paymentRepository.save(payment);
+    private @NonNull List<VendorBill> getEligibleBillsSortedByDueDate(@NonNull UUID vendorId) {
+        List<VendorBill> bills = billRepository.findByVendorIdAndStatus(vendorId, VendorBillStatus.APPROVED);
+        bills.sort(Comparator
+                .comparing(VendorBill::getDueDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(VendorBill::getBillDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(VendorBill::getVendorBillId));
+        return bills;
+    }
+
+    private void validateTotalAllocations(@NonNull BigDecimal totalAllocated, @NonNull BigDecimal grossAmount) {
+        if (totalAllocated.compareTo(grossAmount) > 0) {
+            throw new IllegalArgumentException("Total allocations exceed gross payment amount");
+        }
     }
 
     @Override
@@ -355,7 +409,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
         return bills.stream()
                 .map(this::toBillSummary)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -413,7 +467,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                                 .appliedAmount(a.getAppliedAmount())
                                 .allocationSequence(a.getAllocationSequence())
                                 .build())
-                        .collect(Collectors.toList()))
+                        .toList())
                 .createdAt(payment.getCreatedAt())
                 .createdBy(payment.getCreatedBy())
                 .build();

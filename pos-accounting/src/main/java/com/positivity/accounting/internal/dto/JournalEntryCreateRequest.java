@@ -24,6 +24,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class JournalEntryCreateRequest {
 
+    private UUID organizationId;
     private LocalDateTime transactionDate;
     private String description;
     private UUID sourceEventId;

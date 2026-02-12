@@ -60,12 +60,12 @@ public class JournalEntryController {
                         @Parameter(description = "Page index (0-based)") @RequestParam(defaultValue = "0") int page,
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "createdAt") String sort) {
-                log.debug("Listing journal entries: page={}, size={}, sort={}", page, size, sort);
+                log.debug("Listing journal entries: page={}, size={}", page, size);
 
                 Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, sort));
                 Page<JournalEntry> entryPage = journalEntryService.listJournalEntries(pageable);
 
-                PagedResponse<JournalEntryResponse> response = new PagedResponse<JournalEntryResponse>(
+                PagedResponse<JournalEntryResponse> response = new PagedResponse<>(
                                 entryPage.getContent().stream()
                                                 .map(JournalEntryMapper::toResponse).toList(),
                                 entryPage.getNumber(),

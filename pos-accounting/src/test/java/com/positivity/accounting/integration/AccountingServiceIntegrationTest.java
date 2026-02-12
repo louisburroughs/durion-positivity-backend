@@ -581,7 +581,6 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should create vendor bill from goods received event and complete three-way match workflow")
-  @org.junit.jupiter.api.Disabled("Vendor bill workflow requires additional feature implementation and setup")
   void testVendorBillWorkflow() throws Exception {
     UUID eventId = UUID.randomUUID();
     UUID vendorId = VENDOR_ID;
@@ -592,6 +591,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     String goodsReceivedPayload = """
         {
           "eventId": "%s",
+          "organizationId": "%s",
           "purchaseOrderId": "%s",
           "vendorId": "%s",
           "vendorName": "Test Vendor Corp",
@@ -606,7 +606,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
             }
           ]
         }
-        """.formatted(eventId, purchaseOrderId, vendorId, productId);
+        """.formatted(eventId, ORG_ID, purchaseOrderId, vendorId, productId);
 
     MvcResult createResult = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
         .contentType(MediaType.APPLICATION_JSON)
@@ -634,6 +634,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     String invoiceReceivedPayload = """
         {
           "eventId": "%s",
+          "organizationId": "%s",
           "vendorId": "%s",
           "invoiceReference": "INV-98765",
           "invoiceDate": "2025-01-11T12:00:00",
@@ -647,7 +648,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
             }
           ]
         }
-        """.formatted(UUID.randomUUID(), vendorId, productId);
+        """.formatted(UUID.randomUUID(), ORG_ID, vendorId, productId);
 
     mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
         .contentType(MediaType.APPLICATION_JSON)
@@ -664,6 +665,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     String goodsReceivedPayload2 = """
         {
           "eventId": "%s",
+          "organizationId": "%s",
           "purchaseOrderId": "%s",
           "vendorId": "%s",
           "vendorName": "Test Vendor Corp",
@@ -678,7 +680,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
             }
           ]
         }
-        """.formatted(eventId2, purchaseOrderId2, vendorId, productId);
+        """.formatted(eventId2, ORG_ID, purchaseOrderId2, vendorId, productId);
 
     MvcResult createResult2 = mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills"))
         .contentType(MediaType.APPLICATION_JSON)
@@ -695,6 +697,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     String discrepancyInvoicePayload = """
         {
           "eventId": "%s",
+          "organizationId": "%s",
           "vendorId": "%s",
           "invoiceReference": "INV-99999",
           "invoiceDate": "2025-01-13T12:00:00",
@@ -708,7 +711,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
             }
           ]
         }
-        """.formatted(UUID.randomUUID(), vendorId, productId);
+        """.formatted(UUID.randomUUID(), ORG_ID, vendorId, productId);
 
     mockMvc.perform(withAuth(post(BASE_URL + "/vendor-bills/match"))
         .contentType(MediaType.APPLICATION_JSON)

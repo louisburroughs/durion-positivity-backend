@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.handler;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.event.EventListener;
@@ -12,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
+import com.positivity.accounting.internal.exception.GLPostingException;
 import com.positivity.accounting.service.EventIngestionService;
 
 import lombok.RequiredArgsConstructor;
@@ -78,7 +78,7 @@ public class VendorBillGLPostingEventHandler {
             log.error("Failed to process VendorBillGLPostingEvent | billId={} | eventId={} | error={}",
                     event.getVendorBillId(), event.getEventId(), e.getMessage(), e);
             // In production, this would trigger a retry mechanism or dead letter queue
-            throw new RuntimeException("GL posting failed for bill: " + event.getVendorBillId(), e);
+            throw new GLPostingException("GL posting failed for bill: " + event.getVendorBillId(), e);
         }
     }
 
@@ -99,6 +99,7 @@ public class VendorBillGLPostingEventHandler {
 
         // Event metadata
         payload.put("eventId", event.getEventId());
+        payload.put("organizationId", event.getOrganizationId());
         payload.put("eventType", "VENDOR_BILL_GL_POSTING");
         payload.put("sourceSystem", "POS");
         payload.put("transactionDate", event.getBillDate());
@@ -129,17 +130,17 @@ public class VendorBillGLPostingEventHandler {
                     lineItem.put("isInventoryItem", line.isInventoryItem());
                     return lineItem;
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         billDetails.put("lineItems", lineItems);
         payload.put("payload", billDetails);
 
-        // Dimensions for multi-dimensional accounting (optional, can be added later)
-        Map<String, Object> dimensions = new HashMap<>();
-        // dimensions.put("cost_center", ...);
-        // dimensions.put("location_id", ...);
-        // dimensions.put("business_unit_id", ...);
-        payload.put("dimensions", dimensions);
+        Map<String, String> dimensions = event.getDimensions();
+        if (dimensions == null || dimensions.isEmpty()) {
+            payload.put("dimensions", Map.of());
+        } else {
+            payload.put("dimensions", new HashMap<>(dimensions));
+        }
 
         return payload;
     }
