@@ -1,0 +1,15 @@
+[INFO] Scanning for projects...
+[ERROR] [ERROR] Some problems were encountered while processing the POMs:
+[ERROR] Non-resolvable import POM: The following artifacts could not be resolved: com.positivity:pos-dependencies:pom:0.1.0-SNAPSHOT (absent): Could not find artifact com.positivity:pos-dependencies:pom:0.1.0-SNAPSHOT @ com.positivity:positivity:0.1.0-SNAPSHOT, /home/runner/work/durion-positivity-backend/durion-positivity-backend/pom.xml, line 31, column 16
+ @ 
+[ERROR] The build could not read 1 project -> [Help 1]
+[ERROR]   
+[ERROR]   The project com.positivity:pos-accounting:0.1.0-SNAPSHOT (/home/runner/work/durion-positivity-backend/durion-positivity-backend/pos-accounting/pom.xml) has 1 error
+[ERROR]     Non-resolvable import POM: The following artifacts could not be resolved: com.positivity:pos-dependencies:pom:0.1.0-SNAPSHOT (absent): Could not find artifact com.positivity:pos-dependencies:pom:0.1.0-SNAPSHOT @ com.positivity:positivity:0.1.0-SNAPSHOT, /home/runner/work/durion-positivity-backend/durion-positivity-backend/pom.xml, line 31, column 16 -> [Help 2]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/ProjectBuildingException
+[ERROR] [Help 2] http://cwiki.apache.org/confluence/display/MAVEN/UnresolvableModelException
