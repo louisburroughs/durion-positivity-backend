@@ -117,16 +117,13 @@ public class PostingRuleController {
                         @ApiResponse(responseCode = "404", description = "Posting rule set not found"),
                         @ApiResponse(responseCode = "409", description = "Cannot modify published rule set")
         })
+        @EmitEvent(id = "ACCOUNTING_POSTING_RULE_UPDATE", apiVersion = "1")
         public ResponseEntity<PostingRuleSetResponse> updatePostingRuleSet(
                         @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
                         @Valid @RequestBody PostingRuleSetCreateRequest request) {
                 log.info("Update posting rule set - ruleSetId={}, name={}", postingRuleSetId, request.getName());
-                // Build update entity from request
-                com.positivity.accounting.internal.entity.PostingRuleSet updateEntity = new com.positivity.accounting.internal.entity.PostingRuleSet();
-                updateEntity.setName(request.getName());
-                updateEntity.setEventType(request.getEventType());
-                updateEntity.setDescription(request.getDescription());
-                postingRuleService.updatePostingRuleSet(postingRuleSetId, updateEntity);
+                // Delegate to service layer which handles entity creation and updates
+                postingRuleService.updatePostingRuleSetFromRequest(postingRuleSetId, request);
                 PostingRuleSetResponse response = postingRuleService.getPostingRuleSetAsResponse(postingRuleSetId);
                 return ResponseEntity.ok(response);
         }

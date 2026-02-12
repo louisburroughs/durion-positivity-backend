@@ -115,6 +115,12 @@ public class PostingRuleServiceImpl implements PostingRuleService {
                 .toList();
     }
 
+    @Override
+    public PostingRuleSet updatePostingRuleSetFromRequest(UUID ruleSetId, PostingRuleSetCreateRequest request) {
+        PostingRuleSet updates = PostingRuleMapper.toEntity(request);
+        return updatePostingRuleSet(ruleSetId, updates);
+    }
+
     // ── Entity-based methods (used by internal services) ─────────────
 
     @Override

@@ -52,6 +52,12 @@ public interface PostingRuleService {
      */
     List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId, int page, int size);
 
+    /**
+     * Updates a posting rule set from a DTO request (metadata only).
+     * Converts request to entity and delegates to updatePostingRuleSet.
+     */
+    PostingRuleSet updatePostingRuleSetFromRequest(UUID ruleSetId, PostingRuleSetCreateRequest request);
+
     // ── Entity-based methods (used by internal services) ─────────────
 
     /**
