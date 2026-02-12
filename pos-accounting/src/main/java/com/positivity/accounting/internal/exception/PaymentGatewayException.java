@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.exception;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Exception thrown when payment gateway processing fails.
  * 
@@ -10,11 +12,24 @@ package com.positivity.accounting.internal.exception;
  */
 public class PaymentGatewayException extends RuntimeException {
 
+    private final @Nullable String paymentRef;
+
     public PaymentGatewayException(String message) {
         super(message);
+        this.paymentRef = null;
     }
 
     public PaymentGatewayException(String message, Throwable cause) {
         super(message, cause);
+        this.paymentRef = null;
+    }
+
+    public PaymentGatewayException(String message, String paymentRef, Throwable cause) {
+        super(message, cause);
+        this.paymentRef = paymentRef;
+    }
+
+    public @Nullable String getPaymentRef() {
+        return paymentRef;
     }
 }

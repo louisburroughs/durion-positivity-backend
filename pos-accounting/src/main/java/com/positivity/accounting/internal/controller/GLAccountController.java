@@ -56,8 +56,7 @@ public class GLAccountController {
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "accountCode") String sort,
                         @Parameter(description = "Filter by account status") @RequestParam(required = false) String status) {
-                log.info("List GL accounts: page={}, size={}", page, size);
-                log.debug("List GL accounts filter: sort={}, status={}", sort, status);
+                log.info("List GL accounts");
                 GLAccountListResponse response = glAccountService.listGLAccounts(page, size, sort, status);
                 return ResponseEntity.ok(response);
         }
@@ -69,7 +68,7 @@ public class GLAccountController {
         @ApiResponse(responseCode = "404", description = "GL account not found")
         public ResponseEntity<GLAccountResponse> getGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId) {
-                log.info("Get GL account: id={}", glAccountId);
+                log.info("Get GL account");
                 GLAccountResponse response = glAccountService.getGLAccount(glAccountId);
                 return ResponseEntity.ok(response);
         }
@@ -82,7 +81,6 @@ public class GLAccountController {
         @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_CREATE", apiVersion = "1")
         public ResponseEntity<GLAccountResponse> createGLAccount(@Valid @RequestBody GLAccountCreateRequest request) {
                 log.info("Create GL account request received");
-                log.debug("Create GL account: code={}, type={}", request.getAccountCode(), request.getAccountType());
                 GLAccountResponse response = glAccountService.createGLAccount(request);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
@@ -96,7 +94,7 @@ public class GLAccountController {
         public ResponseEntity<GLAccountResponse> updateGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @Valid @RequestBody GLAccountUpdateRequest request) {
-                log.info("Update GL account: id={}", glAccountId);
+                log.info("Update GL account");
                 GLAccountResponse response = glAccountService.updateGLAccount(glAccountId, request);
                 return ResponseEntity.ok(response);
         }
@@ -110,7 +108,7 @@ public class GLAccountController {
         public ResponseEntity<GLAccountResponse> activateGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @Valid @RequestBody com.positivity.accounting.internal.dto.GLAccountActivateRequest request) {
-                log.info("Activate GL account: id={}, effectiveDate={}", glAccountId, request.getEffectiveDate());
+                log.info("Activate GL account");
                 GLAccountResponse response = glAccountService.activateGLAccount(glAccountId,
                                 request.getEffectiveDate().atStartOfDay());
                 return ResponseEntity.ok(response);
@@ -125,7 +123,7 @@ public class GLAccountController {
         public ResponseEntity<Void> deactivateGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
-                log.info("Stub deactivateGLAccount glAccountId={}", glAccountId);
+                log.info("Stub deactivateGLAccount");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
         }
 
@@ -138,7 +136,7 @@ public class GLAccountController {
         public ResponseEntity<Void> archiveGLAccount(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
                         @RequestBody(required = false) Object request) {
-                log.info("Stub archiveGLAccount glAccountId={}", glAccountId);
+                log.info("Stub archiveGLAccount");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
         }
 
@@ -149,7 +147,7 @@ public class GLAccountController {
         @ApiResponse(responseCode = "404", description = "GL account not found")
         public ResponseEntity<Void> getAccountBalance(
                         @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId) {
-                log.info("Stub getAccountBalance glAccountId={}", glAccountId);
+                log.info("Stub getAccountBalance");
                 return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
         }
 }

@@ -115,7 +115,7 @@ public class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
     @DisplayName("Create balanced journal entry - happy path")
     void testCreateJournalEntry_Success() throws Exception {
         // Given - balanced journal entry
-        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder().organizationId(UUID.randomUUID())
                 .transactionDate(LocalDateTime.now())
                 .description("Test journal entry")
                 .sourceEventType("SALE")
@@ -195,7 +195,7 @@ public class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
         UUID entryId = createBalancedJournalEntry("Original description");
 
         // When - update the entry
-        JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder()
+        JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder().organizationId(UUID.randomUUID())
                 .transactionDate(LocalDateTime.now())
                 .description("Updated description")
                 .sourceEventType("SALE")
@@ -274,7 +274,7 @@ public class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
     @DisplayName("Create unbalanced journal entry - validation error")
     void testCreateJournalEntry_Unbalanced() throws Exception {
         // Given - unbalanced journal entry
-        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder().organizationId(UUID.randomUUID())
                 .transactionDate(LocalDateTime.now())
                 .description("Unbalanced entry")
                 .sourceEventType("SALE")
@@ -323,7 +323,7 @@ public class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
                 .andExpect(status().isOk());
 
         // When - try to update the posted entry
-        JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder()
+        JournalEntryCreateRequest updateRequest = JournalEntryCreateRequest.builder().organizationId(UUID.randomUUID())
                 .transactionDate(LocalDateTime.now())
                 .description("Attempted update")
                 .sourceEventType("SALE")
@@ -357,7 +357,7 @@ public class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
      * Helper method to create a balanced journal entry.
      */
     private UUID createBalancedJournalEntry(String description) throws Exception {
-        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder().organizationId(UUID.randomUUID())
                 .transactionDate(LocalDateTime.now())
                 .description(description)
                 .sourceEventType("SALE")

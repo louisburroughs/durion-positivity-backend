@@ -4,9 +4,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
@@ -27,6 +27,7 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,10 +54,23 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class VendorBillServiceImpl implements VendorBillService {
 
+        private static final String SYSTEM_USER = "SYSTEM";
+
         private final VendorBillRepository billRepository;
         private final VendorBillLineRepository billLineRepository;
         private final VendorBillMatchCandidateRepository matchCandidateRepository;
         private final ApplicationEventPublisher eventPublisher;
+
+        private String getCurrentUser() {
+                return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
+        }
+
+        private Map<String, String> normalizeDimensions(Map<String, String> dimensions) {
+                if (dimensions == null || dimensions.isEmpty()) {
+                        return Map.of();
+                }
+                return Map.copyOf(dimensions);
+        }
 
         // Tolerance thresholds for three-way matching
         private static final BigDecimal QUANTITY_TOLERANCE_PERCENT = new BigDecimal("0.001"); // 0.1%
@@ -67,6 +81,8 @@ public class VendorBillServiceImpl implements VendorBillService {
         public @NonNull VendorBillResponse handleGoodsReceivedEvent(@NonNull GoodsReceivedEvent event) {
                 log.info("Processing GoodsReceivedEvent | eventId={} | vendorId={} | poId={}",
                                 event.getEventId(), event.getVendorId(), event.getPurchaseOrderId());
+
+                String currentUser = getCurrentUser();
 
                 // Step 1: Idempotency check
                 Optional<VendorBill> existingBill = billRepository.findByOriginEventId(event.getEventId());
@@ -85,8 +101,8 @@ public class VendorBillServiceImpl implements VendorBillService {
                 bill.setOriginEventId(event.getEventId());
                 bill.setOriginEventType("GOODS_RECEIVED");
                 bill.setPurchaseOrderId(event.getPurchaseOrderId()); // Store PO reference
-                bill.setCreatedBy("system");
-                bill.setModifiedBy("system");
+                bill.setCreatedBy(currentUser);
+                bill.setModifiedBy(currentUser);
 
                 // Step 3: Calculate total amount from line items
                 BigDecimal totalAmount = event.getLineItems().stream()
@@ -123,11 +139,13 @@ public class VendorBillServiceImpl implements VendorBillService {
                                 .eventId(UUID.randomUUID())
                                 .vendorBillId(savedBill.getVendorBillId())
                                 .vendorId(savedBill.getVendorId())
+                                .organizationId(event.getOrganizationId())
                                 .vendorName(savedBill.getVendorName())
                                 .purchaseOrderId(savedBill.getPurchaseOrderId())
                                 .billNumber(savedBill.getBillNumber())
                                 .billDate(savedBill.getBillDate())
                                 .totalAmount(savedBill.getTotalAmount())
+                                .dimensions(normalizeDimensions(event.getDimensions()))
                                 .lineItems(event.getLineItems().stream()
                                                 .map(line -> VendorBillGLPostingEvent.BillLineItem.builder()
                                                                 .productId(line.getProductId())
@@ -138,7 +156,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                                                                                 .multiply(line.getUnitPrice()))
                                                                 .isInventoryItem(line.isInventoryItem())
                                                                 .build())
-                                                .collect(Collectors.toList()))
+                                                .toList())
                                 .build();
 
                 eventPublisher.publishEvent(glPostingEvent);
@@ -153,6 +171,8 @@ public class VendorBillServiceImpl implements VendorBillService {
         public @NonNull VendorBillResponse handleVendorInvoiceReceivedEvent(@NonNull VendorInvoiceReceivedEvent event) {
                 log.info("Processing VendorInvoiceReceivedEvent | eventId={} | vendorId={} | invoiceRef={}",
                                 event.getEventId(), event.getVendorId(), event.getInvoiceReference());
+
+                String currentUser = getCurrentUser();
 
                 // Step 1: Find and match pending bill using enhanced scoring algorithm
                 BillMatchResult matchResult = findBestMatchingBillWithConfidence(event);
@@ -181,7 +201,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                         bill.setRejectionReason("Ambiguous match - multiple candidates found. "
                                         + "Use /match-candidates/{invoiceEventId} to list and select. "
                                         + matchResult.getMatchingDetails());
-                        bill.setModifiedBy("system");
+                        bill.setModifiedBy(currentUser);
                         billRepository.save(bill);
                         return toResponse(bill);
                 }
@@ -200,7 +220,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                         // Transition to MATCH_EXCEPTION
                         bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
                         bill.setRejectionReason("Quantity or price mismatch detected during three-way match");
-                        bill.setModifiedBy("system");
+                        bill.setModifiedBy(currentUser);
                         billRepository.save(bill);
 
                         log.warn("Three-way match exception | billId={} | invoiceRef={}",
@@ -224,8 +244,8 @@ public class VendorBillServiceImpl implements VendorBillService {
 
                 bill.setBillNumber(event.getInvoiceReference());
                 bill.setDueDate(event.getDueDate());
-                bill.setModifiedBy("system");
-                bill.setApprovedBy("system");
+                bill.setModifiedBy(currentUser);
+                bill.setApprovedBy(currentUser);
                 bill.setApprovedAt(Instant.now());
                 bill.setApprovalJustification("Auto-approved: three-way match successful");
                 billRepository.save(bill);
@@ -412,7 +432,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 List<BillMatchResult.ScoredBill> scoredBills = candidates.stream()
                                 .map(bill -> scoreBillMatch(bill, event, invoiceTotal))
                                 .sorted(Comparator.comparingInt(BillMatchResult.ScoredBill::getTotalScore).reversed())
-                                .collect(java.util.stream.Collectors.toList());
+                                .toList();
 
                 // Log all scored candidates
                 scoredBills.forEach(scored -> log.info(
@@ -423,7 +443,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 // Find candidates meeting minimum threshold (50 points)
                 List<BillMatchResult.ScoredBill> qualifiedCandidates = scoredBills.stream()
                                 .filter(scored -> scored.getTotalScore() >= 50)
-                                .collect(java.util.stream.Collectors.toList());
+                                .toList();
 
                 if (qualifiedCandidates.isEmpty()) {
                         String details = String.format(

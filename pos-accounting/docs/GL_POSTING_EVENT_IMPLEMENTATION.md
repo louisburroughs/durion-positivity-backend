@@ -158,14 +158,26 @@ handleGoodsReceivedEvent()
 - Non-inventory items → Dr Expense (income statement)
 - Must be preserved from `GoodsReceivedEvent` through to posting engine
 
-### 3. **Include Purchase Order Reference**
+### 3. **Include Organization Context**
+
+**Why:** Posting engine validation requires `organizationId`
+- Must be provided on `GoodsReceivedEvent`
+- Must flow into `VendorBillGLPostingEvent` and the accounting event payload
+
+### 4. **Include Purchase Order Reference**
 
 **Why:** Traceability and audit trail
 - Links receipt → PO → invoice for three-way match
 - Enables PO-level accounting analysis
 - Supports vendor compliance reporting
 
-### 4. **Separate Event Handler**
+### 5. **Include Optional Dimensions**
+
+**Why:** Enables dimensional GL mapping when provided (businessUnitId, locationId, departmentId, costCenterId)
+- Optional on `GoodsReceivedEvent`
+- Flows into `VendorBillGLPostingEvent` and the accounting event payload
+
+### 6. **Separate Event Handler**
 
 **Why:** Single Responsibility Principle
 - `VendorBillService` manages bill lifecycle

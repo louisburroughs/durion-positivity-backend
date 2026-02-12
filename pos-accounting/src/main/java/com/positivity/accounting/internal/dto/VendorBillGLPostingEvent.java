@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
@@ -51,6 +52,11 @@ public class VendorBillGLPostingEvent {
     @JsonProperty("vendorId")
     private UUID vendorId;
 
+    @NonNull
+    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010")
+    @JsonProperty("organizationId")
+    private UUID organizationId;
+
     @Nullable
     @Schema(description = "Vendor name", example = "Acme Supplies Ltd")
     @JsonProperty("vendorName")
@@ -85,6 +91,11 @@ public class VendorBillGLPostingEvent {
     @Schema(description = "Line items for GL distribution")
     @JsonProperty("lineItems")
     private List<BillLineItem> lineItems;
+
+    @Nullable
+    @Schema(description = "Optional dimensional context for GL mapping", example = "{\"businessUnitId\":\"BU-001\"}")
+    @JsonProperty("dimensions")
+    private Map<String, String> dimensions;
 
     @Data
     @Builder

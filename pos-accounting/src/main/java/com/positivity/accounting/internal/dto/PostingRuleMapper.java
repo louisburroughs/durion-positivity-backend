@@ -27,7 +27,7 @@ public final class PostingRuleMapper {
         List<PostingRuleVersionResponse> versions = entity.getVersions() != null
                 ? entity.getVersions().stream()
                         .map(PostingRuleMapper::toVersionResponse)
-                        .collect(Collectors.toList())
+                        .toList()
                 : Collections.emptyList();
 
         return PostingRuleSetResponse.builder()
@@ -89,7 +89,7 @@ public final class PostingRuleMapper {
     public static PostingRuleSetListResponse toListResponse(org.springframework.data.domain.Page<PostingRuleSet> page) {
         List<PostingRuleSetResponse> responses = page.getContent().stream()
                 .map(PostingRuleMapper::toResponse)
-                .collect(Collectors.toList());
+                .toList();
 
         return PostingRuleSetListResponse.builder()
                 .ruleSets(responses)

@@ -46,6 +46,11 @@ public class APPaymentGLPostingEvent {
     private UUID eventId;
 
     @NonNull
+    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010")
+    @JsonProperty("organizationId")
+    private UUID organizationId;
+
+    @NonNull
     @Schema(description = "AP Payment UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901")
     @JsonProperty("paymentId")
     private UUID paymentId;

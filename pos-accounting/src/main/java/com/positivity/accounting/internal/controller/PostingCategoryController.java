@@ -44,7 +44,7 @@ public class PostingCategoryController {
         @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_CREATE", apiVersion = "1")
         public ResponseEntity<PostingCategoryResponse> createPostingCategory(
                         @Valid @RequestBody PostingCategoryCreateRequest request) {
-                log.info("Create posting category request: {}", request.getCategoryName());
+                log.info("Create posting category request");
                 PostingCategoryResponse response = postingCategoryService.createPostingCategory(request);
                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
         }
@@ -56,7 +56,7 @@ public class PostingCategoryController {
         @ApiResponse(responseCode = "404", description = "Posting category not found")
         public ResponseEntity<PostingCategoryResponse> getPostingCategory(
                         @Parameter(description = "Posting category identifier") @PathVariable UUID postingCategoryId) {
-                log.info("Get posting category: {}", postingCategoryId);
+                log.info("Get posting category");
                 PostingCategoryResponse response = postingCategoryService.getPostingCategory(postingCategoryId);
                 return ResponseEntity.ok(response);
         }
@@ -71,7 +71,7 @@ public class PostingCategoryController {
         public ResponseEntity<PostingCategoryResponse> updatePostingCategory(
                         @Parameter(description = "Posting category identifier") @PathVariable UUID postingCategoryId,
                         @Valid @RequestBody PostingCategoryUpdateRequest request) {
-                log.info("Update posting category: {}", postingCategoryId);
+                log.info("Update posting category");
                 PostingCategoryResponse response = postingCategoryService.updatePostingCategory(postingCategoryId,
                                 request);
                 return ResponseEntity.ok(response);
@@ -88,7 +88,7 @@ public class PostingCategoryController {
                         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
                         @Parameter(description = "Sort field") @RequestParam(defaultValue = "categoryName") String sort,
                         @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive) {
-                log.info("List posting categories: page={}, size={}, sort={}, isActive={}", page, size, sort, isActive);
+                log.info("List posting categories");
                 PostingCategoryListResponse response = postingCategoryService.listPostingCategories(page, size, sort,
                                 isActive);
                 return ResponseEntity.ok(response);
@@ -103,7 +103,7 @@ public class PostingCategoryController {
         @EmitEvent(id = "ACCOUNTING_POSTING_CATEGORY_DEACTIVATE", apiVersion = "1")
         public ResponseEntity<Void> deactivatePostingCategory(
                         @Parameter(description = "Posting category identifier") @PathVariable UUID postingCategoryId) {
-                log.info("Deactivate posting category: {}", postingCategoryId);
+                log.info("Deactivate posting category");
                 postingCategoryService.deactivatePostingCategory(postingCategoryId);
                 return ResponseEntity.noContent().build();
         }

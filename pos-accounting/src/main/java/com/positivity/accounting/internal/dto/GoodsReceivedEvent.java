@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
@@ -34,17 +35,22 @@ import lombok.NoArgsConstructor;
 public class GoodsReceivedEvent {
 
     @NotNull
-    @Schema(description = "Event UUID (idempotency key)", example = "01936e5c-1234-7a3d-8b6e-123456789012", required = true)
+    @Schema(description = "Event UUID (idempotency key)", example = "01936e5c-1234-7a3d-8b6e-123456789012")
     @JsonProperty("eventId")
     private UUID eventId;
 
     @NotNull
-    @Schema(description = "Purchase order UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901", required = true)
+    @Schema(description = "Organization UUID", example = "00000000-0000-4000-a000-000000000010")
+    @JsonProperty("organizationId")
+    private UUID organizationId;
+
+    @NotNull
+    @Schema(description = "Purchase order UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901")
     @JsonProperty("purchaseOrderId")
     private UUID purchaseOrderId;
 
     @NotNull
-    @Schema(description = "Vendor UUID", example = "01936e5a-7890-7a3d-8b6e-2b3456789012", required = true)
+    @Schema(description = "Vendor UUID", example = "01936e5a-7890-7a3d-8b6e-2b3456789012")
     @JsonProperty("vendorId")
     private UUID vendorId;
 
@@ -54,14 +60,19 @@ public class GoodsReceivedEvent {
     private String vendorName;
 
     @NotNull
-    @Schema(description = "Date goods were received", example = "2026-01-15T10:30:00", required = true)
+    @Schema(description = "Date goods were received", example = "2026-01-15T10:30:00")
     @JsonProperty("receivedDate")
     private LocalDateTime receivedDate;
 
     @NotNull
-    @Schema(description = "Line items received", required = true)
+    @Schema(description = "Line items received")
     @JsonProperty("lineItems")
     private List<ReceivedLineItem> lineItems;
+
+    @Nullable
+    @Schema(description = "Optional dimensional context for GL mapping", example = "{\"businessUnitId\":\"BU-001\"}")
+    @JsonProperty("dimensions")
+    private Map<String, String> dimensions;
 
     @Data
     @Builder
@@ -71,24 +82,24 @@ public class GoodsReceivedEvent {
     public static class ReceivedLineItem {
 
         @NotNull
-        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123", required = true)
+        @Schema(description = "Product/SKU UUID", example = "01936e59-abcd-7a3d-8b6e-3c4567890123")
         @JsonProperty("productId")
         private UUID productId;
 
         @NotBlank
-        @Schema(description = "Product description", example = "Widget Type A", required = true)
+        @Schema(description = "Product description", example = "Widget Type A")
         @JsonProperty("description")
         private String description;
 
         @NotNull
         @Positive
-        @Schema(description = "Quantity received", example = "100.00", required = true)
+        @Schema(description = "Quantity received", example = "100.00")
         @JsonProperty("quantity")
         private BigDecimal quantity;
 
         @NotNull
         @Positive
-        @Schema(description = "Unit price from PO", example = "12.50", required = true)
+        @Schema(description = "Unit price from PO", example = "12.50")
         @JsonProperty("unitPrice")
         private BigDecimal unitPrice;
 

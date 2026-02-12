@@ -77,7 +77,7 @@ public class VendorBill {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
-    private VendorBillStatus status = VendorBillStatus.PENDING_REVIEW;
+    private VendorBillStatus status = VendorBillStatus.PENDING_RECEIPT_MATCH;
 
     // Purchase Order reference (for three-way matching)
     @Column(name = "purchase_order_id")

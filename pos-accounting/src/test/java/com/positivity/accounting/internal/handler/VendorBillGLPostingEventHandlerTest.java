@@ -60,6 +60,7 @@ class VendorBillGLPostingEventHandlerTest {
 
         testEvent = VendorBillGLPostingEvent.builder()
                 .eventId(UUID.randomUUID())
+                .organizationId(UUID.randomUUID())
                 .vendorBillId(testBillId)
                 .vendorId(testVendorId)
                 .vendorName("Test Vendor Inc")
@@ -123,8 +124,8 @@ class VendorBillGLPostingEventHandlerTest {
         verify(eventIngestionService).submitEvent(captor.capture());
 
         Map<String, Object> payload = captor.getValue();
-        assertThat(payload.get("eventType")).isEqualTo("VENDOR_BILL_GL_POSTING");
-        assertThat(payload.get("sourceSystem")).isEqualTo("POS");
+        assertThat(payload).containsEntry("eventType", "VENDOR_BILL_GL_POSTING")
+                .containsEntry("sourceSystem", "POS");
     }
 
     @Test
@@ -144,16 +145,16 @@ class VendorBillGLPostingEventHandlerTest {
         verify(eventIngestionService).submitEvent(captor.capture());
 
         Map<String, Object> payload = captor.getValue();
-        @SuppressWarnings("unchecked")
+
         Map<String, Object> billDetails = (Map<String, Object>) payload.get("payload");
 
-        assertThat(billDetails.get("vendorBillId")).isEqualTo(testBillId);
-        assertThat(billDetails.get("vendorId")).isEqualTo(testVendorId);
-        assertThat(billDetails.get("vendorName")).isEqualTo("Test Vendor Inc");
-        assertThat(billDetails.get("purchaseOrderId")).isEqualTo(testPoId);
-        assertThat(billDetails.get("purchaseOrderNumber")).isEqualTo("PO-2026-00123");
-        assertThat(billDetails.get("billNumber")).isEqualTo("BILL-2026-00456");
-        assertThat(billDetails.get("totalAmount")).isEqualTo(new BigDecimal("1300.00"));
+        assertThat(billDetails).containsEntry("vendorBillId", testBillId)
+                .containsEntry("vendorId", testVendorId)
+                .containsEntry("vendorName", "Test Vendor Inc")
+                .containsEntry("purchaseOrderId", testPoId)
+                .containsEntry("purchaseOrderNumber", "PO-2026-00123")
+                .containsEntry("billNumber", "BILL-2026-00456")
+                .containsEntry("totalAmount", new BigDecimal("1300.00"));
     }
 
     @Test
@@ -182,15 +183,15 @@ class VendorBillGLPostingEventHandlerTest {
 
         // First line: Inventory item
         Map<String, Object> firstLine = lineItems.get(0);
-        assertThat(firstLine.get("productId")).isEqualTo(testProductId1);
-        assertThat(firstLine.get("isInventoryItem")).isEqualTo(true);
-        assertThat(firstLine.get("lineTotal")).isEqualTo(new BigDecimal("1250.00"));
+        assertThat(firstLine).containsEntry("productId", testProductId1)
+                .containsEntry("isInventoryItem", true)
+                .containsEntry("lineTotal", new BigDecimal("1250.00"));
 
         // Second line: Non-inventory (expense) item
         Map<String, Object> secondLine = lineItems.get(1);
-        assertThat(secondLine.get("productId")).isEqualTo(testProductId2);
-        assertThat(secondLine.get("isInventoryItem")).isEqualTo(false);
-        assertThat(secondLine.get("lineTotal")).isEqualTo(new BigDecimal("50.00"));
+        assertThat(secondLine).containsEntry("productId", testProductId2)
+                .containsEntry("isInventoryItem", false)
+                .containsEntry("lineTotal", new BigDecimal("50.00"));
     }
 
     @Test
@@ -216,13 +217,13 @@ class VendorBillGLPostingEventHandlerTest {
         List<Map<String, Object>> lineItems = (List<Map<String, Object>>) billDetails.get("lineItems");
 
         Map<String, Object> firstLine = lineItems.get(0);
-        assertThat(firstLine.get("productId")).isEqualTo(testProductId1);
-        assertThat(firstLine.get("sku")).isEqualTo("WIDGET-A-001");
-        assertThat(firstLine.get("description")).isEqualTo("Widget Type A");
-        assertThat(firstLine.get("quantity")).isEqualTo(new BigDecimal("100.00"));
-        assertThat(firstLine.get("unitPrice")).isEqualTo(new BigDecimal("12.50"));
-        assertThat(firstLine.get("lineTotal")).isEqualTo(new BigDecimal("1250.00"));
-        assertThat(firstLine.get("isInventoryItem")).isEqualTo(true);
+        assertThat(firstLine).containsEntry("productId", testProductId1)
+                .containsEntry("sku", "WIDGET-A-001")
+                .containsEntry("description", "Widget Type A")
+                .containsEntry("quantity", new BigDecimal("100.00"))
+                .containsEntry("unitPrice", new BigDecimal("12.50"))
+                .containsEntry("lineTotal", new BigDecimal("1250.00"))
+                .containsEntry("isInventoryItem", true);
     }
 
     @Test
