@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 
 import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
@@ -347,8 +349,9 @@ class PostingRuleEvaluatorDefaultMappingTest {
                     .map(l -> l.getCreditAmount() != null ? l.getCreditAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            assertThat(totalDebits).isEqualByComparingTo(totalCredits);
-            assertThat(totalDebits).isEqualByComparingTo(new BigDecimal("1234.56"));
+            assertThat(totalDebits)
+                    .isEqualByComparingTo(totalCredits)
+                    .isEqualByComparingTo(new BigDecimal("1234.56"));
         }
 
         @Test
@@ -431,20 +434,20 @@ class PostingRuleEvaluatorDefaultMappingTest {
     @DisplayName("Amount resolution")
     class AmountResolutionTests {
 
-        @Test
-        @DisplayName("Should resolve amount from payload.amount as String")
-        void shouldResolveAmountFromStringPayload() {
+        @ParameterizedTest(name = "Should resolve amount \"{0}\" from string payload")
+        @CsvSource({ "750.25", "9999999.9999", "0.01" })
+        void shouldResolveAmountFromStringPayload(String amount) {
             stubNoPostingRules();
             DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Test");
             stubDefaultMapping("billing.invoicePosted", mapping);
 
-            AccountingEvent event = createEventWithAmount("billing.invoicePosted", "750.25");
+            AccountingEvent event = createEventWithAmount("billing.invoicePosted", amount);
 
             PostingResult result = evaluator.evaluateEvent(event);
 
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getJournalEntryDraft().getLines().get(0).getDebitAmount())
-                    .isEqualByComparingTo(new BigDecimal("750.25"));
+                    .isEqualByComparingTo(new BigDecimal(amount));
         }
 
         @Test
@@ -481,38 +484,6 @@ class PostingRuleEvaluatorDefaultMappingTest {
             assertThat(result.getJournalEntryDraft().getLines().get(0).getDebitAmount())
                     .isEqualByComparingTo(new BigDecimal("0.01"));
             assertThat(result.getJournalEntryDraft().getLines().get(1).getCreditAmount())
-                    .isEqualByComparingTo(new BigDecimal("0.01"));
-        }
-
-        @Test
-        @DisplayName("Should handle large monetary amounts correctly")
-        void shouldHandleLargeAmounts() {
-            stubNoPostingRules();
-            DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Test");
-            stubDefaultMapping("billing.invoicePosted", mapping);
-
-            AccountingEvent event = createEventWithAmount("billing.invoicePosted", "9999999.9999");
-
-            PostingResult result = evaluator.evaluateEvent(event);
-
-            assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getJournalEntryDraft().getLines().get(0).getDebitAmount())
-                    .isEqualByComparingTo(new BigDecimal("9999999.9999"));
-        }
-
-        @Test
-        @DisplayName("Should handle small fractional amounts correctly")
-        void shouldHandleSmallFractionalAmounts() {
-            stubNoPostingRules();
-            DefaultGLMapping mapping = createDefaultMapping("billing.invoicePosted", "Test");
-            stubDefaultMapping("billing.invoicePosted", mapping);
-
-            AccountingEvent event = createEventWithAmount("billing.invoicePosted", "0.01");
-
-            PostingResult result = evaluator.evaluateEvent(event);
-
-            assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getJournalEntryDraft().getLines().get(0).getDebitAmount())
                     .isEqualByComparingTo(new BigDecimal("0.01"));
         }
     }

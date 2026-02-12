@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -13,8 +14,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
+
+import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
+import com.positivity.accounting.internal.enums.PaymentStatus;
+import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
 
 /**
  * Contract Behavioral Integration Tests for Invoice Payment operations.
@@ -40,10 +46,13 @@ import org.springframework.test.web.servlet.MvcResult;
  */
 @Disabled("InvoicePayment entity removed — legacy invoice-centric API replaced by payment-centric PaymentApplication API")
 @DisplayName("Invoice Payment Backend Contract Behavioral Tests")
-public class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
+class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
 
     private static final String API_V1_INVOICES = "/v1/accounting/invoices";
     private static final String API_V1_INVOICE = "/v1/accounting/invoice";
+
+    @Autowired
+    private PaymentAppliedEventRepository paymentAppliedEventRepository;
 
     // Test data
     private UUID testInvoiceId;
@@ -60,7 +69,7 @@ public class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        // No-op: InvoicePayment entity removed; cleanup not needed while @Disabled
+        paymentAppliedEventRepository.deleteAll();
     }
 
     // ===============================================
@@ -136,9 +145,9 @@ public class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
     @Test
     @DisplayName("Get invoice status - happy path")
     void testGetInvoiceStatus_Success() throws Exception {
-        // Given - invoice payment exists (requires InvoicePayment entity - currently
-        // removed)
-        // createTestInvoicePayment(testInvoiceId, "PAID");
+        // Given - payment event exists for this invoice
+        createTestPaymentAppliedEvent(testInvoiceId, PaymentStatus.PAID,
+                new BigDecimal("100.00"), new BigDecimal("100.00"));
 
         // When/Then
         MvcResult result = mockMvc.perform(withAuth(get(API_V1_INVOICE + "/" + testInvoiceId + "/status")))
@@ -375,10 +384,23 @@ public class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
     // ===============================================
 
     /**
-     * Creates a test invoice payment entry.
-     * TODO: Refactor to use PaymentAppliedEvent when re-enabling this test class.
+     * Creates a test {@link PaymentAppliedEvent} for the given invoice.
+     *
+     * @param invoiceId    the invoice to apply the payment to
+     * @param status       the payment status (e.g. PAID, PARTIALLY_PAID, UNPAID,
+     *                     FAILED)
+     * @param amount       the payment amount
+     * @param invoiceTotal the total invoice amount (used for status calculation)
      */
-    // private void createTestInvoicePayment(UUID invoiceId, String status) {
-    // // InvoicePayment entity was removed — stub for compilation
-    // }
+    private void createTestPaymentAppliedEvent(UUID invoiceId, PaymentStatus status,
+            BigDecimal amount, BigDecimal invoiceTotal) {
+        var event = new PaymentAppliedEvent(
+                invoiceId,
+                "TXN-" + UUID.randomUUID(),
+                amount,
+                invoiceTotal,
+                status,
+                UUID.randomUUID().toString());
+        paymentAppliedEventRepository.save(event);
+    }
 }

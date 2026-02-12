@@ -35,8 +35,6 @@ import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 
-import tools.jackson.databind.ObjectMapper;
-
 /**
  * Integration tests for Payment Application REST API endpoints
  * 

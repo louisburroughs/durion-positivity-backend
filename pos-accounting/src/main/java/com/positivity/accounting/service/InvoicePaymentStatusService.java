@@ -53,7 +53,7 @@ public class InvoicePaymentStatusService {
         // Check idempotency
         if (idempotencyService.isKeyProcessed(request.getIdempotencyKey())) {
             log.info("Payment already processed - returning existing status");
-            return getInvoiceStatus(request.getInvoiceId());
+            return buildInvoiceStatusResponse(request.getInvoiceId());
         }
 
         // Determine payment status
@@ -80,7 +80,7 @@ public class InvoicePaymentStatusService {
         // Register idempotency key
         idempotencyService.registerKey(request.getIdempotencyKey(), request.getInvoiceId());
 
-        return getInvoiceStatus(request.getInvoiceId());
+        return buildInvoiceStatusResponse(request.getInvoiceId());
     }
 
     /**
@@ -88,6 +88,15 @@ public class InvoicePaymentStatusService {
      */
     @Transactional(readOnly = true)
     public InvoiceStatusResponse getInvoiceStatus(UUID invoiceId) {
+        return buildInvoiceStatusResponse(invoiceId);
+    }
+
+    /**
+     * Build an {@link InvoiceStatusResponse} from the persisted status view.
+     * Extracted so internal callers avoid a self-invocation that would bypass
+     * the {@code @Transactional} proxy on {@link #getInvoiceStatus(UUID)}.
+     */
+    private InvoiceStatusResponse buildInvoiceStatusResponse(UUID invoiceId) {
         InvoiceStatusView statusView = statusViewRepository.findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
 

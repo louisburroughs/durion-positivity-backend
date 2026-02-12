@@ -468,8 +468,8 @@ class PostingRuleEvaluatorFeatureFlagTest {
                     .map(line -> line.getCreditAmount() != null ? line.getCreditAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            assertThat(totalDebits).isEqualByComparingTo(totalCredits);
-            assertThat(totalDebits).isEqualByComparingTo(new BigDecimal("999.99"));
+            assertThat(totalDebits)
+                    .isEqualByComparingTo(totalCredits).isEqualByComparingTo(new BigDecimal("999.99"));
         }
 
         @Test
