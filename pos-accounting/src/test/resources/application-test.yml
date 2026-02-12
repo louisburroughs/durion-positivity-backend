@@ -29,6 +29,11 @@ eureka:
   client:
     enabled: false
 
+# Stripe configuration for tests
+stripe:
+  api-key: "sk_test_dummy_key_for_unit_tests"
+  connect-account: ""
+
 # Logging
 logging:
   level:

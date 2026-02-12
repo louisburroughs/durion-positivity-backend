@@ -71,10 +71,7 @@ class PostingEngineOrchestratorTest {
     @Mock
     private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
 
-    @Mock
     private ObjectMapper objectMapper;
-
-    @InjectMocks
     private PostingEngineOrchestrator orchestrator;
 
     @Captor
@@ -94,6 +91,16 @@ class PostingEngineOrchestratorTest {
 
     @BeforeEach
     void setUp() {
+        // Create orchestrator with all dependencies
+        objectMapper = new ObjectMapper();
+        orchestrator = new PostingEngineOrchestrator(
+                postingRuleEvaluator,
+                journalEntryService,
+                idempotencyService,
+                accountingEventRepository,
+                reprocessingAttemptHistoryRepository,
+                objectMapper);
+
         testOrganizationId = UUID.randomUUID();
         testEventId = UUID.randomUUID();
         testMappingVersion = UUID.randomUUID();
@@ -468,6 +475,10 @@ class PostingEngineOrchestratorTest {
             AccountingEvent savedEvent = eventCaptor.getValue();
             assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
 
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
+
             verify(idempotencyService, never()).registerKey(anyString(), any());
         }
 
@@ -498,6 +509,10 @@ class PostingEngineOrchestratorTest {
             verify(accountingEventRepository).save(eventCaptor.capture());
             AccountingEvent savedEvent = eventCaptor.getValue();
             assertThat(savedEvent.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+
+            verify(reprocessingAttemptHistoryRepository).save(attemptHistoryCaptor.capture());
+            ReprocessingAttemptHistory savedHistory = attemptHistoryCaptor.getValue();
+            assertThat(savedHistory.getOutcome()).isEqualTo(ReprocessingOutcome.FAILURE);
         }
     }
 
@@ -588,7 +603,8 @@ class PostingEngineOrchestratorTest {
             // When
             orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
 
-            // Then
+            // Then - verify both repository saves happened exactly once
+            verify(accountingEventRepository, times(1)).save(any(AccountingEvent.class));
             verify(reprocessingAttemptHistoryRepository, times(1)).save(any(ReprocessingAttemptHistory.class));
         }
     }

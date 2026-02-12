@@ -29,6 +29,7 @@ import com.stripe.net.RequestOptions;
  */
 @Component
 @ConditionalOnProperty(name = "payment.gateway.provider", havingValue = "stripe", matchIfMissing = true)
+@ConditionalOnProperty(name = "stripe.api-key", matchIfMissing = false)
 public class StripePaymentGateway implements PaymentGatewayProvider {
 
     private static final Logger log = LoggerFactory.getLogger(StripePaymentGateway.class);
