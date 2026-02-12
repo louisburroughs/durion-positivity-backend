@@ -362,7 +362,7 @@ public class EventIngestionContractBehaviorIT {
         // Given - invalid request with missing fields
         AccountingEventSubmitRequest request = AccountingEventSubmitRequest.builder()
                 .organizationId(testOrganizationId)
-                // Missing eventType and eventData
+                // Missing eventType and payload
                 .build();
 
         // When/Then - expect 400 Bad Request
