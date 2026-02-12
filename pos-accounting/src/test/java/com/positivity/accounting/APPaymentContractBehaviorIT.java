@@ -18,14 +18,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
@@ -54,16 +48,8 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/128">Issue
  *      #128</a>
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("AP Payment Backend Contract Behavioral Tests (CAP-053)")
-public class APPaymentContractBehaviorIT {
-
-        @Autowired
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
+public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
 
         @Autowired
         private APPaymentRepository apPaymentRepository;
@@ -77,28 +63,10 @@ public class APPaymentContractBehaviorIT {
         private static final String API_V1_AP_PAYMENTS = "/v1/accounting/ap/payments";
         private static final String API_V1_AP_BILLS = "/v1/accounting/ap/bills";
 
-        // Gateway header values — mirrors what pos-api-gateway injects after JWT
-        // validation
-        private static final String TEST_USER = "testuser";
-        private static final String TEST_AUTHORITIES = String.join(",",
-                        "accounting:ap-payment:execute",
-                        "accounting:ap-payment:read",
-                        "accounting:vendor-bill:read");
-
         // Test data
         private UUID testVendorId;
         private VendorBill bill1; // Due oldest
         private VendorBill bill2; // Due newer
-
-        /**
-         * Adds gateway authentication headers to a request builder.
-         * Mirrors the headers injected by pos-api-gateway after JWT validation.
-         */
-        private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-                return builder
-                                .header("X-User", TEST_USER)
-                                .header("X-Authorities", TEST_AUTHORITIES);
-        }
 
         @BeforeEach
         void setUp() {

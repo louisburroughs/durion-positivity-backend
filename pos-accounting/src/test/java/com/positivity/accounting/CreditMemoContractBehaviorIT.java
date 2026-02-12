@@ -22,14 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
@@ -56,16 +50,8 @@ import com.positivity.accounting.service.GLPostingService;
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/131">Issue
  *      #131</a>
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("Credit Memo Backend Contract Behavioral Tests (CAP-052)")
-public class CreditMemoContractBehaviorIT {
-
-        @Autowired
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
+public class CreditMemoContractBehaviorIT extends BaseIntegrationTest {
 
         @Autowired
         private CreditMemoRepository creditMemoRepository;
@@ -77,23 +63,6 @@ public class CreditMemoContractBehaviorIT {
         private GLPostingService glPostingService;
 
         private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
-
-        // Gateway header values — mirrors what pos-api-gateway injects after JWT
-        // validation
-        private static final String TEST_USER = "testuser";
-        private static final String TEST_AUTHORITIES = String.join(",",
-                        "accounting:credit-memo:create",
-                        "accounting:credit-memo:read");
-
-        /**
-         * Adds gateway authentication headers to a request builder.
-         * Mirrors the headers injected by pos-api-gateway after JWT validation.
-         */
-        private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
-                return builder
-                                .header("X-User", TEST_USER)
-                                .header("X-Authorities", TEST_AUTHORITIES);
-        }
 
         @BeforeEach
         void setUp() {

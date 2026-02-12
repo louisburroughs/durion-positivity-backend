@@ -39,13 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author Louis Burroughs
  * @since 2025-01-01
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Transactional
-class FinancialReportingContractBehaviorIT {
-
-        @Autowired
-        private MockMvc mockMvc;
+class FinancialReportingContractBehaviorIT extends BaseIntegrationTest {
 
         @Autowired
         private StatementLineMappingRepository statementLineMappingRepository;
