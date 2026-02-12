@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -48,6 +49,7 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
  * - Error handling (404, 409)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Event Ingestion Backend Contract Behavioral Tests")
 public class EventIngestionContractBehaviorIT {
@@ -104,14 +106,14 @@ public class EventIngestionContractBehaviorIT {
     @DisplayName("Submit accounting event - happy path")
     void testSubmitEvent_Success() throws Exception {
         // Given - valid event submission request
-        Map<String, Object> eventData = new HashMap<>();
-        eventData.put("amount", 100.00);
-        eventData.put("description", "Test sale");
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("amount", 100.00);
+        payload.put("description", "Test sale");
 
         AccountingEventSubmitRequest request = AccountingEventSubmitRequest.builder()
                 .organizationId(testOrganizationId)
                 .eventType("SALE")
-                .eventData(eventData)
+                .payload(payload)
                 .build();
 
         // When/Then
@@ -213,8 +215,8 @@ public class EventIngestionContractBehaviorIT {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID());
-        request.setReason("Manual reprocessing after rule update");
+        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setReprocessingNotes("Manual reprocessing after rule update");
 
         // When/Then - reprocess the event
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
@@ -236,8 +238,8 @@ public class EventIngestionContractBehaviorIT {
 
         // When - reprocess the event to create history
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID());
-        request.setReason("First reprocessing attempt");
+        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setReprocessingNotes("First reprocessing attempt");
 
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -298,8 +300,8 @@ public class EventIngestionContractBehaviorIT {
         UUID nonExistentId = UUID.randomUUID();
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID());
-        request.setReason("Test");
+        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setReprocessingNotes("Test");
 
         // When/Then - expect 404 Not Found
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", nonExistentId))
@@ -319,8 +321,8 @@ public class EventIngestionContractBehaviorIT {
         accountingEventRepository.save(event);
 
         ReprocessEventRequest request = new ReprocessEventRequest();
-        request.setTriggeredByUserId(UUID.randomUUID());
-        request.setReason("Attempt to reprocess");
+        request.setTriggeredByUserId(UUID.randomUUID().toString());
+        request.setReprocessingNotes("Attempt to reprocess");
 
         // When/Then - expect 409 Conflict
         mockMvc.perform(withAuth(post(API_V1_EVENTS + "/{eventId}/reprocess", eventId))
@@ -379,14 +381,14 @@ public class EventIngestionContractBehaviorIT {
      * Helper method to submit a test event.
      */
     private UUID submitTestEvent(String description) throws Exception {
-        Map<String, Object> eventData = new HashMap<>();
-        eventData.put("amount", 100.00);
-        eventData.put("description", description);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("amount", 100.00);
+        payload.put("description", description);
 
         AccountingEventSubmitRequest request = AccountingEventSubmitRequest.builder()
                 .organizationId(testOrganizationId)
                 .eventType("SALE")
-                .eventData(eventData)
+                .payload(payload)
                 .build();
 
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_EVENTS))
