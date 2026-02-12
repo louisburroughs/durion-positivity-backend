@@ -26,7 +26,7 @@ public interface BillingRulesService {
      * Creates if not exists, updates if exists.
      *
      * @param billingRules the billing rules to save
-     * @param updatedBy the user/service performing the update
+     * @param updatedBy    the user/service performing the update
      * @return the saved billing rules
      */
     @NonNull
@@ -41,4 +41,12 @@ public interface BillingRulesService {
      */
     @NonNull
     BillingRulesDTO createDefaultBillingRules(@NonNull String partyId);
+
+    /**
+     * Get the current authenticated user ID from the security context.
+     *
+     * @return the current user ID or a default value if not authenticated
+     */
+    @NonNull
+    String getCurrentUserId();
 }

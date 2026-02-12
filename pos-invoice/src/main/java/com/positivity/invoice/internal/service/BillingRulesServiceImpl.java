@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.positivity.security.common.SecurityContextHelper;
 
 import java.util.Optional;
 
@@ -100,6 +101,12 @@ public class BillingRulesServiceImpl implements BillingRulesService {
 
         BillingRules saved = repository.save(billingRules);
         return toDTO(saved);
+    }
+
+    @Override
+    @NonNull
+    public String getCurrentUserId() {
+        return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
     }
 
     private BillingRulesDTO toDTO(@NonNull BillingRules entity) {

@@ -1,11 +1,26 @@
 package com.positivity.customer.internal.controller;
 
+import java.util.regex.Pattern;
+
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.CommunicationPreferenceService;
 import com.positivity.events.EmitEvent;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,12 +28,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
 
 /**
  * CRM Communication Preferences Controller
@@ -36,6 +45,10 @@ import org.springframework.web.bind.annotation.*;
 public class CrmCommunicationPreferencesController {
 
     private static final Logger log = LoggerFactory.getLogger(CrmCommunicationPreferencesController.class);
+
+    // Pattern for valid UUID format to prevent injection attacks
+    private static final Pattern VALID_PARTY_ID_PATTERN = Pattern.compile(
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final CommunicationPreferenceService preferenceService;
 
@@ -60,6 +73,12 @@ public class CrmCommunicationPreferencesController {
     @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_GET", apiVersion = "1")
     public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId) {
+
+        // Sanitize partyId - must be valid UUID format
+        if (!VALID_PARTY_ID_PATTERN.matcher(partyId).matches()) {
+            log.warn("Invalid partyId format: {}", partyId);
+            return ResponseEntity.badRequest().build();
+        }
 
         try {
             GetCommunicationPreferencesResponse response = preferenceService.getCommunicationPreferences(partyId);
@@ -89,6 +108,12 @@ public class CrmCommunicationPreferencesController {
     public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId,
             @Parameter(description = "Communication preferences to set", required = true) @RequestBody @NonNull UpsertCommunicationPreferencesRequest request) {
+
+        // Sanitize partyId - must be valid UUID format
+        if (!VALID_PARTY_ID_PATTERN.matcher(partyId).matches()) {
+            log.warn("Invalid partyId format: {}", partyId);
+            return ResponseEntity.badRequest().build();
+        }
 
         try {
             UpsertCommunicationPreferencesResponse response = preferenceService.upsertCommunicationPreferences(partyId,

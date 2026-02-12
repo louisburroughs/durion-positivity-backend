@@ -29,6 +29,8 @@ import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 @Service
 public class PostingCategoryService {
 
+    private static final String POSTING_CATEGORY_NOT_FOUND = "Posting category not found: ";
+
     private static final Logger log = LoggerFactory.getLogger(PostingCategoryService.class);
 
     private final PostingCategoryRepository postingCategoryRepository;
@@ -86,7 +88,7 @@ public class PostingCategoryService {
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Posting category not found: " + postingCategoryId));
+                        POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
 
         return toResponse(category);
     }
@@ -108,7 +110,7 @@ public class PostingCategoryService {
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Posting category not found: " + postingCategoryId));
+                        POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
 
         // Validate uniqueness if name is changing
         String trimmedName = request.getCategoryName().trim();
@@ -183,7 +185,7 @@ public class PostingCategoryService {
 
         PostingCategory category = postingCategoryRepository.findById(postingCategoryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Posting category not found: " + postingCategoryId));
+                        POSTING_CATEGORY_NOT_FOUND + postingCategoryId));
 
         // Check for active mappings
         long activeMappingCount = glMappingRepository.countByPostingCategoryIdAndDeactivatedAtIsNull(postingCategoryId);

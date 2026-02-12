@@ -46,6 +46,12 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- pos-security-common for SecurityContextHelper -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-security-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- pos-shared-dtos for UUID v7 generator -->
         <dependency>
             <groupId>com.positivity</groupId>
