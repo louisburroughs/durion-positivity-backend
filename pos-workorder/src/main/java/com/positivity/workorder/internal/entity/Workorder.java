@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,11 +18,22 @@ public class Workorder {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
     @PrePersist
     public void generateId() {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
     private UUID shopId; // Reference to Shop

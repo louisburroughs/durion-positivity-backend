@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.entity;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -15,11 +16,18 @@ public class ApprovalConfiguration {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
     @PrePersist
-    public void generateId() {
+    protected void prePersist() {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
+        }
+        calculatePriority();
     }
 
     // Location ID - if null, applies to all locations
@@ -54,9 +62,13 @@ public class ApprovalConfiguration {
         VERBAL_CONFIRMATION // Verbal confirmation recorded
     }
 
-    @PrePersist
     @PreUpdate
-    protected void calculatePriority() {
+    protected void preUpdate() {
+        updatedAt = LocalDateTime.now();
+        calculatePriority();
+    }
+
+    private void calculatePriority() {
         if (customerId != null) {
             priority = 2;
         } else if (locationId != null) {

@@ -25,13 +25,6 @@ public class ApprovalRecord {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
-
     @Column(nullable = false)
     private UUID changeRequestId;
 
@@ -44,6 +37,9 @@ public class ApprovalRecord {
 
     @Column(nullable = false)
     private LocalDateTime resolvedAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
 
     @Column(nullable = false)
     private UUID resolvedBy;
@@ -61,9 +57,20 @@ public class ApprovalRecord {
     }
 
     @PrePersist
-    protected void onCreate() {
+    protected void prePersist() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
         if (resolvedAt == null) {
             resolvedAt = LocalDateTime.now();
         }
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
+        }
+    }
+
+    @PreUpdate
+    protected void preUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }
