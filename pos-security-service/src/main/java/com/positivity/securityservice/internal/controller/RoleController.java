@@ -147,6 +147,7 @@ public class RoleController {
     /**
      * Revoke a role assignment
      */
+    @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_REVOKE", apiVersion = "1")
     @DeleteMapping("/assignments/{assignmentId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date")

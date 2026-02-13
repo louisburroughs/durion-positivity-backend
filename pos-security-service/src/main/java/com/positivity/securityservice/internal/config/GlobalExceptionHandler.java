@@ -24,7 +24,7 @@ import org.springframework.web.context.request.WebRequest;
  * **Error Response Format (from BACKEND_CONTRACT_GUIDE.md):**
  * ```json
  * {
- * "error": "error_code",
+ * "code": "error_code",
  * "message": "Human-readable description",
  * "timestamp": "2024-01-15T10:30:00Z",
  * "correlationId": "550e8400-e29b-41d4-a716-446655440000"
@@ -137,13 +137,13 @@ public class GlobalExceptionHandler {
     /**
      * Builds standardized error response object.
      * 
-     * @param errorCode     error code for client processing
+     * @param code          error code for client processing
      * @param message       human-readable error message
      * @param correlationId request correlation ID for tracking
      * @return error response record
      */
-    private ErrorResponse errorResponse(String errorCode, String message, String correlationId) {
-        return new ErrorResponse(errorCode, message, Instant.now().toString(), correlationId);
+    private ErrorResponse errorResponse(String code, String message, String correlationId) {
+        return new ErrorResponse(code, message, Instant.now().toString(), correlationId);
     }
 
     /**

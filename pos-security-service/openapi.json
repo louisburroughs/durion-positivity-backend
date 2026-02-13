@@ -1922,7 +1922,7 @@
                 "type": "object",
                 "description": "Standardized error response with correlation ID",
                 "properties": {
-                    "error": {
+                    "code": {
                         "type": "string",
                         "description": "Error code for client processing"
                     },

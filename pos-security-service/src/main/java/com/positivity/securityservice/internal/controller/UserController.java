@@ -54,11 +54,13 @@ public class UserController {
         String password = payload.get("password");
         Optional<User> userOpt = userService.getUserByUsername(username);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
+            return ResponseEntity.status(401)
+                    .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Invalid credentials"));
         }
         User user = userOpt.get();
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
+            return ResponseEntity.status(401)
+                    .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Invalid credentials"));
         }
         Set<String> roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
         String token = jwtService.generateToken(username, roles);
@@ -105,6 +107,7 @@ public class UserController {
     @Operation(summary = "Delete a user", description = "Delete a user by their unique ID.")
     @ApiResponse(responseCode = "204", description = "User deleted successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")
+    @EmitEvent(id = "SECURITY_USER_DELETE", apiVersion = "1")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(
             @Parameter(description = "ID of the user to delete", example = "1") @PathVariable Long id) {
