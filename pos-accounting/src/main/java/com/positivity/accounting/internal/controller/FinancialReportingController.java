@@ -124,15 +124,17 @@ public class FinancialReportingController {
                 // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
                 // This maintains the accounting domain's standard error contract across all
                 // endpoints.
-                
+
                 // Validate statementLineCode to prevent log injection (S5145):
-                // Must match expected format (uppercase letters and underscores only, max 100 chars)
-                // to prevent CRLF injection that could create fake log entries or manipulate audit trails
+                // Must match expected format (uppercase letters and underscores only, max 100
+                // chars)
+                // to prevent CRLF injection that could create fake log entries or manipulate
+                // audit trails
                 if (!statementLineCode.matches("^[A-Z_]{1,100}$")) {
                         throw new IllegalArgumentException(
                                         "Invalid statement line code format: must contain only uppercase letters and underscores (max 100 characters)");
                 }
-                
+
                 if (endDate.isBefore(startDate)) {
                         throw new IllegalArgumentException("End date cannot be before start date");
                 }
@@ -166,6 +168,15 @@ public class FinancialReportingController {
                 // with a consistent ErrorResponse format (errorCode: "VALIDATION_ERROR").
                 // This maintains the accounting domain's standard error contract across all
                 // endpoints.
+
+                // Validate accountId is a well-formed UUID to prevent log injection (S5145)
+                // and reject malformed input early with a clear error message
+                if (!accountId.matches(
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+                        throw new IllegalArgumentException(
+                                        "Invalid account ID format: must be a valid UUID (e.g., 123e4567-e89b-12d3-a456-426614174000)");
+                }
+
                 if (endDate.isBefore(startDate)) {
                         throw new IllegalArgumentException("End date cannot be before start date");
                 }

@@ -293,13 +293,14 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         try {
             glAccountId = UUID.fromString(accountId);
         } catch (IllegalArgumentException e) {
-            String message = "Invalid UUID format for accountId: " + accountId;
-            log.warn(message);
-            throw new IllegalArgumentException(message, e);
+            String maskedId = accountId.length() > 8 ? accountId.substring(0, 8) + "..." : accountId;
+            log.warn("Invalid UUID format for accountId: {}", maskedId);
+            throw new IllegalArgumentException("Invalid UUID format for accountId", e);
         }
 
+        String maskedAccountId = accountId.substring(0, 8) + "...";
         log.info("Drilling down account {} to journal lines for period {} to {}",
-                accountId, startDate, endDate);
+                maskedAccountId, startDate, endDate);
 
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
