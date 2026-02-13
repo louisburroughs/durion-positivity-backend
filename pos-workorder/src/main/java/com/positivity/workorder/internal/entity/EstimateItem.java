@@ -1,0 +1,117 @@
+package com.positivity.workorder.internal.entity;
+
+import com.positivity.shared.id.UUIDv7Generator;
+import jakarta.persistence.*;
+import lombok.*;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * Represents a line item (part or labor) on an estimate.
+ * Each item captures quantity, pricing, and optional references to products or
+ * services.
+ */
+@Entity
+@Table(name = "estimate_item")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class EstimateItem {
+
+    @Id
+    @Column(columnDefinition = "UUID")
+    private UUID id;
+
+    @Column(nullable = false, columnDefinition = "UUID")
+    private UUID estimateId; // Foreign key to Estimate
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private EstimateItemType itemType; // PART or LABOR
+
+    @Column(nullable = false, length = 500)
+    private String description;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal quantity;
+
+    // For PART items: unit price; For LABOR items: labor rate (hourly)
+    @Column(nullable = false, precision = 19, scale = 2)
+    private BigDecimal unitPrice;
+
+    // Line total = quantity * unitPrice (calculated field)
+    @Column(precision = 19, scale = 2)
+    private BigDecimal lineTotal;
+
+    @Column(length = 50)
+    @Nullable
+    private String taxCode; // Optional tax code for line item
+
+    // Optional references to catalog items
+    @Column(columnDefinition = "UUID")
+    @Nullable
+    private UUID productId; // Reference to Product entity (for PART items)
+
+    @Column(columnDefinition = "UUID")
+    @Nullable
+    private UUID serviceId; // Reference to Service entity (for LABOR items)
+
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Column(nullable = false, columnDefinition = "UUID")
+    private UUID createdById; // User who created this item
+
+    // Soft delete flag
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean deleted = false;
+
+    @PrePersist
+    protected void prePersist() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        calculateLineTotal();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+        calculateLineTotal();
+    }
+
+    /**
+     * Calculate the line total based on quantity and unit price.
+     */
+    public void calculateLineTotal() {
+        if (quantity != null && unitPrice != null) {
+            lineTotal = quantity.multiply(unitPrice);
+        }
+    }
+
+    /**
+     * Validate item based on type.
+     */
+    public void validate() {
+        if (itemType == EstimateItemType.PART) {
+            if (productId == null && (description == null || description.isBlank())) {
+                throw new IllegalArgumentException("PART items must have either productId or description");
+            }
+        } else if (itemType == EstimateItemType.LABOR) {
+            if (serviceId == null && (description == null || description.isBlank())) {
+                throw new IllegalArgumentException("LABOR items must have either serviceId or description");
+            }
+        }
+    }
+}

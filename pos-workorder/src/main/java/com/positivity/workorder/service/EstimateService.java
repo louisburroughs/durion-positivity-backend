@@ -1,25 +1,29 @@
 package com.positivity.workorder.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.internal.entity.ApprovalConfiguration;
-import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateStatus;
-import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
+import com.positivity.workorder.internal.entity.*;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.repository.*;
 import com.positivity.workorder.internal.service.BillingRulesClientService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Year;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,10 +32,13 @@ import java.util.UUID;
 @Slf4j
 public class EstimateService {
     private final EstimateRepository estimateRepository;
+    private final EstimateItemRepository estimateItemRepository;
+    private final EstimateSnapshotRepository estimateSnapshotRepository;
     private final ApprovalConfigurationRepository approvalConfigurationRepository;
     private final WorkorderRepository workOrderRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final BillingRulesClientService billingRulesClientService;
+    private final ObjectMapper objectMapper;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -406,5 +413,285 @@ public class EstimateService {
                     "oldTotal={}, newTotal={}",
                     estimate.getId(), workOrder.getId(), oldTotal, newTotal);
         }
+    }
+
+    // ==================== ESTIMATE ITEM MANAGEMENT (CAP:002 Stories #14, #15, #17)
+    // ====================
+
+    /**
+     * Add a line item (part or labor) to a draft estimate.
+     * Story #14 (Add Parts) and #15 (Add Labor)
+     *
+     * @param estimateId estimate to add item to
+     * @param request    item details
+     * @param userId     user adding the item
+     * @return the created estimate item
+     */
+    @Transactional
+    @NonNull
+    public EstimateItem addEstimateItem(@NonNull UUID estimateId, @NonNull AddEstimateItemRequest request,
+            @NonNull UUID userId) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+
+        // Validate estimate is in DRAFT status
+        if (estimate.getStatus() != EstimateStatus.DRAFT) {
+            throw new IllegalStateException("Cannot add items to estimate in status: " + estimate.getStatus()
+                    + ". Estimate must be in DRAFT status.");
+        }
+
+        // Build and validate item
+        EstimateItem item = EstimateItem.builder()
+                .estimateId(estimateId)
+                .itemType(request.getItemType())
+                .description(request.getDescription())
+                .quantity(request.getQuantity())
+                .unitPrice(request.getUnitPrice())
+                .taxCode(request.getTaxCode())
+                .productId(request.getProductId())
+                .serviceId(request.getServiceId())
+                .createdById(userId)
+                .build();
+
+        item.validate();
+        EstimateItem saved = estimateItemRepository.save(item);
+
+        log.info("Added {} item to estimate {}: itemId={}, description='{}'",
+                saved.getItemType(), estimateId, saved.getId(), saved.getDescription());
+
+        return saved;
+    }
+
+    /**
+     * Update an existing line item on a draft estimate.
+     * Story #17 (Revise Estimate)
+     *
+     * @param estimateId estimate ID
+     * @param itemId     item to update
+     * @param request    updated fields
+     * @return the updated item
+     */
+    @Transactional
+    @NonNull
+    public EstimateItem updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
+            @NonNull UpdateEstimateItemRequest request) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+
+        // Validate estimate is in DRAFT status
+        if (estimate.getStatus() != EstimateStatus.DRAFT) {
+            throw new IllegalStateException("Cannot update items in estimate with status: " + estimate.getStatus()
+                    + ". Estimate must be in DRAFT status.");
+        }
+
+        EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Item not found: " + itemId + " for estimate: " + estimateId));
+
+        // Update only provided fields
+        if (request.getDescription() != null) {
+            item.setDescription(request.getDescription());
+        }
+        if (request.getQuantity() != null) {
+            item.setQuantity(request.getQuantity());
+        }
+        if (request.getUnitPrice() != null) {
+            item.setUnitPrice(request.getUnitPrice());
+        }
+        if (request.getTaxCode() != null) {
+            item.setTaxCode(request.getTaxCode());
+        }
+
+        EstimateItem saved = estimateItemRepository.save(item);
+
+        log.info("Updated item {} on estimate {}", itemId, estimateId);
+
+        return saved;
+    }
+
+    /**
+     * Remove a line item from a draft estimate (soft delete).
+     * Story #17 (Revise Estimate)
+     *
+     * @param estimateId estimate ID
+     * @param itemId     item to remove
+     */
+    @Transactional
+    public void deleteEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+
+        // Validate estimate is in DRAFT status
+        if (estimate.getStatus() != EstimateStatus.DRAFT) {
+            throw new IllegalStateException("Cannot delete items from estimate with status: " + estimate.getStatus()
+                    + ". Estimate must be in DRAFT status.");
+        }
+
+        EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Item not found: " + itemId + " for estimate: " + estimateId));
+
+        // Soft delete
+        item.setDeleted(true);
+        estimateItemRepository.save(item);
+
+        log.info("Deleted (soft) item {} from estimate {}", itemId, estimateId);
+    }
+
+    /**
+     * Get all line items for an estimate (excluding soft-deleted).
+     */
+    @NonNull
+    public List<EstimateItem> getEstimateItems(@NonNull UUID estimateId) {
+        return estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+    }
+
+    // ==================== TAX CALCULATION (CAP:002 Story #16) ====================
+
+    /**
+     * Calculate taxes and totals for an estimate based on its line items.
+     * Story #16 (Calculate Taxes and Totals)
+     * 
+     * STUB IMPLEMENTATION: Uses flat 8.25% tax rate.
+     * TODO: Integrate with pos-accounting tax service for proper tax calculation.
+     *
+     * @param estimateId estimate to calculate
+     * @param userId     user requesting calculation
+     * @return the updated estimate with calculated totals
+     */
+    @Transactional
+    @NonNull
+    public Estimate calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull UUID userId) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+
+        // Validate estimate is in DRAFT status
+        if (estimate.getStatus() != EstimateStatus.DRAFT) {
+            throw new IllegalStateException("Cannot calculate totals for estimate in status: " + estimate.getStatus()
+                    + ". Estimate must be in DRAFT status.");
+        }
+
+        // Get all line items
+        List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+        // Calculate subtotal (sum of all line totals)
+        BigDecimal subtotal = items.stream()
+                .map(EstimateItem::getLineTotal)
+                .filter(lineTotal -> lineTotal != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // STUB: Tax calculation with flat 8.25% rate
+        // TODO: Integrate with pos-accounting tax service for proper jurisdiction-based
+        // tax calculation
+        BigDecimal taxRate = new BigDecimal("0.0825"); // 8.25%
+        BigDecimal taxAmount = subtotal.multiply(taxRate).setScale(2, RoundingMode.HALF_UP);
+
+        // Calculate total
+        BigDecimal total = subtotal.add(taxAmount);
+
+        // Update estimate
+        estimate.setSubtotal(subtotal);
+        estimate.setTaxAmount(taxAmount);
+        estimate.setTotal(total);
+
+        Estimate saved = estimateRepository.save(estimate);
+
+        log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={}",
+                estimateId, subtotal, taxAmount, total);
+        log.warn("Tax calculation for estimate {} uses stub implementation (8.25% flat rate). "
+                + "Integration with pos-accounting tax service required (issue #171)", estimateId);
+
+        return saved;
+    }
+
+    // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
+    // ====================
+
+    /**
+     * Get customer-facing summary of an estimate with grouped line items.
+     * Story #18 (Present Estimate Summary)
+     *
+     * @param estimateId estimate ID
+     * @return estimate with all line items grouped by type
+     */
+    @NonNull
+    public Map<String, Object> getEstimateSummary(@NonNull UUID estimateId) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+
+        List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+        // Group items by type
+        List<EstimateItem> partItems = items.stream()
+                .filter(item -> item.getItemType() == EstimateItemType.PART)
+                .toList();
+
+        List<EstimateItem> laborItems = items.stream()
+                .filter(item -> item.getItemType() == EstimateItemType.LABOR)
+                .toList();
+
+        // Build summary response
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("estimate", estimate);
+        summary.put("partItems", partItems);
+        summary.put("laborItems", laborItems);
+        summary.put("itemCount", items.size());
+
+        log.info("Retrieved summary for estimate {}: {} items ({} parts, {} labor)",
+                estimateId, items.size(), partItems.size(), laborItems.size());
+
+        // NOTE: PDF generation not implemented - requires document service integration
+        // (issue #169)
+
+        return summary;
+    }
+
+    /**
+     * Create an immutable snapshot of an estimate's complete state.
+     * Story #18 (Present Estimate Summary) - Historical Snapshot
+     *
+     * @param estimateId estimate to snapshot
+     * @param userId     user creating snapshot
+     * @param notes      optional notes about why snapshot was created
+     * @return the created snapshot
+     */
+    @Transactional
+    @NonNull
+    public EstimateSnapshot createEstimateSnapshot(@NonNull UUID estimateId, @NonNull UUID userId,
+            @Nullable String notes) {
+        Estimate estimate = estimateRepository.findById(estimateId)
+                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+
+        List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+        // Serialize estimate + items to JSON
+        Map<String, Object> snapshotData = new HashMap<>();
+        snapshotData.put("estimate", estimate);
+        snapshotData.put("items", items);
+        snapshotData.put("capturedAt", LocalDateTime.now());
+
+        String snapshotJson;
+        try {
+            snapshotJson = objectMapper.writeValueAsString(snapshotData);
+        } catch (Exception e) {
+            log.error("Failed to serialize estimate snapshot for estimateId={}", estimateId, e);
+            throw new IllegalStateException("Failed to create snapshot: JSON serialization error", e);
+        }
+
+        // Create snapshot entity
+        EstimateSnapshot snapshot = EstimateSnapshot.builder()
+                .estimateId(estimateId)
+                .status(estimate.getStatus())
+                .snapshotData(snapshotJson)
+                .capturedById(userId)
+                .notes(notes)
+                .build();
+
+        EstimateSnapshot saved = estimateSnapshotRepository.save(snapshot);
+
+        log.info("Created snapshot for estimate {}: snapshotId={}, status={}, itemCount={}",
+                estimateId, saved.getId(), estimate.getStatus(), items.size());
+
+        return saved;
     }
 }
