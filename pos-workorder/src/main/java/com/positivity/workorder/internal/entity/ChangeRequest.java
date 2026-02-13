@@ -16,13 +16,6 @@ public class ChangeRequest {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
-
     @Column(nullable = false)
     private UUID workorderId;
 
@@ -31,6 +24,9 @@ public class ChangeRequest {
 
     @Column(nullable = false)
     private LocalDateTime requestedAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -90,12 +86,23 @@ public class ChangeRequest {
     }
 
     @PrePersist
-    protected void onCreate() {
+    protected void prePersist() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
         if (requestedAt == null) {
             requestedAt = LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
         }
         if (status == null) {
             status = ChangeRequestStatus.AWAITING_ADVISOR_REVIEW;
         }
+    }
+
+    @PreUpdate
+    protected void preUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }

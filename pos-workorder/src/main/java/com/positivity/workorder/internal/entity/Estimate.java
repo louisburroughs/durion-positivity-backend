@@ -18,13 +18,6 @@ public class Estimate {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
-
     @Column(unique = false) // Uniqueness enforced at DB level with composite constraint
     private String estimateNumber; // Human-readable identifier (e.g., EST-2024-1001)
 
@@ -79,12 +72,20 @@ public class Estimate {
     private Integer version = 1;
 
     // Legacy field for backward compatibility
-    @Deprecated
+    /**
+     * @deprecated Use {@link #locationId}. This legacy field will be removed after
+     *             all callers migrate off shopId.
+     */
+    @SuppressWarnings("java:S1133")
+    @Deprecated(since = "0.1.0", forRemoval = true)
     @Transient
     private Long shopId;
 
     @PrePersist
-    protected void onCreate() {
+    protected void prePersist() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }

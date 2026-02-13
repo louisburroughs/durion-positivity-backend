@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -16,13 +17,6 @@ public class AuditEvent {
     @Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 
     @Column(nullable = false)
     private String entityType;
@@ -37,15 +31,29 @@ public class AuditEvent {
     private Instant eventTimestamp;
 
     @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Column(nullable = false)
     private UUID userId;
 
     @Column(columnDefinition = "TEXT")
     private String details;
 
     @PrePersist
-    protected void onCreate() {
+    protected void prePersist() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
         if (eventTimestamp == null) {
             eventTimestamp = Instant.now();
         }
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
+        }
+    }
+
+    @PreUpdate
+    protected void preUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }
