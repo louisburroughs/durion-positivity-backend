@@ -1,19 +1,20 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.workorder.internal.dto.ApproveEstimateRequest;
-import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.internal.dto.CreateEstimateResponse;
-import com.positivity.workorder.internal.dto.EstimateResponse;
+import com.positivity.workorder.internal.dto.*;
 import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateSnapshot;
 import com.positivity.workorder.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -207,5 +208,175 @@ public class EstimateController {
             @Parameter(description = "ID of the estimate to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         estimateService.deleteEstimate(estimateId);
         return ResponseEntity.noContent().build();
+    }
+
+    // ==================== ESTIMATE ITEM MANAGEMENT (CAP:002 Stories #14, #15, #17)
+    // ====================
+
+    @Operation(summary = "Add line item to estimate", description = "Add a part or labor line item to a draft estimate. Estimate must be in DRAFT status. "
+            +
+            "For PART items, provide productId or description. For LABOR items, provide serviceId or description.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Line item added successfully"),
+            @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+            @ApiResponse(responseCode = "404", description = "Estimate not found"),
+            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+    })
+    @PostMapping("/{estimateId}/items")
+    @EmitEvent(id = "ESTIMATE_ITEM_ADD", apiVersion = "1")
+    public ResponseEntity<EstimateItemResponse> addEstimateItem(
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
+            @Parameter(description = "Line item details", required = true) @Valid @RequestBody AddEstimateItemRequest request,
+            @Parameter(description = "ID of the user adding the item", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
+        try {
+            EstimateItem item = estimateService.addEstimateItem(estimateId, request, userId);
+            return ResponseEntity.ok(EstimateItemResponse.fromEntity(item));
+        } catch (IllegalArgumentException e) {
+            log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            log.warn("State error adding item to estimate {}: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
+    }
+
+    @Operation(summary = "Update line item", description = "Update an existing line item on a draft estimate. Estimate must be in DRAFT status. "
+            +
+            "Only provided fields will be updated.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Line item updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
+            @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
+            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+    })
+    @PatchMapping("/{estimateId}/items/{itemId}")
+    @EmitEvent(id = "ESTIMATE_ITEM_UPDATE", apiVersion = "1")
+    public ResponseEntity<EstimateItemResponse> updateEstimateItem(
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
+            @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID itemId,
+            @Parameter(description = "Updated item fields", required = true) @Valid @RequestBody UpdateEstimateItemRequest request) {
+        try {
+            EstimateItem item = estimateService.updateEstimateItem(estimateId, itemId, request);
+            return ResponseEntity.ok(EstimateItemResponse.fromEntity(item));
+        } catch (IllegalArgumentException e) {
+            log.warn("Validation error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IllegalStateException e) {
+            log.warn("State error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
+    }
+
+    @Operation(summary = "Remove line item", description = "Remove a line item from a draft estimate (soft delete). Estimate must be in DRAFT status.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Line item removed successfully"),
+            @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
+            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+    })
+    @DeleteMapping("/{estimateId}/items/{itemId}")
+    @EmitEvent(id = "ESTIMATE_ITEM_DELETE", apiVersion = "1")
+    public ResponseEntity<Void> deleteEstimateItem(
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
+            @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID itemId) {
+        try {
+            estimateService.deleteEstimateItem(estimateId, itemId);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Item {} not found for estimate {}: {}", itemId, estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IllegalStateException e) {
+            log.warn("State error deleting item {} from estimate {}: {}", itemId, estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
+    }
+
+    // ==================== TAX CALCULATION (CAP:002 Story #16) ====================
+
+    @Operation(summary = "Calculate taxes and totals", description = "Calculate subtotal, tax amount, and total for an estimate based on its line items. "
+            +
+            "Estimate must be in DRAFT status. Uses stub tax calculation (8.25% flat rate) pending "
+            +
+            "pos-accounting integration.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Totals calculated successfully"),
+            @ApiResponse(responseCode = "404", description = "Estimate not found"),
+            @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
+    })
+    @PostMapping("/{estimateId}/calculate")
+    @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
+    public ResponseEntity<EstimateResponse> calculateEstimateTotals(
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
+            @Parameter(description = "ID of the user requesting calculation", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
+        try {
+            Estimate estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, userId);
+            return ResponseEntity.ok(EstimateResponse.fromEntity(estimate));
+        } catch (IllegalArgumentException e) {
+            log.warn("Estimate {} not found for calculation: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IllegalStateException e) {
+            log.warn("State error calculating estimate {}: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
+    }
+
+    // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
+    // ====================
+
+    @Operation(summary = "Get estimate summary (customer-facing)", description = "Retrieve a customer-facing summary of an estimate with grouped line items (parts and labor) "
+            +
+            "and financial breakdown. PDF generation not implemented (requires document service integration).")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Summary retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "Estimate not found")
+    })
+    @GetMapping("/{estimateId}/summary")
+    @EmitEvent(id = "ESTIMATE_SUMMARY_VIEW", apiVersion = "1")
+    public ResponseEntity<EstimateSummaryResponse> getEstimateSummary(
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+        try {
+            Map<String, Object> summaryMap = estimateService.getEstimateSummary(estimateId);
+            Estimate estimate = (Estimate) summaryMap.get("estimate");
+            @SuppressWarnings("unchecked")
+            List<EstimateItem> partItems = (List<EstimateItem>) summaryMap.get("partItems");
+            @SuppressWarnings("unchecked")
+            List<EstimateItem> laborItems = (List<EstimateItem>) summaryMap.get("laborItems");
+
+            // Combine all items for summary response
+            List<EstimateItem> allItems = new java.util.ArrayList<>();
+            allItems.addAll(partItems);
+            allItems.addAll(laborItems);
+
+            EstimateSummaryResponse response = EstimateSummaryResponse.fromEstimateAndItems(estimate, allItems);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Estimate {} not found for summary: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    @Operation(summary = "Create historical snapshot", description = "Capture an immutable snapshot of the estimate's complete state (estimate + all line items) "
+            +
+            "for audit trail and version history purposes.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Snapshot created successfully"),
+            @ApiResponse(responseCode = "404", description = "Estimate not found"),
+            @ApiResponse(responseCode = "409", description = "Snapshot creation failed")
+    })
+    @PostMapping("/{estimateId}/snapshots")
+    @EmitEvent(id = "ESTIMATE_SNAPSHOT_CREATE", apiVersion = "1")
+    public ResponseEntity<EstimateSnapshotResponse> createEstimateSnapshot(
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
+            @Parameter(description = "Optional notes about why snapshot was created") @RequestParam(required = false) @Nullable String notes,
+            @Parameter(description = "ID of the user creating snapshot", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
+        try {
+            EstimateSnapshot snapshot = estimateService.createEstimateSnapshot(estimateId, userId, notes);
+            return ResponseEntity.ok(EstimateSnapshotResponse.fromEntity(snapshot));
+        } catch (IllegalArgumentException e) {
+            log.warn("Estimate {} not found for snapshot: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IllegalStateException e) {
+            log.error("Failed to create snapshot for estimate {}: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
     }
 }
