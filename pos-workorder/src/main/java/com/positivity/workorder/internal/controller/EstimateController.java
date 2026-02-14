@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import jakarta.persistence.EntityNotFoundException;
+
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -274,7 +276,7 @@ public class EstimateController {
         try {
             EstimateItemResponse item = estimateService.updateEstimateItem(estimateId, itemId, request);
             return ResponseEntity.ok(item);
-        } catch (jakarta.persistence.EntityNotFoundException e) {
+        } catch (EntityNotFoundException e) {
             log.warn("Estimate or item not found: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalArgumentException e) {
