@@ -61,6 +61,41 @@ public class EstimateResponse {
     @Schema(description = "Total amount including tax", example = "162.38")
     private BigDecimal total;
 
+    // CAP:003 — Approval workflow fields
+
+    @Schema(description = "Date and time the estimate was submitted for approval")
+    private LocalDateTime submittedAt;
+
+    @Schema(description = "User ID who submitted the estimate for approval")
+    private UUID submittedBy;
+
+    @Schema(description = "Date and time the approval window expires")
+    private LocalDateTime expiresAt;
+
+    @Schema(description = "Date and time the estimate was approved")
+    private LocalDateTime approvedAt;
+
+    @Schema(description = "User ID who approved the estimate")
+    private UUID approvedBy;
+
+    @Schema(description = "Base64-encoded signature image")
+    private String signatureData;
+
+    @Schema(description = "MIME type of the signature image", example = "image/png")
+    private String signatureMimeType;
+
+    @Schema(description = "Name of person who signed")
+    private String signerName;
+
+    @Schema(description = "Additional notes provided at approval time")
+    private String approvalNotes;
+
+    @Schema(description = "Purchase order number for commercial accounts", example = "PO-2024-12345")
+    private String purchaseOrderNumber;
+
+    @Schema(description = "Optimistic locking version")
+    private Integer version;
+
     /**
      * Convert entity to response DTO
      */
@@ -83,6 +118,17 @@ public class EstimateResponse {
                 .subtotal(entity.getSubtotal())
                 .taxAmount(entity.getTaxAmount())
                 .total(entity.getTotal())
+                .submittedAt(entity.getSubmittedAt())
+                .submittedBy(entity.getSubmittedBy())
+                .expiresAt(entity.getExpiresAt())
+                .approvedAt(entity.getApprovedAt())
+                .approvedBy(entity.getApprovedBy())
+                .signatureData(entity.getSignatureData())
+                .signatureMimeType(entity.getSignatureMimeType())
+                .signerName(entity.getSignerName())
+                .approvalNotes(entity.getApprovalNotes())
+                .purchaseOrderNumber(entity.getPurchaseOrderNumber())
+                .version(entity.getVersion())
                 .build();
     }
 }
