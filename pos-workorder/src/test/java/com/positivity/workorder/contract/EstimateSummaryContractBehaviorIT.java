@@ -1,19 +1,23 @@
 package com.positivity.workorder.contract;
 
-import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
-import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
-import io.restassured.RestAssured;
-import io.restassured.http.ContentType;
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.startsWith;
+
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
-import java.util.UUID;
-
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
 
 /**
  * Contract behavioral tests for Estimate Summary endpoints.
@@ -43,23 +47,24 @@ class EstimateSummaryContractBehaviorIT {
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Retrieving summary
-        // Assumes test fixture seeds this estimate with at least one PART and one LABOR line item.
+        // Assumes test fixture seeds this estimate with at least one PART and one LABOR
+        // line item.
         given()
-            .contentType(ContentType.JSON)
-            .when()
-            .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
-            .then()
-            .statusCode(200)
-            .contentType(startsWith("application/json"))
-            .body("estimateId", equalTo(estimateId.toString()))
-            .body("partItems", notNullValue())
-            .body("laborItems", notNullValue())
-            .body("partItems.size()", greaterThanOrEqualTo(1))
-            .body("laborItems.size()", greaterThanOrEqualTo(1))
-            .body("subtotal", notNullValue())
-            .body("taxAmount", notNullValue())
-            .body("total", notNullValue())
-            .log().ifValidationFails();
+                .contentType(ContentType.JSON)
+                .when()
+                .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
+                .then()
+                .statusCode(200)
+                .contentType(startsWith("application/json"))
+                .body("estimateId", equalTo(estimateId.toString()))
+                .body("partItems", notNullValue())
+                .body("laborItems", notNullValue())
+                .body("partItems.size()", greaterThanOrEqualTo(1))
+                .body("laborItems.size()", greaterThanOrEqualTo(1))
+                .body("subtotal", notNullValue())
+                .body("taxAmount", notNullValue())
+                .body("total", notNullValue())
+                .log().ifValidationFails();
     }
 
     @Test

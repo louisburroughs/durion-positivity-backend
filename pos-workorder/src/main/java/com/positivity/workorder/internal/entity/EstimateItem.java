@@ -1,14 +1,25 @@
 package com.positivity.workorder.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
-import jakarta.persistence.*;
-import lombok.*;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import org.jspecify.annotations.Nullable;
+
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Represents a line item (part or labor) on an estimate.

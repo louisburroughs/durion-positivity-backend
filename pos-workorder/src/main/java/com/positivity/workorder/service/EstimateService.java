@@ -8,12 +8,14 @@ import java.time.Year;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +54,10 @@ public class EstimateService {
     private final ApplicationEventPublisher eventPublisher;
     private final BillingRulesClientService billingRulesClientService;
     private final ObjectMapper objectMapper;
+
+    // Self-reference for transactional proxy calls
+    @Lazy
+    private final EstimateService self;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -187,7 +193,7 @@ public class EstimateService {
     @Transactional
     public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
             String signatureMimeType, String signerName, String notes) {
-        return approveEstimate(estimateId, customerId, signatureData, signatureMimeType,
+        return self.approveEstimate(estimateId, customerId, signatureData, signatureMimeType,
                 signerName, notes, null);
     }
 
@@ -572,7 +578,7 @@ public class EstimateService {
         // Calculate subtotal (sum of all line totals)
         BigDecimal subtotal = items.stream()
                 .map(EstimateItem::getLineTotal)
-                .filter(lineTotal -> lineTotal != null)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // STUB: Tax calculation with flat 8.25% rate
@@ -586,7 +592,7 @@ public class EstimateService {
 
         // Update estimate using shared financial update path (handles versioning and
         // events)
-        Estimate saved = updateEstimateFinancials(estimateId, subtotal, taxAmount, total, userId);
+        Estimate saved = self.updateEstimateFinancials(estimateId, subtotal, taxAmount, total, userId);
 
         log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={}",
                 estimateId, subtotal, taxAmount, total);

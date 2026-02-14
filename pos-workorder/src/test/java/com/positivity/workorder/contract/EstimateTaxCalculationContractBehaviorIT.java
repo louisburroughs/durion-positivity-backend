@@ -1,18 +1,36 @@
 package com.positivity.workorder.contract;
 
-import com.positivity.workorder.internal.dto.EstimateResponse;
-import io.restassured.RestAssured;
-import io.restassured.http.ContentType;
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.UUID;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
-import java.util.UUID;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
+import io.restassured.path.json.JsonPath;
+import io.restassured.response.Response;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
 
 /**
  * Contract behavioral tests for Estimate Tax Calculation endpoint.
@@ -30,9 +48,23 @@ class EstimateTaxCalculationContractBehaviorIT {
     @LocalServerPort
     private int port;
 
+    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    @Autowired
+    private EstimateRepository estimateRepository;
+
+    @Autowired
+    private EstimateItemRepository estimateItemRepository;
+
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
+    }
+
+    @AfterEach
+    void tearDown() {
+        estimateItemRepository.deleteAll();
+        estimateRepository.deleteAll();
     }
 
     @Test
@@ -59,28 +91,44 @@ class EstimateTaxCalculationContractBehaviorIT {
     @Test
     @DisplayName("Contract: Calculation is idempotent - Multiple calls same result")
     void shouldProduceIdempotentCalculationResults() {
-        // Given: A draft estimate
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedDraftEstimateWithItems();
 
-        // When: Calculating twice
-        var firstResult = given()
-                .contentType(ContentType.JSON)
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-                .when()
-                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-                .then()
-                .statusCode(anyOf(is(200), is(404)));
+        Response firstResponse = calculateResponse(estimateId);
+        Response secondResponse = calculateResponse(estimateId);
 
-        var secondResult = given()
-                .contentType(ContentType.JSON)
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-                .when()
-                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-                .then()
-                .statusCode(anyOf(is(200), is(404)));
+        JsonPath firstBody = firstResponse.jsonPath();
+        JsonPath secondBody = secondResponse.jsonPath();
 
-        // Then: Results should be identical (if estimate exists)
-        // Note: Full verification requires test database setup
+        BigDecimal firstSubtotal = firstBody.getObject("subtotal", BigDecimal.class);
+        BigDecimal secondSubtotal = secondBody.getObject("subtotal", BigDecimal.class);
+        BigDecimal firstTax = firstBody.getObject("taxAmount", BigDecimal.class);
+        BigDecimal secondTax = secondBody.getObject("taxAmount", BigDecimal.class);
+        BigDecimal firstTotal = firstBody.getObject("total", BigDecimal.class);
+        BigDecimal secondTotal = secondBody.getObject("total", BigDecimal.class);
+        Integer firstVersion = firstBody.getInt("version");
+        Integer secondVersion = secondBody.getInt("version");
+
+        assertNotNull(firstSubtotal);
+        assertNotNull(firstTax);
+        assertNotNull(firstTotal);
+
+        // Expected financials for seeded data (2 parts @50 + 5 labor hours @20)
+        BigDecimal expectedSubtotal = new BigDecimal("200.00");
+        BigDecimal expectedTax = expectedSubtotal.multiply(new BigDecimal("0.0825")).setScale(2,
+                RoundingMode.HALF_UP);
+        BigDecimal expectedTotal = expectedSubtotal.add(expectedTax);
+
+        assertEquals(0, firstSubtotal.compareTo(expectedSubtotal));
+        assertEquals(0, secondSubtotal.compareTo(expectedSubtotal));
+        assertEquals(0, firstTax.compareTo(expectedTax));
+        assertEquals(0, secondTax.compareTo(expectedTax));
+        assertEquals(0, firstTotal.compareTo(expectedTotal));
+        assertEquals(0, secondTotal.compareTo(expectedTotal));
+
+        assertEquals(0, firstSubtotal.compareTo(secondSubtotal));
+        assertEquals(0, firstTax.compareTo(secondTax));
+        assertEquals(0, firstTotal.compareTo(secondTotal));
+        assertEquals(firstVersion, secondVersion);
     }
 
     @Test
@@ -140,5 +188,55 @@ class EstimateTaxCalculationContractBehaviorIT {
 
         // Current stub: taxAmount = subtotal * 0.0825
         // Future: taxAmount calculated by pos-accounting based on jurisdiction
+    }
+
+    private Response calculateResponse(UUID estimateId) {
+        return given()
+                .contentType(ContentType.JSON)
+                .header("X-User-Id", SYSTEM_USER_ID.toString())
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .response();
+    }
+
+    private UUID seedDraftEstimateWithItems() {
+        Estimate estimate = Estimate.builder()
+                .id(UUID.randomUUID())
+                .estimateNumber("EST-" + System.nanoTime())
+                .locationId(UUID.randomUUID())
+                .vehicleId(UUID.randomUUID())
+                .customerId(UUID.randomUUID())
+                .currencyUomId("USD")
+                .taxRegionId(UUID.randomUUID())
+                .status(EstimateStatus.DRAFT)
+                .createdByUserId(SYSTEM_USER_ID)
+                .createdById(SYSTEM_USER_ID)
+                .build();
+
+        Estimate savedEstimate = estimateRepository.save(estimate);
+
+        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.PART, "Front brake pads",
+                new BigDecimal("2"), new BigDecimal("50.00")));
+        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.LABOR, "Brake labor",
+                new BigDecimal("5"), new BigDecimal("20.00")));
+
+        return savedEstimate.getId();
+    }
+
+    private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
+            BigDecimal quantity, BigDecimal unitPrice) {
+        return EstimateItem.builder()
+                .id(UUID.randomUUID())
+                .estimateId(estimateId)
+                .itemType(type)
+                .description(description)
+                .quantity(quantity)
+                .unitPrice(unitPrice)
+                .taxCode("STD")
+                .createdById(SYSTEM_USER_ID)
+                .build();
     }
 }
