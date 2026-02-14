@@ -44,7 +44,7 @@ public class EstimateRevisedEvent {
     /**
      * ID of the user who made the change
      */
-    private UUID changedBy;
+    private String changedBy;
 
     /**
      * Timestamp when the revision occurred
