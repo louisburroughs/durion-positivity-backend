@@ -2,6 +2,7 @@ package com.positivity.workorder.contract;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -82,9 +83,9 @@ class EstimateItemManagementContractBehaviorIT {
                 .body("estimateId", equalTo(estimateId.toString()))
                 .body("itemType", equalTo(EstimateItemType.PART.name()))
                 .body("description", equalTo("Oil Filter"))
-                .body("quantity", anyOf(equalTo("1"), equalTo("1.0"), equalTo("1")))
-                .body("unitPrice", anyOf(equalTo("12.99"), equalTo("12.99"), equalTo("12.99")))
-                .body("lineTotal", anyOf(equalTo("12.99"), equalTo("12.99"), equalTo("12.99")))
+                .body("quantity", closeTo(1.0, 0.001))
+                .body("unitPrice", closeTo(12.99, 0.001))
+                .body("lineTotal", closeTo(12.99, 0.001))
                 .log().ifValidationFails();
     }
 
