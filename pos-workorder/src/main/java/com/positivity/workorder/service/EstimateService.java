@@ -642,14 +642,7 @@ public class EstimateService {
 
                 // Build tax calculation request
                 List<TaxLineItem> taxLineItems = items.stream()
-                                .map(item -> TaxLineItem.builder()
-                                                .lineItemId(item.getId().toString())
-                                                .description(getDescriptionForTaxCalculation(item))
-                                                .quantity(item.getQuantity())
-                                                .unitPrice(item.getUnitPrice())
-                                                .taxCategory(mapItemTypeToTaxCategory(item.getItemType()))
-                                                .taxExempt(false)
-                                                .build())
+                                .map(this::buildTaxLineItemFromEstimateItem)
                                 .toList();
 
                 // Get postal code from estimate's location
@@ -724,6 +717,23 @@ public class EstimateService {
                         // Fallback for items without description or reference (shouldn't happen due to validation)
                         return item.getItemType() + " Item";
                 }
+        }
+
+        /**
+         * Build a TaxLineItem from an EstimateItem for tax calculation.
+         * 
+         * @param item the estimate item
+         * @return a TaxLineItem with appropriate description and tax category
+         */
+        private TaxLineItem buildTaxLineItemFromEstimateItem(EstimateItem item) {
+                return TaxLineItem.builder()
+                                .lineItemId(item.getId().toString())
+                                .description(getDescriptionForTaxCalculation(item))
+                                .quantity(item.getQuantity())
+                                .unitPrice(item.getUnitPrice())
+                                .taxCategory(mapItemTypeToTaxCategory(item.getItemType()))
+                                .taxExempt(false)
+                                .build();
         }
 
         // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
