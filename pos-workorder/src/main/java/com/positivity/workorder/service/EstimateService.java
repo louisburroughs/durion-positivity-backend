@@ -15,7 +15,6 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,650 +44,656 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Slf4j
 public class EstimateService {
-    private static final String ESTIMATE_NOT_FOUND = "Estimate not found: ";
-    private final EstimateRepository estimateRepository;
-    private final EstimateItemRepository estimateItemRepository;
-    private final EstimateSnapshotRepository estimateSnapshotRepository;
-    private final ApprovalConfigurationRepository approvalConfigurationRepository;
-    private final WorkorderRepository workOrderRepository;
-    private final ApplicationEventPublisher eventPublisher;
-    private final BillingRulesClientService billingRulesClientService;
-    private final ObjectMapper objectMapper;
+        private static final String ESTIMATE_NOT_FOUND = "Estimate not found: ";
+        private final EstimateRepository estimateRepository;
+        private final EstimateItemRepository estimateItemRepository;
+        private final EstimateSnapshotRepository estimateSnapshotRepository;
+        private final ApprovalConfigurationRepository approvalConfigurationRepository;
+        private final WorkorderRepository workOrderRepository;
+        private final ApplicationEventPublisher eventPublisher;
+        private final BillingRulesClientService billingRulesClientService;
+        private final ObjectMapper objectMapper;
 
-    // Self-reference for transactional proxy calls
-    @Lazy
-    private final EstimateService self;
+        // Configuration defaults
+        private static final String DEFAULT_CURRENCY = "USD";
+        private static final String DEFAULT_TAX_REGION_ID_PROPERTY = "workorder.estimate.default-tax-region-id";
+        private static final UUID DEFAULT_TAX_REGION_ID = UUID.fromString(
+                        System.getProperty(DEFAULT_TAX_REGION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
+        private static final UUID DEFAULT_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001"); // NOTE:
+                                                                                                                 // Extract
+                                                                                                                 // from
+                                                                                                                 // JWT
+                                                                                                                 // claims
+                                                                                                                 // via
+                                                                                                                 // pos-security-service
+                                                                                                                 // (locationId
+                                                                                                                 // claim)
 
-    // Configuration defaults
-    private static final String DEFAULT_CURRENCY = "USD";
-    private static final String DEFAULT_TAX_REGION_ID_PROPERTY = "workorder.estimate.default-tax-region-id";
-    private static final UUID DEFAULT_TAX_REGION_ID = UUID.fromString(
-            System.getProperty(DEFAULT_TAX_REGION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
-    private static final UUID DEFAULT_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001"); // TODO:
-                                                                                                             // Extract
-                                                                                                             // from JWT
-                                                                                                             // claims
-                                                                                                             // via
-                                                                                                             // pos-security-service
-                                                                                                             // (locationId
-                                                                                                             // claim)
-
-    public List<Estimate> getAllEstimates() {
-        return estimateRepository.findAll();
-    }
-
-    public Optional<Estimate> getEstimateById(UUID id) {
-        return estimateRepository.findById(id);
-    }
-
-    public List<Estimate> getEstimatesByCustomer(UUID customerId) {
-        return estimateRepository.findByCustomerId(customerId);
-    }
-
-    public List<Estimate> getEstimatesByLocation(UUID locationId) {
-        return estimateRepository.findByLocationId(locationId);
-    }
-
-    /**
-     * Create a new draft estimate with proper validation and defaulting
-     * 
-     * @param request         The create estimate request with customer and vehicle
-     *                        IDs
-     * @param createdByUserId The user ID creating the estimate
-     * @return The created estimate
-     * @throws IllegalArgumentException if validation fails
-     */
-    @Transactional
-    public Estimate createEstimate(CreateEstimateRequest request, UUID createdByUserId) {
-        log.info("Creating new estimate for customer {} and vehicle {}",
-                request.getCustomerId(), request.getVehicleId());
-
-        // Validate required fields
-        if (request.getCustomerId() == null) {
-            log.warn("Attempt to create estimate without customerId");
-            throw new IllegalArgumentException("customerId is required");
-        }
-        if (request.getVehicleId() == null) {
-            log.warn("Attempt to create estimate without vehicleId");
-            throw new IllegalArgumentException("vehicleId is required");
+        public List<Estimate> getAllEstimates() {
+                return estimateRepository.findAll();
         }
 
-        // Apply defaults
-        UUID locationId = request.getLocationId() != null
-                ? request.getLocationId()
-                : DEFAULT_LOCATION_ID;
-        String currencyUomId = request.getCurrencyUomId() != null
-                ? request.getCurrencyUomId()
-                : DEFAULT_CURRENCY;
-        UUID taxRegionId = request.getTaxRegionId() != null
-                ? request.getTaxRegionId()
-                : DEFAULT_TAX_REGION_ID;
-
-        // Generate unique estimate number
-        String estimateNumber = generateEstimateNumber(locationId);
-
-        // Get approval configuration
-        ApprovalConfiguration config = getApprovalConfiguration(locationId, request.getCustomerId());
-
-        // Build estimate entity
-        Estimate estimate = Estimate.builder()
-                .estimateNumber(estimateNumber)
-                .customerId(request.getCustomerId())
-                .vehicleId(request.getVehicleId())
-                .locationId(locationId)
-                .currencyUomId(currencyUomId)
-                .taxRegionId(taxRegionId)
-                .status(EstimateStatus.DRAFT)
-                .createdByUserId(createdByUserId)
-                .createdAt(LocalDateTime.now())
-                .approvalConfigurationId(config.getId())
-                .build();
-
-        Estimate saved = estimateRepository.save(estimate);
-
-        log.info("Estimate created successfully: estimateId={}, estimateNumber={}",
-                saved.getId(), saved.getEstimateNumber());
-
-        // TODO: Emit EstimateCreated audit event
-
-        return saved;
-    }
-
-    /**
-     * Generate a unique estimate number for a location
-     * Format: EST-YYYY-NNNN where YYYY is the year and NNNN is a sequential number
-     */
-    private String generateEstimateNumber(UUID locationId) {
-        int year = Year.now().getValue();
-        String prefix = String.format("EST-%d-", year);
-
-        // Find the next available number
-        int sequence = 1000; // Start at 1000
-        String estimateNumber;
-        do {
-            estimateNumber = prefix + sequence;
-            sequence++;
-        } while (estimateRepository.existsByLocationIdAndEstimateNumber(locationId, estimateNumber));
-
-        return estimateNumber;
-    }
-
-    @Transactional
-    public Estimate approveEstimate(UUID estimateId, UUID approvedByUserId) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        if (!estimate.canApprove()) {
-            throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
+        public Optional<Estimate> getEstimateById(UUID id) {
+                return estimateRepository.findById(id);
         }
 
-        estimate.setStatus(EstimateStatus.APPROVED);
-        estimate.setApprovedAt(LocalDateTime.now());
-        estimate.setApprovedBy(approvedByUserId);
-
-        log.info("Estimate {} approved by user {}", estimateId, approvedByUserId);
-        return estimateRepository.save(estimate);
-    }
-
-    @Transactional
-    public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
-            String signatureMimeType, String signerName, String notes) {
-        return self.approveEstimate(estimateId, customerId, signatureData, signatureMimeType,
-                signerName, notes, null);
-    }
-
-    /**
-     * Approve estimate with full parameters including purchase order.
-     * CAP:092 Story #98 - Enforces PO requirement for commercial accounts.
-     *
-     * @param estimateId          estimate to approve
-     * @param customerId          customer approving the estimate
-     * @param signatureData       base64-encoded signature image
-     * @param signatureMimeType   MIME type of signature
-     * @param signerName          name of person signing
-     * @param notes               approval notes
-     * @param purchaseOrderNumber PO number (required if account requires PO)
-     * @return approved estimate
-     */
-    @Transactional
-    public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
-            String signatureMimeType, String signerName, String notes,
-            @Nullable String purchaseOrderNumber) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        // Validate customer matches estimate
-        if (!estimate.getCustomerId().equals(customerId)) {
-            throw new IllegalArgumentException("Customer ID mismatch: estimate belongs to customer "
-                    + estimate.getCustomerId() + ", but approval attempted for customer " + customerId);
+        public List<Estimate> getEstimatesByCustomer(UUID customerId) {
+                return estimateRepository.findByCustomerId(customerId);
         }
 
-        if (!estimate.canApprove()) {
-            throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
+        public List<Estimate> getEstimatesByLocation(UUID locationId) {
+                return estimateRepository.findByLocationId(locationId);
         }
 
-        // CAP:092 Story #98: Enforce PO requirement for commercial accounts
-        String partyId = String.valueOf(customerId); // Convert customerId to partyId
-        if (billingRulesClientService.isPurchaseOrderRequired(partyId)) {
-            if (purchaseOrderNumber == null || purchaseOrderNumber.isBlank()) {
-                log.warn("Purchase order required but not provided for estimate {} (partyId={})",
-                        estimateId, partyId);
-                throw new IllegalArgumentException(
-                        "Purchase order number is required for this customer account");
-            }
-            log.info("PO enforcement: validating PO {} for estimate {} (partyId={})",
-                    purchaseOrderNumber, estimateId, partyId);
+        /**
+         * Create a new draft estimate with proper validation and defaulting
+         * 
+         * @param request         The create estimate request with customer and vehicle
+         *                        IDs
+         * @param createdByUserId The user ID creating the estimate
+         * @return The created estimate
+         * @throws IllegalArgumentException if validation fails
+         */
+        @Transactional
+        public Estimate createEstimate(CreateEstimateRequest request, UUID createdByUserId) {
+                log.info("Creating new estimate for customer {} and vehicle {}",
+                                request.getCustomerId(), request.getVehicleId());
+
+                // Validate required fields
+                if (request.getCustomerId() == null) {
+                        log.warn("Attempt to create estimate without customerId");
+                        throw new IllegalArgumentException("customerId is required");
+                }
+                if (request.getVehicleId() == null) {
+                        log.warn("Attempt to create estimate without vehicleId");
+                        throw new IllegalArgumentException("vehicleId is required");
+                }
+
+                // Apply defaults
+                UUID locationId = request.getLocationId() != null
+                                ? request.getLocationId()
+                                : DEFAULT_LOCATION_ID;
+                String currencyUomId = request.getCurrencyUomId() != null
+                                ? request.getCurrencyUomId()
+                                : DEFAULT_CURRENCY;
+                UUID taxRegionId = request.getTaxRegionId() != null
+                                ? request.getTaxRegionId()
+                                : DEFAULT_TAX_REGION_ID;
+
+                // Generate unique estimate number
+                String estimateNumber = generateEstimateNumber(locationId);
+
+                // Get approval configuration
+                ApprovalConfiguration config = getApprovalConfiguration(locationId, request.getCustomerId());
+
+                // Build estimate entity
+                Estimate estimate = Estimate.builder()
+                                .estimateNumber(estimateNumber)
+                                .customerId(request.getCustomerId())
+                                .vehicleId(request.getVehicleId())
+                                .locationId(locationId)
+                                .currencyUomId(currencyUomId)
+                                .taxRegionId(taxRegionId)
+                                .status(EstimateStatus.DRAFT)
+                                .createdByUserId(createdByUserId)
+                                .createdAt(LocalDateTime.now())
+                                .approvalConfigurationId(config.getId())
+                                .build();
+
+                Estimate saved = estimateRepository.save(estimate);
+
+                log.info("Estimate created successfully: estimateId={}, estimateNumber={}",
+                                saved.getId(), saved.getEstimateNumber());
+
+                // NOTE: Emit EstimateCreated audit event
+
+                return saved;
         }
 
-        estimate.setStatus(EstimateStatus.APPROVED);
-        estimate.setApprovedAt(LocalDateTime.now());
-        estimate.setApprovedBy(customerId); // Using customerId as approver
-        estimate.setSignatureData(signatureData);
-        estimate.setSignatureMimeType(signatureMimeType);
-        estimate.setSignerName(signerName);
-        estimate.setApprovalNotes(notes);
-        estimate.setPurchaseOrderNumber(purchaseOrderNumber);
+        /**
+         * Generate a unique estimate number for a location
+         * Format: EST-YYYY-NNNN where YYYY is the year and NNNN is a sequential number
+         */
+        private String generateEstimateNumber(UUID locationId) {
+                int year = Year.now().getValue();
+                String prefix = String.format("EST-%d-", year);
 
-        log.info("Estimate {} approved by customer {} with signature capture", estimateId, customerId);
-        return estimateRepository.save(estimate);
-    }
+                // Find the next available number
+                int sequence = 1000; // Start at 1000
+                String estimateNumber;
+                do {
+                        estimateNumber = prefix + sequence;
+                        sequence++;
+                } while (estimateRepository.existsByLocationIdAndEstimateNumber(locationId, estimateNumber));
 
-    @Transactional
-    public Estimate declineEstimate(UUID estimateId, String reason) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        if (!estimate.canDecline()) {
-            throw new IllegalStateException("Estimate cannot be declined in current state: " + estimate.getStatus());
+                return estimateNumber;
         }
 
-        estimate.setStatus(EstimateStatus.DECLINED);
-        estimate.setDeclinedAt(LocalDateTime.now());
-        estimate.setDeclineReason(reason);
+        @Transactional
+        public Estimate approveEstimate(UUID estimateId, UUID approvedByUserId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-        // Set expiry date based on configuration
-        ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
-        estimate.setExpiresAt(LocalDateTime.now().plusDays(config.getDeclineExpiryDays()));
+                if (!estimate.canApprove()) {
+                        throw new IllegalStateException(
+                                        "Estimate cannot be approved in current state: " + estimate.getStatus());
+                }
 
-        log.info("Estimate {} declined with reason: {}", estimateId, reason);
-        return estimateRepository.save(estimate);
-    }
+                estimate.setStatus(EstimateStatus.APPROVED);
+                estimate.setApprovedAt(LocalDateTime.now());
+                estimate.setApprovedBy(approvedByUserId);
 
-    @Transactional
-    public Estimate reopenEstimate(UUID estimateId) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
-
-        if (!estimate.canReopen(config.getDeclineExpiryDays())) {
-            throw new IllegalStateException(
-                    "Estimate cannot be reopened - either not declined or expiry period has passed");
+                log.info("Estimate {} approved by user {}", estimateId, approvedByUserId);
+                return estimateRepository.save(estimate);
         }
 
-        estimate.setStatus(EstimateStatus.DRAFT);
-        estimate.setDeclinedAt(null);
-        estimate.setDeclineReason(null);
-        estimate.setExpiresAt(null);
-
-        log.info("Estimate {} reopened from declined state", estimateId);
-        return estimateRepository.save(estimate);
-    }
-
-    /**
-     * Get the most specific approval configuration for a location and customer.
-     * Returns default configuration if none found.
-     */
-    public ApprovalConfiguration getApprovalConfiguration(UUID locationId, UUID customerId) {
-        List<ApprovalConfiguration> configs = approvalConfigurationRepository
-                .findApplicableConfigurations(locationId, customerId);
-
-        if (configs.isEmpty()) {
-            // Create and return default configuration
-            return ApprovalConfiguration.builder()
-                    .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
-                    .declineExpiryDays(30)
-                    .requireSignature(false)
-                    .priority(0)
-                    .build();
+        @Transactional
+        public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
+                        String signatureMimeType, String signerName, String notes) {
+                return approveEstimate(estimateId, customerId, signatureData, signatureMimeType,
+                                signerName, notes, null);
         }
 
-        // Return highest priority configuration
-        return configs.get(0);
-    }
+        /**
+         * Approve estimate with full parameters including purchase order.
+         * CAP:092 Story #98 - Enforces PO requirement for commercial accounts.
+         *
+         * @param estimateId          estimate to approve
+         * @param customerId          customer approving the estimate
+         * @param signatureData       base64-encoded signature image
+         * @param signatureMimeType   MIME type of signature
+         * @param signerName          name of person signing
+         * @param notes               approval notes
+         * @param purchaseOrderNumber PO number (required if account requires PO)
+         * @return approved estimate
+         */
+        @Transactional
+        public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
+                        String signatureMimeType, String signerName, String notes,
+                        @Nullable String purchaseOrderNumber) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-    private ApprovalConfiguration getApprovalConfigurationById(UUID configId) {
-        if (configId == null) {
-            return ApprovalConfiguration.builder()
-                    .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
-                    .declineExpiryDays(30)
-                    .requireSignature(false)
-                    .priority(0)
-                    .build();
-        }
-        return approvalConfigurationRepository.findById(configId)
-                .orElseThrow(() -> new IllegalArgumentException("Approval configuration not found: " + configId));
-    }
+                // Validate customer matches estimate
+                if (!estimate.getCustomerId().equals(customerId)) {
+                        throw new IllegalArgumentException("Customer ID mismatch: estimate belongs to customer "
+                                        + estimate.getCustomerId() + ", but approval attempted for customer "
+                                        + customerId);
+                }
 
-    public void deleteEstimate(UUID id) {
-        estimateRepository.deleteById(id);
-    }
+                if (!estimate.canApprove()) {
+                        throw new IllegalStateException(
+                                        "Estimate cannot be approved in current state: " + estimate.getStatus());
+                }
 
-    /**
-     * Update estimate financial details and publish revision event if total
-     * changes.
-     * This triggers the approval invalidation workflow for associated Workorders.
-     * 
-     * @param estimateId the ID of the estimate to update
-     * @param subtotal   new subtotal amount
-     * @param taxAmount  new tax amount
-     * @param total      new total amount
-     * @param userId     ID of user making the change
-     * @return the updated estimate
-     */
-    @Transactional
-    public Estimate updateEstimateFinancials(UUID estimateId, BigDecimal subtotal,
-            BigDecimal taxAmount, BigDecimal total,
-            UUID userId) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+                // CAP:092 Story #98: Enforce PO requirement for commercial accounts
+                String partyId = String.valueOf(customerId); // Convert customerId to partyId
+                if (billingRulesClientService.isPurchaseOrderRequired(partyId)) {
+                        if (purchaseOrderNumber == null || purchaseOrderNumber.isBlank()) {
+                                log.warn("Purchase order required but not provided for estimate {} (partyId={})",
+                                                estimateId, partyId);
+                                throw new IllegalArgumentException(
+                                                "Purchase order number is required for this customer account");
+                        }
+                        log.info("PO enforcement: validating PO {} for estimate {} (partyId={})",
+                                        purchaseOrderNumber, estimateId, partyId);
+                }
 
-        // Capture old total for comparison
-        BigDecimal oldTotal = estimate.getTotal();
+                estimate.setStatus(EstimateStatus.APPROVED);
+                estimate.setApprovedAt(LocalDateTime.now());
+                estimate.setApprovedBy(customerId); // Using customerId as approver
+                estimate.setSignatureData(signatureData);
+                estimate.setSignatureMimeType(signatureMimeType);
+                estimate.setSignerName(signerName);
+                estimate.setApprovalNotes(notes);
+                estimate.setPurchaseOrderNumber(purchaseOrderNumber);
 
-        // Update financial fields
-        estimate.setSubtotal(subtotal);
-        estimate.setTaxAmount(taxAmount);
-        estimate.setTotal(total);
-
-        // Check if total changed (financially significant)
-        boolean totalChanged = (oldTotal == null && total != null) ||
-                (oldTotal != null && !oldTotal.equals(total));
-
-        if (totalChanged) {
-            // Increment version on financial changes
-            estimate.setVersion(estimate.getVersion() + 1);
-
-            log.info("Estimate {} total changed from {} to {}",
-                    estimateId, oldTotal, total);
+                log.info("Estimate {} approved by customer {} with signature capture", estimateId, customerId);
+                return estimateRepository.save(estimate);
         }
 
-        Estimate saved = estimateRepository.save(estimate);
+        @Transactional
+        public Estimate declineEstimate(UUID estimateId, String reason) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-        // Publish revision event if total changed
-        if (totalChanged) {
-            publishEstimateRevisedEvents(saved, oldTotal, total, userId);
+                if (!estimate.canDecline()) {
+                        throw new IllegalStateException(
+                                        "Estimate cannot be declined in current state: " + estimate.getStatus());
+                }
+
+                estimate.setStatus(EstimateStatus.DECLINED);
+                estimate.setDeclinedAt(LocalDateTime.now());
+                estimate.setDeclineReason(reason);
+
+                // Set expiry date based on configuration
+                ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
+                estimate.setExpiresAt(LocalDateTime.now().plusDays(config.getDeclineExpiryDays()));
+
+                log.info("Estimate {} declined with reason: {}", estimateId, reason);
+                return estimateRepository.save(estimate);
         }
 
-        return saved;
-    }
+        @Transactional
+        public Estimate reopenEstimate(UUID estimateId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-    /**
-     * Publish EstimateRevisedEvent for all Workorders associated with this
-     * estimate.
-     * This enables event-driven invalidation of approvals.
-     */
-    private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal,
-            BigDecimal newTotal, UUID userId) {
-        List<Workorder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
+                ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
 
-        log.info("Publishing EstimateRevisedEvent for {} Workorders linked to estimate {}",
-                workOrders.size(), estimate.getId());
+                if (!estimate.canReopen(config.getDeclineExpiryDays())) {
+                        throw new IllegalStateException(
+                                        "Estimate cannot be reopened - either not declined or expiry period has passed");
+                }
 
-        for (Workorder workOrder : workOrders) {
-            EstimateRevisedEvent event = EstimateRevisedEvent.builder()
-                    .estimateId(estimate.getId())
-                    .workorderId(workOrder.getId())
-                    .oldTotal(oldTotal != null ? oldTotal : BigDecimal.ZERO)
-                    .newTotal(newTotal != null ? newTotal : BigDecimal.ZERO)
-                    .changedBy(userId)
-                    .timestamp(Instant.now())
-                    .build();
+                estimate.setStatus(EstimateStatus.DRAFT);
+                estimate.setDeclinedAt(null);
+                estimate.setDeclineReason(null);
+                estimate.setExpiresAt(null);
 
-            eventPublisher.publishEvent(event);
-
-            log.info("Published EstimateRevisedEvent: estimateId={}, workOrderId={}, " +
-                    "oldTotal={}, newTotal={}",
-                    estimate.getId(), workOrder.getId(), oldTotal, newTotal);
-        }
-    }
-
-    // ==================== ESTIMATE ITEM MANAGEMENT (CAP:002 Stories #14, #15, #17)
-    // ====================
-
-    /**
-     * Add a line item (part or labor) to a draft estimate.
-     * Story #14 (Add Parts) and #15 (Add Labor)
-     *
-     * @param estimateId estimate to add item to
-     * @param request    item details
-     * @param userId     user adding the item
-     * @return the created estimate item
-     */
-    @Transactional
-    @NonNull
-    public EstimateItem addEstimateItem(@NonNull UUID estimateId, @NonNull AddEstimateItemRequest request,
-            @NonNull UUID userId) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        // Validate estimate is in DRAFT status
-        if (estimate.getStatus() != EstimateStatus.DRAFT) {
-            throw new IllegalStateException("Cannot add items to estimate in status: " + estimate.getStatus()
-                    + ". Estimate must be in DRAFT status.");
+                log.info("Estimate {} reopened from declined state", estimateId);
+                return estimateRepository.save(estimate);
         }
 
-        // Build and validate item
-        EstimateItem item = EstimateItem.builder()
-                .estimateId(estimateId)
-                .itemType(request.getItemType())
-                .description(request.getDescription())
-                .quantity(request.getQuantity())
-                .unitPrice(request.getUnitPrice())
-                .taxCode(request.getTaxCode())
-                .productId(request.getProductId())
-                .serviceId(request.getServiceId())
-                .createdById(userId)
-                .build();
+        /**
+         * Get the most specific approval configuration for a location and customer.
+         * Returns default configuration if none found.
+         */
+        public ApprovalConfiguration getApprovalConfiguration(UUID locationId, UUID customerId) {
+                List<ApprovalConfiguration> configs = approvalConfigurationRepository
+                                .findApplicableConfigurations(locationId, customerId);
 
-        item.validate();
-        EstimateItem saved = estimateItemRepository.save(item);
+                if (configs.isEmpty()) {
+                        // Create and return default configuration
+                        return ApprovalConfiguration.builder()
+                                        .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
+                                        .declineExpiryDays(30)
+                                        .requireSignature(false)
+                                        .priority(0)
+                                        .build();
+                }
 
-        log.info("Added {} item to estimate {}: itemId={}, description='{}'",
-                saved.getItemType(), estimateId, saved.getId(), saved.getDescription());
-
-        return saved;
-    }
-
-    /**
-     * Update an existing line item on a draft estimate.
-     * Story #17 (Revise Estimate)
-     *
-     * @param estimateId estimate ID
-     * @param itemId     item to update
-     * @param request    updated fields
-     * @return the updated item
-     */
-    @Transactional
-    @NonNull
-    public EstimateItem updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
-            @NonNull UpdateEstimateItemRequest request) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        // Validate estimate is in DRAFT status
-        if (estimate.getStatus() != EstimateStatus.DRAFT) {
-            throw new IllegalStateException("Cannot update items in estimate with status: " + estimate.getStatus()
-                    + ". Estimate must be in DRAFT status.");
+                // Return highest priority configuration
+                return configs.get(0);
         }
 
-        EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Item not found: " + itemId + " for estimate: " + estimateId));
-
-        // Update only provided fields
-        if (request.getDescription() != null) {
-            item.setDescription(request.getDescription());
-        }
-        if (request.getQuantity() != null) {
-            item.setQuantity(request.getQuantity());
-        }
-        if (request.getUnitPrice() != null) {
-            item.setUnitPrice(request.getUnitPrice());
-        }
-        if (request.getTaxCode() != null) {
-            item.setTaxCode(request.getTaxCode());
+        private ApprovalConfiguration getApprovalConfigurationById(UUID configId) {
+                if (configId == null) {
+                        return ApprovalConfiguration.builder()
+                                        .approvalMethod(ApprovalConfiguration.ApprovalMethod.CLICK_CONFIRM)
+                                        .declineExpiryDays(30)
+                                        .requireSignature(false)
+                                        .priority(0)
+                                        .build();
+                }
+                return approvalConfigurationRepository.findById(configId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Approval configuration not found: " + configId));
         }
 
-        // Re-validate entity invariants after mutations
-        item.validate();
-
-        EstimateItem saved = estimateItemRepository.save(item);
-
-        log.info("Updated item {} on estimate {}", itemId, estimateId);
-
-        return saved;
-    }
-
-    /**
-     * Remove a line item from a draft estimate (soft delete).
-     * Story #17 (Revise Estimate)
-     *
-     * @param estimateId estimate ID
-     * @param itemId     item to remove
-     */
-    @Transactional
-    public void deleteEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        // Validate estimate is in DRAFT status
-        if (estimate.getStatus() != EstimateStatus.DRAFT) {
-            throw new IllegalStateException("Cannot delete items from estimate with status: " + estimate.getStatus()
-                    + ". Estimate must be in DRAFT status.");
+        public void deleteEstimate(UUID id) {
+                estimateRepository.deleteById(id);
         }
 
-        EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Item not found: " + itemId + " for estimate: " + estimateId));
+        /**
+         * Update estimate financial details and publish revision event if total
+         * changes.
+         * This triggers the approval invalidation workflow for associated Workorders.
+         * 
+         * @param estimateId the ID of the estimate to update
+         * @param subtotal   new subtotal amount
+         * @param taxAmount  new tax amount
+         * @param total      new total amount
+         * @param userId     ID of user making the change
+         * @return the updated estimate
+         */
+        @Transactional
+        public Estimate updateEstimateFinancials(UUID estimateId, BigDecimal subtotal,
+                        BigDecimal taxAmount, BigDecimal total,
+                        UUID userId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-        // Soft delete
-        item.setDeleted(true);
-        estimateItemRepository.save(item);
+                // Capture old total for comparison
+                BigDecimal oldTotal = estimate.getTotal();
 
-        log.info("Deleted (soft) item {} from estimate {}", itemId, estimateId);
-    }
+                // Update financial fields
+                estimate.setSubtotal(subtotal);
+                estimate.setTaxAmount(taxAmount);
+                estimate.setTotal(total);
 
-    /**
-     * Get all line items for an estimate (excluding soft-deleted).
-     */
-    @NonNull
-    public List<EstimateItem> getEstimateItems(@NonNull UUID estimateId) {
-        return estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
-    }
+                // Check if total changed (financially significant)
+                boolean totalChanged = (oldTotal == null && total != null) ||
+                                (oldTotal != null && !oldTotal.equals(total));
 
-    // ==================== TAX CALCULATION (CAP:002 Story #16) ====================
+                if (totalChanged) {
+                        // Increment version on financial changes
+                        estimate.setVersion(estimate.getVersion() + 1);
 
-    /**
-     * Calculate taxes and totals for an estimate based on its line items.
-     * Story #16 (Calculate Taxes and Totals)
-     * 
-     * STUB IMPLEMENTATION: Uses flat 8.25% tax rate.
-     * TODO: Integrate with pos-accounting tax service for proper tax calculation.
-     *
-     * @param estimateId estimate to calculate
-     * @param userId     user requesting calculation
-     * @return the updated estimate with calculated totals
-     */
-    @Transactional
-    @NonNull
-    public Estimate calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull UUID userId) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+                        log.info("Estimate {} total changed from {} to {}",
+                                        estimateId, oldTotal, total);
+                }
 
-        // Validate estimate is in DRAFT status
-        if (estimate.getStatus() != EstimateStatus.DRAFT) {
-            throw new IllegalStateException("Cannot calculate totals for estimate in status: " + estimate.getStatus()
-                    + ". Estimate must be in DRAFT status.");
+                Estimate saved = estimateRepository.save(estimate);
+
+                // Publish revision event if total changed
+                if (totalChanged) {
+                        publishEstimateRevisedEvents(saved, oldTotal, total, userId);
+                }
+
+                return saved;
         }
 
-        // Get all line items
-        List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+        /**
+         * Publish EstimateRevisedEvent for all Workorders associated with this
+         * estimate.
+         * This enables event-driven invalidation of approvals.
+         */
+        private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal,
+                        BigDecimal newTotal, UUID userId) {
+                List<Workorder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
 
-        // Calculate subtotal (sum of all line totals)
-        BigDecimal subtotal = items.stream()
-                .map(EstimateItem::getLineTotal)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                log.info("Publishing EstimateRevisedEvent for {} Workorders linked to estimate {}",
+                                workOrders.size(), estimate.getId());
 
-        // STUB: Tax calculation with flat 8.25% rate
-        // TODO: Integrate with pos-accounting tax service for proper jurisdiction-based
-        // tax calculation
-        BigDecimal taxRate = new BigDecimal("0.0825"); // 8.25%
-        BigDecimal taxAmount = subtotal.multiply(taxRate).setScale(2, RoundingMode.HALF_UP);
+                for (Workorder workOrder : workOrders) {
+                        EstimateRevisedEvent event = EstimateRevisedEvent.builder()
+                                        .estimateId(estimate.getId())
+                                        .workorderId(workOrder.getId())
+                                        .oldTotal(oldTotal != null ? oldTotal : BigDecimal.ZERO)
+                                        .newTotal(newTotal != null ? newTotal : BigDecimal.ZERO)
+                                        .changedBy(userId)
+                                        .timestamp(Instant.now())
+                                        .build();
 
-        // Calculate total
-        BigDecimal total = subtotal.add(taxAmount);
+                        eventPublisher.publishEvent(event);
 
-        // Update estimate using shared financial update path (handles versioning and
-        // events)
-        Estimate saved = self.updateEstimateFinancials(estimateId, subtotal, taxAmount, total, userId);
-
-        log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={}",
-                estimateId, subtotal, taxAmount, total);
-        log.warn("Tax calculation for estimate {} uses stub implementation (8.25% flat rate). "
-                + "Integration with pos-accounting tax service required (issue #171)", estimateId);
-
-        return saved;
-    }
-
-    // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
-    // ====================
-
-    /**
-     * Get customer-facing summary of an estimate with grouped line items.
-     * Story #18 (Present Estimate Summary)
-     *
-     * @param estimateId estimate ID
-     * @return estimate with all line items grouped by type
-     */
-    @NonNull
-    public Map<String, Object> getEstimateSummary(@NonNull UUID estimateId) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
-
-        // Group items by type
-        List<EstimateItem> partItems = items.stream()
-                .filter(item -> item.getItemType() == EstimateItemType.PART)
-                .toList();
-
-        List<EstimateItem> laborItems = items.stream()
-                .filter(item -> item.getItemType() == EstimateItemType.LABOR)
-                .toList();
-
-        // Build summary response
-        Map<String, Object> summary = new HashMap<>();
-        summary.put("estimate", estimate);
-        summary.put("partItems", partItems);
-        summary.put("laborItems", laborItems);
-        summary.put("itemCount", items.size());
-
-        log.info("Retrieved summary for estimate {}: {} items ({} parts, {} labor)",
-                estimateId, items.size(), partItems.size(), laborItems.size());
-
-        // NOTE: PDF generation not implemented - requires document service integration
-        // (issue #169)
-
-        return summary;
-    }
-
-    /**
-     * Create an immutable snapshot of an estimate's complete state.
-     * Story #18 (Present Estimate Summary) - Historical Snapshot
-     *
-     * @param estimateId estimate to snapshot
-     * @param userId     user creating snapshot
-     * @param notes      optional notes about why snapshot was created
-     * @return the created snapshot
-     */
-    @Transactional
-    @NonNull
-    public EstimateSnapshot createEstimateSnapshot(@NonNull UUID estimateId, @NonNull UUID userId,
-            @Nullable String notes) {
-        Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
-
-        List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
-
-        // Serialize estimate + items to JSON (capturedAt stored in entity field only)
-        Map<String, Object> snapshotData = new HashMap<>();
-        snapshotData.put("estimate", estimate);
-        snapshotData.put("items", items);
-
-        String snapshotJson;
-        try {
-            snapshotJson = objectMapper.writeValueAsString(snapshotData);
-        } catch (Exception e) {
-            log.error("Failed to serialize estimate snapshot for estimateId={}", estimateId, e);
-            throw new IllegalStateException("Failed to create snapshot: JSON serialization error", e);
+                        log.info("Published EstimateRevisedEvent: estimateId={}, workOrderId={}, " +
+                                        "oldTotal={}, newTotal={}",
+                                        estimate.getId(), workOrder.getId(), oldTotal, newTotal);
+                }
         }
 
-        // Create snapshot entity
-        EstimateSnapshot snapshot = EstimateSnapshot.builder()
-                .estimateId(estimateId)
-                .status(estimate.getStatus())
-                .snapshotData(snapshotJson)
-                .capturedById(userId)
-                .notes(notes)
-                .build();
+        // ==================== ESTIMATE ITEM MANAGEMENT (CAP:002 Stories #14, #15, #17)
+        // ====================
 
-        EstimateSnapshot saved = estimateSnapshotRepository.save(snapshot);
+        /**
+         * Add a line item (part or labor) to a draft estimate.
+         * Story #14 (Add Parts) and #15 (Add Labor)
+         *
+         * @param estimateId estimate to add item to
+         * @param request    item details
+         * @param userId     user adding the item
+         * @return the created estimate item
+         */
+        @Transactional
+        @NonNull
+        public EstimateItem addEstimateItem(@NonNull UUID estimateId, @NonNull AddEstimateItemRequest request,
+                        @NonNull UUID userId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
-        log.info("Created snapshot for estimate {}: snapshotId={}, status={}, itemCount={}",
-                estimateId, saved.getId(), estimate.getStatus(), items.size());
+                // Validate estimate is in DRAFT status
+                if (estimate.getStatus() != EstimateStatus.DRAFT) {
+                        throw new IllegalStateException(
+                                        "Cannot add items to estimate in status: " + estimate.getStatus()
+                                                        + ". Estimate must be in DRAFT status.");
+                }
 
-        return saved;
-    }
+                // Build and validate item
+                EstimateItem item = EstimateItem.builder()
+                                .estimateId(estimateId)
+                                .itemType(request.getItemType())
+                                .description(request.getDescription())
+                                .quantity(request.getQuantity())
+                                .unitPrice(request.getUnitPrice())
+                                .taxCode(request.getTaxCode())
+                                .productId(request.getProductId())
+                                .serviceId(request.getServiceId())
+                                .createdById(userId)
+                                .build();
+
+                item.validate();
+                EstimateItem saved = estimateItemRepository.save(item);
+
+                log.info("Added {} item to estimate {}: itemId={}, description='{}'",
+                                saved.getItemType(), estimateId, saved.getId(), saved.getDescription());
+
+                return saved;
+        }
+
+        /**
+         * Update an existing line item on a draft estimate.
+         * Story #17 (Revise Estimate)
+         *
+         * @param estimateId estimate ID
+         * @param itemId     item to update
+         * @param request    updated fields
+         * @return the updated item
+         */
+        @Transactional
+        @NonNull
+        public EstimateItem updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
+                        @NonNull UpdateEstimateItemRequest request) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+
+                // Validate estimate is in DRAFT status
+                if (estimate.getStatus() != EstimateStatus.DRAFT) {
+                        throw new IllegalStateException(
+                                        "Cannot update items in estimate with status: " + estimate.getStatus()
+                                                        + ". Estimate must be in DRAFT status.");
+                }
+
+                EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Item not found: " + itemId + " for estimate: " + estimateId));
+
+                // Update only provided fields
+                if (request.getDescription() != null) {
+                        item.setDescription(request.getDescription());
+                }
+                if (request.getQuantity() != null) {
+                        item.setQuantity(request.getQuantity());
+                }
+                if (request.getUnitPrice() != null) {
+                        item.setUnitPrice(request.getUnitPrice());
+                }
+                if (request.getTaxCode() != null) {
+                        item.setTaxCode(request.getTaxCode());
+                }
+
+                // Re-validate entity invariants after mutations
+                item.validate();
+
+                EstimateItem saved = estimateItemRepository.save(item);
+
+                log.info("Updated item {} on estimate {}", itemId, estimateId);
+
+                return saved;
+        }
+
+        /**
+         * Remove a line item from a draft estimate (soft delete).
+         * Story #17 (Revise Estimate)
+         *
+         * @param estimateId estimate ID
+         * @param itemId     item to remove
+         */
+        @Transactional
+        public void deleteEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+
+                // Validate estimate is in DRAFT status
+                if (estimate.getStatus() != EstimateStatus.DRAFT) {
+                        throw new IllegalStateException(
+                                        "Cannot delete items from estimate with status: " + estimate.getStatus()
+                                                        + ". Estimate must be in DRAFT status.");
+                }
+
+                EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Item not found: " + itemId + " for estimate: " + estimateId));
+
+                // Soft delete
+                item.setDeleted(true);
+                estimateItemRepository.save(item);
+
+                log.info("Deleted (soft) item {} from estimate {}", itemId, estimateId);
+        }
+
+        /**
+         * Get all line items for an estimate (excluding soft-deleted).
+         */
+        @NonNull
+        public List<EstimateItem> getEstimateItems(@NonNull UUID estimateId) {
+                return estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+        }
+
+        // ==================== TAX CALCULATION (CAP:002 Story #16) ====================
+
+        /**
+         * Calculate taxes and totals for an estimate based on its line items.
+         * Story #16 (Calculate Taxes and Totals)
+         * 
+         * STUB IMPLEMENTATION: Uses flat 8.25% tax rate.
+         * NOTE: Integrate with pos-accounting tax service for proper tax calculation.
+         *
+         * @param estimateId estimate to calculate
+         * @param userId     user requesting calculation
+         * @return the updated estimate with calculated totals
+         */
+        @Transactional
+        @NonNull
+        public Estimate calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull UUID userId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+
+                // Validate estimate is in DRAFT status
+                if (estimate.getStatus() != EstimateStatus.DRAFT) {
+                        throw new IllegalStateException(
+                                        "Cannot calculate totals for estimate in status: " + estimate.getStatus()
+                                                        + ". Estimate must be in DRAFT status.");
+                }
+
+                // Get all line items
+                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+                // Calculate subtotal (sum of all line totals)
+                BigDecimal subtotal = items.stream()
+                                .map(EstimateItem::getLineTotal)
+                                .filter(Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                // STUB: Tax calculation with flat 8.25% rate
+                // NOTE: Integrate with pos-accounting tax service for proper jurisdiction-based
+                // tax calculation
+                BigDecimal taxRate = new BigDecimal("0.0825"); // 8.25%
+                BigDecimal taxAmount = subtotal.multiply(taxRate).setScale(2, RoundingMode.HALF_UP);
+
+                // Calculate total
+                BigDecimal total = subtotal.add(taxAmount);
+
+                // Update estimate using shared financial update path (handles versioning and
+                // events)
+                Estimate saved = updateEstimateFinancials(estimateId, subtotal, taxAmount, total, userId);
+
+                log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={}",
+                                estimateId, subtotal, taxAmount, total);
+                log.warn("Tax calculation for estimate {} uses stub implementation (8.25% flat rate). "
+                                + "Integration with pos-accounting tax service required (issue #171)", estimateId);
+
+                return saved;
+        }
+
+        // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
+        // ====================
+
+        /**
+         * Get customer-facing summary of an estimate with grouped line items.
+         * Story #18 (Present Estimate Summary)
+         *
+         * @param estimateId estimate ID
+         * @return estimate with all line items grouped by type
+         */
+        @NonNull
+        public Map<String, Object> getEstimateSummary(@NonNull UUID estimateId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+
+                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+                // Group items by type
+                List<EstimateItem> partItems = items.stream()
+                                .filter(item -> item.getItemType() == EstimateItemType.PART)
+                                .toList();
+
+                List<EstimateItem> laborItems = items.stream()
+                                .filter(item -> item.getItemType() == EstimateItemType.LABOR)
+                                .toList();
+
+                // Build summary response
+                Map<String, Object> summary = new HashMap<>();
+                summary.put("estimate", estimate);
+                summary.put("partItems", partItems);
+                summary.put("laborItems", laborItems);
+                summary.put("itemCount", items.size());
+
+                log.info("Retrieved summary for estimate {}: {} items ({} parts, {} labor)",
+                                estimateId, items.size(), partItems.size(), laborItems.size());
+
+                // NOTE: PDF generation not implemented - requires document service integration
+                // (issue #169)
+
+                return summary;
+        }
+
+        /**
+         * Create an immutable snapshot of an estimate's complete state.
+         * Story #18 (Present Estimate Summary) - Historical Snapshot
+         *
+         * @param estimateId estimate to snapshot
+         * @param userId     user creating snapshot
+         * @param notes      optional notes about why snapshot was created
+         * @return the created snapshot
+         */
+        @Transactional
+        @NonNull
+        public EstimateSnapshot createEstimateSnapshot(@NonNull UUID estimateId, @NonNull UUID userId,
+                        @Nullable String notes) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+
+                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+                // Serialize estimate + items to JSON (capturedAt stored in entity field only)
+                Map<String, Object> snapshotData = new HashMap<>();
+                snapshotData.put("estimate", estimate);
+                snapshotData.put("items", items);
+
+                String snapshotJson;
+                try {
+                        snapshotJson = objectMapper.writeValueAsString(snapshotData);
+                } catch (Exception e) {
+                        log.error("Failed to serialize estimate snapshot for estimateId={}", estimateId, e);
+                        throw new IllegalStateException("Failed to create snapshot: JSON serialization error", e);
+                }
+
+                // Create snapshot entity
+                EstimateSnapshot snapshot = EstimateSnapshot.builder()
+                                .estimateId(estimateId)
+                                .status(estimate.getStatus())
+                                .snapshotData(snapshotJson)
+                                .capturedById(userId)
+                                .notes(notes)
+                                .build();
+
+                EstimateSnapshot saved = estimateSnapshotRepository.save(snapshot);
+
+                log.info("Created snapshot for estimate {}: snapshotId={}, status={}, itemCount={}",
+                                estimateId, saved.getId(), estimate.getStatus(), items.size());
+
+                return saved;
+        }
 }
