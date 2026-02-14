@@ -45,9 +45,9 @@ class EstimateSummaryContractBehaviorIT {
         // When: Retrieving summary
         given()
                 .contentType(ContentType.JSON)
-        .when()
+                .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist
                 .log().ifValidationFails();
     }
@@ -61,12 +61,12 @@ class EstimateSummaryContractBehaviorIT {
         // When: Retrieving summary
         given()
                 .contentType(ContentType.JSON)
-        .when()
+                .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)))
                 .log().ifValidationFails();
-        
+
         // Note: If 200, response should contain partItems and laborItems arrays
         // Full verification requires test database with known items
     }
@@ -80,12 +80,12 @@ class EstimateSummaryContractBehaviorIT {
         // When: Retrieving summary
         given()
                 .contentType(ContentType.JSON)
-        .when()
+                .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)))
                 .log().ifValidationFails();
-        
+
         // Note: If 200, response should contain subtotal, taxAmount, total
     }
 
@@ -100,9 +100,9 @@ class EstimateSummaryContractBehaviorIT {
                 .contentType(ContentType.JSON)
                 .queryParam("notes", "Pre-approval snapshot")
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist
                 .log().ifValidationFails();
     }
@@ -117,13 +117,14 @@ class EstimateSummaryContractBehaviorIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)))
                 .log().ifValidationFails();
-        
-        // Note: If 200, response should contain snapshotData with serialized estimate + items
+
+        // Note: If 200, response should contain snapshotData with serialized estimate +
+        // items
     }
 
     @Test
@@ -136,12 +137,12 @@ class EstimateSummaryContractBehaviorIT {
         var response = given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)))
                 .log().ifValidationFails();
-        
+
         // Then: Snapshot should have capturedAt timestamp that never changes
         // Future modifications to estimate should not affect this snapshot
     }
@@ -151,19 +152,19 @@ class EstimateSummaryContractBehaviorIT {
     void shouldDocumentPDFGenerationLimitation() {
         // This test documents that PDF generation is not yet implemented
         // TODO: When document service is integrated, add PDF generation tests
-        
+
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // Current behavior: Summary returns JSON only
         given()
                 .contentType(ContentType.JSON)
-        .when()
+                .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)))
                 .contentType(anyOf(is("application/json"), is("application/json;charset=UTF-8")))
                 .log().ifValidationFails();
-        
+
         // Future: Add Accept: application/pdf header support
         // and verify PDF document is returned with proper MIME type
     }
@@ -179,20 +180,20 @@ class EstimateSummaryContractBehaviorIT {
                 .contentType(ContentType.JSON)
                 .queryParam("notes", "First snapshot")
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)));
 
         given()
                 .contentType(ContentType.JSON)
                 .queryParam("notes", "Second snapshot after changes")
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)));
-        
+
         // Then: Both snapshots should exist with different timestamps
         // This provides full version history for compliance
     }

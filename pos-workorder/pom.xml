@@ -148,6 +148,12 @@
             <artifactId>mockito-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- RestAssured for REST API testing -->
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Spring Boot Logging (includes SLF4J + Logback) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
