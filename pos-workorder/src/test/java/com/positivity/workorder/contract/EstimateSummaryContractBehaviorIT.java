@@ -101,7 +101,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
         // When: Creating snapshot with notes
         givenWithGatewayAuth()
                 .queryParam("notes", "Pre-approval snapshot")
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
@@ -120,7 +119,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When: Creating snapshot
         givenWithGatewayAuth()
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
@@ -139,7 +137,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
         // When: Creating snapshot twice, subsequent snapshot should not mutate the
         // first capture
         givenWithGatewayAuth()
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
@@ -147,7 +144,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .log().ifValidationFails();
 
         givenWithGatewayAuth()
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
@@ -190,7 +186,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
         // When: Creating multiple snapshots at different points in time
         givenWithGatewayAuth()
                 .queryParam("notes", "First snapshot")
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
@@ -198,7 +193,6 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
 
         givenWithGatewayAuth()
                 .queryParam("notes", "Second snapshot after changes")
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
