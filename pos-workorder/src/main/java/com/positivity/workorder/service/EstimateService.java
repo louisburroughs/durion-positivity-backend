@@ -710,12 +710,15 @@ public class EstimateService {
                 
                 // Generate fallback description based on item type and reference
                 if (item.getItemType() == EstimateItemType.PART && item.getProductId() != null) {
-                        return "Part (Product ID: " + item.getProductId() + ")";
+                        return String.format("Part (Product ID: %s)", item.getProductId());
                 } else if (item.getItemType() == EstimateItemType.LABOR && item.getServiceId() != null) {
-                        return "Labor (Service ID: " + item.getServiceId() + ")";
+                        return String.format("Labor (Service ID: %s)", item.getServiceId());
                 } else {
                         // Fallback for items without description or reference (shouldn't happen due to validation)
-                        return item.getItemType() + " Item";
+                        String itemTypeName = item.getItemType() != null 
+                                ? item.getItemType().name().toLowerCase().replace('_', ' ')
+                                : "unknown";
+                        return String.format("%s item", itemTypeName);
                 }
         }
 
