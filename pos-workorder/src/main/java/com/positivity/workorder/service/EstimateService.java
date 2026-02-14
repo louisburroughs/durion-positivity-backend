@@ -198,7 +198,7 @@ public class EstimateService {
         @Transactional
         public EstimateResponse approveEstimate(UUID estimateId, UUID approvedByUserId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
-                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+                                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
 
                 if (!estimate.canApprove()) {
                         throw new IllegalStateException(
@@ -281,7 +281,7 @@ public class EstimateService {
                         @Nullable String purchaseOrderNumber,
                         @Nullable List<com.positivity.workorder.internal.dto.LineItemApprovalDto> lineItemApprovals) {
                 Estimate estimate = estimateRepository.findById(estimateId)
-                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+                                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
 
                 // Validate customer matches estimate
                 if (!estimate.getCustomerId().equals(customerId)) {
