@@ -990,4 +990,66 @@ public class EstimateService {
 
                 return EstimateSnapshotResponse.fromEntity(saved);
         }
+
+        /**
+         * Find and expire estimates in PENDING_APPROVAL state that have exceeded their
+         * approval window.
+         * CAP:003 Issue #204 - Handle Approval Expiration
+         * Called by scheduled job to mark expired estimates.
+         * 
+         * @return count of expired estimates
+         */
+        @Transactional
+        public int expirePendingApprovals() {
+                LocalDateTime now = LocalDateTime.now();
+                log.debug("Checking for expired pending approvals at {}", now);
+
+                // Find all estimates in PENDING_APPROVAL state that have expired
+                List<Estimate> expiredEstimates = estimateRepository.findByStatusAndExpiresAtBefore(
+                                EstimateStatus.PENDING_APPROVAL, now);
+
+                if (expiredEstimates.isEmpty()) {
+                        log.debug("No expired pending approvals found");
+                        return 0;
+                }
+
+                log.info("Found {} expired pending approvals, marking them as expired", expiredEstimates.size());
+
+                int successCount = 0;
+                int errorCount = 0;
+
+                for (Estimate estimate : expiredEstimates) {
+                        try {
+                                expireApproval(estimate, now);
+                                successCount++;
+                        } catch (Exception e) {
+                                errorCount++;
+                                log.error("Failed to expire approval for estimate {}: {}",
+                                                estimate.getId(), e.getMessage(), e);
+                        }
+                }
+
+                log.info("Approval expiration completed - success: {}, errors: {}", successCount, errorCount);
+                return successCount;
+        }
+
+        /**
+         * Mark an estimate as expired due to approval window timeout.
+         * 
+         * @param estimate estimate to expire
+         * @param now      current timestamp
+         */
+        private void expireApproval(@NonNull Estimate estimate, @NonNull LocalDateTime now) {
+                log.info("Expiring approval for estimate {} (expired at: {}, now: {})",
+                                estimate.getId(), estimate.getExpiresAt(), now);
+
+                estimate.setStatus(EstimateStatus.EXPIRED);
+                estimate.setDeclineReason("Approval window expired - customer did not respond within "
+                                + "the approval window that ended at " + estimate.getExpiresAt());
+                estimate.setDeclinedAt(now);
+
+                estimateRepository.save(estimate);
+
+                log.info("Estimate {} marked as EXPIRED due to approval timeout", estimate.getId());
+        }
 }

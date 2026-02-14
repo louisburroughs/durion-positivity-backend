@@ -44,6 +44,9 @@ public class ApprovalConfiguration {
     @Builder.Default
     private Integer declineExpiryDays = 30;
 
+    // Number of days an estimate is valid for approval (null = no expiration)
+    private Integer approvalWindowDays;
+
     // Whether signature is required (if approvalMethod is SIGNATURE)
     @Builder.Default
     private Boolean requireSignature = false;
