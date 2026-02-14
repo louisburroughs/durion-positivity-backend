@@ -1,4 +1,4 @@
-package com.positivity.workexec;
+package com.positivity.workorder.contract;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;

@@ -1,0 +1,27 @@
+# Application profile for standalone deployment mode
+# Use this profile ONLY if deploying pos-tax as a separate microservice
+# for centralized tax calculation logic
+#
+# SECURITY WARNING: This service MUST remain on internal network only.
+# Do NOT add gateway routes for pos-tax. Do NOT expose to external traffic.
+#
+# Enable with: java -jar pos-tax.jar --spring.profiles.active=standalone
+# Or set environment: SPRING_PROFILES_ACTIVE=standalone
+
+spring:
+  cloud:
+    discovery:
+      # Enable service discovery for standalone internal deployment
+      enabled: true
+
+eureka:
+  client:
+    # Register with Eureka for service-to-service discovery
+    # Other internal services can discover and call this service
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    # Add metadata to indicate this is an internal-only service
+    metadata-map:
+      internal-only: true
+      access-level: private
