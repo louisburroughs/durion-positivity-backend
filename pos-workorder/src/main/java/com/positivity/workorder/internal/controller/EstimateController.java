@@ -197,6 +197,9 @@ public class EstimateController {
                     request.getPurchaseOrderNumber(),
                     request.getLineItemApprovals()); // CAP:003 - Pass selective line item approvals
             return ResponseEntity.ok(approved);
+        } catch (EntityNotFoundException e) {
+            log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -219,6 +222,9 @@ public class EstimateController {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
             EstimateResponse submitted = estimateService.submitForApproval(estimateId, username);
             return ResponseEntity.ok(submitted);
+        } catch (EntityNotFoundException e) {
+            log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to submit estimate {} for approval: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
