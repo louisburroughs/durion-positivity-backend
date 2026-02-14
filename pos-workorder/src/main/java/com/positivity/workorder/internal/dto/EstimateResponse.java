@@ -1,15 +1,15 @@
 package com.positivity.workorder.internal.dto;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateStatus;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * DTO for estimate responses.

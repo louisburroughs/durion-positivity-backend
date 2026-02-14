@@ -190,8 +190,8 @@ public class EstimateService {
         @Transactional
         public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes) {
-                return approveEstimate(estimateId, customerId, signatureData, signatureMimeType,
-                                signerName, notes, null);
+                return approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
+                                signatureMimeType, signerName, notes, null);
         }
 
         /**
@@ -209,6 +209,18 @@ public class EstimateService {
          */
         @Transactional
         public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
+                        String signatureMimeType, String signerName, String notes,
+                        @Nullable String purchaseOrderNumber) {
+                return approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
+                                signatureMimeType, signerName, notes, purchaseOrderNumber);
+        }
+
+        /**
+         * Internal helper for approving estimates with signature. Used by public API
+         * and internal calls.
+         * Runs within the transaction context of the caller.
+         */
+        private Estimate approveEstimateWithSignatureInternal(UUID estimateId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes,
                         @Nullable String purchaseOrderNumber) {
                 Estimate estimate = estimateRepository.findById(estimateId)
@@ -351,6 +363,16 @@ public class EstimateService {
         public Estimate updateEstimateFinancials(UUID estimateId, BigDecimal subtotal,
                         BigDecimal taxAmount, BigDecimal total,
                         UUID userId) {
+                return updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, userId);
+        }
+
+        /**
+         * Internal helper for updating financial details. Used by public API and
+         * internal calls.
+         * Runs within the transaction context of the caller.
+         */
+        private Estimate updateEstimateFinancialsInternal(UUID estimateId, BigDecimal subtotal,
+                        BigDecimal taxAmount, BigDecimal total, UUID userId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -595,9 +617,8 @@ public class EstimateService {
                 // Calculate total
                 BigDecimal total = subtotal.add(taxAmount);
 
-                // Update estimate using shared financial update path (handles versioning and
-                // events)
-                Estimate saved = updateEstimateFinancials(estimateId, subtotal, taxAmount, total, userId);
+                // Update estimate using internal helper (reuses transaction context)
+                Estimate saved = updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, userId);
 
                 log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={}",
                                 estimateId, subtotal, taxAmount, total);

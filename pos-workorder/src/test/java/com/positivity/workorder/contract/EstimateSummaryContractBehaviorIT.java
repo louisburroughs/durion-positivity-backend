@@ -60,6 +60,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Contract: Summary groups line items by type (parts and labor)")
     void shouldGroupLineItemsByType() {
         // Given: An estimate with both part and labor items
+        // Assumes test fixture seeds this estimate with line items
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Retrieving summary
@@ -68,43 +69,39 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404)))
+                .statusCode(200)
+                .contentType(startsWith("application/json"))
+                .body("partItems", notNullValue())
+                .body("laborItems", notNullValue())
                 .log().ifValidationFails();
-
-        // Note: If 200, response should contain partItems and laborItems arrays
-        // Full verification requires test database with known items
     }
 
     @Test
     @DisplayName("Contract: Summary includes financial breakdown")
     void shouldIncludeFinancialBreakdown() {
         // Given: An estimate with calculated totals
+        // Assumes test fixture seeds this estimate
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Retrieving summary
-        var response = given()
+        given()
                 .contentType(ContentType.JSON)
                 .when()
-                .get("/v1/workorders/estimates/{estimateId}/summary", estimateId);
-
-        response.then()
-                .statusCode(anyOf(is(200), is(404)))
+                .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
+                .then()
+                .statusCode(200)
+                .contentType(startsWith("application/json"))
+                .body("subtotal", notNullValue())
+                .body("taxAmount", notNullValue())
+                .body("total", notNullValue())
                 .log().ifValidationFails();
-
-        if (response.statusCode() == 200) {
-            response.then()
-                    .body("subtotal", notNullValue())
-                    .body("taxAmount", notNullValue())
-                    .body("total", notNullValue());
-        }
-
-        // Note: If 200, response should contain subtotal, taxAmount, total
     }
 
     @Test
     @DisplayName("Contract: Create historical snapshot - Happy Path")
     void shouldCreateEstimateSnapshot() {
         // Given: An estimate to snapshot
+        // Assumes test fixture seeds this estimate
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Creating snapshot with notes
@@ -115,7 +112,9 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist
+                .statusCode(200)
+                .body("snapshotId", notNullValue())
+                .body("capturedAt", notNullValue())
                 .log().ifValidationFails();
     }
 
@@ -123,6 +122,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Contract: Snapshot captures complete estimate state as JSON")
     void shouldCaptureCompleteEstimateState() {
         // Given: An estimate with items and calculated totals
+        // Assumes test fixture seeds this estimate with line items
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Creating snapshot
@@ -132,17 +132,16 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404)))
+                .statusCode(200)
+                .body("snapshotData", notNullValue())
                 .log().ifValidationFails();
-
-        // Note: If 200, response should contain snapshotData with serialized estimate +
-        // items
     }
 
     @Test
     @DisplayName("Contract: Snapshot is immutable - Captured timestamp never changes")
     void shouldCreateImmutableSnapshot() {
         // Given: An estimate
+        // Assumes test fixture seeds this estimate
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Creating snapshot twice, subsequent snapshot should not mutate the
@@ -153,7 +152,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404)))
+                .statusCode(200)
                 .log().ifValidationFails();
 
         given()
@@ -162,7 +161,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404)))
+                .statusCode(200)
                 .log().ifValidationFails();
 
         // Then: Snapshot should have capturedAt timestamp that never changes
@@ -174,6 +173,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     void shouldDocumentPDFGenerationLimitation() {
         // This test documents that PDF generation is not yet implemented
         // NOTE: When document service is integrated, add PDF generation tests
+        // Assumes test fixture seeds this estimate
 
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
@@ -183,7 +183,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404)))
+                .statusCode(200)
                 .contentType(anyOf(is("application/json"), is("application/json;charset=UTF-8")))
                 .log().ifValidationFails();
 
@@ -195,6 +195,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("Contract: Multiple snapshots can be created for audit trail")
     void shouldAllowMultipleSnapshots() {
         // Given: An estimate
+        // Assumes test fixture seeds this estimate
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Creating multiple snapshots at different points in time
@@ -205,7 +206,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404)));
+                .statusCode(200);
 
         given()
                 .contentType(ContentType.JSON)
@@ -214,7 +215,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404)));
+                .statusCode(200);
 
         // Then: Both snapshots should exist with different timestamps
         // This provides full version history for compliance
