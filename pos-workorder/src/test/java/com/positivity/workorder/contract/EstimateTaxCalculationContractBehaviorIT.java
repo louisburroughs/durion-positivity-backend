@@ -45,9 +45,9 @@ class EstimateTaxCalculationContractBehaviorIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist
                 .log().ifValidationFails();
     }
@@ -62,17 +62,17 @@ class EstimateTaxCalculationContractBehaviorIT {
         var firstResult = given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)));
 
         var secondResult = given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)));
 
         // Then: Results should be identical (if estimate exists)
@@ -89,9 +89,9 @@ class EstimateTaxCalculationContractBehaviorIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(409), is(404))) // 409 if approved, 404 if not found
                 .log().ifValidationFails();
     }
@@ -106,12 +106,12 @@ class EstimateTaxCalculationContractBehaviorIT {
         given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)))
                 .log().ifValidationFails();
-        
+
         // Note: If 200, response should contain subtotal, taxAmount, total fields
         // Full field validation requires test database with known estimate
     }
@@ -122,18 +122,18 @@ class EstimateTaxCalculationContractBehaviorIT {
         // This test documents the stub behavior for future integration
         // TODO: When pos-accounting tax service is integrated, update this test
         // to verify proper jurisdiction-based tax calculation
-        
+
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404)))
                 .log().ifValidationFails();
-        
+
         // Current stub: taxAmount = subtotal * 0.0825
         // Future: taxAmount calculated by pos-accounting based on jurisdiction
     }

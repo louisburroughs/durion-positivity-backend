@@ -59,9 +59,9 @@ class EstimateItemManagementContractBehaviorIT {
                 .contentType(ContentType.JSON)
                 .body(request)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/items", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist in test DB
                 .log().ifValidationFails();
     }
@@ -85,9 +85,9 @@ class EstimateItemManagementContractBehaviorIT {
                 .contentType(ContentType.JSON)
                 .body(request)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/items", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist
                 .log().ifValidationFails();
     }
@@ -110,9 +110,9 @@ class EstimateItemManagementContractBehaviorIT {
                 .contentType(ContentType.JSON)
                 .body(request)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/items", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(409), is(404))) // 409 if exists and approved, 404 if not found
                 .log().ifValidationFails();
     }
@@ -133,9 +133,9 @@ class EstimateItemManagementContractBehaviorIT {
         given()
                 .contentType(ContentType.JSON)
                 .body(request)
-        .when()
+                .when()
                 .patch("/v1/workorders/estimates/{estimateId}/items/{itemId}", estimateId, itemId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(200), is(404))) // 404 if estimate or item not found
                 .log().ifValidationFails();
     }
@@ -149,9 +149,9 @@ class EstimateItemManagementContractBehaviorIT {
 
         // When: Deleting an item
         given()
-        .when()
+                .when()
                 .delete("/v1/workorders/estimates/{estimateId}/items/{itemId}", estimateId, itemId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(204), is(404))) // 204 success, 404 if not found
                 .log().ifValidationFails();
     }
@@ -173,9 +173,9 @@ class EstimateItemManagementContractBehaviorIT {
                 .contentType(ContentType.JSON)
                 .body(invalidRequest)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
-        .when()
+                .when()
                 .post("/v1/workorders/estimates/{estimateId}/items", estimateId)
-        .then()
+                .then()
                 .statusCode(anyOf(is(400), is(404))) // 400 validation error, 404 if estimate not found
                 .log().ifValidationFails();
     }

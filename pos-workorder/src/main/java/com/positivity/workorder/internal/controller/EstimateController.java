@@ -231,6 +231,19 @@ public class EstimateController {
         try {
             EstimateItem item = estimateService.addEstimateItem(estimateId, request, userId);
             return ResponseEntity.ok(EstimateItemResponse.fromEntity(item));
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                log.warn("Estimate {} not found when adding item: {}", estimateId, e.getReason());
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getReason());
+                return ResponseEntity.badRequest().build();
+            }
+            throw e;
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            log.warn("Estimate {} not found when adding item: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalArgumentException e) {
             log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
