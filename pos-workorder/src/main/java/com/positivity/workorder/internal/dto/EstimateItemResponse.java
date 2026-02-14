@@ -25,6 +25,7 @@ public class EstimateItemResponse {
     private UUID id;
     private UUID estimateId;
     private EstimateItemType itemType;
+    @Nullable
     private String description;
     private BigDecimal quantity;
     private BigDecimal unitPrice;

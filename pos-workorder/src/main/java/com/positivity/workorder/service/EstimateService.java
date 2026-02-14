@@ -644,7 +644,7 @@ public class EstimateService {
                 List<TaxLineItem> taxLineItems = items.stream()
                                 .map(item -> TaxLineItem.builder()
                                                 .lineItemId(item.getId().toString())
-                                                .description(item.getDescription())
+                                                .description(getDescriptionForTaxCalculation(item))
                                                 .quantity(item.getQuantity())
                                                 .unitPrice(item.getUnitPrice())
                                                 .taxCategory(mapItemTypeToTaxCategory(item.getItemType()))
@@ -700,6 +700,30 @@ public class EstimateService {
                         case PART -> TAX_CATEGORY_GOODS;
                         case LABOR -> TAX_CATEGORY_SERVICES;
                 };
+        }
+
+        /**
+         * Get description for tax calculation purposes.
+         * If the item has a description, use it. Otherwise, generate a fallback
+         * description based on the item type and reference IDs.
+         * 
+         * @param item the estimate item
+         * @return a non-null, non-blank description suitable for tax calculation
+         */
+        private String getDescriptionForTaxCalculation(EstimateItem item) {
+                if (item.getDescription() != null && !item.getDescription().isBlank()) {
+                        return item.getDescription();
+                }
+                
+                // Generate fallback description based on item type and reference
+                if (item.getItemType() == EstimateItemType.PART && item.getProductId() != null) {
+                        return "Part (Product ID: " + item.getProductId() + ")";
+                } else if (item.getItemType() == EstimateItemType.LABOR && item.getServiceId() != null) {
+                        return "Labor (Service ID: " + item.getServiceId() + ")";
+                } else {
+                        // Fallback for items without description or reference (shouldn't happen due to validation)
+                        return item.getItemType() + " Item";
+                }
         }
 
         // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
