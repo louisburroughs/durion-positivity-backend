@@ -201,4 +201,61 @@ class EstimateItemManagementContractBehaviorIT {
                 .statusCode(anyOf(is(400), is(404))) // 400 validation error, 404 if estimate not found
                 .log().ifValidationFails();
     }
+
+    @Test
+    @DisplayName("Contract: Add PART item with productId but no description - Happy Path")
+    void shouldAddPartItemWithProductIdButNoDescription() {
+        // Given: A draft estimate exists
+        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID productId = UUID.randomUUID();
+
+        // Request with productId but no description (valid per validation rules)
+        AddEstimateItemRequest request = AddEstimateItemRequest.builder()
+                .itemType(EstimateItemType.PART)
+                .productId(productId)
+                .quantity(new BigDecimal("2"))
+                .unitPrice(new BigDecimal("25.99"))
+                .taxCode("TAXABLE")
+                .build();
+
+        // When: Adding a part item without description
+        // Then: Should succeed since productId is provided
+        given()
+                .contentType(ContentType.JSON)
+                .body(request)
+                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/items", estimateId)
+                .then()
+                .statusCode(anyOf(is(200), is(404))) // 200 success, 404 if estimate not found
+                .log().ifValidationFails();
+    }
+
+    @Test
+    @DisplayName("Contract: Add LABOR item with serviceId but no description - Happy Path")
+    void shouldAddLaborItemWithServiceIdButNoDescription() {
+        // Given: A draft estimate exists
+        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID serviceId = UUID.randomUUID();
+
+        // Request with serviceId but no description (valid per validation rules)
+        AddEstimateItemRequest request = AddEstimateItemRequest.builder()
+                .itemType(EstimateItemType.LABOR)
+                .serviceId(serviceId)
+                .quantity(new BigDecimal("1.5"))
+                .unitPrice(new BigDecimal("75.00"))
+                .build();
+
+        // When: Adding a labor item without description
+        // Then: Should succeed since serviceId is provided
+        given()
+                .contentType(ContentType.JSON)
+                .body(request)
+                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/items", estimateId)
+                .then()
+                .statusCode(anyOf(is(200), is(404))) // 200 success, 404 if estimate not found
+                .log().ifValidationFails();
+    }
 }
