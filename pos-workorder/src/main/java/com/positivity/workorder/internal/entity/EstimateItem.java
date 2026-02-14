@@ -96,7 +96,9 @@ public class EstimateItem {
      */
     public void calculateLineTotal() {
         if (quantity != null && unitPrice != null) {
-            lineTotal = quantity.multiply(unitPrice);
+            lineTotal = quantity.multiply(unitPrice).setScale(2, java.math.RoundingMode.HALF_UP);
+        } else {
+            lineTotal = null;
         }
     }
 

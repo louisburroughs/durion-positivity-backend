@@ -48,7 +48,11 @@ class EstimateTaxCalculationContractBehaviorIT {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist
+                .statusCode(200)
+                .body("id", equalTo(estimateId.toString()))
+                .body("subtotal", closeTo(200.00, 0.001)) // known line items total
+                .body("taxAmount", closeTo(16.50, 0.001)) // 200.00 * 0.0825
+                .body("total", closeTo(216.50, 0.001)) // subtotal + tax
                 .log().ifValidationFails();
     }
 

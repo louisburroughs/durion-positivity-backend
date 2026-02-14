@@ -55,6 +55,16 @@ class EstimateItemManagementContractBehaviorIT {
                 .build();
 
         // When: Adding a part item
+        // And: The estimate exists and is in DRAFT status
+        given()
+                .when()
+                .get("/v1/workorders/estimates/{estimateId}", estimateId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(estimateId.toString()))
+                .body("status", equalTo(EstimateStatus.DRAFT.name()));
+
+        // When/Then: Adding a part item succeeds and returns expected fields
         given()
                 .contentType(ContentType.JSON)
                 .body(request)
@@ -62,7 +72,15 @@ class EstimateItemManagementContractBehaviorIT {
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/items", estimateId)
                 .then()
-                .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist in test DB
+                .statusCode(200)
+                .contentType(ContentType.JSON)
+                .body("id", notNullValue())
+                .body("estimateId", equalTo(estimateId.toString()))
+                .body("itemType", equalTo(EstimateItemType.PART.name()))
+                .body("description", equalTo("Oil Filter"))
+                .body("quantity", anyOf(equalTo(1), equalTo(1.0f), equalTo("1")))
+                .body("unitPrice", anyOf(equalTo(12.99f), equalTo(12.99d), equalTo("12.99")))
+                .body("lineTotal", anyOf(equalTo(12.99f), equalTo(12.99d), equalTo("12.99")))
                 .log().ifValidationFails();
     }
 

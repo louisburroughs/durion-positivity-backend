@@ -25,8 +25,21 @@ public class AddEstimateItemRequest {
     @NotNull(message = "itemType is required")
     private EstimateItemType itemType;
 
-    @NotBlank(message = "description is required")
+    @Nullable
     private String description;
+
+    @jakarta.validation.constraints.AssertTrue(message = "description is required unless PART has productId or LABOR has serviceId")
+    private boolean isDescriptionOrReferenceValid() {
+        if (itemType == null)
+            return true; // handled by @NotNull on itemType
+
+        final boolean hasDescription = description != null && !description.isBlank();
+        return switch (itemType) {
+            case PART -> hasDescription || productId != null;
+            case LABOR -> hasDescription || serviceId != null;
+            default -> hasDescription;
+        };
+    }
 
     @NotNull(message = "quantity is required")
     @DecimalMin(value = "0.0001", message = "quantity must be greater than 0")

@@ -16,33 +16,35 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "estimate_snapshot")
-@Data
+@Getter
+@ToString
+@EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class EstimateSnapshot {
 
     @Id
-    @Column(columnDefinition = "UUID")
+    @Column(columnDefinition = "UUID", updatable = false)
     private UUID id;
 
-    @Column(nullable = false, columnDefinition = "UUID")
+    @Column(nullable = false, columnDefinition = "UUID", updatable = false)
     private UUID estimateId; // Reference to the source estimate
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 20, updatable = false)
     private EstimateStatus status; // Status at time of snapshot
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(nullable = false, columnDefinition = "TEXT", updatable = false)
     private String snapshotData; // JSON representation of full estimate state (estimate + all line items)
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime capturedAt;
 
-    @Column(nullable = false, columnDefinition = "UUID")
+    @Column(nullable = false, columnDefinition = "UUID", updatable = false)
     private UUID capturedById; // User who created the snapshot
 
-    @Column(length = 500)
+    @Column(length = 500, updatable = false)
     private String notes; // Optional notes about why snapshot was captured
 
     @PrePersist

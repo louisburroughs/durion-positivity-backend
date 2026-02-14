@@ -43,13 +43,23 @@ class EstimateSummaryContractBehaviorIT {
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Retrieving summary
+        // Assumes test fixture seeds this estimate with at least one PART and one LABOR line item.
         given()
-                .contentType(ContentType.JSON)
-                .when()
-                .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
-                .then()
-                .statusCode(anyOf(is(200), is(404))) // 404 if estimate doesn't exist
-                .log().ifValidationFails();
+            .contentType(ContentType.JSON)
+            .when()
+            .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
+            .then()
+            .statusCode(200)
+            .contentType(startsWith("application/json"))
+            .body("estimateId", equalTo(estimateId.toString()))
+            .body("partItems", notNullValue())
+            .body("laborItems", notNullValue())
+            .body("partItems.size()", greaterThanOrEqualTo(1))
+            .body("laborItems.size()", greaterThanOrEqualTo(1))
+            .body("subtotal", notNullValue())
+            .body("taxAmount", notNullValue())
+            .body("total", notNullValue())
+            .log().ifValidationFails();
     }
 
     @Test
