@@ -202,6 +202,29 @@ public class EstimateController {
         }
     }
 
+    @Operation(summary = "Submit estimate for customer approval", description = "Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. "
+            + "Validates completeness (has customer, vehicle, line items, calculated totals). "
+            + "CAP:003 Issue #168 - Submit Estimate for Customer Approval")
+    @ApiResponse(responseCode = "200", description = "Estimate submitted for approval successfully")
+    @ApiResponse(responseCode = "400", description = "Estimate is incomplete or not in DRAFT state")
+    @ApiResponse(responseCode = "404", description = "Estimate not found")
+    @PostMapping("/{estimateId}/submit-for-approval")
+    @EmitEvent(id = "WORKORDER_ESTIMATE_SUBMIT", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:submit')")
+    public ResponseEntity<EstimateResponse> submitForApproval(
+            @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
+            @Parameter(description = "User ID submitting the estimate", hidden = true) @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
+        try {
+            // Fall back to a dummy user ID if not provided (for testing)
+            UUID submittingUser = userId != null ? userId : UUID.fromString("00000000-0000-0000-0000-000000000001");
+            EstimateResponse submitted = estimateService.submitForApproval(estimateId, submittingUser);
+            return ResponseEntity.ok(submitted);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            log.warn("Failed to submit estimate {} for approval: {}", estimateId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     @Operation(summary = "Delete an estimate", description = "Delete an estimate by its unique ID.")
     @ApiResponse(responseCode = "204", description = "Estimate deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
