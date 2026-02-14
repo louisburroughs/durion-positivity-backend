@@ -20,6 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.dto.EstimateItemResponse;
+import com.positivity.workorder.internal.dto.EstimateResponse;
+import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
+import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.internal.entity.Estimate;
@@ -35,6 +39,10 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.BillingRulesClientService;
+import com.positivity.tax.internal.dto.TaxCalculationRequest;
+import com.positivity.tax.internal.dto.TaxCalculationResponse;
+import com.positivity.tax.internal.dto.TaxLineItem;
+import com.positivity.tax.service.TaxCalculationService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +60,7 @@ public class EstimateService {
         private final WorkorderRepository workOrderRepository;
         private final ApplicationEventPublisher eventPublisher;
         private final BillingRulesClientService billingRulesClientService;
+        private final TaxCalculationService taxCalculationService;
         private final ObjectMapper objectMapper;
 
         // Configuration defaults
@@ -69,20 +78,37 @@ public class EstimateService {
                                                                                                                  // (locationId
                                                                                                                  // claim)
 
-        public List<Estimate> getAllEstimates() {
-                return estimateRepository.findAll();
+        // Tax category constants
+        private static final String TAX_CATEGORY_GOODS = "GOODS";
+        private static final String TAX_CATEGORY_SERVICES = "SERVICES";
+
+        // Default postal code - should be replaced with location service lookup
+        private static final String DEFAULT_POSTAL_CODE = "78701"; // Austin, TX
+
+        public List<EstimateResponse> getAllEstimates() {
+                return estimateRepository.findAll()
+                                .stream()
+                                .map(EstimateResponse::fromEntity)
+                                .toList();
         }
 
-        public Optional<Estimate> getEstimateById(UUID id) {
-                return estimateRepository.findById(id);
+        public Optional<EstimateResponse> getEstimateById(UUID id) {
+                return estimateRepository.findById(id)
+                                .map(EstimateResponse::fromEntity);
         }
 
-        public List<Estimate> getEstimatesByCustomer(UUID customerId) {
-                return estimateRepository.findByCustomerId(customerId);
+        public List<EstimateResponse> getEstimatesByCustomer(UUID customerId) {
+                return estimateRepository.findByCustomerId(customerId)
+                                .stream()
+                                .map(EstimateResponse::fromEntity)
+                                .toList();
         }
 
-        public List<Estimate> getEstimatesByLocation(UUID locationId) {
-                return estimateRepository.findByLocationId(locationId);
+        public List<EstimateResponse> getEstimatesByLocation(UUID locationId) {
+                return estimateRepository.findByLocationId(locationId)
+                                .stream()
+                                .map(EstimateResponse::fromEntity)
+                                .toList();
         }
 
         /**
@@ -91,11 +117,11 @@ public class EstimateService {
          * @param request         The create estimate request with customer and vehicle
          *                        IDs
          * @param createdByUserId The user ID creating the estimate
-         * @return The created estimate
+         * @return The created estimate DTO
          * @throws IllegalArgumentException if validation fails
          */
         @Transactional
-        public Estimate createEstimate(CreateEstimateRequest request, UUID createdByUserId) {
+        public EstimateResponse createEstimate(CreateEstimateRequest request, UUID createdByUserId) {
                 log.info("Creating new estimate for customer {} and vehicle {}",
                                 request.getCustomerId(), request.getVehicleId());
 
@@ -147,7 +173,7 @@ public class EstimateService {
 
                 // NOTE: Emit EstimateCreated audit event
 
-                return saved;
+                return EstimateResponse.fromEntity(saved);
         }
 
         /**
@@ -170,7 +196,7 @@ public class EstimateService {
         }
 
         @Transactional
-        public Estimate approveEstimate(UUID estimateId, UUID approvedByUserId) {
+        public EstimateResponse approveEstimate(UUID estimateId, UUID approvedByUserId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -184,14 +210,15 @@ public class EstimateService {
                 estimate.setApprovedBy(approvedByUserId);
 
                 log.info("Estimate {} approved by user {}", estimateId, approvedByUserId);
-                return estimateRepository.save(estimate);
+                return EstimateResponse.fromEntity(estimateRepository.save(estimate));
         }
 
         @Transactional
-        public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
+        public EstimateResponse approveEstimate(UUID estimateId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes) {
-                return approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
-                                signatureMimeType, signerName, notes, null);
+                return EstimateResponse
+                                .fromEntity(approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
+                                                signatureMimeType, signerName, notes, null));
         }
 
         /**
@@ -208,11 +235,12 @@ public class EstimateService {
          * @return approved estimate
          */
         @Transactional
-        public Estimate approveEstimate(UUID estimateId, UUID customerId, String signatureData,
+        public EstimateResponse approveEstimate(UUID estimateId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes,
                         @Nullable String purchaseOrderNumber) {
-                return approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
-                                signatureMimeType, signerName, notes, purchaseOrderNumber);
+                return EstimateResponse
+                                .fromEntity(approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
+                                                signatureMimeType, signerName, notes, purchaseOrderNumber));
         }
 
         /**
@@ -265,7 +293,7 @@ public class EstimateService {
         }
 
         @Transactional
-        public Estimate declineEstimate(UUID estimateId, String reason) {
+        public EstimateResponse declineEstimate(UUID estimateId, String reason) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -283,11 +311,11 @@ public class EstimateService {
                 estimate.setExpiresAt(LocalDateTime.now().plusDays(config.getDeclineExpiryDays()));
 
                 log.info("Estimate {} declined with reason: {}", estimateId, reason);
-                return estimateRepository.save(estimate);
+                return EstimateResponse.fromEntity(estimateRepository.save(estimate));
         }
 
         @Transactional
-        public Estimate reopenEstimate(UUID estimateId) {
+        public EstimateResponse reopenEstimate(UUID estimateId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -304,7 +332,7 @@ public class EstimateService {
                 estimate.setExpiresAt(null);
 
                 log.info("Estimate {} reopened from declined state", estimateId);
-                return estimateRepository.save(estimate);
+                return EstimateResponse.fromEntity(estimateRepository.save(estimate));
         }
 
         /**
@@ -360,10 +388,11 @@ public class EstimateService {
          * @return the updated estimate
          */
         @Transactional
-        public Estimate updateEstimateFinancials(UUID estimateId, BigDecimal subtotal,
+        public EstimateResponse updateEstimateFinancials(UUID estimateId, BigDecimal subtotal,
                         BigDecimal taxAmount, BigDecimal total,
                         UUID userId) {
-                return updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, userId);
+                return EstimateResponse.fromEntity(
+                                updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, userId));
         }
 
         /**
@@ -450,7 +479,7 @@ public class EstimateService {
          */
         @Transactional
         @NonNull
-        public EstimateItem addEstimateItem(@NonNull UUID estimateId, @NonNull AddEstimateItemRequest request,
+        public EstimateItemResponse addEstimateItem(@NonNull UUID estimateId, @NonNull AddEstimateItemRequest request,
                         @NonNull UUID userId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
@@ -481,7 +510,7 @@ public class EstimateService {
                 log.info("Added {} item to estimate {}: itemId={}, description='{}'",
                                 saved.getItemType(), estimateId, saved.getId(), saved.getDescription());
 
-                return saved;
+                return EstimateItemResponse.fromEntity(saved);
         }
 
         /**
@@ -495,7 +524,7 @@ public class EstimateService {
          */
         @Transactional
         @NonNull
-        public EstimateItem updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
+        public EstimateItemResponse updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
                         @NonNull UpdateEstimateItemRequest request) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
@@ -532,7 +561,7 @@ public class EstimateService {
 
                 log.info("Updated item {} on estimate {}", itemId, estimateId);
 
-                return saved;
+                return EstimateItemResponse.fromEntity(saved);
         }
 
         /**
@@ -569,8 +598,11 @@ public class EstimateService {
          * Get all line items for an estimate (excluding soft-deleted).
          */
         @NonNull
-        public List<EstimateItem> getEstimateItems(@NonNull UUID estimateId) {
-                return estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+        public List<EstimateItemResponse> getEstimateItems(@NonNull UUID estimateId) {
+                return estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId)
+                                .stream()
+                                .map(EstimateItemResponse::fromEntity)
+                                .toList();
         }
 
         // ==================== TAX CALCULATION (CAP:002 Story #16) ====================
@@ -579,8 +611,7 @@ public class EstimateService {
          * Calculate taxes and totals for an estimate based on its line items.
          * Story #16 (Calculate Taxes and Totals)
          * 
-         * STUB IMPLEMENTATION: Uses flat 8.25% tax rate.
-         * NOTE: Integrate with pos-accounting tax service for proper tax calculation.
+         * Integrates with pos-tax service for jurisdiction-based tax calculation.
          *
          * @param estimateId estimate to calculate
          * @param userId     user requesting calculation
@@ -588,7 +619,7 @@ public class EstimateService {
          */
         @Transactional
         @NonNull
-        public Estimate calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull UUID userId) {
+        public EstimateResponse calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull UUID userId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -602,30 +633,73 @@ public class EstimateService {
                 // Get all line items
                 List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
 
-                // Calculate subtotal (sum of all line totals)
-                BigDecimal subtotal = items.stream()
-                                .map(EstimateItem::getLineTotal)
-                                .filter(Objects::nonNull)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (items.isEmpty()) {
+                        log.warn("No line items found for estimate {}, setting totals to zero", estimateId);
+                        Estimate saved = updateEstimateFinancialsInternal(estimateId, BigDecimal.ZERO, BigDecimal.ZERO,
+                                        BigDecimal.ZERO, userId);
+                        return EstimateResponse.fromEntity(saved);
+                }
 
-                // STUB: Tax calculation with flat 8.25% rate
-                // NOTE: Integrate with pos-accounting tax service for proper jurisdiction-based
-                // tax calculation
-                BigDecimal taxRate = new BigDecimal("0.0825"); // 8.25%
-                BigDecimal taxAmount = subtotal.multiply(taxRate).setScale(2, RoundingMode.HALF_UP);
+                // Build tax calculation request
+                List<TaxLineItem> taxLineItems = items.stream()
+                                .map(item -> TaxLineItem.builder()
+                                                .lineItemId(item.getId().toString())
+                                                .description(item.getDescription())
+                                                .quantity(item.getQuantity())
+                                                .unitPrice(item.getUnitPrice())
+                                                .taxCategory(mapItemTypeToTaxCategory(item.getItemType()))
+                                                .taxExempt(false)
+                                                .build())
+                                .toList();
 
-                // Calculate total
-                BigDecimal total = subtotal.add(taxAmount);
+                // Get postal code from estimate's location
+                // NOTE: Currently using default postal code. Should integrate with pos-location
+                // service
+                // to retrieve actual postal code for estimate.getLocationId()
+                String postalCode = DEFAULT_POSTAL_CODE;
+
+                TaxCalculationRequest taxRequest = TaxCalculationRequest.builder()
+                                .lineItems(taxLineItems)
+                                .postalCode(postalCode)
+                                .countryCode("US")
+                                .customerId(estimate.getCustomerId().toString())
+                                .referenceId(estimateId.toString())
+                                .build();
+
+                // Call tax service
+                TaxCalculationResponse taxResponse = taxCalculationService.calculateTax(taxRequest);
+
+                // Extract calculated values
+                BigDecimal subtotal = taxResponse.getSubtotal();
+                BigDecimal taxAmount = taxResponse.getTotalTax();
+                BigDecimal total = taxResponse.getTotal();
 
                 // Update estimate using internal helper (reuses transaction context)
                 Estimate saved = updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, userId);
 
-                log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={}",
-                                estimateId, subtotal, taxAmount, total);
-                log.warn("Tax calculation for estimate {} uses stub implementation (8.25% flat rate). "
-                                + "Integration with pos-accounting tax service required (issue #171)", estimateId);
+                log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={} (testMode={})",
+                                estimateId, subtotal, taxAmount, total, taxResponse.isTestMode());
 
-                return saved;
+                if (taxResponse.isTestMode()) {
+                        log.warn("Tax calculation for estimate {} used TEST MODE. "
+                                        + "Verify tax service configuration for production use.", estimateId);
+                }
+
+                return EstimateResponse.fromEntity(saved);
+        }
+
+        /**
+         * Map EstimateItemType to tax category code.
+         * Different item types may have different tax treatment.
+         */
+        private String mapItemTypeToTaxCategory(EstimateItemType itemType) {
+                if (itemType == null) {
+                        return TAX_CATEGORY_GOODS;
+                }
+                return switch (itemType) {
+                        case PART -> TAX_CATEGORY_GOODS;
+                        case LABOR -> TAX_CATEGORY_SERVICES;
+                };
         }
 
         // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
@@ -639,35 +713,18 @@ public class EstimateService {
          * @return estimate with all line items grouped by type
          */
         @NonNull
-        public Map<String, Object> getEstimateSummary(@NonNull UUID estimateId) {
+        public EstimateSummaryResponse getEstimateSummary(@NonNull UUID estimateId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
                 List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
 
-                // Group items by type
-                List<EstimateItem> partItems = items.stream()
-                                .filter(item -> item.getItemType() == EstimateItemType.PART)
-                                .toList();
-
-                List<EstimateItem> laborItems = items.stream()
-                                .filter(item -> item.getItemType() == EstimateItemType.LABOR)
-                                .toList();
-
-                // Build summary response
-                Map<String, Object> summary = new HashMap<>();
-                summary.put("estimate", estimate);
-                summary.put("partItems", partItems);
-                summary.put("laborItems", laborItems);
-                summary.put("itemCount", items.size());
-
-                log.info("Retrieved summary for estimate {}: {} items ({} parts, {} labor)",
-                                estimateId, items.size(), partItems.size(), laborItems.size());
+                log.info("Retrieved summary for estimate {}: {} items", estimateId, items.size());
 
                 // NOTE: PDF generation not implemented - requires document service integration
                 // (issue #169)
 
-                return summary;
+                return EstimateSummaryResponse.fromEstimateAndItems(estimate, items);
         }
 
         /**
@@ -681,7 +738,7 @@ public class EstimateService {
          */
         @Transactional
         @NonNull
-        public EstimateSnapshot createEstimateSnapshot(@NonNull UUID estimateId, @NonNull UUID userId,
+        public EstimateSnapshotResponse createEstimateSnapshot(@NonNull UUID estimateId, @NonNull UUID userId,
                         @Nullable String notes) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
@@ -715,6 +772,6 @@ public class EstimateService {
                 log.info("Created snapshot for estimate {}: snapshotId={}, status={}, itemCount={}",
                                 estimateId, saved.getId(), estimate.getStatus(), items.size());
 
-                return saved;
+                return EstimateSnapshotResponse.fromEntity(saved);
         }
 }

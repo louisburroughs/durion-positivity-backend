@@ -122,6 +122,12 @@
             <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <!-- POS Tax Service -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tax</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

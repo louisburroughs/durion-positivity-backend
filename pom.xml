@@ -218,6 +218,7 @@
 		<module>pos-security-service</module>
 		<module>pos-people</module>
 		<module>pos-location</module>
+		<module>pos-tax</module>
 		<module>pos-api-gateway</module>
 		<module>pos-service-discovery</module>
 		<module>pos-mcp-server</module>

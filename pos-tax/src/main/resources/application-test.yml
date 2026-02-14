@@ -1,0 +1,33 @@
+# Test configuration
+spring:
+  cloud:
+    discovery:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+# Force test mode for all tests
+pos:
+  tax:
+    test-mode:
+      enabled: true
+      default-rates:
+        STATE: 0.08        # 8% state tax for tests
+        COUNTY: 0.01       # 1% county tax for tests
+        CITY: 0.01         # 1% city tax for tests
+      postal-code-mapping:
+        "12345":
+          state: "TS"
+          county: "Test County"
+          city: "Test City"
+    retry:
+      max-attempts: 1      # No retries in tests
+      initial-backoff: 0
+
+logging:
+  level:
+    com.positivity.tax: DEBUG
