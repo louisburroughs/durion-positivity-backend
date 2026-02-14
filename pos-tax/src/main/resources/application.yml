@@ -3,7 +3,9 @@ spring:
     name: pos-tax
   cloud:
     discovery:
-      enabled: true
+      # Disabled by default - pos-tax is internal-only and should not be externally accessible
+      # Enable only if deploying as standalone internal microservice
+      enabled: false
 
 server:
   port: 8091
@@ -12,8 +14,10 @@ eureka:
   client:
     serviceUrl:
       defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
-    register-with-eureka: true
-    fetch-registry: true
+    # Do NOT register with Eureka by default - pos-tax is internal-only
+    # Other services use it as a library dependency, not via REST calls
+    register-with-eureka: false
+    fetch-registry: false
   instance:
     prefer-ip-address: true
     lease-renewal-interval-in-seconds: 30
