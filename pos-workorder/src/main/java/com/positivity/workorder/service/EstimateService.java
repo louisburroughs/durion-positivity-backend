@@ -1,14 +1,12 @@
 package com.positivity.workorder.service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +18,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.tax.internal.dto.TaxCalculationRequest;
+import com.positivity.tax.internal.dto.TaxCalculationResponse;
+import com.positivity.tax.internal.dto.TaxLineItem;
+import com.positivity.tax.service.TaxCalculationService;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateItemResponse;
@@ -41,10 +43,6 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.service.BillingRulesClientService;
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
-import com.positivity.tax.internal.dto.TaxCalculationResponse;
-import com.positivity.tax.internal.dto.TaxLineItem;
-import com.positivity.tax.service.TaxCalculationService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

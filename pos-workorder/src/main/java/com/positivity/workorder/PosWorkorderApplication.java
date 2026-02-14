@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Note: Jackson 3.0 ObjectMapper is auto-configured by Spring Boot 4.0.1 with
  * Java 8 date/time support built-in. No manual configuration required.
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = { "com.positivity.workorder", "com.positivity.tax" })
 public class PosWorkorderApplication {
     public static void main(String[] args) {
         SpringApplication.run(PosWorkorderApplication.class, args);
