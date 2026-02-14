@@ -1,17 +1,18 @@
 package com.positivity.workorder.internal.dto;
 
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import org.jspecify.annotations.Nullable;
+
 import com.positivity.workorder.internal.entity.EstimateItemType;
+
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.jspecify.annotations.Nullable;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * Request DTO for adding a line item to an estimate.

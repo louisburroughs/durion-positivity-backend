@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
@@ -37,6 +38,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "List of work orders returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_LIST", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:workorder:view')")
     public List<WorkorderResponse> getAllWorkorders() {
         return workorderService.getAllWorkorders()
                 .stream()
@@ -48,6 +50,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Work order found and returned.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @GetMapping("/{workorderId}")
+    @PreAuthorize("hasAuthority('workorder:workorder:view')")
     public ResponseEntity<WorkorderResponse> getWorkorderById(
             @Parameter(description = "ID of the work order to retrieve", example = "1") @PathVariable UUID workorderId) {
         return workorderService.getWorkorderById(workorderId)
@@ -84,6 +87,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @PostMapping("/{workorderId}/start")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:workorder:start')")
     public ResponseEntity<StartWorkorderResponse> startWorkorder(
             @Parameter(description = "ID of the work order to start", example = "1") @PathVariable UUID workorderId,
             @RequestBody StartWorkorderRequest request) {
@@ -138,6 +142,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @PostMapping("/{workorderId}/approval")
     @EmitEvent(id = "WORKORDER_APPROVE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:workorder:approve')")
     public ResponseEntity<WorkorderResponse> approveWorkorder(
             @Parameter(description = "ID of the work order to approve", example = "1") @PathVariable UUID workorderId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveWorkorderRequest request) {
@@ -161,6 +166,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @PostMapping("/{workorderId}/complete")
     @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:workorder:complete')")
     public ResponseEntity<CompleteWorkorderResponse> completeWorkorder(
             @Parameter(description = "ID of the work order to complete", example = "1") @PathVariable UUID workorderId,
             @RequestBody CompleteWorkorderRequest request) {

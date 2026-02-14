@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,6 +36,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_ESTIMATE_LIST", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getAllEstimates() {
         return estimateService.getAllEstimates()
                 .stream()
@@ -46,6 +48,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "Estimate found and returned.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @GetMapping("/{estimateId}")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<EstimateResponse> getEstimateById(
             @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         return estimateService.getEstimateById(estimateId)
@@ -58,6 +61,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/customer/{customerId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByCustomer(
             @Parameter(description = "ID of the customer", example = "1") @PathVariable UUID customerId) {
         return estimateService.getEstimatesByCustomer(customerId)
@@ -70,6 +74,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/shop/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_SHOP", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByShop(
             @Parameter(description = "ID of the shop", example = "1") @PathVariable UUID locationId) {
         return estimateService.getEstimatesByLocation(locationId)
@@ -82,6 +87,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
     @GetMapping("/location/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_LOCATION", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByLocation(
             @Parameter(description = "ID of the location", example = "1") @PathVariable UUID locationId) {
         return estimateService.getEstimatesByLocation(locationId)
@@ -100,16 +106,14 @@ public class EstimateController {
     @ApiResponse(responseCode = "500", description = "Internal server error - estimate creation failed.")
     @PostMapping()
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
-    public ResponseEntity<?> createEstimate(
+    @PreAuthorize("hasAuthority('workorder:estimate:create')")
+    public ResponseEntity<EstimateResponse> createEstimate(
             @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request,
             @Parameter(description = "ID of the user creating the estimate", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
 
         try {
             log.info("Received create estimate request for customerId={}, vehicleId={}",
                     request.getCustomerId(), request.getVehicleId());
-
-            // TODO: Check permissions - verify user has ESTIMATE_CREATE permission
-            // For now, we'll assume the user has permission
 
             Estimate estimate = estimateService.createEstimate(request, userId);
             EstimateResponse response = EstimateResponse.fromEntity(estimate);
@@ -121,19 +125,11 @@ public class EstimateController {
 
         } catch (IllegalArgumentException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of(
-                            "error", "Bad Request",
-                            "message", e.getMessage()));
+            return ResponseEntity.badRequest().build();
 
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of(
-                            "error", "Internal Server Error",
-                            "message", "An unexpected error occurred while creating the estimate"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -143,6 +139,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/decline")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DECLINE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:decline')")
     public ResponseEntity<EstimateResponse> declineEstimate(
             @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Reason for decline") @RequestParam(required = false) String reason) {
@@ -160,6 +157,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/reopen")
     @EmitEvent(id = "WORKORDER_ESTIMATE_REOPEN", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:reopen')")
     public ResponseEntity<EstimateResponse> reopenEstimate(
             @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
@@ -180,6 +178,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @PostMapping("/{estimateId}/approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_APPROVE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:approve')")
     public ResponseEntity<EstimateResponse> approveEstimate(
             @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveEstimateRequest request) {
@@ -204,6 +203,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @DeleteMapping("/{estimateId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_DELETE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:delete')")
     public ResponseEntity<Void> deleteEstimate(
             @Parameter(description = "ID of the estimate to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         estimateService.deleteEstimate(estimateId);
@@ -224,6 +224,7 @@ public class EstimateController {
     })
     @PostMapping("/{estimateId}/items")
     @EmitEvent(id = "ESTIMATE_ITEM_ADD", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate_item:add')")
     public ResponseEntity<EstimateItemResponse> addEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Line item details", required = true) @Valid @RequestBody AddEstimateItemRequest request,
@@ -264,6 +265,7 @@ public class EstimateController {
     })
     @PatchMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_UPDATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate_item:edit')")
     public ResponseEntity<EstimateItemResponse> updateEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID itemId,
@@ -288,6 +290,7 @@ public class EstimateController {
     })
     @DeleteMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_DELETE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate_item:delete')")
     public ResponseEntity<Void> deleteEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID itemId) {
@@ -317,6 +320,7 @@ public class EstimateController {
     })
     @PostMapping("/{estimateId}/calculate")
     @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:calculate')")
     public ResponseEntity<EstimateResponse> calculateEstimateTotals(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "ID of the user requesting calculation", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
@@ -344,6 +348,7 @@ public class EstimateController {
     })
     @GetMapping("/{estimateId}/summary")
     @EmitEvent(id = "ESTIMATE_SUMMARY_VIEW", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public ResponseEntity<EstimateSummaryResponse> getEstimateSummary(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
@@ -377,6 +382,7 @@ public class EstimateController {
     })
     @PostMapping("/{estimateId}/snapshots")
     @EmitEvent(id = "ESTIMATE_SNAPSHOT_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate_snapshot:create')")
     public ResponseEntity<EstimateSnapshotResponse> createEstimateSnapshot(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Optional notes about why snapshot was created") @RequestParam(required = false) @Nullable String notes,

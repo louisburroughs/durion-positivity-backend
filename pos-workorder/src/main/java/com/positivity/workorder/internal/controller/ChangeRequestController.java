@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,6 +36,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Work order not found")
     @PostMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:change_request:create')")
     public ResponseEntity<ChangeRequestResponse> createChangeRequest(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @Parameter(description = "Change request details including items") @RequestBody CreateChangeRequestDTO dto) {
@@ -55,6 +57,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @PostMapping("/changeRequests/{changeId}/approve")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_APPROVE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:change_request:approve')")
     public ResponseEntity<ChangeRequestResponse> approveChangeRequest(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Approval details including user ID and note") @RequestBody ApproveChangeRequestDTO dto) {
@@ -75,6 +78,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @PostMapping("/changeRequests/{changeId}/decline")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DECLINE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:change_request:decline')")
     public ResponseEntity<ChangeRequestResponse> declineChangeRequest(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Decline details including note") @RequestBody DeclineChangeRequestDTO dto) {
@@ -114,11 +118,11 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @PostMapping("/changeRequests/{changeId}/emergency-override")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:change_request:emergency_override')")
     public ResponseEntity<ChangeRequestResponse> applyEmergencyOverride(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId,
             @Parameter(description = "Emergency override details including manager ID and reason") @RequestBody EmergencyOverrideDTO dto) {
         try {
-            // TODO: Add role-based authorization check for Manager role
             ChangeRequest overridden = changeRequestService.applyEmergencyOverride(
                     changeId, dto.getManagerId(), dto.getExceptionReason());
             return ResponseEntity.ok(ChangeRequestResponse.fromEntity(overridden));
@@ -131,6 +135,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "Change request found")
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @GetMapping("/changeRequests/{changeId}")
+    @PreAuthorize("hasAuthority('workorder:change_request:view')")
     public ResponseEntity<ChangeRequestResponse> getChangeRequestById(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
         try {
@@ -145,6 +150,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "List of change requests returned")
     @GetMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_LIST", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:change_request:view')")
     public ResponseEntity<List<ChangeRequestResponse>> getChangeRequestsByWorkorder(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         List<ChangeRequest> changeRequests = changeRequestService.getChangeRequestsByWorkorder(workorderId);
