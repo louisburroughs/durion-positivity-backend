@@ -10,13 +10,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.WebApplicationContext;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -27,18 +29,20 @@ import tools.jackson.databind.node.ObjectNode;
  * 
  * Tests cover:
  * - Submit for approval (Issue #168)
- * - Digital signature approval with selective line item approval (Issue #207, #205)
+ * - Digital signature approval with selective line item approval (Issue #207,
+ * #205)
  * - In-person approval (Issue #206)
  * - Approval expiration (Issue #204)
  */
-@SpringBootTest
-@AutoConfigureMockMvc
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Transactional
 @DisplayName("Estimate Approval Contract Behavior Tests (CAP:003)")
 class EstimateApprovalContractBehaviorIT {
 
     @Autowired
+    private WebApplicationContext webApplicationContext;
+
     private MockMvc mockMvc;
 
     @Autowired
@@ -50,6 +54,7 @@ class EstimateApprovalContractBehaviorIT {
 
     @BeforeEach
     void setUp() {
+        mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         testCustomerId = UUID.randomUUID();
         testVehicleId = UUID.randomUUID();
         testLocationId = UUID.randomUUID();
@@ -65,8 +70,8 @@ class EstimateApprovalContractBehaviorIT {
 
         // Submit for approval
         mockMvc.perform(post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
-                        .header("X-User-Id", UUID.randomUUID().toString())
-                        .header("X-Correlation-Id", "test-ap-001"))
+                .header("X-User-Id", UUID.randomUUID().toString())
+                .header("X-Correlation-Id", "test-ap-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(estimateId))
                 .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
@@ -82,8 +87,8 @@ class EstimateApprovalContractBehaviorIT {
 
         // Attempt to submit - should fail validation
         mockMvc.perform(post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
-                        .header("X-User-Id", UUID.randomUUID().toString())
-                        .header("X-Correlation-Id", "test-ap-002"))
+                .header("X-User-Id", UUID.randomUUID().toString())
+                .header("X-Correlation-Id", "test-ap-002"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -95,8 +100,8 @@ class EstimateApprovalContractBehaviorIT {
 
         // Attempt to submit - should fail validation
         mockMvc.perform(post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
-                        .header("X-User-Id", UUID.randomUUID().toString())
-                        .header("X-Correlation-Id", "test-ap-003"))
+                .header("X-User-Id", UUID.randomUUID().toString())
+                .header("X-Correlation-Id", "test-ap-003"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -109,12 +114,13 @@ class EstimateApprovalContractBehaviorIT {
 
         // Attempt to submit approved estimate - should fail state check
         mockMvc.perform(post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
-                        .header("X-User-Id", UUID.randomUUID().toString())
-                        .header("X-Correlation-Id", "test-ap-004"))
+                .header("X-User-Id", UUID.randomUUID().toString())
+                .header("X-Correlation-Id", "test-ap-004"))
                 .andExpect(status().isBadRequest());
     }
 
-    // ========== DIGITAL APPROVAL WITH SELECTIVE LINE ITEM TESTS (Issue #207, #205) ==========
+    // ========== DIGITAL APPROVAL WITH SELECTIVE LINE ITEM TESTS (Issue #207, #205)
+    // ==========
 
     @Test
     @DisplayName("AP-010: Successfully approve estimate with all line items approved")
@@ -126,14 +132,14 @@ class EstimateApprovalContractBehaviorIT {
         submitForApproval(estimateId);
 
         // Approve with all items approved
-        String approvalPayload = createApprovalPayload(testCustomerId.toString(), 
+        String approvalPayload = createApprovalPayload(testCustomerId.toString(),
                 null, // null = approve all items implicitly
                 "Test Signer", "Approved all services", null);
 
         mockMvc.perform(post("/v1/workorders/estimates/{id}/approval", estimateId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(approvalPayload)
-                        .header("X-Correlation-Id", "test-ap-010"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(approvalPayload)
+                .header("X-Correlation-Id", "test-ap-010"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"))
                 .andExpect(jsonPath("$.approvedAt").exists())
@@ -156,19 +162,20 @@ class EstimateApprovalContractBehaviorIT {
                 testCustomerId.toString(),
                 "Test Signer",
                 "Partial approval",
-                itemIds[0], true, null,  // Approve first item
-                itemIds[1], false, "Customer declined optional service"  // Decline second item
+                itemIds[0], true, null, // Approve first item
+                itemIds[1], false, "Customer declined optional service" // Decline second item
         );
 
         mockMvc.perform(post("/v1/workorders/estimates/{id}/approval", estimateId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(approvalPayload)
-                        .header("X-Correlation-Id", "test-ap-011"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(approvalPayload)
+                .header("X-Correlation-Id", "test-ap-011"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"));
 
         // Verify line item approval statuses
-        // TODO: Add endpoint to fetch estimate with line items to verify individual item statuses
+        // TODO: Add endpoint to fetch estimate with line items to verify individual
+        // item statuses
     }
 
     @Test
@@ -179,13 +186,13 @@ class EstimateApprovalContractBehaviorIT {
         submitForApproval(estimateId);
 
         // Approve with PO number
-        String approvalPayload = createApprovalPayload(testCustomerId.toString(), 
+        String approvalPayload = createApprovalPayload(testCustomerId.toString(),
                 null, "Test Signer", "Approved with PO", "PO-2024-12345");
 
         mockMvc.perform(post("/v1/workorders/estimates/{id}/approval", estimateId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(approvalPayload)
-                        .header("X-Correlation-Id", "test-ap-012"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(approvalPayload)
+                .header("X-Correlation-Id", "test-ap-012"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.purchaseOrderNumber").value("PO-2024-12345"));
     }
@@ -198,13 +205,13 @@ class EstimateApprovalContractBehaviorIT {
 
         // Attempt approval with wrong customer ID
         UUID wrongCustomerId = UUID.randomUUID();
-        String approvalPayload = createApprovalPayload(wrongCustomerId.toString(), 
+        String approvalPayload = createApprovalPayload(wrongCustomerId.toString(),
                 null, "Test Signer", "Wrong customer", null);
 
         mockMvc.perform(post("/v1/workorders/estimates/{id}/approval", estimateId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(approvalPayload)
-                        .header("X-Correlation-Id", "test-ap-013"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(approvalPayload)
+                .header("X-Correlation-Id", "test-ap-013"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -214,13 +221,13 @@ class EstimateApprovalContractBehaviorIT {
         // Create draft estimate (not submitted for approval)
         String estimateId = createCompleteEstimate();
 
-        String approvalPayload = createApprovalPayload(testCustomerId.toString(), 
+        String approvalPayload = createApprovalPayload(testCustomerId.toString(),
                 null, "Test Signer", "Trying to approve draft", null);
 
         mockMvc.perform(post("/v1/workorders/estimates/{id}/approval", estimateId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(approvalPayload)
-                        .header("X-Correlation-Id", "test-ap-014"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(approvalPayload)
+                .header("X-Correlation-Id", "test-ap-014"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -234,8 +241,8 @@ class EstimateApprovalContractBehaviorIT {
         payload.put("locationId", testLocationId.toString());
 
         MvcResult createResult = mockMvc.perform(post("/v1/workorders/estimates")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(payload.toString()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload.toString()))
                 .andExpect(status().isCreated())
                 .andReturn();
 
@@ -259,8 +266,8 @@ class EstimateApprovalContractBehaviorIT {
         payload.put("locationId", testLocationId.toString());
 
         MvcResult result = mockMvc.perform(post("/v1/workorders/estimates")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(payload.toString()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload.toString()))
                 .andExpect(status().isCreated())
                 .andReturn();
 
@@ -283,8 +290,8 @@ class EstimateApprovalContractBehaviorIT {
         return estimateId;
     }
 
-    private void addLineItem(String estimateId, String description, String itemType, 
-                            String price, int quantity) throws Exception {
+    private void addLineItem(String estimateId, String description, String itemType,
+            String price, int quantity) throws Exception {
         ObjectNode itemPayload = objectMapper.createObjectNode();
         itemPayload.put("description", description);
         itemPayload.put("itemType", itemType);
@@ -292,8 +299,8 @@ class EstimateApprovalContractBehaviorIT {
         itemPayload.put("quantity", quantity);
 
         mockMvc.perform(post("/v1/workorders/estimates/{id}/items", estimateId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(itemPayload.toString()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(itemPayload.toString()))
                 .andExpect(status().isCreated());
     }
 
@@ -304,18 +311,18 @@ class EstimateApprovalContractBehaviorIT {
 
     private void submitForApproval(String estimateId) throws Exception {
         mockMvc.perform(post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
-                        .header("X-User-Id", UUID.randomUUID().toString()))
+                .header("X-User-Id", UUID.randomUUID().toString()))
                 .andExpect(status().isOk());
     }
 
     private void approveEstimate(String estimateId) throws Exception {
         submitForApproval(estimateId);
-        String approvalPayload = createApprovalPayload(testCustomerId.toString(), 
+        String approvalPayload = createApprovalPayload(testCustomerId.toString(),
                 null, "Test Signer", "Test approval", null);
 
         mockMvc.perform(post("/v1/workorders/estimates/{id}/approval", estimateId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(approvalPayload))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(approvalPayload))
                 .andExpect(status().isOk());
     }
 
@@ -334,10 +341,12 @@ class EstimateApprovalContractBehaviorIT {
     }
 
     private String createApprovalPayload(String customerId, String lineItemApprovals,
-                                        String signerName, String notes, String poNumber) throws Exception {
+            String signerName, String notes, String poNumber) throws Exception {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("customerId", customerId);
-        payload.put("signatureData", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="); // 1x1 PNG
+        payload.put("signatureData",
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="); // 1x1
+                                                                                                                     // PNG
         payload.put("signatureMimeType", "image/png");
         payload.put("signerName", signerName);
         payload.put("notes", notes);
@@ -354,11 +363,12 @@ class EstimateApprovalContractBehaviorIT {
         return payload.toString();
     }
 
-    private String createApprovalPayloadWithLineItems(String customerId, String signerName, 
-                                                      String notes, Object... lineItemData) throws Exception {
+    private String createApprovalPayloadWithLineItems(String customerId, String signerName,
+            String notes, Object... lineItemData) throws Exception {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("customerId", customerId);
-        payload.put("signatureData", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        payload.put("signatureData",
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
         payload.put("signatureMimeType", "image/png");
         payload.put("signerName", signerName);
         payload.put("notes", notes);
