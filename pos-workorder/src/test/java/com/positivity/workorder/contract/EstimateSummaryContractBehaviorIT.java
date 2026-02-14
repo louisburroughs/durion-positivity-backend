@@ -41,7 +41,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .statusCode(200)
                 .contentType(startsWith("application/json"))
-                .body("estimateId", equalTo(estimateId.toString()))
+                .body("id", equalTo(estimateId.toString()))
                 .body("partItems", notNullValue())
                 .body("laborItems", notNullValue())
                 .body("partItems.size()", greaterThanOrEqualTo(1))
