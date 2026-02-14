@@ -222,6 +222,9 @@ public class EstimateController {
             UUID submittingUser = userId != null ? userId : UUID.fromString("00000000-0000-0000-0000-000000000001");
             EstimateResponse submitted = estimateService.submitForApproval(estimateId, submittingUser);
             return ResponseEntity.ok(submitted);
+        } catch (EntityNotFoundException e) {
+            log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to submit estimate {} for approval: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();

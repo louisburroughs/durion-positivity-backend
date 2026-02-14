@@ -449,7 +449,7 @@ public class EstimateService {
         @Transactional
         public EstimateResponse submitForApproval(UUID estimateId, UUID userId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
-                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+                                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
 
                 // Validate estimate is in correct state
                 if (estimate.getStatus() != EstimateStatus.DRAFT) {
