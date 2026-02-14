@@ -87,6 +87,31 @@ public class EstimateItem {
     @Column(nullable = false)
     private Boolean deleted = false;
 
+    // CAP:003 - Selective line item approval fields
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    @Column(length = 20)
+    private ApprovalStatus approvalStatus = ApprovalStatus.PENDING_APPROVAL;
+
+    @Column
+    private LocalDateTime approvalTimestamp;
+
+    @Column(length = 100)
+    @Nullable
+    private String approvalMethodUsed; // e.g., "DigitalSignature", "ServiceAdvisorElectronic"
+
+    @Column(columnDefinition = "UUID")
+    @Nullable
+    private UUID approvalProofId; // Reference to signature data or confirmation record
+
+    @Column(length = 1000)
+    @Nullable
+    private String rejectionReason; // Required when approvalStatus = DECLINED
+
+    @Column(length = 1000)
+    @Nullable
+    private String approvalNotes; // Additional notes about approval/rejection decision
+
     @PrePersist
     protected void prePersist() {
         if (id == null) {

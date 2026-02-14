@@ -184,7 +184,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate:approve')")
     public ResponseEntity<EstimateResponse> approveEstimate(
             @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveEstimateRequest request) {
+            @Parameter(description = "Approval request with customer ID, signature capture, and optional selective line item approvals") @Valid @RequestBody ApproveEstimateRequest request) {
         try {
             EstimateResponse approved = estimateService.approveEstimate(
                     estimateId,
@@ -193,7 +193,8 @@ public class EstimateController {
                     request.getSignatureMimeType(),
                     request.getSignerName(),
                     request.getNotes(),
-                    request.getPurchaseOrderNumber());
+                    request.getPurchaseOrderNumber(),
+                    request.getLineItemApprovals()); // CAP:003 - Pass selective line item approvals
             return ResponseEntity.ok(approved);
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());

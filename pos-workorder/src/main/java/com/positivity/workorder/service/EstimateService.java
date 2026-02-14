@@ -218,7 +218,34 @@ public class EstimateService {
                         String signatureMimeType, String signerName, String notes) {
                 return EstimateResponse
                                 .fromEntity(approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
-                                                signatureMimeType, signerName, notes, null));
+                                                signatureMimeType, signerName, notes, null, null));
+        }
+
+        /**
+         * Approve estimate with full parameters including purchase order.
+         * CAP:092 Story #98 - Enforces PO requirement for commercial accounts.
+         * CAP:003 - Supports selective line item approval.
+         *
+         * @param estimateId          estimate to approve
+         * @param customerId          customer approving the estimate
+         * @param signatureData       base64-encoded signature image
+         * @param signatureMimeType   MIME type of signature
+         * @param signerName          name of person signing
+         * @param notes               approval notes
+         * @param purchaseOrderNumber PO number (required if account requires PO)
+         * @param lineItemApprovals   optional selective line item approvals (null =
+         *                            approve all)
+         * @return approved estimate
+         */
+        @Transactional
+        public EstimateResponse approveEstimate(UUID estimateId, UUID customerId, String signatureData,
+                        String signatureMimeType, String signerName, String notes,
+                        @Nullable String purchaseOrderNumber,
+                        @Nullable List<com.positivity.workorder.internal.dto.LineItemApprovalDto> lineItemApprovals) {
+                return EstimateResponse
+                                .fromEntity(approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
+                                                signatureMimeType, signerName, notes, purchaseOrderNumber,
+                                                lineItemApprovals));
         }
 
         /**
@@ -240,17 +267,19 @@ public class EstimateService {
                         @Nullable String purchaseOrderNumber) {
                 return EstimateResponse
                                 .fromEntity(approveEstimateWithSignatureInternal(estimateId, customerId, signatureData,
-                                                signatureMimeType, signerName, notes, purchaseOrderNumber));
+                                                signatureMimeType, signerName, notes, purchaseOrderNumber, null));
         }
 
         /**
          * Internal helper for approving estimates with signature. Used by public API
          * and internal calls.
          * Runs within the transaction context of the caller.
+         * CAP:003 - Handles selective line item approval.
          */
         private Estimate approveEstimateWithSignatureInternal(UUID estimateId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes,
-                        @Nullable String purchaseOrderNumber) {
+                        @Nullable String purchaseOrderNumber,
+                        @Nullable List<com.positivity.workorder.internal.dto.LineItemApprovalDto> lineItemApprovals) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -279,6 +308,9 @@ public class EstimateService {
                                         purchaseOrderNumber, estimateId, partyId);
                 }
 
+                // CAP:003 - Process selective line item approvals
+                processLineItemApprovals(estimateId, lineItemApprovals);
+
                 estimate.setStatus(EstimateStatus.APPROVED);
                 estimate.setApprovedAt(LocalDateTime.now());
                 estimate.setApprovedBy(customerId); // Using customerId as approver
@@ -290,6 +322,71 @@ public class EstimateService {
 
                 log.info("Estimate {} approved by customer {} with signature capture", estimateId, customerId);
                 return estimateRepository.save(estimate);
+        }
+
+        /**
+         * Process selective line item approvals for CAP:003.
+         * If lineItemApprovals is null or empty, all items are implicitly approved.
+         * 
+         * @param estimateId        estimate ID
+         * @param lineItemApprovals list of line item approval decisions (null = approve
+         *                          all)
+         */
+        private void processLineItemApprovals(UUID estimateId,
+                        @Nullable List<com.positivity.workorder.internal.dto.LineItemApprovalDto> lineItemApprovals) {
+                List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+                if (lineItemApprovals == null || lineItemApprovals.isEmpty()) {
+                        // No explicit line item approvals provided - approve all items
+                        log.info("No selective line item approvals provided for estimate {} - approving all {} items",
+                                        estimateId, allItems.size());
+                        for (EstimateItem item : allItems) {
+                                item.setApprovalStatus(
+                                                com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED);
+                                item.setApprovalTimestamp(LocalDateTime.now());
+                                estimateItemRepository.save(item);
+                        }
+                        return;
+                }
+
+                // Process selective approvals
+                Map<UUID, com.positivity.workorder.internal.dto.LineItemApprovalDto> approvalMap = new HashMap<>();
+                for (com.positivity.workorder.internal.dto.LineItemApprovalDto approval : lineItemApprovals) {
+                        approvalMap.put(approval.getLineItemId(), approval);
+                }
+
+                for (EstimateItem item : allItems) {
+                        com.positivity.workorder.internal.dto.LineItemApprovalDto approval = approvalMap
+                                        .get(item.getId());
+
+                        if (approval != null) {
+                                // Explicit approval/rejection provided
+                                if (Boolean.TRUE.equals(approval.getApproved())) {
+                                        item.setApprovalStatus(
+                                                        com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED);
+                                        log.debug("Line item {} explicitly approved", item.getId());
+                                } else {
+                                        item.setApprovalStatus(
+                                                        com.positivity.workorder.internal.entity.ApprovalStatus.DECLINED);
+                                        item.setRejectionReason(approval.getRejectionReason());
+                                        log.debug("Line item {} declined - reason: {}", item.getId(),
+                                                        approval.getRejectionReason());
+                                }
+                                item.setApprovalNotes(approval.getNotes());
+                                item.setApprovalTimestamp(LocalDateTime.now());
+                        } else {
+                                // No explicit decision - default to approved
+                                item.setApprovalStatus(
+                                                com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED);
+                                item.setApprovalTimestamp(LocalDateTime.now());
+                                log.debug("Line item {} implicitly approved (no explicit decision)", item.getId());
+                        }
+
+                        estimateItemRepository.save(item);
+                }
+
+                log.info("Processed selective approvals for estimate {}: {} items total, {} explicit decisions provided",
+                                estimateId, allItems.size(), lineItemApprovals.size());
         }
 
         @Transactional
@@ -707,17 +804,18 @@ public class EstimateService {
                 if (item.getDescription() != null && !item.getDescription().isBlank()) {
                         return item.getDescription();
                 }
-                
+
                 // Generate fallback description based on item type and reference
                 if (item.getItemType() == EstimateItemType.PART && item.getProductId() != null) {
                         return String.format("Part (Product ID: %s)", item.getProductId());
                 } else if (item.getItemType() == EstimateItemType.LABOR && item.getServiceId() != null) {
                         return String.format("Labor (Service ID: %s)", item.getServiceId());
                 } else {
-                        // Fallback for items without description or reference (shouldn't happen due to validation)
-                        String itemTypeName = item.getItemType() != null 
-                                ? item.getItemType().name().toLowerCase().replace('_', ' ')
-                                : "unknown";
+                        // Fallback for items without description or reference (shouldn't happen due to
+                        // validation)
+                        String itemTypeName = item.getItemType() != null
+                                        ? item.getItemType().name().toLowerCase().replace('_', ' ')
+                                        : "unknown";
                         return String.format("%s item", itemTypeName);
                 }
         }
