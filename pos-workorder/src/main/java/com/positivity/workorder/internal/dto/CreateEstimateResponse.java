@@ -22,7 +22,7 @@ public class CreateEstimateResponse {
     private UUID locationId;
     private String currencyUomId;
     private UUID taxRegionId;
-    private UUID createdByUserId;
+    private String createdByUserId;
     private LocalDateTime createdAt;
 
     public static CreateEstimateResponse fromEntity(Estimate estimate) {
