@@ -313,7 +313,10 @@ public class EstimateService {
 
                 estimate.setStatus(EstimateStatus.APPROVED);
                 estimate.setApprovedAt(LocalDateTime.now());
-                estimate.setApprovedBy(customerId.toString()); // Using customerId as approver (converted to String)
+                // Note: When customers approve (via signature capture), we store customerId as the approver
+                // This is different from internal staff approvals which would use a username.
+                // The field is String to accommodate both use cases.
+                estimate.setApprovedBy(customerId.toString());
                 estimate.setSignatureData(signatureData);
                 estimate.setSignatureMimeType(signatureMimeType);
                 estimate.setSignerName(signerName);

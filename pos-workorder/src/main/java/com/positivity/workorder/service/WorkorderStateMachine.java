@@ -118,6 +118,8 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
+    // TODO: Consider updating this method to accept String username instead of UUID userId
+    // for consistency with the new user tracking pattern (see EstimateService changes)
     public void completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
