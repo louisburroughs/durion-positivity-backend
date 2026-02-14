@@ -2,6 +2,33 @@
 
 Tax calculation service with external API passthrough and test mode support.
 
+## ⚠️ Internal Service Only
+
+**pos-tax is an INTERNAL service and MUST NOT be exposed to external traffic.**
+
+### Deployment Modes
+
+1. **Library Mode (Recommended)**
+   - pos-tax is included as a Maven dependency in other services (e.g., pos-workorder)
+   - No separate deployment required
+   - Services directly inject `TaxCalculationService` bean
+   - No network traffic, lower latency
+   - Default configuration (Eureka registration disabled)
+
+2. **Standalone Mode** (only if needed for centralized deployment)
+   - Deploy as separate internal microservice
+   - **MUST NOT be added to API Gateway routes**
+   - Only accessible to internal microservices on private network
+   - Enable Eureka registration with environment variable: `EUREKA_REGISTER_ENABLED=true`
+   - Use network policies/security groups to restrict access to internal subnet only
+
+### Security Configuration
+
+- **API Gateway**: pos-tax has NO route configured in pos-api-gateway and MUST NOT be added
+- **Eureka Registration**: Disabled by default (`register-with-eureka: false`)
+- **Network Access**: If deployed standalone, use firewall/security groups to allow only internal service-to-service communication
+- **Service Discovery**: Not discoverable by external clients
+
 ## Overview
 
 The pos-tax service provides tax calculation capabilities for the Durion POS system. It supports two operating modes:
