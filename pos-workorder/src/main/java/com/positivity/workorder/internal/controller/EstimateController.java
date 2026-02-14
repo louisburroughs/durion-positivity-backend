@@ -274,9 +274,12 @@ public class EstimateController {
         try {
             EstimateItemResponse item = estimateService.updateEstimateItem(estimateId, itemId, request);
             return ResponseEntity.ok(item);
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            log.warn("Estimate or item not found: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalArgumentException e) {
             log.warn("Validation error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            return ResponseEntity.badRequest().build();
         } catch (IllegalStateException e) {
             log.warn("State error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();

@@ -527,7 +527,7 @@ public class EstimateService {
         public EstimateItemResponse updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
                         @NonNull UpdateEstimateItemRequest request) {
                 Estimate estimate = estimateRepository.findById(estimateId)
-                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+                                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
 
                 // Validate estimate is in DRAFT status
                 if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -537,7 +537,7 @@ public class EstimateService {
                 }
 
                 EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
-                                .orElseThrow(() -> new IllegalArgumentException(
+                                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
                                                 "Item not found: " + itemId + " for estimate: " + estimateId));
 
                 // Update only provided fields
