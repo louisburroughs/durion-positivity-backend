@@ -1,21 +1,5 @@
 package com.positivity.workorder.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
-import com.positivity.workorder.internal.dto.CreateEstimateRequest;
-import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
-import com.positivity.workorder.internal.entity.*;
-import com.positivity.workorder.internal.event.EstimateRevisedEvent;
-import com.positivity.workorder.internal.repository.*;
-import com.positivity.workorder.internal.service.BillingRulesClientService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -27,10 +11,39 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
+import com.positivity.workorder.internal.entity.ApprovalConfiguration;
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.EstimateSnapshot;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.event.EstimateRevisedEvent;
+import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.service.BillingRulesClientService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.ObjectMapper;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EstimateService {
+    private static final String ESTIMATE_NOT_FOUND = "Estimate not found: ";
     private final EstimateRepository estimateRepository;
     private final EstimateItemRepository estimateItemRepository;
     private final EstimateSnapshotRepository estimateSnapshotRepository;
@@ -42,14 +55,17 @@ public class EstimateService {
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
-    private static final UUID DEFAULT_TAX_REGION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001"); // TODO:
-                                                                                                               // Get
-                                                                                                               // from
-                                                                                                               // configuration
+    private static final String DEFAULT_TAX_REGION_ID_PROPERTY = "workorder.estimate.default-tax-region-id";
+    private static final UUID DEFAULT_TAX_REGION_ID = UUID.fromString(
+            System.getProperty(DEFAULT_TAX_REGION_ID_PROPERTY, "00000000-0000-0000-0000-000000000001"));
     private static final UUID DEFAULT_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000001"); // TODO:
-                                                                                                             // Get from
-                                                                                                             // user
-                                                                                                             // session
+                                                                                                             // Extract
+                                                                                                             // from JWT
+                                                                                                             // claims
+                                                                                                             // via
+                                                                                                             // pos-security-service
+                                                                                                             // (locationId
+                                                                                                             // claim)
 
     public List<Estimate> getAllEstimates() {
         return estimateRepository.findAll();
@@ -133,30 +149,6 @@ public class EstimateService {
     }
 
     /**
-     * Legacy method for backward compatibility
-     * 
-     * @deprecated Use createEstimate(CreateEstimateRequest, Long) instead
-     */
-    @Deprecated
-    @Transactional
-    public Estimate createEstimate(Estimate estimate) {
-        estimate.setStatus(EstimateStatus.DRAFT);
-        estimate.setCreatedAt(LocalDateTime.now());
-
-        // Get approval configuration for this customer/location
-        UUID locationId = estimate.getLocationId();
-        ApprovalConfiguration config = getApprovalConfiguration(locationId, estimate.getCustomerId());
-        estimate.setApprovalConfigurationId(config.getId());
-
-        // Generate estimate number if not set
-        if (estimate.getEstimateNumber() == null && locationId != null) {
-            estimate.setEstimateNumber(generateEstimateNumber(locationId));
-        }
-
-        return estimateRepository.save(estimate);
-    }
-
-    /**
      * Generate a unique estimate number for a location
      * Format: EST-YYYY-NNNN where YYYY is the year and NNNN is a sequential number
      */
@@ -178,7 +170,7 @@ public class EstimateService {
     @Transactional
     public Estimate approveEstimate(UUID estimateId, UUID approvedByUserId) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         if (!estimate.canApprove()) {
             throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
@@ -217,7 +209,7 @@ public class EstimateService {
             String signatureMimeType, String signerName, String notes,
             @Nullable String purchaseOrderNumber) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         // Validate customer matches estimate
         if (!estimate.getCustomerId().equals(customerId)) {
@@ -258,7 +250,7 @@ public class EstimateService {
     @Transactional
     public Estimate declineEstimate(UUID estimateId, String reason) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         if (!estimate.canDecline()) {
             throw new IllegalStateException("Estimate cannot be declined in current state: " + estimate.getStatus());
@@ -279,7 +271,7 @@ public class EstimateService {
     @Transactional
     public Estimate reopenEstimate(UUID estimateId) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
 
@@ -353,7 +345,7 @@ public class EstimateService {
             BigDecimal taxAmount, BigDecimal total,
             UUID userId) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         // Capture old total for comparison
         BigDecimal oldTotal = estimate.getTotal();
@@ -432,7 +424,7 @@ public class EstimateService {
     public EstimateItem addEstimateItem(@NonNull UUID estimateId, @NonNull AddEstimateItemRequest request,
             @NonNull UUID userId) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         // Validate estimate is in DRAFT status
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -476,7 +468,7 @@ public class EstimateService {
     public EstimateItem updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
             @NonNull UpdateEstimateItemRequest request) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         // Validate estimate is in DRAFT status
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -502,6 +494,9 @@ public class EstimateService {
             item.setTaxCode(request.getTaxCode());
         }
 
+        // Re-validate entity invariants after mutations
+        item.validate();
+
         EstimateItem saved = estimateItemRepository.save(item);
 
         log.info("Updated item {} on estimate {}", itemId, estimateId);
@@ -519,7 +514,7 @@ public class EstimateService {
     @Transactional
     public void deleteEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         // Validate estimate is in DRAFT status
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -563,7 +558,7 @@ public class EstimateService {
     @NonNull
     public Estimate calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull UUID userId) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         // Validate estimate is in DRAFT status
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -589,12 +584,9 @@ public class EstimateService {
         // Calculate total
         BigDecimal total = subtotal.add(taxAmount);
 
-        // Update estimate
-        estimate.setSubtotal(subtotal);
-        estimate.setTaxAmount(taxAmount);
-        estimate.setTotal(total);
-
-        Estimate saved = estimateRepository.save(estimate);
+        // Update estimate using shared financial update path (handles versioning and
+        // events)
+        Estimate saved = updateEstimateFinancials(estimateId, subtotal, taxAmount, total, userId);
 
         log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={}",
                 estimateId, subtotal, taxAmount, total);
@@ -617,7 +609,7 @@ public class EstimateService {
     @NonNull
     public Map<String, Object> getEstimateSummary(@NonNull UUID estimateId) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
 
@@ -660,15 +652,14 @@ public class EstimateService {
     public EstimateSnapshot createEstimateSnapshot(@NonNull UUID estimateId, @NonNull UUID userId,
             @Nullable String notes) {
         Estimate estimate = estimateRepository.findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
         List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
 
-        // Serialize estimate + items to JSON
+        // Serialize estimate + items to JSON (capturedAt stored in entity field only)
         Map<String, Object> snapshotData = new HashMap<>();
         snapshotData.put("estimate", estimate);
         snapshotData.put("items", items);
-        snapshotData.put("capturedAt", LocalDateTime.now());
 
         String snapshotJson;
         try {
