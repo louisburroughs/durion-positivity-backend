@@ -64,7 +64,7 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
                 .statusCode(200)
-                .body("id", equalTo(estimateId.toString()))
+                .body("estimate.id", equalTo(estimateId.toString()))
                 .body("subtotal", closeTo(200.00, 0.001)) // known line items total
                 .body("taxAmount", closeTo(16.50, 0.001)) // 200.00 * 0.0825
                 .body("total", closeTo(216.50, 0.001)) // subtotal + tax
@@ -88,8 +88,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
         BigDecimal secondTax = secondBody.getObject("taxAmount", BigDecimal.class);
         BigDecimal firstTotal = firstBody.getObject("total", BigDecimal.class);
         BigDecimal secondTotal = secondBody.getObject("total", BigDecimal.class);
-        Integer firstVersion = firstBody.getInt("version");
-        Integer secondVersion = secondBody.getInt("version");
+        Integer firstVersion = firstBody.getInt("estimate.version");
+        Integer secondVersion = secondBody.getInt("estimate.version");
 
         assertNotNull(firstSubtotal);
         assertNotNull(firstTax);
