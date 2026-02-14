@@ -79,8 +79,8 @@ public class EstimateItem {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    @Column(nullable = false, columnDefinition = "UUID")
-    private UUID createdById; // User who created this item
+    @Column(nullable = false)
+    private String createdById; // User who created this item
 
     // Soft delete flag
     @Builder.Default

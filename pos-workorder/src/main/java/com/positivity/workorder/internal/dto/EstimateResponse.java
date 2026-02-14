@@ -46,8 +46,8 @@ public class EstimateResponse {
     @Schema(description = "Estimate status", example = "DRAFT")
     private String status;
 
-    @Schema(description = "User ID who created the estimate", example = "550e8400-e29b-41d4-a716-446655440005")
-    private UUID createdByUserId;
+    @Schema(description = "Username who created the estimate", example = "john.doe")
+    private String createdByUserId;
 
     @Schema(description = "Date and time the estimate was created")
     private LocalDateTime createdAt;

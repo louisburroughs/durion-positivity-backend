@@ -93,14 +93,14 @@ class EstimateServiceTest {
                                 .currencyUomId("USD")
                                 .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440014"))
                                 .status(EstimateStatus.DRAFT)
-                                .createdByUserId(testUserId)
+                                .createdByUserId(testUserId.toString())
                                 .build();
 
                 when(estimateRepository.save(any(Estimate.class)))
                                 .thenReturn(savedEstimate);
 
                 // When
-                EstimateResponse result = estimateService.createEstimate(validRequest, testUserId);
+                EstimateResponse result = estimateService.createEstimate(validRequest, testUserId.toString());
 
                 // Then
                 assertNotNull(result);
@@ -108,7 +108,7 @@ class EstimateServiceTest {
                 assertEquals(UUID.fromString("550e8400-e29b-41d4-a716-446655440011"), result.getCustomerId());
                 assertEquals(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"), result.getVehicleId());
                 assertNotNull(result.getEstimateNumber());
-                assertEquals(testUserId, result.getCreatedByUserId());
+                assertEquals(testUserId.toString(), result.getCreatedByUserId());
 
                 // Verify repository was called
                 verify(estimateRepository, times(1)).save(any(Estimate.class));
@@ -133,7 +133,7 @@ class EstimateServiceTest {
                 // When & Then
                 IllegalArgumentException exception = assertThrows(
                                 IllegalArgumentException.class,
-                                () -> estimateService.createEstimate(invalidRequest, testUserId));
+                                () -> estimateService.createEstimate(invalidRequest, testUserId.toString()));
 
                 assertEquals("customerId is required", exception.getMessage());
                 verify(estimateRepository, never()).save(any(Estimate.class));
@@ -149,7 +149,7 @@ class EstimateServiceTest {
                 // When & Then
                 IllegalArgumentException exception = assertThrows(
                                 IllegalArgumentException.class,
-                                () -> estimateService.createEstimate(invalidRequest, testUserId));
+                                () -> estimateService.createEstimate(invalidRequest, testUserId.toString()));
 
                 assertEquals("vehicleId is required", exception.getMessage());
                 verify(estimateRepository, never()).save(any(Estimate.class));
@@ -162,7 +162,7 @@ class EstimateServiceTest {
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
                 // When
-                EstimateResponse result = estimateService.createEstimate(validRequest, testUserId);
+                EstimateResponse result = estimateService.createEstimate(validRequest, testUserId.toString());
 
                 // Then
                 assertNotNull(result);
@@ -184,7 +184,7 @@ class EstimateServiceTest {
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
                 // When
-                EstimateResponse result = estimateService.createEstimate(requestWithLocation, testUserId);
+                EstimateResponse result = estimateService.createEstimate(requestWithLocation, testUserId.toString());
 
                 // Then
                 assertEquals(UUID.fromString("550e8400-e29b-41d4-a716-446655440015"), result.getLocationId(),
@@ -198,7 +198,7 @@ class EstimateServiceTest {
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
                 // When
-                EstimateResponse result = estimateService.createEstimate(validRequest, testUserId);
+                EstimateResponse result = estimateService.createEstimate(validRequest, testUserId.toString());
 
                 // Then
                 assertNotNull(result.getEstimateNumber());
@@ -215,7 +215,7 @@ class EstimateServiceTest {
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
                 // When
-                estimateService.createEstimate(validRequest, testUserId);
+                estimateService.createEstimate(validRequest, testUserId.toString());
 
                 // Then - verify the repository method was called to fetch approval
                 // configuration
