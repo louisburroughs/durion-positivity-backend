@@ -10,13 +10,11 @@ import static org.hamcrest.Matchers.startsWith;
 
 import java.util.UUID;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 
-import io.restassured.RestAssured;
+import com.positivity.workorder.support.BaseContractIntegrationTest;
+
 import io.restassured.http.ContentType;
 
 /**
@@ -29,16 +27,7 @@ import io.restassured.http.ContentType;
  * - Customer-facing format: Parts and labor grouped
  * - Note: PDF generation not implemented (requires document service)
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class EstimateSummaryContractBehaviorIT {
-
-    @LocalServerPort
-    private int port;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
+class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("Contract: Get customer-facing estimate summary - Happy Path")
@@ -93,13 +82,21 @@ class EstimateSummaryContractBehaviorIT {
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Retrieving summary
-        given()
+        var response = given()
                 .contentType(ContentType.JSON)
                 .when()
-                .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
-                .then()
+                .get("/v1/workorders/estimates/{estimateId}/summary", estimateId);
+
+        response.then()
                 .statusCode(anyOf(is(200), is(404)))
                 .log().ifValidationFails();
+
+        if (response.statusCode() == 200) {
+            response.then()
+                    .body("subtotal", notNullValue())
+                    .body("taxAmount", notNullValue())
+                    .body("total", notNullValue());
+        }
 
         // Note: If 200, response should contain subtotal, taxAmount, total
     }
@@ -148,8 +145,18 @@ class EstimateSummaryContractBehaviorIT {
         // Given: An estimate
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
-        // When: Creating snapshot
-        var response = given()
+        // When: Creating snapshot twice, subsequent snapshot should not mutate the
+        // first capture
+        given()
+                .contentType(ContentType.JSON)
+                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
+                .then()
+                .statusCode(anyOf(is(200), is(404)))
+                .log().ifValidationFails();
+
+        given()
                 .contentType(ContentType.JSON)
                 .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
                 .when()
@@ -166,7 +173,7 @@ class EstimateSummaryContractBehaviorIT {
     @DisplayName("Contract: PDF generation not implemented - Documented limitation")
     void shouldDocumentPDFGenerationLimitation() {
         // This test documents that PDF generation is not yet implemented
-        // TODO: When document service is integrated, add PDF generation tests
+        // NOTE: When document service is integrated, add PDF generation tests
 
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
