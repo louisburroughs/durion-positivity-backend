@@ -1,13 +1,9 @@
 {
     "openapi": "3.1.0",
     "info": {
-        "title": "POS Workorder Service API",
-        "description": "Workorder service for managing workorders and tasks",
-        "contact": {
-            "name": "Durion Team",
-            "email": "louis.burroughs@gmail.com"
-        },
-        "version": "v1"
+        "title": "POS Tax Service API",
+        "description": "Tax calculation service with external API passthrough and test mode support",
+        "version": "1.0"
     },
     "servers": [
         {
@@ -23,6 +19,10 @@
         {
             "name": "Approval Configuration API",
             "description": "Endpoints for managing approval configurations by location and customer"
+        },
+        {
+            "name": "Tax",
+            "description": "Tax calculation API"
         },
         {
             "name": "Change Request API",
@@ -572,7 +572,9 @@
                         "description": "Invalid request - missing required fields.",
                         "content": {
                             "*/*": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
                             }
                         }
                     },
@@ -580,7 +582,9 @@
                         "description": "Internal server error - estimate creation failed.",
                         "content": {
                             "*/*": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
                             }
                         }
                     },
@@ -588,7 +592,9 @@
                         "description": "Estimate created successfully.",
                         "content": {
                             "*/*": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
                             }
                         }
                     },
@@ -596,7 +602,85 @@
                         "description": "Forbidden - user does not have ESTIMATE_CREATE permission.",
                         "content": {
                             "*/*": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/estimates/{estimateId}/snapshots": {
+            "post": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Create historical snapshot",
+                "description": "Capture an immutable snapshot of the estimate's complete state (estimate + all line items) for audit trail and version history purposes.",
+                "operationId": "createEstimateSnapshot",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "Estimate ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "notes",
+                        "in": "query",
+                        "description": "Optional notes about why snapshot was created",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "description": "ID of the user creating snapshot",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "default": "00000000-0000-0000-0000-000000000001"
+                        },
+                        "example": "00000000-0000-0000-0000-000000000001"
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Estimate not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateSnapshotResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Snapshot created successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateSnapshotResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Snapshot creation failed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateSnapshotResponse"
+                                }
                             }
                         }
                     }
@@ -651,6 +735,93 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/estimates/{estimateId}/items": {
+            "post": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Add line item to estimate",
+                "description": "Add a part or labor line item to a draft estimate. Estimate must be in DRAFT status. For PART items, provide productId or description. For LABOR items, provide serviceId or description.",
+                "operationId": "addEstimateItem",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "Estimate ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "description": "ID of the user adding the item",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "default": "00000000-0000-0000-0000-000000000001"
+                        },
+                        "example": "00000000-0000-0000-0000-000000000001"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AddEstimateItemRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Line item added successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Estimate not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Estimate not in DRAFT status (INVALID_STATE)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
                                 }
                             }
                         }
@@ -715,6 +886,76 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/estimates/{estimateId}/calculate": {
+            "post": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Calculate taxes and totals",
+                "description": "Calculate subtotal, tax amount, and total for an estimate based on its line items. Estimate must be in DRAFT status. Uses stub tax calculation (8.25% flat rate) pending pos-accounting integration.",
+                "operationId": "calculateEstimateTotals",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "Estimate ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "description": "ID of the user requesting calculation",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "default": "00000000-0000-0000-0000-000000000001"
+                        },
+                        "example": "00000000-0000-0000-0000-000000000001"
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Estimate not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Totals calculated successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Estimate not in DRAFT status (INVALID_STATE)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
                                 }
                             }
                         }
@@ -1058,6 +1299,167 @@
                 }
             }
         },
+        "/api/v1/tax/calculate": {
+            "post": {
+                "tags": [
+                    "Tax"
+                ],
+                "summary": "Calculate tax",
+                "description": "Calculate tax for line items based on location. Routes to external service in production or test calculator in test mode.",
+                "operationId": "calculateTax",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaxCalculationRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaxCalculationResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/estimates/{estimateId}/items/{itemId}": {
+            "delete": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Remove line item",
+                "description": "Remove a line item from a draft estimate (soft delete). Estimate must be in DRAFT status.",
+                "operationId": "deleteEstimateItem",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "Estimate ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "itemId",
+                        "in": "path",
+                        "description": "Item ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Line item removed successfully"
+                    },
+                    "409": {
+                        "description": "Estimate not in DRAFT status (INVALID_STATE)"
+                    },
+                    "404": {
+                        "description": "Estimate or item not found"
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Update line item",
+                "description": "Update an existing line item on a draft estimate. Estimate must be in DRAFT status. Only provided fields will be updated.",
+                "operationId": "updateEstimateItem",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "Estimate ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "itemId",
+                        "in": "path",
+                        "description": "Item ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateEstimateItemRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Line item updated successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Estimate not in DRAFT status (INVALID_STATE)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Estimate or item not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateItemResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/workorders/{workorderId}": {
             "get": {
                 "tags": [
@@ -1317,6 +1719,51 @@
                 }
             }
         },
+        "/v1/workorders/estimates/{estimateId}/summary": {
+            "get": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Get estimate summary (customer-facing)",
+                "description": "Retrieve a customer-facing summary of an estimate with grouped line items (parts and labor) and financial breakdown. PDF generation not implemented (requires document service integration).",
+                "operationId": "getEstimateSummary",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "Estimate ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Estimate not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateSummaryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Summary retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateSummaryResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/workorders/estimates/shop/{locationId}": {
             "get": {
                 "tags": [
@@ -1548,6 +1995,28 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApprovalConfigurationResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax/mode": {
+            "get": {
+                "tags": [
+                    "Tax"
+                ],
+                "summary": "Get tax service mode",
+                "description": "Check if the tax service is currently in test mode or production mode",
+                "operationId": "getMode",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModeResponse"
                                 }
                             }
                         }
@@ -2088,6 +2557,149 @@
                         "type": "string",
                         "format": "date-time",
                         "description": "Date and time the estimate was created"
+                    },
+                    "subtotal": {
+                        "type": "number",
+                        "description": "Subtotal amount before tax",
+                        "example": 150.0
+                    },
+                    "taxAmount": {
+                        "type": "number",
+                        "description": "Tax amount",
+                        "example": 12.38
+                    },
+                    "total": {
+                        "type": "number",
+                        "description": "Total amount including tax",
+                        "example": 162.38
+                    }
+                }
+            },
+            "EstimateSnapshotResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "estimateId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "DRAFT",
+                            "PENDING_APPROVAL",
+                            "APPROVED",
+                            "DECLINED",
+                            "EXPIRED"
+                        ]
+                    },
+                    "snapshotData": {
+                        "type": "string"
+                    },
+                    "capturedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "capturedById": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                }
+            },
+            "AddEstimateItemRequest": {
+                "type": "object",
+                "description": "Line item details",
+                "properties": {
+                    "itemType": {
+                        "type": "string",
+                        "enum": [
+                            "PART",
+                            "LABOR"
+                        ]
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "minimum": 0.0001
+                    },
+                    "unitPrice": {
+                        "type": "number",
+                        "minimum": 0.00
+                    },
+                    "taxCode": {
+                        "type": "string"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "serviceId": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "itemType",
+                    "quantity",
+                    "unitPrice"
+                ]
+            },
+            "EstimateItemResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "estimateId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "itemType": {
+                        "type": "string",
+                        "enum": [
+                            "PART",
+                            "LABOR"
+                        ]
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "number"
+                    },
+                    "unitPrice": {
+                        "type": "number"
+                    },
+                    "lineTotal": {
+                        "type": "number"
+                    },
+                    "taxCode": {
+                        "type": "string"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "serviceId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
                     }
                 }
             },
@@ -2169,6 +2781,179 @@
                         "format": "uuid"
                     },
                     "approvalNote": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TaxCalculationRequest": {
+                "type": "object",
+                "properties": {
+                    "lineItems": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaxLineItem"
+                        }
+                    },
+                    "postalCode": {
+                        "type": "string"
+                    },
+                    "countryCode": {
+                        "type": "string"
+                    },
+                    "stateCode": {
+                        "type": "string"
+                    },
+                    "city": {
+                        "type": "string"
+                    },
+                    "address": {
+                        "type": "string"
+                    },
+                    "customerId": {
+                        "type": "string"
+                    },
+                    "transactionDate": {
+                        "type": "string"
+                    },
+                    "referenceId": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "lineItems",
+                    "postalCode"
+                ]
+            },
+            "TaxLineItem": {
+                "type": "object",
+                "properties": {
+                    "lineItemId": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "number"
+                    },
+                    "unitPrice": {
+                        "type": "number"
+                    },
+                    "subtotal": {
+                        "type": "number"
+                    },
+                    "taxCategory": {
+                        "type": "string"
+                    },
+                    "taxExempt": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "description",
+                    "lineItemId",
+                    "quantity",
+                    "unitPrice"
+                ]
+            },
+            "LineItemTax": {
+                "type": "object",
+                "properties": {
+                    "lineItemId": {
+                        "type": "string"
+                    },
+                    "subtotal": {
+                        "type": "number"
+                    },
+                    "taxAmount": {
+                        "type": "number"
+                    },
+                    "total": {
+                        "type": "number"
+                    },
+                    "taxExempt": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "TaxCalculationResponse": {
+                "type": "object",
+                "properties": {
+                    "subtotal": {
+                        "type": "number"
+                    },
+                    "totalTax": {
+                        "type": "number"
+                    },
+                    "total": {
+                        "type": "number"
+                    },
+                    "effectiveTaxRate": {
+                        "type": "number"
+                    },
+                    "jurisdictions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaxJurisdiction"
+                        }
+                    },
+                    "lineItemTaxes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/LineItemTax"
+                        }
+                    },
+                    "testMode": {
+                        "type": "boolean"
+                    },
+                    "calculatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "referenceId": {
+                        "type": "string"
+                    },
+                    "externalTransactionId": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TaxJurisdiction": {
+                "type": "object",
+                "properties": {
+                    "jurisdictionCode": {
+                        "type": "string"
+                    },
+                    "jurisdictionName": {
+                        "type": "string"
+                    },
+                    "taxRate": {
+                        "type": "number"
+                    },
+                    "jurisdictionType": {
+                        "type": "string"
+                    },
+                    "taxAmount": {
+                        "type": "number"
+                    }
+                }
+            },
+            "UpdateEstimateItemRequest": {
+                "type": "object",
+                "description": "Updated item fields",
+                "properties": {
+                    "description": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "minimum": 0.0001
+                    },
+                    "unitPrice": {
+                        "type": "number",
+                        "minimum": 0.00
+                    },
+                    "taxCode": {
                         "type": "string"
                     }
                 }
@@ -2265,6 +3050,65 @@
                     "reason": {
                         "type": "string",
                         "description": "Reason for capturing the snapshot"
+                    }
+                }
+            },
+            "EstimateSummaryResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "estimateNumber": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "customerId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "vehicleId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "partItems": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/EstimateItemResponse"
+                        }
+                    },
+                    "laborItems": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/EstimateItemResponse"
+                        }
+                    },
+                    "subtotal": {
+                        "type": "number"
+                    },
+                    "taxAmount": {
+                        "type": "number"
+                    },
+                    "total": {
+                        "type": "number"
+                    },
+                    "currencyUomId": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ModeResponse": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string"
+                    },
+                    "testMode": {
+                        "type": "boolean"
                     }
                 }
             }
