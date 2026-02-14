@@ -321,12 +321,17 @@ public class EstimateController {
     @PostMapping("/{estimateId}/calculate")
     @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:calculate')")
-    public ResponseEntity<EstimateResponse> calculateEstimateTotals(
+    public ResponseEntity<Map<String, Object>> calculateEstimateTotals(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "ID of the user requesting calculation", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
         try {
             Estimate estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, userId);
-            return ResponseEntity.ok(EstimateResponse.fromEntity(estimate));
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("estimate", EstimateResponse.fromEntity(estimate));
+            response.put("subtotal", estimate.getSubtotal());
+            response.put("taxAmount", estimate.getTaxAmount());
+            response.put("total", estimate.getTotal());
+            return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             log.warn("Estimate {} not found for calculation: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
@@ -354,15 +359,20 @@ public class EstimateController {
         try {
             Map<String, Object> summaryMap = estimateService.getEstimateSummary(estimateId);
             Estimate estimate = (Estimate) summaryMap.get("estimate");
+            
+            // Prefer using a full items list from the service if available, fall back to combining parts and labor
             @SuppressWarnings("unchecked")
-            List<EstimateItem> partItems = (List<EstimateItem>) summaryMap.get("partItems");
-            @SuppressWarnings("unchecked")
-            List<EstimateItem> laborItems = (List<EstimateItem>) summaryMap.get("laborItems");
-
-            // Combine all items for summary response
-            List<EstimateItem> allItems = new java.util.ArrayList<>();
-            allItems.addAll(partItems);
-            allItems.addAll(laborItems);
+            List<EstimateItem> allItems = (List<EstimateItem>) summaryMap.get("items");
+            if (allItems == null) {
+                @SuppressWarnings("unchecked")
+                List<EstimateItem> partItems = (List<EstimateItem>) summaryMap.get("partItems");
+                @SuppressWarnings("unchecked")
+                List<EstimateItem> laborItems = (List<EstimateItem>) summaryMap.get("laborItems");
+                
+                allItems = new java.util.ArrayList<>();
+                allItems.addAll(partItems);
+                allItems.addAll(laborItems);
+            }
 
             EstimateSummaryResponse response = EstimateSummaryResponse.fromEstimateAndItems(estimate, allItems);
             return ResponseEntity.ok(response);
