@@ -60,7 +60,6 @@ public class TaxConfiguration {
         
         RetryConfig config = RetryConfig.custom()
             .maxAttempts(retryProps.getMaxAttempts())
-            .waitDuration(Duration.ofMillis(retryProps.getInitialBackoff()))
             .intervalFunction(attempt -> 
                 (long) (retryProps.getInitialBackoff() * Math.pow(retryProps.getMultiplier(), attempt - 1)))
             .build();
