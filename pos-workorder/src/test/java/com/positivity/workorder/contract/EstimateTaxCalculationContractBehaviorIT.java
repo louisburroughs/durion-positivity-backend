@@ -1,6 +1,5 @@
 package com.positivity.workorder.contract;
 
-import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
@@ -13,15 +12,10 @@ import java.math.RoundingMode;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 
-import io.restassured.RestAssured;
-import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
 
@@ -31,6 +25,7 @@ import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 /**
  * Contract behavioral tests for Estimate Tax Calculation endpoint.
@@ -42,24 +37,14 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
  * - State constraints: Cannot calculate for non-DRAFT estimates
  * - Stub implementation: Documents 8.25% flat tax rate
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class EstimateTaxCalculationContractBehaviorIT {
 
-    @LocalServerPort
-    private int port;
-
-    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private EstimateRepository estimateRepository;
 
     @Autowired
     private EstimateItemRepository estimateItemRepository;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     @AfterEach
     void tearDown() {
@@ -71,12 +56,10 @@ class EstimateTaxCalculationContractBehaviorIT {
     @DisplayName("Contract: Calculate taxes and totals for draft estimate - Happy Path")
     void shouldCalculateTaxesForDraftEstimate() {
         // Given: A draft estimate with line items
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedDraftEstimateWithItems();
 
         // When: Requesting calculation
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
+        givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
@@ -138,9 +121,7 @@ class EstimateTaxCalculationContractBehaviorIT {
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
 
         // When/Then: Calculation should fail with 409 CONFLICT
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
+        givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
@@ -155,9 +136,7 @@ class EstimateTaxCalculationContractBehaviorIT {
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         // When: Calculating
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
+        givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
@@ -172,28 +151,35 @@ class EstimateTaxCalculationContractBehaviorIT {
     @DisplayName("Contract: Tax calculation uses stub implementation (8.25% flat rate)")
     void shouldDocumentStubTaxCalculation() {
         // This test documents the stub behavior for future integration
-        // TODO: When pos-accounting tax service is integrated, update this test
+        // When pos-accounting tax service is integrated, update this test
         // to verify proper jurisdiction-based tax calculation
 
         UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
-        given()
-                .contentType(ContentType.JSON)
-                .header("X-User-Id", "00000000-0000-0000-0000-000000000001")
+        Response response = givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
                 .statusCode(anyOf(is(200), is(404)))
-                .log().ifValidationFails();
+                .extract()
+                .response();
+
+        if (response.statusCode() == 200) {
+            JsonPath body = response.jsonPath();
+            BigDecimal subtotal = body.getObject("subtotal", BigDecimal.class);
+            BigDecimal taxAmount = body.getObject("taxAmount", BigDecimal.class);
+            assertNotNull(subtotal);
+            assertNotNull(taxAmount);
+            BigDecimal expectedTax = subtotal.multiply(new BigDecimal("0.0825")).setScale(2, RoundingMode.HALF_UP);
+            assertEquals(0, taxAmount.compareTo(expectedTax));
+        }
 
         // Current stub: taxAmount = subtotal * 0.0825
         // Future: taxAmount calculated by pos-accounting based on jurisdiction
     }
 
     private Response calculateResponse(UUID estimateId) {
-        return given()
-                .contentType(ContentType.JSON)
-                .header("X-User-Id", SYSTEM_USER_ID.toString())
+        return givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
                 .then()
