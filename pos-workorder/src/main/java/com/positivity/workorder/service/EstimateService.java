@@ -433,6 +433,87 @@ public class EstimateService {
         }
 
         /**
+         * Submit estimate for customer approval.
+         * CAP:003 Issue #168 - Submit Estimate for Customer Approval
+         * 
+         * Validates completeness, creates immutable snapshot, and transitions
+         * from DRAFT -> PENDING_APPROVAL.
+         * 
+         * @param estimateId estimate to submit
+         * @param userId     user submitting the estimate
+         * @return updated estimate in PENDING_APPROVAL state
+         * @throws IllegalArgumentException if estimate not found
+         * @throws IllegalStateException    if estimate is not in DRAFT state or
+         *                                  incomplete
+         */
+        @Transactional
+        public EstimateResponse submitForApproval(UUID estimateId, UUID userId) {
+                Estimate estimate = estimateRepository.findById(estimateId)
+                                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+
+                // Validate estimate is in correct state
+                if (estimate.getStatus() != EstimateStatus.DRAFT) {
+                        throw new IllegalStateException(
+                                        "Cannot submit estimate - must be in DRAFT state, current state: "
+                                                        + estimate.getStatus());
+                }
+
+                // Validate completeness
+                validateEstimateCompleteness(estimate);
+
+                // Create immutable snapshot before transitioning state
+                createEstimateSnapshot(estimateId, userId, "Submitted for customer approval");
+
+                // Transition to PENDING_APPROVAL
+                estimate.setStatus(EstimateStatus.PENDING_APPROVAL);
+                estimate.setSubmittedAt(LocalDateTime.now());
+                estimate.setSubmittedBy(userId);
+
+                // Set expiration based on approval configuration
+                ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
+                if (config.getApprovalWindowDays() != null && config.getApprovalWindowDays() > 0) {
+                        estimate.setExpiresAt(LocalDateTime.now().plusDays(config.getApprovalWindowDays()));
+                }
+
+                log.info("Estimate {} submitted for approval by user {}, expires at {}",
+                                estimateId, userId, estimate.getExpiresAt());
+                return EstimateResponse.fromEntity(estimateRepository.save(estimate));
+        }
+
+        /**
+         * Validate estimate has all required data to be submitted for approval.
+         * 
+         * @param estimate estimate to validate
+         * @throws IllegalStateException if estimate is incomplete
+         */
+        private void validateEstimateCompleteness(Estimate estimate) {
+                // Must have a customer
+                if (estimate.getCustomerId() == null) {
+                        throw new IllegalStateException("Cannot submit estimate - no customer assigned");
+                }
+
+                // Must have a vehicle
+                if (estimate.getVehicleId() == null) {
+                        throw new IllegalStateException("Cannot submit estimate - no vehicle assigned");
+                }
+
+                // Must have at least one line item
+                List<EstimateItem> items = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimate.getId());
+                if (items == null || items.isEmpty()) {
+                        throw new IllegalStateException("Cannot submit estimate - no line items added");
+                }
+
+                // Must have calculated totals (subtotal should be non-null and positive)
+                if (estimate.getSubtotal() == null || estimate.getSubtotal().signum() <= 0) {
+                        throw new IllegalStateException(
+                                        "Cannot submit estimate - totals not calculated. Call calculate endpoint first.");
+                }
+
+                log.debug("Estimate {} passed completeness validation - {} items, subtotal: {}",
+                                estimate.getId(), items.size(), estimate.getSubtotal());
+        }
+
+        /**
          * Get the most specific approval configuration for a location and customer.
          * Returns default configuration if none found.
          */
