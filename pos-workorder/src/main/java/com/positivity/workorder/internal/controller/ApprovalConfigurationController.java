@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,6 +27,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "List of configurations returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_LIST", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:approval_config:view')")
     public List<ApprovalConfigurationResponse> getAllConfigurations() {
         return approvalConfigurationService.getAllConfigurations();
     }
@@ -34,6 +36,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @GetMapping("/approvalConfigurations/{approvalId}")
+    @PreAuthorize("hasAuthority('workorder:approval_config:view')")
     public ResponseEntity<ApprovalConfigurationResponse> getConfigurationById(
             @Parameter(description = "ID of the configuration to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId) {
         return approvalConfigurationService.getConfigurationById(approvalId)
@@ -45,6 +48,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "No configuration found (default will be used).")
     @GetMapping("/approvalConfigurations/applicable")
+    @PreAuthorize("hasAuthority('workorder:approval_config:view')")
     public ResponseEntity<ApprovalConfigurationResponse> getApplicableConfiguration(
             @Parameter(description = "Location ID") @RequestParam(required = false) UUID locationId,
             @Parameter(description = "Customer ID") @RequestParam(required = false) UUID customerId) {
@@ -57,6 +61,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
     @PostMapping("/approvalConfigurations")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:approval_config:create')")
     public ResponseEntity<ApprovalConfigurationResponse> createConfiguration(
             @Parameter(description = "Configuration object to be created") @RequestBody ApprovalConfigurationRequest request) {
         ApprovalConfigurationResponse created = approvalConfigurationService.createConfiguration(request);
@@ -68,6 +73,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @PutMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_UPDATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:approval_config:edit')")
     public ResponseEntity<ApprovalConfigurationResponse> updateConfiguration(
             @Parameter(description = "ID of the configuration to update", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId,
             @Parameter(description = "Updated configuration object") @RequestBody ApprovalConfigurationRequest request) {
@@ -85,6 +91,7 @@ public class ApprovalConfigurationController {
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @DeleteMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_DELETE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:approval_config:delete')")
     public ResponseEntity<Void> deleteConfiguration(
             @Parameter(description = "ID of the configuration to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID approvalId) {
         approvalConfigurationService.deleteConfiguration(approvalId);

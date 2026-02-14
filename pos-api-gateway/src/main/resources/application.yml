@@ -12,8 +12,18 @@ spring:
         webflux:
           discovery:
             locator:
+              # Discovery locator disabled - only explicitly configured routes are exposed
+              # This prevents internal-only services from being accidentally exposed
               enabled: false
           routes:
+            # ============================================================================
+            # EXTERNALLY ACCESSIBLE SERVICE ROUTES
+            # ============================================================================
+            # SECURITY WARNING: Do NOT add routes for internal-only services:
+            #   - pos-tax (library service, no external access)
+            #   - pos-events (internal event aggregation)
+            # These services MUST remain accessible only to internal microservices
+            # ============================================================================
             - id: accounting
               uri: lb://ACCOUNTING
               predicates:

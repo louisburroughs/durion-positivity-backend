@@ -1,15 +1,16 @@
 package com.positivity.workorder.internal.dto;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateStatus;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * DTO for estimate responses.
@@ -51,6 +52,15 @@ public class EstimateResponse {
     @Schema(description = "Date and time the estimate was created")
     private LocalDateTime createdAt;
 
+    @Schema(description = "Subtotal amount before tax", example = "150.00")
+    private BigDecimal subtotal;
+
+    @Schema(description = "Tax amount", example = "12.38")
+    private BigDecimal taxAmount;
+
+    @Schema(description = "Total amount including tax", example = "162.38")
+    private BigDecimal total;
+
     /**
      * Convert entity to response DTO
      */
@@ -70,6 +80,9 @@ public class EstimateResponse {
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)
                 .createdByUserId(entity.getCreatedByUserId())
                 .createdAt(entity.getCreatedAt())
+                .subtotal(entity.getSubtotal())
+                .taxAmount(entity.getTaxAmount())
+                .total(entity.getTotal())
                 .build();
     }
 }

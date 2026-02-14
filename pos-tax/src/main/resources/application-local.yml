@@ -1,0 +1,37 @@
+# Local development configuration
+spring:
+  cloud:
+    discovery:
+      enabled: false
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+
+# Enable test mode by default for local development
+pos:
+  tax:
+    test-mode:
+      enabled: true
+      default-rates:
+        STATE: 0.0725      # 7.25% California state tax
+        COUNTY: 0.01       # 1% Los Angeles county tax
+        CITY: 0.0025       # 0.25% city tax
+      postal-code-mapping:
+        "90001":
+          state: "CA"
+          county: "Los Angeles"
+          city: "Los Angeles"
+        "90210":
+          state: "CA"
+          county: "Los Angeles"
+          city: "Beverly Hills"
+        "10001":
+          state: "NY"
+          county: "New York"
+          city: "New York"
+
+logging:
+  level:
+    com.positivity.tax: DEBUG

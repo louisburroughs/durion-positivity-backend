@@ -3,10 +3,12 @@
 ## Quick Links
 
 ### Getting Started
+
 - **[COMPLETION_SUMMARY.md](COMPLETION_SUMMARY.md)** - Executive summary of completed work
 - **[OPENAPI_GENERATION_STATUS.md](OPENAPI_GENERATION_STATUS.md)** - OpenAPI configuration status and usage guide
 
 ### Build and Deployment
+
 ```bash
 # Build the module
 ./mvnw -pl pos-workorder -am clean package -DskipTests
@@ -19,9 +21,10 @@ java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 ```
 
 ### API Documentation Access (While Running)
-- **Swagger UI**: http://localhost:8080/swagger-ui/index.html
-- **OpenAPI JSON**: http://localhost:8080/v3/api-docs
-- **OpenAPI YAML**: http://localhost:8080/v3/api-docs.yaml
+
+- **Swagger UI**: <http://localhost:8080/swagger-ui/index.html>
+- **OpenAPI JSON**: <http://localhost:8080/v3/api-docs>
+- **OpenAPI YAML**: <http://localhost:8080/v3/api-docs.yaml>
 
 ## Project Status
 
@@ -38,9 +41,11 @@ java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 ## Files Created
 
 ### Configuration
+
 - `src/main/java/com/positivity/workorder/config/SecurityConfig.java` (2.6 KB)
 
 ### Documentation
+
 - `COMPLETION_SUMMARY.md` (Detailed completion report)
 - `OPENAPI_GENERATION_STATUS.md` (Status and usage guide)
 - `README_OPENAPI.md` (This quick reference)
@@ -61,6 +66,7 @@ All 4 REST controllers are fully annotated and documented:
 ## OpenAPI Specification
 
 ### Format
+
 - **Version**: OpenAPI 3.0.1
 - **Title**: Work Order API
 - **Version**: 1.0
@@ -69,6 +75,7 @@ All 4 REST controllers are fully annotated and documented:
 ### Generation Methods
 
 #### Method 1: Maven Profile (Automated)
+
 ```bash
 cd pos-workorder
 ./mvnw -Popenapi clean verify -DskipTests
@@ -76,6 +83,7 @@ cd pos-workorder
 ```
 
 #### Method 2: Manual Extraction (Running Instance)
+
 ```bash
 cd pos-workorder
 java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar &
@@ -85,6 +93,7 @@ pkill -f "pos-workorder"
 ```
 
 #### Method 3: Interactive Swagger UI
+
 ```bash
 java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 # Open: http://localhost:8080/swagger-ui/index.html
@@ -93,18 +102,21 @@ java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 ## Security Configuration
 
 ### Public Endpoints (No Authentication Required)
+
 - `/v3/api-docs/**` - OpenAPI specification
 - `/swagger-ui/**` - Swagger UI interface
 - `/actuator/health` - Health check
 - `/api/public/**` - Public API endpoints
 
 ### Secured Endpoints
+
 - All other endpoints require appropriate Spring Security authorization
 - Method-level security via `@EnableMethodSecurity`
 
 ## Dependencies Overview
 
 ### Key Additions
+
 | Dependency | Version | Purpose |
 |------------|---------|---------|
 | springdoc-openapi-starter-webmvc-ui | 2.7.0 | OpenAPI + Swagger UI |
@@ -113,6 +125,7 @@ java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 | postgresql | Latest | Database driver |
 
 ### Maven Plugins
+
 | Plugin | Version | Purpose |
 |--------|---------|---------|
 | spring-boot-maven-plugin | 3.4.2 | Fat JAR creation |
@@ -121,6 +134,7 @@ java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 ## Build Information
 
 ### Last Build
+
 - **Status**: ✅ SUCCESS
 - **Duration**: 24.1 seconds
 - **Java Version**: 21.0.5-tem
@@ -128,6 +142,7 @@ java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 - **Output**: `target/pos-workorder-0.0.1-SNAPSHOT.jar`
 
 ### Build Verification
+
 - ✅ All source files compiled
 - ✅ All dependencies resolved
 - ✅ Spring Boot repackage successful
@@ -137,6 +152,7 @@ java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar
 ## Troubleshooting
 
 ### Module won't build
+
 ```bash
 # Ensure Java 21+
 java -version
@@ -146,6 +162,7 @@ java -version
 ```
 
 ### OpenAPI spec not generated
+
 ```bash
 # Check if app starts correctly
 java -jar target/pos-workorder-0.0.1-SNAPSHOT.jar --server.port=8081
@@ -158,6 +175,7 @@ curl http://localhost:8081/v3/api-docs > spec.json
 ```
 
 ### Port 8081 already in use
+
 ```bash
 # Find and kill process using port
 lsof -i :8081

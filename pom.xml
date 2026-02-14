@@ -68,6 +68,12 @@
 				<version>${archunit.version}</version>
 				<scope>test</scope>
 			</dependency>
+			<dependency>
+				<groupId>io.rest-assured</groupId>
+				<artifactId>rest-assured</artifactId>
+				<version>${rest-assured.version}</version>
+				<scope>test</scope>
+			</dependency>
 
 			<!-- UTILITY LIBRARIES -->
 			<dependency>
@@ -212,6 +218,7 @@
 		<module>pos-security-service</module>
 		<module>pos-people</module>
 		<module>pos-location</module>
+		<module>pos-tax</module>
 		<module>pos-api-gateway</module>
 		<module>pos-service-discovery</module>
 		<module>pos-mcp-server</module>
@@ -248,6 +255,7 @@
 		<!-- Test Dependencies - JUnit managed by Spring Boot 4.0.2 (6.0.2) -->
 		<mockito.version>5.9.0</mockito.version>
 		<assertj.version>3.25.1</assertj.version>
+		<rest-assured.version>5.5.0</rest-assured.version>
 		<!-- Utility Libraries -->
 		<lombok.version>1.18.32</lombok.version>
 		<slf4j.version>2.0.13</slf4j.version>

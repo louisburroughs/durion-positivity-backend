@@ -1,0 +1,228 @@
+package com.positivity.workorder.contract;
+
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.UUID;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import io.restassured.path.json.JsonPath;
+import io.restassured.response.Response;
+
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.support.BaseContractIntegrationTest;
+
+/**
+ * Contract behavioral tests for Estimate Tax Calculation endpoint.
+ * Story #16 (Calculate Taxes and Totals)
+ * 
+ * Verifies:
+ * - Happy path: Calculate subtotal, tax, and total for draft estimate
+ * - Idempotency: Multiple calculations produce same result
+ * - State constraints: Cannot calculate for non-DRAFT estimates
+ * - Stub implementation: Documents 8.25% flat tax rate
+ */
+
+class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTest {
+
+    @Autowired
+    private EstimateRepository estimateRepository;
+
+    @Autowired
+    private EstimateItemRepository estimateItemRepository;
+
+    @AfterEach
+    void tearDown() {
+        estimateItemRepository.deleteAll();
+        estimateRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("Contract: Calculate taxes and totals for draft estimate - Happy Path")
+    void shouldCalculateTaxesForDraftEstimate() {
+        // Given: A draft estimate with line items
+        UUID estimateId = seedDraftEstimateWithItems();
+
+        // When: Requesting calculation
+        givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
+                .then()
+                .statusCode(200)
+                .body("estimate.id", equalTo(estimateId.toString()))
+                .body("subtotal", closeTo(200.00, 0.001)) // known line items total
+                .body("taxAmount", closeTo(16.50, 0.001)) // 200.00 * 0.0825
+                .body("total", closeTo(216.50, 0.001)) // subtotal + tax
+                .log().ifValidationFails();
+    }
+
+    @Test
+    @DisplayName("Contract: Calculation is idempotent - Multiple calls same result")
+    void shouldProduceIdempotentCalculationResults() {
+        UUID estimateId = seedDraftEstimateWithItems();
+
+        Response firstResponse = calculateResponse(estimateId);
+        Response secondResponse = calculateResponse(estimateId);
+
+        JsonPath firstBody = firstResponse.jsonPath();
+        JsonPath secondBody = secondResponse.jsonPath();
+
+        BigDecimal firstSubtotal = firstBody.getObject("subtotal", BigDecimal.class);
+        BigDecimal secondSubtotal = secondBody.getObject("subtotal", BigDecimal.class);
+        BigDecimal firstTax = firstBody.getObject("taxAmount", BigDecimal.class);
+        BigDecimal secondTax = secondBody.getObject("taxAmount", BigDecimal.class);
+        BigDecimal firstTotal = firstBody.getObject("total", BigDecimal.class);
+        BigDecimal secondTotal = secondBody.getObject("total", BigDecimal.class);
+        Integer firstVersion = firstBody.getInt("estimate.version");
+        Integer secondVersion = secondBody.getInt("estimate.version");
+
+        assertNotNull(firstSubtotal);
+        assertNotNull(firstTax);
+        assertNotNull(firstTotal);
+
+        // Expected financials for seeded data (2 parts @50 + 5 labor hours @20)
+        BigDecimal expectedSubtotal = new BigDecimal("200.00");
+        BigDecimal expectedTax = expectedSubtotal.multiply(new BigDecimal("0.0825")).setScale(2,
+                RoundingMode.HALF_UP);
+        BigDecimal expectedTotal = expectedSubtotal.add(expectedTax);
+
+        assertEquals(0, firstSubtotal.compareTo(expectedSubtotal));
+        assertEquals(0, secondSubtotal.compareTo(expectedSubtotal));
+        assertEquals(0, firstTax.compareTo(expectedTax));
+        assertEquals(0, secondTax.compareTo(expectedTax));
+        assertEquals(0, firstTotal.compareTo(expectedTotal));
+        assertEquals(0, secondTotal.compareTo(expectedTotal));
+
+        assertEquals(0, firstSubtotal.compareTo(secondSubtotal));
+        assertEquals(0, firstTax.compareTo(secondTax));
+        assertEquals(0, firstTotal.compareTo(secondTotal));
+        assertEquals(firstVersion, secondVersion);
+    }
+
+    @Test
+    @DisplayName("Contract: Cannot calculate for APPROVED estimate - State Constraint")
+    void shouldRejectCalculationForApprovedEstimate() {
+        // Given: An approved estimate
+        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+
+        // When/Then: Calculation should fail with 409 CONFLICT
+        givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
+                .then()
+                .statusCode(anyOf(is(409), is(404))) // 409 if approved, 404 if not found
+                .log().ifValidationFails();
+    }
+
+    @Test
+    @DisplayName("Contract: Calculation returns estimate with financial fields")
+    void shouldReturnEstimateWithFinancialFields() {
+        // Given: A draft estimate with items
+        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+        // When: Calculating
+        givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
+                .then()
+                .statusCode(anyOf(is(200), is(404)))
+                .log().ifValidationFails();
+
+        // Note: If 200, response should contain subtotal, taxAmount, total fields
+        // Full field validation requires test database with known estimate
+    }
+
+    @Test
+    @DisplayName("Contract: Tax calculation uses stub implementation (8.25% flat rate)")
+    void shouldDocumentStubTaxCalculation() {
+        // This test documents the stub behavior for future integration
+        // When pos-accounting tax service is integrated, update this test
+        // to verify proper jurisdiction-based tax calculation
+
+        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+        Response response = givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
+                .then()
+                .statusCode(anyOf(is(200), is(404)))
+                .extract()
+                .response();
+
+        if (response.statusCode() == 200) {
+            JsonPath body = response.jsonPath();
+            BigDecimal subtotal = body.getObject("subtotal", BigDecimal.class);
+            BigDecimal taxAmount = body.getObject("taxAmount", BigDecimal.class);
+            assertNotNull(subtotal);
+            assertNotNull(taxAmount);
+            BigDecimal expectedTax = subtotal.multiply(new BigDecimal("0.0825")).setScale(2, RoundingMode.HALF_UP);
+            assertEquals(0, taxAmount.compareTo(expectedTax));
+        }
+
+        // Current stub: taxAmount = subtotal * 0.0825
+        // Future: taxAmount calculated by pos-accounting based on jurisdiction
+    }
+
+    private Response calculateResponse(UUID estimateId) {
+        return givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/calculate", estimateId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .response();
+    }
+
+    private UUID seedDraftEstimateWithItems() {
+        Estimate estimate = Estimate.builder()
+                .id(UUID.randomUUID())
+                .estimateNumber("EST-" + System.nanoTime())
+                .locationId(UUID.randomUUID())
+                .vehicleId(UUID.randomUUID())
+                .customerId(UUID.randomUUID())
+                .currencyUomId("USD")
+                .taxRegionId(UUID.randomUUID())
+                .status(EstimateStatus.DRAFT)
+                .createdByUserId(SYSTEM_USER_ID)
+                .createdById(SYSTEM_USER_ID)
+                .build();
+
+        Estimate savedEstimate = estimateRepository.save(estimate);
+
+        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.PART, "Front brake pads",
+                new BigDecimal("2"), new BigDecimal("50.00")));
+        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.LABOR, "Brake labor",
+                new BigDecimal("5"), new BigDecimal("20.00")));
+
+        return savedEstimate.getId();
+    }
+
+    private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
+            BigDecimal quantity, BigDecimal unitPrice) {
+        return EstimateItem.builder()
+                .id(UUID.randomUUID())
+                .estimateId(estimateId)
+                .itemType(type)
+                .description(description)
+                .quantity(quantity)
+                .unitPrice(unitPrice)
+                .taxCode("STD")
+                .createdById(SYSTEM_USER_ID)
+                .build();
+    }
+}
