@@ -45,7 +45,8 @@ public class EstimateItem {
     @Column(nullable = false, length = 20)
     private EstimateItemType itemType; // PART or LABOR
 
-    @Column(nullable = false, length = 500)
+    @Column(length = 500)
+    @Nullable
     private String description;
 
     @Column(nullable = false, precision = 19, scale = 4)

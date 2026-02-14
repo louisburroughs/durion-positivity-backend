@@ -644,14 +644,7 @@ public class EstimateService {
 
                 // Build tax calculation request
                 List<TaxLineItem> taxLineItems = items.stream()
-                                .map(item -> TaxLineItem.builder()
-                                                .lineItemId(item.getId().toString())
-                                                .description(item.getDescription())
-                                                .quantity(item.getQuantity())
-                                                .unitPrice(item.getUnitPrice())
-                                                .taxCategory(mapItemTypeToTaxCategory(item.getItemType()))
-                                                .taxExempt(false)
-                                                .build())
+                                .map(this::buildTaxLineItemFromEstimateItem)
                                 .toList();
 
                 // Get postal code from estimate's location
@@ -702,6 +695,50 @@ public class EstimateService {
                         case PART -> TAX_CATEGORY_GOODS;
                         case LABOR -> TAX_CATEGORY_SERVICES;
                 };
+        }
+
+        /**
+         * Get description for tax calculation purposes.
+         * If the item has a description, use it. Otherwise, generate a fallback
+         * description based on the item type and reference IDs.
+         * 
+         * @param item the estimate item
+         * @return a non-null, non-blank description suitable for tax calculation
+         */
+        private String getDescriptionForTaxCalculation(EstimateItem item) {
+                if (item.getDescription() != null && !item.getDescription().isBlank()) {
+                        return item.getDescription();
+                }
+                
+                // Generate fallback description based on item type and reference
+                if (item.getItemType() == EstimateItemType.PART && item.getProductId() != null) {
+                        return String.format("Part (Product ID: %s)", item.getProductId());
+                } else if (item.getItemType() == EstimateItemType.LABOR && item.getServiceId() != null) {
+                        return String.format("Labor (Service ID: %s)", item.getServiceId());
+                } else {
+                        // Fallback for items without description or reference (shouldn't happen due to validation)
+                        String itemTypeName = item.getItemType() != null 
+                                ? item.getItemType().name().toLowerCase().replace('_', ' ')
+                                : "unknown";
+                        return String.format("%s item", itemTypeName);
+                }
+        }
+
+        /**
+         * Build a TaxLineItem from an EstimateItem for tax calculation.
+         * 
+         * @param item the estimate item
+         * @return a TaxLineItem with appropriate description and tax category
+         */
+        private TaxLineItem buildTaxLineItemFromEstimateItem(EstimateItem item) {
+                return TaxLineItem.builder()
+                                .lineItemId(item.getId().toString())
+                                .description(getDescriptionForTaxCalculation(item))
+                                .quantity(item.getQuantity())
+                                .unitPrice(item.getUnitPrice())
+                                .taxCategory(mapItemTypeToTaxCategory(item.getItemType()))
+                                .taxExempt(false)
+                                .build();
         }
 
         // ==================== ESTIMATE SUMMARY (CAP:002 Story #18)
