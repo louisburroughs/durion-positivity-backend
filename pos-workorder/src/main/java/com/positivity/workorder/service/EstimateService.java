@@ -12,6 +12,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.persistence.EntityNotFoundException;
+
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
@@ -527,7 +529,7 @@ public class EstimateService {
         public EstimateItemResponse updateEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId,
                         @NonNull UpdateEstimateItemRequest request) {
                 Estimate estimate = estimateRepository.findById(estimateId)
-                                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
+                                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
 
                 // Validate estimate is in DRAFT status
                 if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -537,7 +539,7 @@ public class EstimateService {
                 }
 
                 EstimateItem item = estimateItemRepository.findByIdAndEstimateIdAndDeletedFalse(itemId, estimateId)
-                                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
+                                .orElseThrow(() -> new EntityNotFoundException(
                                                 "Item not found: " + itemId + " for estimate: " + estimateId));
 
                 // Update only provided fields
