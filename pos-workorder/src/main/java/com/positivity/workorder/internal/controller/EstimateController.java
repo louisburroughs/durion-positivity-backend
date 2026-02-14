@@ -1,11 +1,35 @@
 package com.positivity.workorder.internal.controller;
 
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.positivity.events.EmitEvent;
-import com.positivity.workorder.internal.dto.*;
-import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateItem;
-import com.positivity.workorder.internal.entity.EstimateSnapshot;
+import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
+import com.positivity.workorder.internal.dto.ApproveEstimateRequest;
+import com.positivity.workorder.internal.dto.CreateEstimateRequest;
+import com.positivity.workorder.internal.dto.EstimateItemResponse;
+import com.positivity.workorder.internal.dto.EstimateResponse;
+import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
+import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
+import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.service.EstimateService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -14,15 +38,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 @Tag(name = "Estimate API", description = "Endpoints for estimate management and approval workflow")
 @RestController
@@ -38,10 +53,7 @@ public class EstimateController {
     @EmitEvent(id = "WORKORDER_ESTIMATE_LIST", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getAllEstimates() {
-        return estimateService.getAllEstimates()
-                .stream()
-                .map(EstimateResponse::fromEntity)
-                .toList();
+        return estimateService.getAllEstimates();
     }
 
     @Operation(summary = "Get estimate by ID", description = "Retrieve an estimate by its unique ID.")
@@ -52,7 +64,6 @@ public class EstimateController {
     public ResponseEntity<EstimateResponse> getEstimateById(
             @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         return estimateService.getEstimateById(estimateId)
-                .map(EstimateResponse::fromEntity)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -64,10 +75,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByCustomer(
             @Parameter(description = "ID of the customer", example = "1") @PathVariable UUID customerId) {
-        return estimateService.getEstimatesByCustomer(customerId)
-                .stream()
-                .map(EstimateResponse::fromEntity)
-                .toList();
+        return estimateService.getEstimatesByCustomer(customerId);
     }
 
     @Operation(summary = "Get estimates by shop", description = "Retrieve all estimates for a specific shop.")
@@ -77,10 +85,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByShop(
             @Parameter(description = "ID of the shop", example = "1") @PathVariable UUID locationId) {
-        return estimateService.getEstimatesByLocation(locationId)
-                .stream()
-                .map(EstimateResponse::fromEntity)
-                .toList();
+        return estimateService.getEstimatesByLocation(locationId);
     }
 
     @Operation(summary = "Get estimates by location", description = "Retrieve all estimates for a specific location.")
@@ -90,10 +95,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByLocation(
             @Parameter(description = "ID of the location", example = "1") @PathVariable UUID locationId) {
-        return estimateService.getEstimatesByLocation(locationId)
-                .stream()
-                .map(EstimateResponse::fromEntity)
-                .toList();
+        return estimateService.getEstimatesByLocation(locationId);
     }
 
     @Operation(summary = "Create a new draft estimate", description = "Create a new estimate in DRAFT status for a customer and vehicle. "
@@ -115,8 +117,7 @@ public class EstimateController {
             log.info("Received create estimate request for customerId={}, vehicleId={}",
                     request.getCustomerId(), request.getVehicleId());
 
-            Estimate estimate = estimateService.createEstimate(request, userId);
-            EstimateResponse response = EstimateResponse.fromEntity(estimate);
+            EstimateResponse response = estimateService.createEstimate(request, userId);
 
             log.info("Estimate created successfully: id={}, number={}",
                     response.getId(), response.getEstimateNumber());
@@ -144,8 +145,8 @@ public class EstimateController {
             @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Reason for decline") @RequestParam(required = false) String reason) {
         try {
-            Estimate declined = estimateService.declineEstimate(estimateId, reason);
-            return ResponseEntity.ok(EstimateResponse.fromEntity(declined));
+            EstimateResponse declined = estimateService.declineEstimate(estimateId, reason);
+            return ResponseEntity.ok(declined);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -161,8 +162,8 @@ public class EstimateController {
     public ResponseEntity<EstimateResponse> reopenEstimate(
             @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
-            Estimate reopened = estimateService.reopenEstimate(estimateId);
-            return ResponseEntity.ok(EstimateResponse.fromEntity(reopened));
+            EstimateResponse reopened = estimateService.reopenEstimate(estimateId);
+            return ResponseEntity.ok(reopened);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -183,7 +184,7 @@ public class EstimateController {
             @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveEstimateRequest request) {
         try {
-            Estimate approved = estimateService.approveEstimate(
+            EstimateResponse approved = estimateService.approveEstimate(
                     estimateId,
                     request.getCustomerId(),
                     request.getSignatureData(),
@@ -191,7 +192,7 @@ public class EstimateController {
                     request.getSignerName(),
                     request.getNotes(),
                     request.getPurchaseOrderNumber());
-            return ResponseEntity.ok(EstimateResponse.fromEntity(approved));
+            return ResponseEntity.ok(approved);
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -230,8 +231,8 @@ public class EstimateController {
             @Parameter(description = "Line item details", required = true) @Valid @RequestBody AddEstimateItemRequest request,
             @Parameter(description = "ID of the user adding the item", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
         try {
-            EstimateItem item = estimateService.addEstimateItem(estimateId, request, userId);
-            return ResponseEntity.ok(EstimateItemResponse.fromEntity(item));
+            EstimateItemResponse item = estimateService.addEstimateItem(estimateId, request, userId);
+            return ResponseEntity.ok(item);
         } catch (org.springframework.web.server.ResponseStatusException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 log.warn("Estimate {} not found when adding item: {}", estimateId, e.getReason());
@@ -271,8 +272,8 @@ public class EstimateController {
             @Parameter(description = "Item ID", required = true, example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID itemId,
             @Parameter(description = "Updated item fields", required = true) @Valid @RequestBody UpdateEstimateItemRequest request) {
         try {
-            EstimateItem item = estimateService.updateEstimateItem(estimateId, itemId, request);
-            return ResponseEntity.ok(EstimateItemResponse.fromEntity(item));
+            EstimateItemResponse item = estimateService.updateEstimateItem(estimateId, itemId, request);
+            return ResponseEntity.ok(item);
         } catch (IllegalArgumentException e) {
             log.warn("Validation error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
@@ -325,9 +326,9 @@ public class EstimateController {
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "ID of the user requesting calculation", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
         try {
-            Estimate estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, userId);
+            EstimateResponse estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, userId);
             Map<String, Object> response = new java.util.HashMap<>();
-            response.put("estimate", EstimateResponse.fromEntity(estimate));
+            response.put("estimate", estimate);
             response.put("subtotal", estimate.getSubtotal());
             response.put("taxAmount", estimate.getTaxAmount());
             response.put("total", estimate.getTotal());
@@ -357,25 +358,8 @@ public class EstimateController {
     public ResponseEntity<EstimateSummaryResponse> getEstimateSummary(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
-            Map<String, Object> summaryMap = estimateService.getEstimateSummary(estimateId);
-            Estimate estimate = (Estimate) summaryMap.get("estimate");
-            
-            // Prefer using a full items list from the service if available, fall back to combining parts and labor
-            @SuppressWarnings("unchecked")
-            List<EstimateItem> allItems = (List<EstimateItem>) summaryMap.get("items");
-            if (allItems == null) {
-                @SuppressWarnings("unchecked")
-                List<EstimateItem> partItems = (List<EstimateItem>) summaryMap.get("partItems");
-                @SuppressWarnings("unchecked")
-                List<EstimateItem> laborItems = (List<EstimateItem>) summaryMap.get("laborItems");
-                
-                allItems = new java.util.ArrayList<>();
-                allItems.addAll(partItems);
-                allItems.addAll(laborItems);
-            }
-
-            EstimateSummaryResponse response = EstimateSummaryResponse.fromEstimateAndItems(estimate, allItems);
-            return ResponseEntity.ok(response);
+            EstimateSummaryResponse summary = estimateService.getEstimateSummary(estimateId);
+            return ResponseEntity.ok(summary);
         } catch (IllegalArgumentException e) {
             log.warn("Estimate {} not found for summary: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
@@ -398,8 +382,8 @@ public class EstimateController {
             @Parameter(description = "Optional notes about why snapshot was created") @RequestParam(required = false) @Nullable String notes,
             @Parameter(description = "ID of the user creating snapshot", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
         try {
-            EstimateSnapshot snapshot = estimateService.createEstimateSnapshot(estimateId, userId, notes);
-            return ResponseEntity.ok(EstimateSnapshotResponse.fromEntity(snapshot));
+            EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, userId, notes);
+            return ResponseEntity.ok(snapshot);
         } catch (IllegalArgumentException e) {
             log.warn("Estimate {} not found for snapshot: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();

@@ -10,9 +10,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.tax.service.TaxCalculationService;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateStatus;
@@ -41,9 +43,6 @@ class EstimateRevisionWorkflowTest {
         private EstimateService estimateService;
 
         @Autowired
-        private WorkorderService workorderService;
-
-        @Autowired
         private EstimateRepository estimateRepository;
 
         @Autowired
@@ -51,6 +50,9 @@ class EstimateRevisionWorkflowTest {
 
         @Autowired
         private AuditEventRepository auditEventRepository;
+
+        @MockitoBean
+        private TaxCalculationService taxCalculationService;
 
         private Estimate testEstimate;
         private Workorder testWorkorder;

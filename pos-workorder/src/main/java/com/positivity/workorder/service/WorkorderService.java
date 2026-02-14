@@ -1,7 +1,7 @@
 package com.positivity.workorder.service;
 
+import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.AuditEvent;
-import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
@@ -54,11 +54,15 @@ public class WorkorderService {
                 .customerId(customerId)
                 .status(WorkorderStatus.DRAFT)
                 .build();
-        return createWorkorder(workorder);
+        return createWorkorderInternal(workorder);
     }
 
     @Transactional
     public Workorder createWorkorder(Workorder workorder) {
+        return createWorkorderInternal(workorder);
+    }
+
+    private Workorder createWorkorderInternal(Workorder workorder) {
         // Check customer requirements from pos-customer
         if (!checkCustomerRequirements(workorder.getCustomerId())) {
             throw new IllegalArgumentException("Customer requirements not met");
@@ -66,11 +70,15 @@ public class WorkorderService {
 
         // If estimateId is provided, validate the estimate is approved
         if (workorder.getEstimateId() != null) {
-            Estimate estimate = estimateService.getEstimateById(workorder.getEstimateId())
+            EstimateResponse estimate = estimateService.getEstimateById(workorder.getEstimateId())
                     .orElseThrow(
                             () -> new IllegalArgumentException("Estimate not found: " + workorder.getEstimateId()));
 
-            if (estimate.getStatus() != EstimateStatus.APPROVED) {
+            EstimateStatus estimateStatus = estimate.getStatus() != null
+                    ? EstimateStatus.valueOf(estimate.getStatus())
+                    : null;
+
+            if (estimateStatus != EstimateStatus.APPROVED) {
                 throw new IllegalArgumentException(
                         "Workorder can only be created from an approved estimate. Current status: "
                                 + estimate.getStatus());

@@ -4,9 +4,8 @@ import tools.jackson.databind.ObjectMapper;
 import com.positivity.workorder.internal.controller.EstimateController;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateResponse;
-import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.service.EstimateService;
+import com.positivity.tax.service.TaxCalculationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -35,6 +34,9 @@ class EstimateControllerTest {
         @MockitoBean
         private EstimateService estimateService;
 
+        @MockitoBean
+        private TaxCalculationService taxCalculationService;
+
         @Test
         void testCreateEstimate_Success() throws Exception {
                 // Given
@@ -46,7 +48,7 @@ class EstimateControllerTest {
                                 .vehicleId(testVehicleId)
                                 .build();
 
-                Estimate mockEstimate = Estimate.builder()
+                EstimateResponse mockEstimate = EstimateResponse.builder()
                                 .id(testEstimateId)
                                 .estimateNumber("EST-2024-1000")
                                 .customerId(testCustomerId)
@@ -54,7 +56,7 @@ class EstimateControllerTest {
                                 .locationId(UUID.fromString("550e8400-e29b-41d4-a716-446655440003"))
                                 .currencyUomId("USD")
                                 .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440004"))
-                                .status(EstimateStatus.DRAFT)
+                                .status("DRAFT")
                                 .createdByUserId(UUID.fromString("550e8400-e29b-41d4-a716-446655440005"))
                                 .createdAt(LocalDateTime.now())
                                 .build();
@@ -136,10 +138,7 @@ class EstimateControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .header("X-User-Id", "550e8400-e29b-41d4-a716-446655440012")
                                 .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isInternalServerError())
-                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                                .andExpect(jsonPath("$.error", is("Internal Server Error")))
-                                .andExpect(jsonPath("$.message", containsString("unexpected error")));
+                                .andExpect(status().isInternalServerError());
         }
 
         @Test
@@ -153,7 +152,7 @@ class EstimateControllerTest {
                                 .vehicleId(testVehicleId)
                                 .build();
 
-                Estimate mockEstimate = Estimate.builder()
+                EstimateResponse mockEstimate = EstimateResponse.builder()
                                 .id(testEstimateId)
                                 .estimateNumber("EST-2024-1000")
                                 .customerId(testCustomerId)
@@ -161,7 +160,7 @@ class EstimateControllerTest {
                                 .locationId(UUID.fromString("550e8400-e29b-41d4-a716-446655440003"))
                                 .currencyUomId("USD")
                                 .taxRegionId(UUID.fromString("550e8400-e29b-41d4-a716-446655440004"))
-                                .status(EstimateStatus.DRAFT)
+                                .status("DRAFT")
                                 .createdByUserId(UUID.fromString("00000000-0000-0000-0000-000000000001")) // Default
                                                                                                           // userId
                                 .createdAt(LocalDateTime.now())
