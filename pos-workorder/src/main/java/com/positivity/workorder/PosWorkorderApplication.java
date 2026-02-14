@@ -10,7 +10,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * Note: Jackson 3.0 ObjectMapper is auto-configured by Spring Boot 4.0.1 with
  * Java 8 date/time support built-in. No manual configuration required.
  * 
- * @EnableScheduling enables support for @Scheduled tasks like ApprovalExpirationJob.
+ * @EnableScheduling enables support for @Scheduled tasks like
+ *                   ApprovalExpirationJob.
  */
 @SpringBootApplication(scanBasePackages = { "com.positivity.workorder", "com.positivity.tax" })
 @EnableScheduling
