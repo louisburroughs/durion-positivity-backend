@@ -43,10 +43,10 @@ public class Estimate {
 
     // CAP:003 Issue #168 - Submit for Approval tracking
     private LocalDateTime submittedAt; // When estimate was submitted for customer approval
-    private UUID submittedBy; // User who submitted estimate for approval
+    private String submittedBy; // User who submitted estimate for approval
 
     @Column(nullable = false, updatable = false)
-    private UUID createdById; // User who created the estimate
+    private String createdById; // User who created the estimate
     // Configuration reference for approval method
     private UUID approvalConfigurationId;
 
@@ -54,7 +54,7 @@ public class Estimate {
     private String declineReason;
 
     // Approved by (service advisor or system user ID)
-    private UUID approvedBy;
+    private String approvedBy;
 
     // Customer signature capture for approval
     @Column(length = 100000)

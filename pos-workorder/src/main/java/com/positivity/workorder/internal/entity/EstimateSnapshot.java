@@ -52,8 +52,8 @@ public class EstimateSnapshot {
     @Column(nullable = false, updatable = false)
     private LocalDateTime capturedAt;
 
-    @Column(nullable = false, columnDefinition = "UUID", updatable = false)
-    private UUID capturedById; // User who created the snapshot
+    @Column(nullable = false, updatable = false)
+    private String capturedById; // User who created the snapshot
 
     @Column(length = 500, updatable = false)
     private String notes; // Optional notes about why snapshot was captured

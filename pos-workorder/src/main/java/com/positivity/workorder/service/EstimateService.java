@@ -121,7 +121,7 @@ public class EstimateService {
          * @throws IllegalArgumentException if validation fails
          */
         @Transactional
-        public EstimateResponse createEstimate(CreateEstimateRequest request, UUID createdByUserId) {
+        public EstimateResponse createEstimate(CreateEstimateRequest request, String username) {
                 log.info("Creating new estimate for customer {} and vehicle {}",
                                 request.getCustomerId(), request.getVehicleId());
 
@@ -161,7 +161,7 @@ public class EstimateService {
                                 .currencyUomId(currencyUomId)
                                 .taxRegionId(taxRegionId)
                                 .status(EstimateStatus.DRAFT)
-                                .createdByUserId(createdByUserId)
+                                .createdByUserId(username)
                                 .createdAt(LocalDateTime.now())
                                 .approvalConfigurationId(config.getId())
                                 .build();
@@ -196,7 +196,7 @@ public class EstimateService {
         }
 
         @Transactional
-        public EstimateResponse approveEstimate(UUID estimateId, UUID approvedByUserId) {
+        public EstimateResponse approveEstimate(UUID estimateId, String approvedByUsername) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -207,9 +207,9 @@ public class EstimateService {
 
                 estimate.setStatus(EstimateStatus.APPROVED);
                 estimate.setApprovedAt(LocalDateTime.now());
-                estimate.setApprovedBy(approvedByUserId);
+                estimate.setApprovedBy(approvedByUsername);
 
-                log.info("Estimate {} approved by user {}", estimateId, approvedByUserId);
+                log.info("Estimate {} approved by user {}", estimateId, approvedByUsername);
                 return EstimateResponse.fromEntity(estimateRepository.save(estimate));
         }
 
@@ -313,7 +313,10 @@ public class EstimateService {
 
                 estimate.setStatus(EstimateStatus.APPROVED);
                 estimate.setApprovedAt(LocalDateTime.now());
-                estimate.setApprovedBy(customerId); // Using customerId as approver
+                // Note: When customers approve (via signature capture), we store customerId as the approver
+                // This is different from internal staff approvals which would use a username.
+                // The field is String to accommodate both use cases.
+                estimate.setApprovedBy(customerId.toString());
                 estimate.setSignatureData(signatureData);
                 estimate.setSignatureMimeType(signatureMimeType);
                 estimate.setSignerName(signerName);
@@ -440,14 +443,14 @@ public class EstimateService {
          * from DRAFT -> PENDING_APPROVAL.
          * 
          * @param estimateId estimate to submit
-         * @param userId     user submitting the estimate
+         * @param username   username submitting the estimate
          * @return updated estimate in PENDING_APPROVAL state
          * @throws IllegalArgumentException if estimate not found
          * @throws IllegalStateException    if estimate is not in DRAFT state or
          *                                  incomplete
          */
         @Transactional
-        public EstimateResponse submitForApproval(UUID estimateId, UUID userId) {
+        public EstimateResponse submitForApproval(UUID estimateId, String username) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -462,12 +465,12 @@ public class EstimateService {
                 validateEstimateCompleteness(estimate);
 
                 // Create immutable snapshot before transitioning state
-                createEstimateSnapshot(estimateId, userId, "Submitted for customer approval");
+                createEstimateSnapshot(estimateId, username, "Submitted for customer approval");
 
                 // Transition to PENDING_APPROVAL
                 estimate.setStatus(EstimateStatus.PENDING_APPROVAL);
                 estimate.setSubmittedAt(LocalDateTime.now());
-                estimate.setSubmittedBy(userId);
+                estimate.setSubmittedBy(username);
 
                 // Set expiration based on approval configuration
                 ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
@@ -476,7 +479,7 @@ public class EstimateService {
                 }
 
                 log.info("Estimate {} submitted for approval by user {}, expires at {}",
-                                estimateId, userId, estimate.getExpiresAt());
+                                estimateId, username, estimate.getExpiresAt());
                 return EstimateResponse.fromEntity(estimateRepository.save(estimate));
         }
 
@@ -562,15 +565,15 @@ public class EstimateService {
          * @param subtotal   new subtotal amount
          * @param taxAmount  new tax amount
          * @param total      new total amount
-         * @param userId     ID of user making the change
+         * @param username   username making the change
          * @return the updated estimate
          */
         @Transactional
         public EstimateResponse updateEstimateFinancials(UUID estimateId, BigDecimal subtotal,
                         BigDecimal taxAmount, BigDecimal total,
-                        UUID userId) {
+                        String username) {
                 return EstimateResponse.fromEntity(
-                                updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, userId));
+                                updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, username));
         }
 
         /**
@@ -579,7 +582,7 @@ public class EstimateService {
          * Runs within the transaction context of the caller.
          */
         private Estimate updateEstimateFinancialsInternal(UUID estimateId, BigDecimal subtotal,
-                        BigDecimal taxAmount, BigDecimal total, UUID userId) {
+                        BigDecimal taxAmount, BigDecimal total, String username) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -607,7 +610,7 @@ public class EstimateService {
 
                 // Publish revision event if total changed
                 if (totalChanged) {
-                        publishEstimateRevisedEvents(saved, oldTotal, total, userId);
+                        publishEstimateRevisedEvents(saved, oldTotal, total, username);
                 }
 
                 return saved;
@@ -619,7 +622,7 @@ public class EstimateService {
          * This enables event-driven invalidation of approvals.
          */
         private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal,
-                        BigDecimal newTotal, UUID userId) {
+                        BigDecimal newTotal, String username) {
                 List<Workorder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
 
                 log.info("Publishing EstimateRevisedEvent for {} Workorders linked to estimate {}",
@@ -631,7 +634,7 @@ public class EstimateService {
                                         .workorderId(workOrder.getId())
                                         .oldTotal(oldTotal != null ? oldTotal : BigDecimal.ZERO)
                                         .newTotal(newTotal != null ? newTotal : BigDecimal.ZERO)
-                                        .changedBy(userId)
+                                        .changedBy(username)
                                         .timestamp(Instant.now())
                                         .build();
 
@@ -652,13 +655,13 @@ public class EstimateService {
          *
          * @param estimateId estimate to add item to
          * @param request    item details
-         * @param userId     user adding the item
+         * @param username   username adding the item
          * @return the created estimate item
          */
         @Transactional
         @NonNull
         public EstimateItemResponse addEstimateItem(@NonNull UUID estimateId, @NonNull AddEstimateItemRequest request,
-                        @NonNull UUID userId) {
+                        @NonNull String username) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -679,7 +682,7 @@ public class EstimateService {
                                 .taxCode(request.getTaxCode())
                                 .productId(request.getProductId())
                                 .serviceId(request.getServiceId())
-                                .createdById(userId)
+                                .createdById(username)
                                 .build();
 
                 item.validate();
@@ -792,12 +795,12 @@ public class EstimateService {
          * Integrates with pos-tax service for jurisdiction-based tax calculation.
          *
          * @param estimateId estimate to calculate
-         * @param userId     user requesting calculation
+         * @param username   username requesting calculation
          * @return the updated estimate with calculated totals
          */
         @Transactional
         @NonNull
-        public EstimateResponse calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull UUID userId) {
+        public EstimateResponse calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull String username) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -814,7 +817,7 @@ public class EstimateService {
                 if (items.isEmpty()) {
                         log.warn("No line items found for estimate {}, setting totals to zero", estimateId);
                         Estimate saved = updateEstimateFinancialsInternal(estimateId, BigDecimal.ZERO, BigDecimal.ZERO,
-                                        BigDecimal.ZERO, userId);
+                                        BigDecimal.ZERO, username);
                         return EstimateResponse.fromEntity(saved);
                 }
 
@@ -846,7 +849,7 @@ public class EstimateService {
                 BigDecimal total = taxResponse.getTotal();
 
                 // Update estimate using internal helper (reuses transaction context)
-                Estimate saved = updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, userId);
+                Estimate saved = updateEstimateFinancialsInternal(estimateId, subtotal, taxAmount, total, username);
 
                 log.info("Calculated totals for estimate {}: subtotal={}, tax={}, total={} (testMode={})",
                                 estimateId, subtotal, taxAmount, total, taxResponse.isTestMode());
@@ -948,13 +951,13 @@ public class EstimateService {
          * Story #18 (Present Estimate Summary) - Historical Snapshot
          *
          * @param estimateId estimate to snapshot
-         * @param userId     user creating snapshot
+         * @param username   username creating snapshot
          * @param notes      optional notes about why snapshot was created
          * @return the created snapshot
          */
         @Transactional
         @NonNull
-        public EstimateSnapshotResponse createEstimateSnapshot(@NonNull UUID estimateId, @NonNull UUID userId,
+        public EstimateSnapshotResponse createEstimateSnapshot(@NonNull UUID estimateId, @NonNull String username,
                         @Nullable String notes) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
@@ -979,7 +982,7 @@ public class EstimateService {
                                 .estimateId(estimateId)
                                 .status(estimate.getStatus())
                                 .snapshotData(snapshotJson)
-                                .capturedById(userId)
+                                .capturedById(username)
                                 .notes(notes)
                                 .build();
 

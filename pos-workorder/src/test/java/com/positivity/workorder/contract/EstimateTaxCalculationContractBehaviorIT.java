@@ -198,8 +198,8 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
                 .currencyUomId("USD")
                 .taxRegionId(UUID.randomUUID())
                 .status(EstimateStatus.DRAFT)
-                .createdByUserId(SYSTEM_USER_ID)
-                .createdById(SYSTEM_USER_ID)
+                .createdByUserId(SYSTEM_USER_ID.toString())
+                .createdById(SYSTEM_USER_ID.toString())
                 .build();
 
         Estimate savedEstimate = estimateRepository.save(estimate);
@@ -222,7 +222,7 @@ class EstimateTaxCalculationContractBehaviorIT extends BaseContractIntegrationTe
                 .quantity(quantity)
                 .unitPrice(unitPrice)
                 .taxCode("STD")
-                .createdById(SYSTEM_USER_ID)
+                .createdById(SYSTEM_USER_ID.toString())
                 .build();
     }
 }
