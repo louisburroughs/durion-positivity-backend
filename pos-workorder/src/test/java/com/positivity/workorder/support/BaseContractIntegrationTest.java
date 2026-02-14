@@ -29,6 +29,7 @@ public abstract class BaseContractIntegrationTest {
             "workorder:estimate:create",
             "workorder:estimate:edit",
             "workorder:estimate:delete",
+            "workorder:estimate:submit",
             "workorder:estimate:decline",
             "workorder:estimate:reopen",
             "workorder:estimate:approve",
