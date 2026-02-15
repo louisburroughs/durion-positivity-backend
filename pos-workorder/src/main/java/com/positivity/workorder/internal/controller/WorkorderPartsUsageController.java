@@ -2,7 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.*;
-import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
+
 import com.positivity.workorder.service.WorkorderPartUsageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -59,14 +59,14 @@ public class WorkorderPartsUsageController {
             @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey,
             @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
 
-        WorkorderPartUsageEvent event = usageService.issuePartQuantity(
+        var event = usageService.issuePartQuantity(
                 workorderId,
                 request.getWorkorderPartId(),
                 request.getQuantity(),
                 userId,
                 idempotencyKey);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(event));
+        return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
     }
 
     /**
@@ -86,14 +86,14 @@ public class WorkorderPartsUsageController {
             @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
 
         try {
-            WorkorderPartUsageEvent event = usageService.consumePartQuantity(
+            var event = usageService.consumePartQuantity(
                     workorderId,
                     request.getWorkorderPartId(),
                     request.getQuantity(),
                     userId,
                     idempotencyKey);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(event));
+            return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -116,14 +116,14 @@ public class WorkorderPartsUsageController {
             @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
 
         try {
-            WorkorderPartUsageEvent event = usageService.returnPartQuantity(
+            var event = usageService.returnPartQuantity(
                     workorderId,
                     request.getWorkorderPartId(),
                     request.getQuantity(),
                     userId,
                     idempotencyKey);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(event));
+            return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -150,22 +150,5 @@ public class WorkorderPartsUsageController {
         }
 
         return ResponseEntity.ok(responses);
-    }
-
-    /**
-     * Convert entity to response DTO for write operations.
-     */
-    private WorkorderPartUsageEventResponse toResponse(WorkorderPartUsageEvent event) {
-        return WorkorderPartUsageEventResponse.builder()
-                .id(event.getId())
-                .workorderPartId(event.getWorkorderPart().getId())
-                .workorderId(event.getWorkorderId())
-                .eventType(event.getEventType())
-                .quantity(event.getQuantity())
-                .performedBy(event.getPerformedBy())
-                .performedAt(event.getPerformedAt())
-                .notes(event.getNotes())
-                .partDescription(event.getWorkorderPart().getDescription())
-                .build();
     }
 }

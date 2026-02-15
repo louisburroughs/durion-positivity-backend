@@ -74,10 +74,10 @@ public class WorkorderLaborController {
                     userId,
                     idempotencyKey);
 
-            WorkorderLaborEntryResponse response = WorkorderLaborEntryResponse.fromEntity(entry);
+            WorkorderLaborEntryResponse response = WorkorderLaborMapper.toResponse(entry);
 
             log.info("Started labor session {} for workorder {} service {} by technician {}",
-                    entry.getId(), workorderId, serviceId, request.getTechnicianId());
+                    response.getId(), workorderId, serviceId, request.getTechnicianId());
 
             // Return 200 for idempotent replay, 201 for new creation
             HttpStatus status = isIdempotent ? HttpStatus.OK : HttpStatus.CREATED;
@@ -110,12 +110,12 @@ public class WorkorderLaborController {
             @Parameter(description = "Optional idempotency key to prevent duplicate stops") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         try {
-            WorkorderLaborEntry entry = laborService.stopLaborSession(entryId, idempotencyKey);
+            var entry = laborService.stopLaborSession(entryId, idempotencyKey);
 
-            WorkorderLaborEntryResponse response = WorkorderLaborEntryResponse.fromEntity(entry);
+            WorkorderLaborEntryResponse response = WorkorderLaborMapper.toResponse(entry);
 
             log.info("Stopped labor session {} for workorder {} - {} hours worked",
-                    entryId, workorderId, entry.getHoursWorked());
+                    entryId, workorderId, response.getHoursWorked());
 
             return ResponseEntity.ok(response);
 
