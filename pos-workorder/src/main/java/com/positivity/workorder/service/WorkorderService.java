@@ -13,9 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
-import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.AuditEvent;
-import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
@@ -32,9 +30,9 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkorderService {
     private final WorkorderRepository workorderRepository;
     private final RestClient restClient;
-    private final EstimateService estimateService;
     private final WorkorderStateMachine stateMachine;
     private final AuditEventRepository auditEventRepository;
+    private final PromotionValidationService promotionValidationService;
 
     @Value("${customer.service.url:http://localhost:8080/api/customers}")
     private String customerServiceUrl;
@@ -70,23 +68,16 @@ public class WorkorderService {
             throw new IllegalArgumentException("Customer requirements not met");
         }
 
-        // If estimateId is provided, validate the estimate is approved
+        // If estimateId is provided, validate promotion preconditions
         if (workorder.getEstimateId() != null) {
-            EstimateResponse estimate = estimateService.getEstimateById(workorder.getEstimateId())
-                    .orElseThrow(
-                            () -> new IllegalArgumentException("Estimate not found: " + workorder.getEstimateId()));
+            log.info("Validating promotion preconditions for estimate {}", workorder.getEstimateId());
 
-            EstimateStatus estimateStatus = estimate.getStatus() != null
-                    ? EstimateStatus.valueOf(estimate.getStatus())
-                    : null;
+            // Use PromotionValidationService for comprehensive validation (CAP:004 Story
+            // #25)
+            promotionValidationService.validatePromotionPreconditions(workorder.getEstimateId());
 
-            if (estimateStatus != EstimateStatus.APPROVED) {
-                throw new IllegalArgumentException(
-                        "Workorder can only be created from an approved estimate. Current status: "
-                                + estimate.getStatus());
-            }
-
-            log.info("Creating workorder from approved estimate {}", workorder.getEstimateId());
+            log.info("Promotion preconditions validated successfully for estimate {}",
+                    workorder.getEstimateId());
         }
 
         // Check customer approval from pos-customer-approval (legacy)
