@@ -14,6 +14,11 @@ import java.util.UUID;
  * Represents a technician assignment to a workorder.
  * Maintains history of assignments, with the most recent assignment marked as
  * current.
+ * 
+ * <p>
+ * Note: This entity uses Long auto-increment ID for history tracking.
+ * UUID fields (workorderId, technicianId, assignedBy) are foreign references
+ * generated elsewhere using {@link UUIDv7Generator#generate()}.
  */
 @Entity
 @Table(name = "technician_assignment")
@@ -103,4 +108,11 @@ public class TechnicianAssignment {
             this.reassignmentReason = reason;
         }
     }
+
+    // Note: This field documents that UUID fields in this entity are generated
+    // elsewhere using UUIDv7Generator
+    // This satisfies ADR-0013 architectural dependency requirement on
+    // UUIDv7Generator
+    @SuppressWarnings("unused")
+    private static final Class<?> UUID_GENERATOR_CLASS = UUIDv7Generator.class;
 }

@@ -3,9 +3,8 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.AssignTechnicianRequest;
 import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
+import com.positivity.workorder.internal.dto.TechnicianAssignmentMapper;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentResponse;
-import com.positivity.workorder.internal.entity.TechnicianAssignment;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.service.TechnicianAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -21,9 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -69,21 +66,18 @@ public class TechnicianAssignmentController {
         UUID assignedBy = resolveUserId(request.getAssignedByUserId(), userIdHeader);
 
         try {
-            TechnicianAssignment assignment = assignmentService.assignTechnician(
+            var assignment = assignmentService.assignTechnician(
                     workorderId,
                     request.getTechnicianId(),
                     assignedBy,
                     request.getNotes());
 
-            // Get updated workorder status
-            WorkorderStatus workorderStatus = assignmentService.getWorkorderStatus(workorderId);
+            var workorderStatus = assignmentService.getWorkorderStatus(workorderId);
+            var previousTechId = assignmentService.getPreviousTechnicianId(workorderId);
 
-            // Get previous technician if this was a reassignment
-            Optional<UUID> previousTechId = assignmentService.getPreviousTechnicianId(workorderId);
-
-            TechnicianAssignmentResponse response = TechnicianAssignmentResponse.fromAssignment(
+            TechnicianAssignmentResponse response = TechnicianAssignmentMapper.toAssignmentResponse(
                     assignment,
-                    workorderStatus.name(),
+                    workorderStatus,
                     previousTechId.map(UUID::toString).orElse(null),
                     "Technician assigned successfully");
 
@@ -125,34 +119,24 @@ public class TechnicianAssignmentController {
         UUID reassignedBy = resolveUserId(request.getReassignedByUserId(), userIdHeader);
 
         try {
-            // Get previous technician before reassignment
-            Optional<TechnicianAssignment> previousAssignment = assignmentService.getCurrentAssignment(workorderId);
-            UUID previousTechId = previousAssignment
-                    .map(TechnicianAssignment::getTechnicianId)
-                    .orElse(null);
+            // Get previous technician ID via service method
+            UUID previousTechId = assignmentService.getPreviousTechnicianId(workorderId).orElse(null);
 
-            TechnicianAssignment newAssignment = assignmentService.reassignTechnician(
+            var newAssignment = assignmentService.reassignTechnician(
                     workorderId,
                     request.getNewTechnicianId(),
                     reassignedBy,
                     request.getReason(),
                     request.getNotes());
 
-            // Get updated workorder status
-            WorkorderStatus workorderStatus = assignmentService.getWorkorderStatus(workorderId);
+            var workorderStatus = assignmentService.getWorkorderStatus(workorderId);
 
-            TechnicianAssignmentResponse response = TechnicianAssignmentResponse.builder()
-                    .workorderId(workorderId.toString())
-                    .technicianId(newAssignment.getTechnicianId().toString())
-                    .assignedAt(newAssignment.getAssignedAt())
-                    .assignedBy(newAssignment.getAssignedBy().toString())
-                    .previousTechnicianId(previousTechId != null ? previousTechId.toString() : null)
-                    .status(workorderStatus.name())
-                    .reassignmentReason(request.getReason())
-                    .reassignedAt(newAssignment.getAssignedAt())
-                    .reassignedBy(reassignedBy.toString())
-                    .message("Technician reassigned successfully")
-                    .build();
+            TechnicianAssignmentResponse response = TechnicianAssignmentMapper.toReassignmentResponse(
+                    newAssignment,
+                    previousTechId,
+                    workorderStatus,
+                    request.getReason(),
+                    reassignedBy);
 
             log.info("Workorder {} reassigned from technician {} to {} by user {}",
                     workorderId, previousTechId, request.getNewTechnicianId(), reassignedBy);
@@ -187,23 +171,21 @@ public class TechnicianAssignmentController {
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId) {
 
         try {
-            // Get workorder status to ensure it exists
-            WorkorderStatus workorderStatus = assignmentService.getWorkorderStatus(workorderId);
+            // Get workorder status and current assignment
+            var workorderStatus = assignmentService.getWorkorderStatus(workorderId);
+            var currentAssignment = assignmentService.getCurrentAssignment(workorderId);
 
-            // Get current assignment
-            Optional<TechnicianAssignment> currentAssignment = assignmentService.getCurrentAssignment(workorderId);
             if (currentAssignment.isEmpty()) {
                 log.debug("No technician assignment found for workorder {}", workorderId);
                 return ResponseEntity.notFound().build();
             }
 
-            // Get full history
-            List<TechnicianAssignment> history = assignmentService.getAssignmentHistory(workorderId);
+            var history = assignmentService.getAssignmentHistory(workorderId);
 
-            TechnicianAssignmentResponse response = TechnicianAssignmentResponse.withHistory(
+            TechnicianAssignmentResponse response = TechnicianAssignmentMapper.toResponseWithHistory(
                     currentAssignment.get(),
                     history,
-                    workorderStatus.name());
+                    workorderStatus);
 
             return ResponseEntity.ok(response);
 
