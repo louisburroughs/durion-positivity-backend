@@ -143,7 +143,7 @@ public class WorkorderService {
         // CAP:004 Story #29: Fetch only APPROVED and non-deleted items to support
         // partial approval
         List<EstimateItem> estimateItems = estimateItemRepository
-            .findByEstimateIdAndApprovalStatusAndDeletedFalse(estimateId, ApprovalStatus.APPROVED);
+                .findByEstimateIdAndApprovalStatusAndDeletedFalse(estimateId, ApprovalStatus.APPROVED);
 
         if (estimateItems.isEmpty()) {
             log.warn("No approved estimate items found for estimate {}, no workorder items created", estimateId);
@@ -151,7 +151,7 @@ public class WorkorderService {
         }
 
         log.info("Found {} approved estimate items to copy to workorder {}",
-            estimateItems.size(), workorder.getId());
+                estimateItems.size(), workorder.getId());
 
         List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = new ArrayList<>();
         List<WorkorderPart> partItems = new ArrayList<>();
