@@ -26,6 +26,18 @@ class WorkorderCompletionTest {
     private WorkorderRepository workOrderRepository;
 
     @Mock
+    private EstimateRepository estimateRepository;
+
+    @Mock
+    private EstimateItemRepository estimateItemRepository;
+
+    @Mock
+    private WorkorderServiceRepository workorderServiceRepository;
+
+    @Mock
+    private WorkorderPartRepository workorderPartRepository;
+
+    @Mock
     private WorkorderStateTransitionRepository transitionRepository;
 
     @Mock
@@ -44,7 +56,13 @@ class WorkorderCompletionTest {
     private ChangeRequestService changeRequestService;
 
     @Mock
+    private PromotionValidationService promotionValidationService;
+
+    @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private org.springframework.web.client.RestClient restClient;
 
     @InjectMocks
     private WorkorderStateMachine stateMachine;
@@ -76,7 +94,9 @@ class WorkorderCompletionTest {
 
         // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
         // dependency
-        workOrderService = new WorkorderService(workOrderRepository, null, null, stateMachine, auditEventRepository, idempotencyService);
+        workOrderService = new WorkorderService(workOrderRepository, estimateRepository, estimateItemRepository,
+                workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
+                auditEventRepository, promotionValidationService);
     }
 
     @Test

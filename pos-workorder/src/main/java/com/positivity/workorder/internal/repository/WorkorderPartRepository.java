@@ -10,4 +10,10 @@ import java.util.UUID;
 @Repository
 public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UUID> {
     List<WorkorderPart> findByChangeRequestId(UUID changeRequestId);
+
+    /**
+     * Find all parts directly associated with a workorder (CAP:004 Story #27).
+     * This includes standalone parts not tied to a service.
+     */
+    List<WorkorderPart> findByWorkorderId(UUID workorderId);
 }
