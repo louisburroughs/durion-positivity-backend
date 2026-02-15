@@ -26,6 +26,9 @@ class WorkorderCompletionTest {
     private WorkorderRepository workOrderRepository;
 
     @Mock
+    private EstimateRepository estimateRepository;
+
+    @Mock
     private WorkorderStateTransitionRepository transitionRepository;
 
     @Mock
@@ -39,6 +42,9 @@ class WorkorderCompletionTest {
 
     @Mock
     private ChangeRequestService changeRequestService;
+
+    @Mock
+    private PromotionValidationService promotionValidationService;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -73,8 +79,8 @@ class WorkorderCompletionTest {
 
         // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
         // dependency
-        workOrderService = new WorkorderService(workOrderRepository, null, stateMachine,
-                auditEventRepository, null);
+        workOrderService = new WorkorderService(workOrderRepository, estimateRepository, null, stateMachine,
+                auditEventRepository, promotionValidationService);
     }
 
     @Test
