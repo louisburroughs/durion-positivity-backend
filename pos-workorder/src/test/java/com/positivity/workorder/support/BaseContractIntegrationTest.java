@@ -53,6 +53,7 @@ public abstract class BaseContractIntegrationTest {
             "workorder:workorder:approve",
             "workorder:workorder:start",
             "workorder:workorder:complete",
+            "workorder:workorder:assign-technician",
             "workorder:invoice:view",
             "workorder:invoice:create",
             "workorder:parts:view",

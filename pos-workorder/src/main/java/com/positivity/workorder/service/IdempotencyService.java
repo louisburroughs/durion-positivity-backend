@@ -78,6 +78,50 @@ public class IdempotencyService {
     }
 
     /**
+     * Check if an idempotency key exists and return the associated change request ID.
+     * 
+     * @param keyValue the idempotency key to check
+     * @return Optional containing the change request ID if the key has been processed
+     *         before, empty otherwise
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> getExistingChangeRequestId(@NonNull String keyValue) {
+        Optional<IdempotencyKey> existing = repository.findByKeyValue(keyValue);
+        if (existing.isPresent()) {
+            IdempotencyKey key = existing.get();
+            if (key.getExpiresAt().isAfter(Instant.now()) && key.getChangeRequestId() != null) {
+                log.info("Idempotency key {} already processed for change request {}", keyValue, key.getChangeRequestId());
+                return Optional.of(key.getChangeRequestId());
+            } else if (key.getExpiresAt().isBefore(Instant.now())) {
+                log.info("Idempotency key {} has expired", keyValue);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Check if an idempotency key exists and return the associated labor entry ID.
+     * 
+     * @param keyValue the idempotency key to check
+     * @return Optional containing the labor entry ID if the key has been processed
+     *         before, empty otherwise
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> getExistingLaborEntryId(@NonNull String keyValue) {
+        Optional<IdempotencyKey> existing = repository.findByKeyValue(keyValue);
+        if (existing.isPresent()) {
+            IdempotencyKey key = existing.get();
+            if (key.getExpiresAt().isAfter(Instant.now()) && key.getLaborEntryId() != null) {
+                log.info("Idempotency key {} already processed for labor entry {}", keyValue, key.getLaborEntryId());
+                return Optional.of(key.getLaborEntryId());
+            } else if (key.getExpiresAt().isBefore(Instant.now())) {
+                log.info("Idempotency key {} has expired", keyValue);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Register a new idempotency key associated with a workorder.
      * 
      * @param keyValue    the idempotency key value
@@ -89,6 +133,38 @@ public class IdempotencyService {
         IdempotencyKey key = new IdempotencyKey(keyValue, workorderId, expiresAt);
         repository.save(key);
         log.info("Registered idempotency key {} for workorder {}", keyValue, workorderId);
+    }
+
+    /**
+     * Mark an idempotency key as processed for a change request.
+     * 
+     * @param keyValue        the idempotency key value
+     * @param changeRequestId the ID of the created change request
+     */
+    @Transactional
+    public void markKeyProcessedForChangeRequest(@NonNull String keyValue, @NonNull UUID changeRequestId) {
+        Instant expiresAt = Instant.now().plus(KEY_EXPIRATION);
+        IdempotencyKey key = new IdempotencyKey(keyValue, null, changeRequestId, expiresAt);
+        repository.save(key);
+        log.info("Registered idempotency key {} for change request {}", keyValue, changeRequestId);
+    }
+
+    /**
+     * Register a new idempotency key associated with a labor entry.
+     * 
+     * @param keyValue     the idempotency key value
+     * @param laborEntryId the ID of the created labor entry
+     */
+    @Transactional
+    public void registerLaborKey(@NonNull String keyValue, @NonNull UUID laborEntryId) {
+        Instant expiresAt = Instant.now().plus(KEY_EXPIRATION);
+        IdempotencyKey key = new IdempotencyKey();
+        key.setKeyValue(keyValue);
+        key.setLaborEntryId(laborEntryId);
+        key.setCreatedAt(Instant.now());
+        key.setExpiresAt(expiresAt);
+        repository.save(key);
+        log.info("Registered idempotency key {} for labor entry {}", keyValue, laborEntryId);
     }
 
     /**

@@ -30,8 +30,9 @@ public class ChangeRequestController {
     @Operation(summary = "Create a change request", description = "Technician creates a request for additional work beyond authorized scope. "
             +
             "Items are marked as PENDING_APPROVAL until advisor approves. " +
-            "Requires description and at least one service or part item.")
-    @ApiResponse(responseCode = "200", description = "Change request created successfully")
+            "Requires description and at least one service or part item. " +
+            "Supports idempotent creation via Idempotency-Key header to prevent duplicate change requests.")
+    @ApiResponse(responseCode = "200", description = "Change request created successfully, or existing change request returned if idempotency key was previously processed")
     @ApiResponse(responseCode = "400", description = "Invalid request - missing description, no items, or validation failed")
     @ApiResponse(responseCode = "404", description = "Work order not found")
     @PostMapping("/{workorderId}/changeRequests")
@@ -39,10 +40,12 @@ public class ChangeRequestController {
     @PreAuthorize("hasAuthority('workorder:change_request:create')")
     public ResponseEntity<ChangeRequestResponse> createChangeRequest(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
-            @Parameter(description = "Change request details including items") @RequestBody CreateChangeRequestDTO dto) {
+            @Parameter(description = "Change request details including items") @RequestBody CreateChangeRequestDTO dto,
+            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)") 
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         try {
             dto.setWorkorderId(workorderId);
-            ChangeRequest created = changeRequestService.createChangeRequest(dto);
+            ChangeRequest created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
             return ResponseEntity.ok(ChangeRequestResponse.fromEntity(created));
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().build();

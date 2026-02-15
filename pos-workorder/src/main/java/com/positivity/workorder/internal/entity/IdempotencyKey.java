@@ -47,8 +47,14 @@ public class IdempotencyKey {
     @Column(nullable = false, unique = true, length = 255)
     private String keyValue;
 
-    @Column(nullable = false, columnDefinition = "UUID")
+    @Column(columnDefinition = "UUID")
     private UUID workorderId;
+
+    @Column(columnDefinition = "UUID")
+    private UUID changeRequestId;
+
+    @Column(columnDefinition = "UUID")
+    private UUID laborEntryId;
 
     @Column(nullable = false)
     private Instant createdAt;
@@ -59,6 +65,14 @@ public class IdempotencyKey {
     public IdempotencyKey(String keyValue, UUID workorderId, Instant expiresAt) {
         this.keyValue = keyValue;
         this.workorderId = workorderId;
+        this.createdAt = Instant.now();
+        this.expiresAt = expiresAt;
+    }
+
+    public IdempotencyKey(String keyValue, UUID workorderId, UUID changeRequestId, Instant expiresAt) {
+        this.keyValue = keyValue;
+        this.workorderId = workorderId;
+        this.changeRequestId = changeRequestId;
         this.createdAt = Instant.now();
         this.expiresAt = expiresAt;
     }
