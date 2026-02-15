@@ -54,6 +54,45 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== TECHNICIAN ASSIGNMENT EVENTS (CAP:005 Story #161) ====================
+
+        /** Assign a technician to a workorder */
+        public static final EventTypeRegistration WORKORDER_TECHNICIAN_ASSIGN = EventTypeRegistration
+                        .write("WORKORDER_TECHNICIAN_ASSIGN",
+                                        "Assign a technician to a workorder")
+                        .apiVersion("1")
+                        .build();
+
+        /** Reassign a workorder to a different technician */
+        public static final EventTypeRegistration WORKORDER_TECHNICIAN_REASSIGN = EventTypeRegistration
+                        .write("WORKORDER_TECHNICIAN_REASSIGN",
+                                        "Reassign a workorder to a different technician")
+                        .apiVersion("1")
+                        .build();
+
+        // ==================== LABOR TRACKING EVENTS (CAP:005 Story #159) ====================
+
+        /** Start a labor session on a workorder service */
+        public static final EventTypeRegistration WORKORDER_LABOR_START = EventTypeRegistration
+                        .write("WORKORDER_LABOR_START",
+                                        "Start labor session on a workorder service")
+                        .apiVersion("1")
+                        .build();
+
+        /** Stop a labor session */
+        public static final EventTypeRegistration WORKORDER_LABOR_STOP = EventTypeRegistration
+                        .write("WORKORDER_LABOR_STOP",
+                                        "Stop an active labor session")
+                        .apiVersion("1")
+                        .build();
+
+        /** Adjust labor hours manually */
+        public static final EventTypeRegistration WORKORDER_LABOR_ADJUST = EventTypeRegistration
+                        .write("WORKORDER_LABOR_ADJUST",
+                                        "Manually adjust labor hours with reason")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== ESTIMATE EVENTS ====================
 
         /** List all estimates */
@@ -269,6 +308,13 @@ public final class WorkorderEventTypes {
                         WORKORDER_START,
                         WORKORDER_APPROVE,
                         WORKORDER_COMPLETE,
+                        // Technician assignment events (CAP:005 Story #161)
+                        WORKORDER_TECHNICIAN_ASSIGN,
+                        WORKORDER_TECHNICIAN_REASSIGN,
+                        // Labor tracking events (CAP:005 Story #159)
+                        WORKORDER_LABOR_START,
+                        WORKORDER_LABOR_STOP,
+                        WORKORDER_LABOR_ADJUST,
                         // Estimate events
                         WORKORDER_ESTIMATE_LIST,
                         WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER,

@@ -190,8 +190,19 @@
                     "Work Order API"
                 ],
                 "summary": "Create a new work order",
-                "description": "Add a new work order to the system.",
+                "description": "Add a new work order to the system. Supports idempotent creation via Idempotency-Key header to prevent duplicate workorders.",
                 "operationId": "createWorkorder",
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate creation (recommended for retries)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -204,7 +215,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Work order created successfully.",
+                        "description": "Work order created successfully, or existing work order returned if idempotency key was previously processed.",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -388,7 +399,7 @@
                     "Change Request API"
                 ],
                 "summary": "Create a change request",
-                "description": "Technician creates a request for additional work beyond authorized scope. Items are marked as PENDING_APPROVAL until advisor approves. Requires description and at least one service or part item.",
+                "description": "Technician creates a request for additional work beyond authorized scope. Items are marked as PENDING_APPROVAL until advisor approves. Requires description and at least one service or part item. Supports idempotent creation via Idempotency-Key header to prevent duplicate change requests.",
                 "operationId": "createChangeRequest",
                 "parameters": [
                     {
@@ -401,6 +412,15 @@
                             "format": "uuid"
                         },
                         "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate creation (recommended for retries)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "requestBody": {
@@ -425,7 +445,7 @@
                         }
                     },
                     "200": {
-                        "description": "Change request created successfully",
+                        "description": "Change request created successfully, or existing change request returned if idempotency key was previously processed",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -764,6 +784,80 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/estimates/{estimateId}/promote": {
+            "post": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Promote approved estimate to workorder",
+                "description": "Promote an approved estimate to a workorder. Validates preconditions: estimate must be APPROVED, not expired, have approved items, and not already promoted. Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate was previously promoted (idempotency). CAP:004 Story #26 - Create Workorder from Approved Estimate.",
+                "operationId": "promoteEstimateToWorkorder",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "ID of the estimate to promote",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Idempotency-Key header for safe retries",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "409": {
+                        "description": "Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Estimate not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error - estimate not in correct state",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Workorder created successfully from estimate",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderResponse"
                                 }
                             }
                         }
