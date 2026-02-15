@@ -126,10 +126,10 @@ public class WorkorderService {
                 // Mark transaction for rollback to prevent persisting the duplicate workorder
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
                 
-                // Check if it points to the same workorder or a different one
+                // Retrieve the existing workorder that won the race
                 Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
-                if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(created.getId())) {
-                    log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",
+                if (existingWorkorderId.isPresent()) {
+                    log.warn("Race condition detected: idempotency key {} already registered for workorder {}, returning existing workorder",
                             idempotencyKey, existingWorkorderId.get());
                     // Return the existing workorder to maintain idempotency semantics
                     // The transaction will be rolled back, preventing the duplicate 'created' workorder
@@ -137,10 +137,14 @@ public class WorkorderService {
                             .orElseThrow(() -> new IllegalStateException(
                                     "Idempotency key " + idempotencyKey + " points to non-existent workorder: " 
                                     + existingWorkorderId.get()));
+                } else {
+                    // This should not happen - if DataIntegrityViolationException was thrown,
+                    // the key must exist. This indicates a serious data inconsistency.
+                    log.error("Race condition detected but no existing workorder found for idempotency key {}", 
+                            idempotencyKey);
+                    throw new IllegalStateException(
+                            "DataIntegrityViolationException occurred but no workorder found for key: " + idempotencyKey);
                 }
-                // If it points to the same workorder, we can proceed normally
-                log.debug("Idempotency key {} already registered for current workorder {}", 
-                        idempotencyKey, created.getId());
             }
         }
 
