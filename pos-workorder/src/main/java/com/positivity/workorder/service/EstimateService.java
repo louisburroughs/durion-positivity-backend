@@ -622,7 +622,7 @@ public class EstimateService {
          */
         private void publishEstimateRevisedEvents(Estimate estimate, BigDecimal oldTotal,
                         BigDecimal newTotal, String username) {
-                List<Workorder> workOrders = workOrderRepository.findByEstimateId(estimate.getId());
+                List<Workorder> workOrders = workOrderRepository.findAllByEstimateId(estimate.getId());
 
                 log.info("Publishing EstimateRevisedEvent for {} Workorders linked to estimate {}",
                                 workOrders.size(), estimate.getId());
