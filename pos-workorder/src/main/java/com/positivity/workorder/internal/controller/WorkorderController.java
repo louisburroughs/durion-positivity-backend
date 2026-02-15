@@ -59,14 +59,19 @@ public class WorkorderController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Create a new work order", description = "Add a new work order to the system.")
-    @ApiResponse(responseCode = "200", description = "Work order created successfully.")
+    @Operation(summary = "Create a new work order", description = "Add a new work order to the system. Supports idempotent creation via Idempotency-Key header to prevent duplicate workorders.")
+    @ApiResponse(responseCode = "200", description = "Work order created successfully, or existing work order returned if idempotency key was previously processed.")
     @PostMapping
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
     public ResponseEntity<WorkorderResponse> createWorkorder(
-            @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request) {
-        // Service handles entity creation internally
-        Workorder created = workorderService.createWorkorder(request.getEstimateId(), request.getCustomerId());
+            @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
+            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)") 
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        // Service handles entity creation internally, including idempotency check
+        Workorder created = workorderService.createWorkorderWithIdempotency(
+                request.getEstimateId(), 
+                request.getCustomerId(),
+                idempotencyKey);
         return ResponseEntity.ok(WorkorderResponse.fromEntity(created));
     }
 

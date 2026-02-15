@@ -12,7 +12,14 @@ import lombok.Setter;
 import lombok.ToString;
 
 /**
- * Entity for tracking idempotency keys to prevent duplicate workorder promotion processing.
+ * Entity for tracking idempotency keys to prevent duplicate workorder creation.
+ * 
+ * <p>
+ * This entity stores idempotency keys submitted with workorder creation
+ * requests
+ * to ensure that retrying a failed request with the same key does not create
+ * duplicate workorders. Keys expire after 24 hours.
+ * </p>
  */
 @Getter
 @Setter
@@ -21,7 +28,7 @@ import lombok.ToString;
 @ToString
 @Entity
 @Table(name = "idempotency_keys", indexes = {
-        @Index(name = "idx_key_value", columnList = "keyValue")
+        @Index(name = "idx_key_value", columnList = "keyValue", unique = true)
 })
 public class IdempotencyKey {
 
@@ -37,10 +44,10 @@ public class IdempotencyKey {
         }
     }
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 255)
     private String keyValue;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "UUID")
     private UUID workorderId;
 
     @Column(nullable = false)

@@ -50,6 +50,9 @@ class WorkorderCompletionTest {
     private AuditEventRepository auditEventRepository;
 
     @Mock
+    private IdempotencyService idempotencyService;
+
+    @Mock
     private ChangeRequestService changeRequestService;
 
     @Mock
@@ -93,7 +96,7 @@ class WorkorderCompletionTest {
         // dependency
         workOrderService = new WorkorderService(workOrderRepository, estimateRepository, estimateItemRepository,
                 workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
-                auditEventRepository, promotionValidationService);
+                auditEventRepository, idempotencyService, promotionValidationService);
     }
 
     @Test
