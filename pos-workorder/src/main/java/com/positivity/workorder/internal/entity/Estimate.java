@@ -53,8 +53,8 @@ public class Estimate {
     // Notes or reason for decline
     private String declineReason;
 
-    // Approved by (service advisor or system user ID)
-    private String approvedBy;
+    // Approved by (customer UUID who approved the estimate)
+    private UUID approvedBy;
 
     // Customer signature capture for approval
     @Column(length = 100000)

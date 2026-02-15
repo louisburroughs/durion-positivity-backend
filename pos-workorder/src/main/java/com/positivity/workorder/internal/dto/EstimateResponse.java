@@ -75,8 +75,8 @@ public class EstimateResponse {
     @Schema(description = "Date and time the estimate was approved")
     private LocalDateTime approvedAt;
 
-    @Schema(description = "Username who approved the estimate", example = "jane.smith")
-    private String approvedBy;
+    @Schema(description = "Customer UUID who approved the estimate", example = "550e8400-e29b-41d4-a716-446655440005")
+    private UUID approvedBy;
 
     @Schema(description = "Base64-encoded signature image")
     private String signatureData;

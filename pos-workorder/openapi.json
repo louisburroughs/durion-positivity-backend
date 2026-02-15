@@ -543,20 +543,6 @@
                 "summary": "Create a new draft estimate",
                 "description": "Create a new estimate in DRAFT status for a customer and vehicle. Requires ESTIMATE_CREATE permission. System will generate a unique estimate number and apply default values for location, currency, and tax region if not provided.",
                 "operationId": "createEstimate",
-                "parameters": [
-                    {
-                        "name": "X-User-Id",
-                        "in": "header",
-                        "description": "ID of the user creating the estimate",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "default": "00000000-0000-0000-0000-000000000001"
-                        },
-                        "example": "00000000-0000-0000-0000-000000000001"
-                    }
-                ],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -611,6 +597,61 @@
                 }
             }
         },
+        "/v1/workorders/estimates/{estimateId}/submit-for-approval": {
+            "post": {
+                "tags": [
+                    "Estimate API"
+                ],
+                "summary": "Submit estimate for customer approval",
+                "description": "Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. Validates completeness (has customer, vehicle, line items, calculated totals). CAP:003 Issue #168 - Submit Estimate for Customer Approval",
+                "operationId": "submitForApproval",
+                "parameters": [
+                    {
+                        "name": "estimateId",
+                        "in": "path",
+                        "description": "ID of the estimate to submit",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Estimate is incomplete or not in DRAFT state",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Estimate not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Estimate submitted for approval successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/workorders/estimates/{estimateId}/snapshots": {
             "post": {
                 "tags": [
@@ -639,18 +680,6 @@
                         "schema": {
                             "type": "string"
                         }
-                    },
-                    {
-                        "name": "X-User-Id",
-                        "in": "header",
-                        "description": "ID of the user creating snapshot",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "default": "00000000-0000-0000-0000-000000000001"
-                        },
-                        "example": "00000000-0000-0000-0000-000000000001"
                     }
                 ],
                 "responses": {
@@ -761,18 +790,6 @@
                             "format": "uuid"
                         },
                         "example": "550e8400-e29b-41d4-a716-446655440000"
-                    },
-                    {
-                        "name": "X-User-Id",
-                        "in": "header",
-                        "description": "ID of the user adding the item",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "default": "00000000-0000-0000-0000-000000000001"
-                        },
-                        "example": "00000000-0000-0000-0000-000000000001"
                     }
                 ],
                 "requestBody": {
@@ -912,18 +929,6 @@
                             "format": "uuid"
                         },
                         "example": "550e8400-e29b-41d4-a716-446655440000"
-                    },
-                    {
-                        "name": "X-User-Id",
-                        "in": "header",
-                        "description": "ID of the user requesting calculation",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "default": "00000000-0000-0000-0000-000000000001"
-                        },
-                        "example": "00000000-0000-0000-0000-000000000001"
                     }
                 ],
                 "responses": {
@@ -2443,10 +2448,10 @@
                 "description": "Approval or rejection status for a specific line item",
                 "properties": {
                     "lineItemId": {
-                        "type": "integer",
-                        "format": "int64",
+                        "type": "string",
+                        "format": "uuid",
                         "description": "ID of the line item (service/product) being approved or rejected",
-                        "example": 123
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     },
                     "approved": {
                         "type": "boolean",
@@ -2549,9 +2554,8 @@
                     },
                     "createdByUserId": {
                         "type": "string",
-                        "format": "uuid",
-                        "description": "User ID who created the estimate",
-                        "example": "550e8400-e29b-41d4-a716-446655440005"
+                        "description": "Username who created the estimate",
+                        "example": "john.doe"
                     },
                     "createdAt": {
                         "type": "string",
@@ -2572,6 +2576,59 @@
                         "type": "number",
                         "description": "Total amount including tax",
                         "example": 162.38
+                    },
+                    "submittedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Date and time the estimate was submitted for approval"
+                    },
+                    "submittedBy": {
+                        "type": "string",
+                        "description": "Username who submitted the estimate for approval",
+                        "example": "john.doe"
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Date and time the approval window expires"
+                    },
+                    "approvedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Date and time the estimate was approved"
+                    },
+                    "approvedBy": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer UUID who approved the estimate",
+                        "example": "550e8400-e29b-41d4-a716-446655440005"
+                    },
+                    "signatureData": {
+                        "type": "string",
+                        "description": "Base64-encoded signature image"
+                    },
+                    "signatureMimeType": {
+                        "type": "string",
+                        "description": "MIME type of the signature image",
+                        "example": "image/png"
+                    },
+                    "signerName": {
+                        "type": "string",
+                        "description": "Name of person who signed"
+                    },
+                    "approvalNotes": {
+                        "type": "string",
+                        "description": "Additional notes provided at approval time"
+                    },
+                    "purchaseOrderNumber": {
+                        "type": "string",
+                        "description": "Purchase order number for commercial accounts",
+                        "example": "PO-2024-12345"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Optimistic locking version"
                     }
                 }
             },
@@ -2604,8 +2661,7 @@
                         "format": "date-time"
                     },
                     "capturedById": {
-                        "type": "string",
-                        "format": "uuid"
+                        "type": "string"
                     },
                     "notes": {
                         "type": "string"
@@ -2705,7 +2761,7 @@
             },
             "ApproveEstimateRequest": {
                 "type": "object",
-                "description": "Approval request with customer ID and signature capture",
+                "description": "Approval request with customer ID, signature capture, and optional selective line item approvals",
                 "properties": {
                     "customerId": {
                         "type": "string",

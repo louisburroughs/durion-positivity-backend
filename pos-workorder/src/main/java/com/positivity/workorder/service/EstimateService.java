@@ -195,7 +195,7 @@ public class EstimateService {
         }
 
         @Transactional
-        public EstimateResponse approveEstimate(UUID estimateId, String approvedByUsername) {
+        public EstimateResponse approveEstimate(UUID estimateId, UUID approvedByCustomerId) {
                 Estimate estimate = estimateRepository.findById(estimateId)
                                 .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
 
@@ -206,9 +206,9 @@ public class EstimateService {
 
                 estimate.setStatus(EstimateStatus.APPROVED);
                 estimate.setApprovedAt(LocalDateTime.now());
-                estimate.setApprovedBy(approvedByUsername);
+                estimate.setApprovedBy(approvedByCustomerId);
 
-                log.info("Estimate {} approved by user {}", estimateId, approvedByUsername);
+                log.info("Estimate {} approved by customer {}", estimateId, approvedByCustomerId);
                 return EstimateResponse.fromEntity(estimateRepository.save(estimate));
         }
 
@@ -237,6 +237,7 @@ public class EstimateService {
          * @return approved estimate
          */
         @Transactional
+        @SuppressWarnings("java:S107") // Suppress "too many parameters" warning for this approval method
         public EstimateResponse approveEstimate(UUID estimateId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes,
                         @Nullable String purchaseOrderNumber,
@@ -275,6 +276,7 @@ public class EstimateService {
          * Runs within the transaction context of the caller.
          * CAP:003 - Handles selective line item approval.
          */
+        @SuppressWarnings("java:S107") // Suppress "too many parameters" warning for this approval method
         private Estimate approveEstimateWithSignatureInternal(UUID estimateId, UUID customerId, String signatureData,
                         String signatureMimeType, String signerName, String notes,
                         @Nullable String purchaseOrderNumber,
@@ -312,11 +314,8 @@ public class EstimateService {
 
                 estimate.setStatus(EstimateStatus.APPROVED);
                 estimate.setApprovedAt(LocalDateTime.now());
-                // Note: When customers approve (via signature capture), we store customerId as
-                // the approver
-                // This is different from internal staff approvals which would use a username.
-                // The field is String to accommodate both use cases.
-                estimate.setApprovedBy(customerId.toString());
+                // Customer who approved the estimate (via signature capture)
+                estimate.setApprovedBy(customerId);
                 estimate.setSignatureData(signatureData);
                 estimate.setSignatureMimeType(signatureMimeType);
                 estimate.setSignerName(signerName);
