@@ -31,15 +31,16 @@ public interface EstimateItemRepository extends JpaRepository<EstimateItem, UUID
     long countByEstimateIdAndDeletedFalse(@NonNull UUID estimateId);
 
     /**
-     * Find all items for a given estimate with a specific approval status.
+     * Find all items for a given estimate with a specific approval status,
+     * excluding soft-deleted items.
      * Used for promotion validation to verify approved scope exists.
-     * 
+     *
      * @param estimateId     the ID of the estimate
      * @param approvalStatus the approval status to filter by
      * @return list of items matching the criteria
      */
     @NonNull
-    List<EstimateItem> findByEstimateIdAndApprovalStatus(
+    List<EstimateItem> findByEstimateIdAndDeletedFalseAndApprovalStatus(
             @NonNull UUID estimateId,
             @NonNull ApprovalStatus approvalStatus);
 
