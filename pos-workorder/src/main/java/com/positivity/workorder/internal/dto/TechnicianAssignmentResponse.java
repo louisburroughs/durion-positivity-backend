@@ -22,55 +22,55 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 @Schema(description = "Technician assignment response")
 public class TechnicianAssignmentResponse {
-    
+
     @Schema(description = "Work order ID", example = "550e8400-e29b-41d4-a716-446655440001")
     private String workorderId;
-    
+
     @Schema(description = "Assigned technician ID", example = "550e8400-e29b-41d4-a716-446655440050")
     private String technicianId;
-    
+
     @Schema(description = "Technician display name", example = "John Smith")
     private String technicianName;
-    
+
     @Schema(description = "When the technician was assigned", example = "2024-01-27T14:30:00")
     private LocalDateTime assignedAt;
-    
+
     @Schema(description = "ID of user who assigned the technician", example = "550e8400-e29b-41d4-a716-446655440000")
     private String assignedBy;
-    
+
     @Schema(description = "Previous technician ID if this was a reassignment", example = "550e8400-e29b-41d4-a716-446655440049")
     private String previousTechnicianId;
-    
+
     @Schema(description = "Previous technician name if this was a reassignment", example = "Jane Doe")
     private String previousTechnicianName;
-    
+
     @Schema(description = "Status of the workorder after assignment", example = "ASSIGNED")
     private String status;
-    
+
     @Schema(description = "Operation result message", example = "Technician assigned successfully")
     private String message;
-    
+
     @Schema(description = "Assignment notes")
     private String notes;
-    
+
     @Schema(description = "Reason for reassignment if applicable")
     private String reassignmentReason;
-    
+
     @Schema(description = "When technician was reassigned", example = "2024-01-27T15:30:00")
     private LocalDateTime reassignedAt;
-    
+
     @Schema(description = "ID of user who performed reassignment", example = "550e8400-e29b-41d4-a716-446655440000")
     private String reassignedBy;
-    
+
     @Schema(description = "Technician certifications", example = "[\"ASE Master Technician\", \"Brake Specialist\"]")
     private List<String> technicianCertifications;
-    
+
     @Schema(description = "Current workorder status", example = "WORK_IN_PROGRESS")
     private String currentStatus;
-    
+
     @Schema(description = "Full assignment history for the workorder")
     private List<AssignmentHistoryEntry> assignmentHistory;
-    
+
     /**
      * Simple factory method for basic assignment response.
      */
@@ -92,7 +92,7 @@ public class TechnicianAssignmentResponse {
                 .notes(assignment.getNotes())
                 .build();
     }
-    
+
     /**
      * Nested DTO for assignment history entries.
      */
@@ -104,25 +104,25 @@ public class TechnicianAssignmentResponse {
     public static class AssignmentHistoryEntry {
         @Schema(description = "Technician ID for this assignment period", example = "550e8400-e29b-41d4-a716-446655440050")
         private String technicianId;
-        
+
         @Schema(description = "Technician display name", example = "John Smith")
         private String technicianName;
-        
+
         @Schema(description = "When the technician was assigned", example = "2024-01-27T14:30:00")
         private LocalDateTime assignedAt;
-        
+
         @Schema(description = "ID of user who assigned the technician", example = "550e8400-e29b-41d4-a716-446655440000")
         private String assignedBy;
-        
+
         @Schema(description = "When the technician was unassigned (null for current assignment)", example = "2024-01-27T16:00:00")
         private LocalDateTime unassignedAt;
-        
+
         @Schema(description = "Reason for reassignment/unassignment", example = "Technician called out sick")
         private String reason;
-        
+
         @Schema(description = "Assignment notes")
         private String notes;
-        
+
         /**
          * Convert entity to history entry DTO.
          */
@@ -139,7 +139,7 @@ public class TechnicianAssignmentResponse {
                     .build();
         }
     }
-    
+
     /**
      * Create response with full history.
      */
@@ -151,7 +151,7 @@ public class TechnicianAssignmentResponse {
         List<AssignmentHistoryEntry> historyEntries = history.stream()
                 .map(AssignmentHistoryEntry::fromEntity)
                 .collect(Collectors.toList());
-        
+
         return TechnicianAssignmentResponse.builder()
                 .workorderId(currentAssignment.getWorkorderId().toString())
                 .technicianId(currentAssignment.getTechnicianId().toString())

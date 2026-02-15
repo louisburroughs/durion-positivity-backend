@@ -24,15 +24,21 @@ import java.util.UUID;
  * 
  * CAP:005 Story #157 - Handle Part Substitutions and Returns
  * 
- * <p>Provides methods to:</p>
+ * <p>
+ * Provides methods to:
+ * </p>
  * <ul>
- *   <li>Substitute one part for another (preserves original for history)</li>
- *   <li>Return unused quantity</li>
- *   <li>Correct part quantity (administrative corrections)</li>
+ * <li>Substitute one part for another (preserves original for history)</li>
+ * <li>Return unused quantity</li>
+ * <li>Correct part quantity (administrative corrections)</li>
  * </ul>
  * 
- * <p>All operations are idempotent when an idempotency key is provided.</p>
- * <p>All operations append to an immutable audit trail.</p>
+ * <p>
+ * All operations are idempotent when an idempotency key is provided.
+ * </p>
+ * <p>
+ * All operations append to an immutable audit trail.
+ * </p>
  */
 @Service
 public class WorkorderPartAdjustmentService {
@@ -55,20 +61,25 @@ public class WorkorderPartAdjustmentService {
     /**
      * Substitute one part for another.
      * 
-     * <p>Creates a new WorkorderPart entry for the substitute and records a SUBSTITUTION adjustment event.
-     * The original part is preserved for history—it is NOT deleted.</p>
+     * <p>
+     * Creates a new WorkorderPart entry for the substitute and records a
+     * SUBSTITUTION adjustment event.
+     * The original part is preserved for history—it is NOT deleted.
+     * </p>
      * 
-     * @param workorderId workorder ID
-     * @param originalPartId ID of the part to substitute
+     * @param workorderId      workorder ID
+     * @param originalPartId   ID of the part to substitute
      * @param substitutePartId ID of the new part (must be different from original)
-     * @param reason reason for substitution (required for audit)
-     * @param performedBy user performing substitution
-     * @param idempotencyKey optional idempotency key
-     * @param notes optional additional notes
+     * @param reason           reason for substitution (required for audit)
+     * @param performedBy      user performing substitution
+     * @param idempotencyKey   optional idempotency key
+     * @param notes            optional additional notes
      * @return the adjustment event as DTO
-     * @throws NoSuchElementException if original part not found
-     * @throws IllegalArgumentException if substitute part ID equals original part ID
-     * @throws IllegalStateException if original part already consumed or cannot be substituted
+     * @throws NoSuchElementException   if original part not found
+     * @throws IllegalArgumentException if substitute part ID equals original part
+     *                                  ID
+     * @throws IllegalStateException    if original part already consumed or cannot
+     *                                  be substituted
      */
     @Transactional
     @NonNull
@@ -85,11 +96,12 @@ public class WorkorderPartAdjustmentService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing adjustment event {}", 
-                         idempotencyKey, existingEventId.get());
+                log.info("Idempotency key {} already processed, returning existing adjustment event {}",
+                        idempotencyKey, existingEventId.get());
                 return adjustmentEventRepository.findById(existingEventId.get())
                         .map(this::toResponse)
-                        .orElseThrow(() -> new IllegalStateException("Adjustment event not found: " + existingEventId.get()));
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Adjustment event not found: " + existingEventId.get()));
             }
         }
 
@@ -117,7 +129,8 @@ public class WorkorderPartAdjustmentService {
                 .workorder(originalPart.getWorkorder())
                 .workOrderService(originalPart.getWorkOrderService())
                 .productEntityId(substitutePartId)
-                .description(originalPart.getDescription() + " (Substitute)")  // Will be updated by caller with actual description
+                .description(originalPart.getDescription() + " (Substitute)") // Will be updated by caller with actual
+                                                                              // description
                 .quantity(originalPart.getQuantity())
                 .unitPrice(originalPart.getUnitPrice())
                 .lineTotal(originalPart.getLineTotal())
@@ -137,7 +150,7 @@ public class WorkorderPartAdjustmentService {
                 .workorderId(workorderId)
                 .adjustmentType("SUBSTITUTION")
                 .substitutedWithPartId(substitutePart.getId())
-                .quantityAdjustment(BigDecimal.ZERO)  // No quantity change, just substitution
+                .quantityAdjustment(BigDecimal.ZERO) // No quantity change, just substitution
                 .reason(reason)
                 .performedBy(performedBy)
                 .performedAt(Instant.now())
@@ -158,17 +171,20 @@ public class WorkorderPartAdjustmentService {
     /**
      * Return unused quantity of a part.
      * 
-     * <p>This supplements the normal return flow and records an ADDITIONAL_RETURN adjustment event.</p>
+     * <p>
+     * This supplements the normal return flow and records an ADDITIONAL_RETURN
+     * adjustment event.
+     * </p>
      * 
-     * @param workorderId workorder ID
-     * @param partId part line item ID
-     * @param quantity quantity to return (must be positive and <= available)
-     * @param reason reason for return (required for audit)
-     * @param performedBy user performing return
+     * @param workorderId    workorder ID
+     * @param partId         part line item ID
+     * @param quantity       quantity to return (must be positive and <= available)
+     * @param reason         reason for return (required for audit)
+     * @param performedBy    user performing return
      * @param idempotencyKey optional idempotency key
-     * @param notes optional additional notes
+     * @param notes          optional additional notes
      * @return the adjustment event as DTO
-     * @throws NoSuchElementException if part not found
+     * @throws NoSuchElementException   if part not found
      * @throws IllegalArgumentException if quantity exceeds available quantity
      */
     @Transactional
@@ -186,11 +202,12 @@ public class WorkorderPartAdjustmentService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing adjustment event {}", 
-                         idempotencyKey, existingEventId.get());
+                log.info("Idempotency key {} already processed, returning existing adjustment event {}",
+                        idempotencyKey, existingEventId.get());
                 return adjustmentEventRepository.findById(existingEventId.get())
                         .map(this::toResponse)
-                        .orElseThrow(() -> new IllegalStateException("Adjustment event not found: " + existingEventId.get()));
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Adjustment event not found: " + existingEventId.get()));
             }
         }
 
@@ -214,7 +231,7 @@ public class WorkorderPartAdjustmentService {
                 .subtract(part.getQuantityReturned());
 
         if (quantity.compareTo(availableToReturn) > 0) {
-            throw new IllegalArgumentException("Return quantity " + quantity + 
+            throw new IllegalArgumentException("Return quantity " + quantity +
                     " exceeds available quantity " + availableToReturn);
         }
 
@@ -228,7 +245,7 @@ public class WorkorderPartAdjustmentService {
                 .workorderId(workorderId)
                 .adjustmentType("ADDITIONAL_RETURN")
                 .substitutedWithPartId(null)
-                .quantityAdjustment(quantity.negate())  // Negative for return
+                .quantityAdjustment(quantity.negate()) // Negative for return
                 .reason(reason)
                 .performedBy(performedBy)
                 .performedAt(Instant.now())
@@ -249,15 +266,15 @@ public class WorkorderPartAdjustmentService {
     /**
      * Correct part quantity (administrative correction for data entry errors).
      * 
-     * @param workorderId workorder ID
-     * @param partId part line item ID
-     * @param newQuantity new authorized quantity (must be positive)
-     * @param reason reason for correction (required for audit)
-     * @param performedBy user performing correction
+     * @param workorderId    workorder ID
+     * @param partId         part line item ID
+     * @param newQuantity    new authorized quantity (must be positive)
+     * @param reason         reason for correction (required for audit)
+     * @param performedBy    user performing correction
      * @param idempotencyKey optional idempotency key
-     * @param notes optional additional notes
+     * @param notes          optional additional notes
      * @return the adjustment event as DTO
-     * @throws NoSuchElementException if part not found
+     * @throws NoSuchElementException   if part not found
      * @throws IllegalArgumentException if new quantity is not positive
      */
     @Transactional
@@ -275,11 +292,12 @@ public class WorkorderPartAdjustmentService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing adjustment event {}", 
-                         idempotencyKey, existingEventId.get());
+                log.info("Idempotency key {} already processed, returning existing adjustment event {}",
+                        idempotencyKey, existingEventId.get());
                 return adjustmentEventRepository.findById(existingEventId.get())
                         .map(this::toResponse)
-                        .orElseThrow(() -> new IllegalStateException("Adjustment event not found: " + existingEventId.get()));
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Adjustment event not found: " + existingEventId.get()));
             }
         }
 
@@ -329,7 +347,7 @@ public class WorkorderPartAdjustmentService {
             idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
         }
 
-        log.info("Corrected quantity of part {} from {} to {} on workorder {}", 
+        log.info("Corrected quantity of part {} from {} to {} on workorder {}",
                 partId, oldQuantity, newQuantity, workorderId);
         return toResponse(event);
     }
@@ -377,7 +395,7 @@ public class WorkorderPartAdjustmentService {
                 .workorderId(event.getWorkorderId())
                 .adjustmentType(event.getAdjustmentType())
                 .substitutedWithPartId(event.getSubstitutedWithPartId())
-                .substitutedWithPartDescription(null)  // Would need additional lookup if needed
+                .substitutedWithPartDescription(null) // Would need additional lookup if needed
                 .quantityAdjustment(event.getQuantityAdjustment())
                 .reason(event.getReason())
                 .performedBy(event.getPerformedBy())

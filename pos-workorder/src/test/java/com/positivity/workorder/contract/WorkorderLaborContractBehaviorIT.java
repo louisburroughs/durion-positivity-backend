@@ -25,15 +25,17 @@ import io.restassured.http.ContentType;
  * Contract behavior integration tests for labor tracking on workorders.
  * CAP:005 Story #159 - Record Labor Performed
  *
- * <p>Tests cover:
+ * <p>
+ * Tests cover:
  * <ul>
- *   <li>WL-001: Happy path start labor session</li>
- *   <li>WL-002: Start labor with idempotency (duplicate key returns existing)</li>
- *   <li>WL-003: Reject start labor if workorder not in progress</li>
- *   <li>WL-004: Happy path stop labor session</li>
- *   <li>WL-005: Stop labor with idempotency</li>
- *   <li>WL-006: Adjust labor hours manually</li>
- *   <li>WL-007: Get labor history returns newest-first order</li>
+ * <li>WL-001: Happy path start labor session</li>
+ * <li>WL-002: Start labor with idempotency (duplicate key returns
+ * existing)</li>
+ * <li>WL-003: Reject start labor if workorder not in progress</li>
+ * <li>WL-004: Happy path stop labor session</li>
+ * <li>WL-005: Stop labor with idempotency</li>
+ * <li>WL-006: Adjust labor hours manually</li>
+ * <li>WL-007: Get labor history returns newest-first order</li>
  * </ul>
  */
 @DisplayName("Labor Tracking Contract Behavior Tests (CAP:005 Story #159)")
@@ -82,8 +84,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         // When: Start a labor session
         Map<String, Object> startRequest = Map.of(
                 "technicianId", testTechnicianId.toString(),
-                "notes", "Beginning brake pad replacement"
-        );
+                "notes", "Beginning brake pad replacement");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -105,7 +106,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         // Then: Verify labor entry was created
         List<WorkorderLaborEntry> entries = laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId);
         assertThat(entries).hasSize(1);
-        
+
         WorkorderLaborEntry entry = entries.get(0);
         assertThat(entry.getWorkorderServiceId()).isEqualTo(serviceId);
         assertThat(entry.getTechnicianId()).isEqualTo(testTechnicianId);
@@ -124,8 +125,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
 
         Map<String, Object> startRequest = Map.of(
                 "technicianId", testTechnicianId.toString(),
-                "notes", "First attempt"
-        );
+                "notes", "First attempt");
 
         // When: First request creates the session
         String firstResponseId = givenWithGatewayAuth()
@@ -166,8 +166,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When: Attempt to start labor
         Map<String, Object> startRequest = Map.of(
-                "technicianId", testTechnicianId.toString()
-        );
+                "technicianId", testTechnicianId.toString());
 
         // Then: Request is rejected with 400
         givenWithGatewayAuth()
@@ -228,7 +227,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .statusCode(200)
                 .extract().path("hoursWorked");
-        
+
         BigDecimal firstHoursWorked = new BigDecimal(hoursWorkedStr);
 
         // Then: Second request with same key returns same result
@@ -255,8 +254,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         // When: Manually adjust the hours
         Map<String, Object> adjustRequest = Map.of(
                 "hoursWorked", "3.5",
-                "adjustmentReason", "Manual correction for unpaid break time"
-        );
+                "adjustmentReason", "Manual correction for unpaid break time");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -297,7 +295,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
         LocalDateTime first = LocalDateTime.parse(startTimes.get(0));
         LocalDateTime second = LocalDateTime.parse(startTimes.get(1));
         assertThat(first).isAfter(second);
-        
+
         List<WorkorderLaborEntry> entries = laborEntryRepository.findByWorkorderIdOrderByStartTimeDesc(workorderId);
         assertThat(entries).hasSizeGreaterThanOrEqualTo(2);
     }
@@ -463,7 +461,7 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
      */
     private UUID seedCompletedWorkorder() {
         UUID workorderId = seedWorkInProgressWorkorder();
-        
+
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
         workorder.setStatus(WorkorderStatus.COMPLETED);
         workorderRepository.save(workorder);

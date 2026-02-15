@@ -91,8 +91,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
         // When: Start the workorder
         Map<String, Object> startRequest = Map.of(
                 "userId", SYSTEM_USER_ID.toString(),
-                "reason", "Customer arrived and dropped off vehicle"
-        );
+                "reason", "Customer arrived and dropped off vehicle");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -146,8 +145,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
         // When: Attempt to start the workorder
         Map<String, Object> startRequest = Map.of(
                 "userId", SYSTEM_USER_ID.toString(),
-                "reason", "Attempting to start workorder"
-        );
+                "reason", "Attempting to start workorder");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -173,8 +171,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
         // Start the workorder
         Map<String, Object> startRequest = Map.of(
                 "userId", SYSTEM_USER_ID.toString(),
-                "reason", "Starting work"
-        );
+                "reason", "Starting work");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -226,8 +223,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
         // Start the workorder (this should create a snapshot)
         Map<String, Object> startRequest = Map.of(
                 "userId", SYSTEM_USER_ID.toString(),
-                "reason", "Starting work"
-        );
+                "reason", "Starting work");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -248,8 +244,10 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                 .jsonPath()
                 .getList("$");
 
-        // Then: Verify snapshots are returned (may be empty if automatic snapshots not yet implemented)
-        // This test documents the expected API shape even if snapshots are not yet created
+        // Then: Verify snapshots are returned (may be empty if automatic snapshots not
+        // yet implemented)
+        // This test documents the expected API shape even if snapshots are not yet
+        // created
         if (!snapshots.isEmpty()) {
             // Verify each snapshot has required fields
             for (Map<String, Object> snapshot : snapshots) {

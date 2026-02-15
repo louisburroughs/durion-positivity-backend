@@ -11,16 +11,22 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Immutable append-only entity for auditing part adjustments (substitutions, returns, corrections).
+ * Immutable append-only entity for auditing part adjustments (substitutions,
+ * returns, corrections).
  * 
- * <p>This entity records all part adjustments on workorders, including:</p>
+ * <p>
+ * This entity records all part adjustments on workorders, including:
+ * </p>
  * <ul>
- *   <li>SUBSTITUTION: Replace one part with another (original part preserved for history)</li>
- *   <li>ADDITIONAL_RETURN: Return unused quantity beyond normal return flow</li>
- *   <li>CORRECTION: Administrative correction for data entry errors</li>
+ * <li>SUBSTITUTION: Replace one part with another (original part preserved for
+ * history)</li>
+ * <li>ADDITIONAL_RETURN: Return unused quantity beyond normal return flow</li>
+ * <li>CORRECTION: Administrative correction for data entry errors</li>
  * </ul>
  * 
- * <p>All fields are immutable after creation to maintain audit integrity.</p>
+ * <p>
+ * All fields are immutable after creation to maintain audit integrity.
+ * </p>
  * 
  * @see WorkorderPart
  */

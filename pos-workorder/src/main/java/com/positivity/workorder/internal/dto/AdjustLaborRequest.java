@@ -14,7 +14,8 @@ import java.math.BigDecimal;
 /**
  * Request DTO for adjusting labor hours manually.
  * 
- * <p>Implements CAP-005 Story #159 - Record Labor Performed
+ * <p>
+ * Implements CAP-005 Story #159 - Record Labor Performed
  */
 @Data
 @NoArgsConstructor
@@ -22,13 +23,13 @@ import java.math.BigDecimal;
 @Builder
 @Schema(description = "Request to manually adjust labor hours")
 public class AdjustLaborRequest {
-    
+
     @NotNull(message = "Hours worked is required")
     @Positive(message = "Hours worked must be positive")
     @Schema(description = "Adjusted hours worked", example = "2.5")
     @JsonProperty("hoursWorked")
     private BigDecimal hoursWorked;
-    
+
     @NotNull(message = "Adjustment reason is required")
     @Schema(description = "Reason for the adjustment", example = "Manual correction for break time")
     @JsonProperty("adjustmentReason")

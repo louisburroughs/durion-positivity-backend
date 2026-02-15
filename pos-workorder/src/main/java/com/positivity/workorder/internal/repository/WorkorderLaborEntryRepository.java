@@ -12,29 +12,32 @@ import java.util.UUID;
 /**
  * Repository for WorkorderLaborEntry entities.
  * 
- * <p>Implements CAP-005 Story #159 - Record Labor Performed
+ * <p>
+ * Implements CAP-005 Story #159 - Record Labor Performed
  */
 @Repository
 public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLaborEntry, UUID> {
-    
+
     /**
-     * Find all labor entries for a workorder, ordered by start time descending (newest first).
+     * Find all labor entries for a workorder, ordered by start time descending
+     * (newest first).
      * 
      * @param workorderId the workorder ID
      * @return list of labor entries
      */
     @NonNull
     List<WorkorderLaborEntry> findByWorkorderIdOrderByStartTimeDesc(@NonNull UUID workorderId);
-    
+
     /**
-     * Find all labor entries for a specific service, ordered by start time descending.
+     * Find all labor entries for a specific service, ordered by start time
+     * descending.
      * 
      * @param workorderServiceId the service ID
      * @return list of labor entries
      */
     @NonNull
     List<WorkorderLaborEntry> findByWorkorderServiceIdOrderByStartTimeDesc(@NonNull UUID workorderServiceId);
-    
+
     /**
      * Find active (not stopped) labor entry for a specific service.
      * 

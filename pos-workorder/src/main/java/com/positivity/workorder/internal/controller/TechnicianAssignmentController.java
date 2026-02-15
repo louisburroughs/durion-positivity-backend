@@ -29,7 +29,8 @@ import java.util.UUID;
 /**
  * REST controller for managing technician assignments to workorders.
  * 
- * <p>Implements CAP-005 Story #161 - Assign Technician to Workorder
+ * <p>
+ * Implements CAP-005 Story #161 - Assign Technician to Workorder
  */
 @Tag(name = "Technician Assignment API", description = "Endpoints for assigning technicians to workorders")
 @RestController
@@ -37,68 +38,60 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class TechnicianAssignmentController {
-    
+
     private final TechnicianAssignmentService assignmentService;
-    
+
     private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
-    
+
     /**
      * Assign a technician to a workorder.
      * 
-     * <p>This operation transitions the workorder to ASSIGNED status if it's currently APPROVED.
+     * <p>
+     * This operation transitions the workorder to ASSIGNED status if it's currently
+     * APPROVED.
      * Supports idempotency via Idempotency-Key header.
      */
-    @Operation(
-            summary = "Assign technician to workorder",
-            description = "Assign a technician to a work order. Transitions workorder to ASSIGNED status if currently APPROVED.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Technician assigned successfully",
-                            content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                    @ApiResponse(responseCode = "400", description = "Invalid state transition"),
-                    @ApiResponse(responseCode = "403", description = "Permission denied"),
-                    @ApiResponse(responseCode = "404", description = "Workorder or technician not found")
-            }
-    )
+    @Operation(summary = "Assign technician to workorder", description = "Assign a technician to a work order. Transitions workorder to ASSIGNED status if currently APPROVED.", responses = {
+            @ApiResponse(responseCode = "200", description = "Technician assigned successfully", content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid state transition"),
+            @ApiResponse(responseCode = "403", description = "Permission denied"),
+            @ApiResponse(responseCode = "404", description = "Workorder or technician not found")
+    })
     @PostMapping("/{workorderId}/technician")
     @EmitEvent(id = "WORKORDER_TECHNICIAN_ASSIGN", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")
     public ResponseEntity<TechnicianAssignmentResponse> assignTechnician(
-            @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
-            @PathVariable UUID workorderId,
+            @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Valid @RequestBody AssignTechnicianRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate assignments")
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication")
-            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
-        
+            @Parameter(description = "Optional idempotency key to prevent duplicate assignments") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "User ID from gateway authentication") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+
         UUID assignedBy = resolveUserId(request.getAssignedByUserId(), userIdHeader);
-        
+
         try {
             TechnicianAssignment assignment = assignmentService.assignTechnician(
                     workorderId,
                     request.getTechnicianId(),
                     assignedBy,
-                    request.getNotes()
-            );
-            
+                    request.getNotes());
+
             // Get updated workorder status
             WorkorderStatus workorderStatus = assignmentService.getWorkorderStatus(workorderId);
-            
+
             // Get previous technician if this was a reassignment
             Optional<UUID> previousTechId = assignmentService.getPreviousTechnicianId(workorderId);
-            
+
             TechnicianAssignmentResponse response = TechnicianAssignmentResponse.fromAssignment(
                     assignment,
                     workorderStatus.name(),
                     previousTechId.map(UUID::toString).orElse(null),
-                    "Technician assigned successfully"
-            );
-            
-            log.info("Technician {} assigned to workorder {} by user {}", 
+                    "Technician assigned successfully");
+
+            log.info("Technician {} assigned to workorder {} by user {}",
                     request.getTechnicianId(), workorderId, assignedBy);
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (NoSuchElementException e) {
             log.warn("Assignment failed - not found: {}", e.getMessage());
             return ResponseEntity.notFound().build();
@@ -107,55 +100,47 @@ public class TechnicianAssignmentController {
             return ResponseEntity.badRequest().build();
         }
     }
-    
+
     /**
      * Reassign a workorder to a different technician.
      * 
-     * <p>Requires an existing assignment. Records the reason for reassignment.
+     * <p>
+     * Requires an existing assignment. Records the reason for reassignment.
      */
-    @Operation(
-            summary = "Reassign workorder to different technician",
-            description = "Reassign a workorder to a different technician. Records reassignment reason and maintains history.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Technician reassigned successfully",
-                            content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                    @ApiResponse(responseCode = "400", description = "Invalid state transition or no current assignment"),
-                    @ApiResponse(responseCode = "403", description = "Permission denied"),
-                    @ApiResponse(responseCode = "404", description = "Workorder not found")
-            }
-    )
+    @Operation(summary = "Reassign workorder to different technician", description = "Reassign a workorder to a different technician. Records reassignment reason and maintains history.", responses = {
+            @ApiResponse(responseCode = "200", description = "Technician reassigned successfully", content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid state transition or no current assignment"),
+            @ApiResponse(responseCode = "403", description = "Permission denied"),
+            @ApiResponse(responseCode = "404", description = "Workorder not found")
+    })
     @PutMapping("/{workorderId}/technician")
     @EmitEvent(id = "WORKORDER_TECHNICIAN_REASSIGN", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")
     public ResponseEntity<TechnicianAssignmentResponse> reassignTechnician(
-            @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
-            @PathVariable UUID workorderId,
+            @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Valid @RequestBody ReassignTechnicianRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate reassignments")
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication")
-            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
-        
+            @Parameter(description = "Optional idempotency key to prevent duplicate reassignments") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "User ID from gateway authentication") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+
         UUID reassignedBy = resolveUserId(request.getReassignedByUserId(), userIdHeader);
-        
+
         try {
             // Get previous technician before reassignment
             Optional<TechnicianAssignment> previousAssignment = assignmentService.getCurrentAssignment(workorderId);
             UUID previousTechId = previousAssignment
                     .map(TechnicianAssignment::getTechnicianId)
                     .orElse(null);
-            
+
             TechnicianAssignment newAssignment = assignmentService.reassignTechnician(
                     workorderId,
                     request.getNewTechnicianId(),
                     reassignedBy,
                     request.getReason(),
-                    request.getNotes()
-            );
-            
+                    request.getNotes());
+
             // Get updated workorder status
             WorkorderStatus workorderStatus = assignmentService.getWorkorderStatus(workorderId);
-            
+
             TechnicianAssignmentResponse response = TechnicianAssignmentResponse.builder()
                     .workorderId(workorderId.toString())
                     .technicianId(newAssignment.getTechnicianId().toString())
@@ -168,14 +153,15 @@ public class TechnicianAssignmentController {
                     .reassignedBy(reassignedBy.toString())
                     .message("Technician reassigned successfully")
                     .build();
-            
-            log.info("Workorder {} reassigned from technician {} to {} by user {}", 
+
+            log.info("Workorder {} reassigned from technician {} to {} by user {}",
                     workorderId, previousTechId, request.getNewTechnicianId(), reassignedBy);
-            
-            // Note: Notification to previous technician is handled by event listeners if configured
-            
+
+            // Note: Notification to previous technician is handled by event listeners if
+            // configured
+
             return ResponseEntity.ok(response);
-            
+
         } catch (NoSuchElementException e) {
             log.warn("Reassignment failed - not found: {}", e.getMessage());
             return ResponseEntity.notFound().build();
@@ -184,55 +170,49 @@ public class TechnicianAssignmentController {
             return ResponseEntity.badRequest().build();
         }
     }
-    
+
     /**
      * Get current assignment and history for a workorder.
      * 
-     * <p>Returns the current technician assignment plus full assignment history.
+     * <p>
+     * Returns the current technician assignment plus full assignment history.
      */
-    @Operation(
-            summary = "Get technician assignment",
-            description = "Retrieve the current technician assignment and full assignment history for a workorder.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Assignment retrieved successfully",
-                            content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "Workorder not found or no assignment exists")
-            }
-    )
+    @Operation(summary = "Get technician assignment", description = "Retrieve the current technician assignment and full assignment history for a workorder.", responses = {
+            @ApiResponse(responseCode = "200", description = "Assignment retrieved successfully", content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Workorder not found or no assignment exists")
+    })
     @GetMapping("/{workorderId}/technician")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")
     public ResponseEntity<TechnicianAssignmentResponse> getTechnicianAssignment(
-            @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
-            @PathVariable UUID workorderId) {
-        
+            @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId) {
+
         try {
             // Get workorder status to ensure it exists
             WorkorderStatus workorderStatus = assignmentService.getWorkorderStatus(workorderId);
-            
+
             // Get current assignment
             Optional<TechnicianAssignment> currentAssignment = assignmentService.getCurrentAssignment(workorderId);
             if (currentAssignment.isEmpty()) {
                 log.debug("No technician assignment found for workorder {}", workorderId);
                 return ResponseEntity.notFound().build();
             }
-            
+
             // Get full history
             List<TechnicianAssignment> history = assignmentService.getAssignmentHistory(workorderId);
-            
+
             TechnicianAssignmentResponse response = TechnicianAssignmentResponse.withHistory(
                     currentAssignment.get(),
                     history,
-                    workorderStatus.name()
-            );
-            
+                    workorderStatus.name());
+
             return ResponseEntity.ok(response);
-            
+
         } catch (NoSuchElementException e) {
             log.warn("Get assignment failed - not found: {}", e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }
-    
+
     /**
      * Resolve user ID from request or header, falling back to system user.
      */

@@ -14,7 +14,8 @@ import java.util.UUID;
 /**
  * Request DTO for starting a labor session.
  * 
- * <p>Implements CAP-005 Story #159 - Record Labor Performed
+ * <p>
+ * Implements CAP-005 Story #159 - Record Labor Performed
  */
 @Data
 @NoArgsConstructor
@@ -22,12 +23,12 @@ import java.util.UUID;
 @Builder
 @Schema(description = "Request to start a labor session on a workorder service")
 public class StartLaborRequest {
-    
+
     @NotNull(message = "Technician ID is required")
     @Schema(description = "ID of the technician performing the work", example = "550e8400-e29b-41d4-a716-446655440050")
     @JsonProperty("technicianId")
     private UUID technicianId;
-    
+
     @Nullable
     @Schema(description = "Optional notes about the labor session", example = "Beginning brake pad replacement")
     @JsonProperty("notes")
