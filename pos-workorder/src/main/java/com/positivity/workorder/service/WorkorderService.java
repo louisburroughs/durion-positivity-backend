@@ -14,6 +14,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.client.RestClient;
 
 import com.positivity.workorder.internal.entity.AuditEvent;
@@ -122,14 +123,20 @@ public class WorkorderService {
                 idempotencyService.registerKey(idempotencyKey, created.getId());
             } catch (DataIntegrityViolationException e) {
                 // Race condition: another request already registered this key
+                // Mark transaction for rollback to prevent persisting the duplicate workorder
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                
                 // Check if it points to the same workorder or a different one
                 Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
                 if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(created.getId())) {
                     log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",
                             idempotencyKey, existingWorkorderId.get());
                     // Return the existing workorder to maintain idempotency semantics
+                    // The transaction will be rolled back, preventing the duplicate 'created' workorder
                     return workorderRepository.findById(existingWorkorderId.get())
-                            .orElse(created); // Fallback to current if not found
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Idempotency key " + idempotencyKey + " points to non-existent workorder: " 
+                                    + existingWorkorderId.get()));
                 }
                 // If it points to the same workorder, we can proceed normally
                 log.debug("Idempotency key {} already registered for current workorder {}", 
