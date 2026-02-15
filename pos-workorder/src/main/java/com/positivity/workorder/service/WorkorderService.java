@@ -123,9 +123,12 @@ public class WorkorderService {
     }
 
     /**
-     * Copy approved estimate items to workorder items (CAP:004 Story #27).
+     * Copy approved estimate items to workorder items (CAP:004 Story #27, #29).
      * Creates an immutable financial snapshot of pricing, quantity, and tax
      * information.
+     * 
+     * Story #29: Only copies items with ApprovalStatus.APPROVED to support
+     * partial approval workflows where customers can approve a subset of items.
      * 
      * @param workorder the workorder to populate with items
      */
@@ -136,15 +139,21 @@ public class WorkorderService {
             return;
         }
 
-        // Fetch all approved/non-deleted items from the estimate
-        List<EstimateItem> estimateItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+        // CAP:004 Story #29: Fetch only APPROVED and non-deleted items to support
+        // partial approval
+        List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+        List<EstimateItem> estimateItems = allItems.stream()
+                .filter(item -> item
+                        .getApprovalStatus() == com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED)
+                .toList();
 
         if (estimateItems.isEmpty()) {
-            log.warn("No estimate items found for estimate {}, no workorder items created", estimateId);
+            log.warn("No approved estimate items found for estimate {}, no workorder items created", estimateId);
             return;
         }
 
-        log.info("Found {} estimate items to copy to workorder {}", estimateItems.size(), workorder.getId());
+        log.info("Found {} approved estimate items to copy to workorder {} (out of {} total items)",
+                estimateItems.size(), workorder.getId(), allItems.size());
 
         List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = new ArrayList<>();
         List<WorkorderPart> partItems = new ArrayList<>();

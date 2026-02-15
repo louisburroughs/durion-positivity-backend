@@ -83,11 +83,21 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
         List<EstimateItem> estimateItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
         assertThat(estimateItems).hasSize(3); // 2 labor + 1 part
 
+        // DEBUG: Check approval status of saved items
+        long approvedCount = estimateItems.stream()
+                .filter(item -> item.getApprovalStatus() == ApprovalStatus.APPROVED)
+                .count();
+        System.out.println("DEBUG: Found " + approvedCount + " approved items out of " + estimateItems.size());
+        estimateItems.forEach(item -> System.out
+                .println("DEBUG: Item " + item.getId() + " has approval status: " + item.getApprovalStatus()));
+        assertThat(approvedCount).isEqualTo(3);
+
         // When: Promote estimate to workorder
         String workorderIdStr = givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
                 .then()
+                .log().ifValidationFails()
                 .statusCode(200)
                 .body("id", notNullValue())
                 .body("estimateId", equalTo(estimateId.toString()))
