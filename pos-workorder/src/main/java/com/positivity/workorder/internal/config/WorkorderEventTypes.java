@@ -54,7 +54,8 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
-        // ==================== TECHNICIAN ASSIGNMENT EVENTS (CAP:005 Story #161) ====================
+        // ==================== TECHNICIAN ASSIGNMENT EVENTS (CAP:005 Story #161)
+        // ====================
 
         /** Assign a technician to a workorder */
         public static final EventTypeRegistration WORKORDER_TECHNICIAN_ASSIGN = EventTypeRegistration
@@ -70,7 +71,8 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
-        // ==================== LABOR TRACKING EVENTS (CAP:005 Story #159) ====================
+        // ==================== LABOR TRACKING EVENTS (CAP:005 Story #159)
+        // ====================
 
         /** Start a labor session on a workorder service */
         public static final EventTypeRegistration WORKORDER_LABOR_START = EventTypeRegistration
@@ -297,7 +299,8 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
-        // ==================== PARTS USAGE EVENTS (CAP:005 Story #158) ====================
+        // ==================== PARTS USAGE EVENTS (CAP:005 Story #158)
+        // ====================
 
         /** Issue parts to a workorder */
         public static final EventTypeRegistration WORKORDER_PART_ISSUE = EventTypeRegistration
@@ -320,7 +323,8 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
-        // ==================== PARTS ADJUSTMENT EVENTS (CAP:005 Story #157) ====================
+        // ==================== PARTS ADJUSTMENT EVENTS (CAP:005 Story #157)
+        // ====================
 
         /** Substitute one part for another */
         public static final EventTypeRegistration WORKORDER_PART_SUBSTITUTE = EventTypeRegistration

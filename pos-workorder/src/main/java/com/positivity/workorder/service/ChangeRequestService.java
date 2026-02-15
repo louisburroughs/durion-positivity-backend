@@ -100,11 +100,14 @@ public class ChangeRequestService {
     /**
      * Create a change request with idempotency key support.
      * 
-     * <p>If an idempotency key is provided and has been processed before,
-     * returns the existing change request instead of creating a duplicate.</p>
+     * <p>
+     * If an idempotency key is provided and has been processed before,
+     * returns the existing change request instead of creating a duplicate.
+     * </p>
      * 
-     * @param dto the change request creation request
-     * @param idempotencyKey optional idempotency key for duplicate prevention; if null, idempotency is not enforced
+     * @param dto            the change request creation request
+     * @param idempotencyKey optional idempotency key for duplicate prevention; if
+     *                       null, idempotency is not enforced
      * @return the created or existing change request
      */
     @Transactional
@@ -113,11 +116,12 @@ public class ChangeRequestService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(idempotencyKey);
             if (existingChangeRequestId.isPresent()) {
-                log.info("Idempotent request detected for key {}; returning existing change request {}", 
-                         idempotencyKey, existingChangeRequestId.get());
+                log.info("Idempotent request detected for key {}; returning existing change request {}",
+                        idempotencyKey, existingChangeRequestId.get());
                 return changeRequestRepository.findById(existingChangeRequestId.get())
                         .orElseThrow(() -> new IllegalStateException(
-                                "Idempotency key points to non-existent change request: " + existingChangeRequestId.get()));
+                                "Idempotency key points to non-existent change request: "
+                                        + existingChangeRequestId.get()));
             }
         }
 
@@ -128,31 +132,37 @@ public class ChangeRequestService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             try {
                 idempotencyService.markKeyProcessedForChangeRequest(idempotencyKey, created.getId());
-                // Force flush so any unique-constraint violation is raised within this try/catch
+                // Force flush so any unique-constraint violation is raised within this
+                // try/catch
                 TransactionAspectSupport.currentTransactionStatus().flush();
             } catch (DataIntegrityViolationException e) {
                 // Race condition: another request already registered this key
-                // The unique constraint violation means another transaction has committed the key.
-                // Mark our transaction for rollback to prevent persisting the duplicate change request.
+                // The unique constraint violation means another transaction has committed the
+                // key.
+                // Mark our transaction for rollback to prevent persisting the duplicate change
+                // request.
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                
+
                 // Retrieve the existing change request that won the race
                 // Note: The DataIntegrityViolationException indicates the other transaction has
-                // committed, so the change request should be visible with READ_COMMITTED isolation.
+                // committed, so the change request should be visible with READ_COMMITTED
+                // isolation.
                 Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(idempotencyKey);
                 if (existingChangeRequestId.isPresent()) {
-                    log.warn("Race condition detected: idempotency key {} already registered for change request {}, returning existing change request",
+                    log.warn(
+                            "Race condition detected: idempotency key {} already registered for change request {}, returning existing change request",
                             idempotencyKey, existingChangeRequestId.get());
                     // Return the existing change request to maintain idempotency semantics
-                    // The transaction will be rolled back, preventing the duplicate 'created' change request
+                    // The transaction will be rolled back, preventing the duplicate 'created'
+                    // change request
                     return changeRequestRepository.findById(existingChangeRequestId.get())
                             .orElseThrow(() -> new IllegalStateException(
-                                    "Idempotency key " + idempotencyKey + " points to non-existent change request: " 
-                                    + existingChangeRequestId.get()));
+                                    "Idempotency key " + idempotencyKey + " points to non-existent change request: "
+                                            + existingChangeRequestId.get()));
                 } else {
                     // This should not happen - if DataIntegrityViolationException was thrown,
                     // the key must exist. This indicates a serious data inconsistency.
-                    log.error("Race condition detected but no existing change request found for idempotency key {}", 
+                    log.error("Race condition detected but no existing change request found for idempotency key {}",
                             idempotencyKey);
                     throw new IllegalStateException(
                             "Idempotency key collision but no existing change request found: " + idempotencyKey, e);

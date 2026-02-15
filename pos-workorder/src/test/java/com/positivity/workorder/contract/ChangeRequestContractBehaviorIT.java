@@ -25,7 +25,8 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 
 /**
- * Contract behavior integration tests for change request creation and approval workflow.
+ * Contract behavior integration tests for change request creation and approval
+ * workflow.
  * CAP:005 - Story #156: Request Additional Work and Flag for Approval
  * 
  * Tests cover:
@@ -36,7 +37,9 @@ import io.restassured.response.Response;
  * - Get change request by ID
  * - Invalid state: workorder not in WORK_IN_PROGRESS
  * 
- * @see <a href="https://github.com/louisburroughs/durion-positivity-backend/issues/156">Issue #156</a>
+ * @see <a href=
+ *      "https://github.com/louisburroughs/durion-positivity-backend/issues/156">Issue
+ *      #156</a>
  */
 @DisplayName("Change Request Contract Behavior Tests (CAP:005, Story #156)")
 class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
@@ -107,7 +110,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
                 .body("workorderId", equalTo(workorderId.toString()))
                 .body("requestedByUserId", equalTo(testTechnicianId.toString()))
                 .body("status", equalTo("AWAITING_ADVISOR_REVIEW"))
-                .body("description", equalTo("Technician discovered brake rotors below minimum thickness during pad replacement"))
+                .body("description",
+                        equalTo("Technician discovered brake rotors below minimum thickness during pad replacement"))
                 .body("isEmergencyException", equalTo(false))
                 .body("isApprovalGated", equalTo(true))
                 .body("requestedAt", notNullValue())
@@ -118,7 +122,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Verify change request was persisted
         org.assertj.core.api.Assertions.assertThat(changeRequestId).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(changeRequestRepository.findById(UUID.fromString(changeRequestId))).isPresent();
+        org.assertj.core.api.Assertions.assertThat(changeRequestRepository.findById(UUID.fromString(changeRequestId)))
+                .isPresent();
     }
 
     @Test
@@ -158,7 +163,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
         String firstChangeRequestId = firstResponse.path("id");
 
         // Second request - same key, should return existing change request
-        // NOTE: This test will currently FAIL because idempotency is not yet implemented
+        // NOTE: This test will currently FAIL because idempotency is not yet
+        // implemented
         // Once idempotency is implemented, this test should pass
         Response secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)

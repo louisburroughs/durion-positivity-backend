@@ -48,15 +48,8 @@ public class WorkorderPartsUsageController {
     @PostMapping("/issue")
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_ISSUE", apiVersion = "1")
-    @Operation(
-        summary = "Issue parts to workorder",
-        description = "Issue parts from inventory, reserving them for consumption on the workorder"
-    )
-    @ApiResponse(
-        responseCode = "201",
-        description = "Parts issued successfully",
-        content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class))
-    )
+    @Operation(summary = "Issue parts to workorder", description = "Issue parts from inventory, reserving them for consumption on the workorder")
+    @ApiResponse(responseCode = "201", description = "Parts issued successfully", content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (negative quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(responseCode = "409", description = "Idempotency conflict (duplicate key)")
@@ -82,15 +75,8 @@ public class WorkorderPartsUsageController {
     @PostMapping("/consume")
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_CONSUME", apiVersion = "1")
-    @Operation(
-        summary = "Consume parts on workorder",
-        description = "Record actual consumption of parts. Quantity consumed cannot exceed quantity issued."
-    )
-    @ApiResponse(
-        responseCode = "201",
-        description = "Parts consumption recorded successfully",
-        content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class))
-    )
+    @Operation(summary = "Consume parts on workorder", description = "Record actual consumption of parts. Quantity consumed cannot exceed quantity issued.")
+    @ApiResponse(responseCode = "201", description = "Parts consumption recorded successfully", content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds issued quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<WorkorderPartUsageEventResponse> consumeParts(
@@ -119,15 +105,8 @@ public class WorkorderPartsUsageController {
     @PostMapping("/return")
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_RETURN", apiVersion = "1")
-    @Operation(
-        summary = "Return unused parts to inventory",
-        description = "Return unused parts after partial consumption or service completion"
-    )
-    @ApiResponse(
-        responseCode = "201",
-        description = "Parts returned successfully",
-        content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class))
-    )
+    @Operation(summary = "Return unused parts to inventory", description = "Return unused parts after partial consumption or service completion")
+    @ApiResponse(responseCode = "201", description = "Parts returned successfully", content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<WorkorderPartUsageEventResponse> returnParts(
@@ -151,25 +130,17 @@ public class WorkorderPartsUsageController {
     }
 
     /**
-     * Get usage history for all parts on a workorder, or a specific part if partLineId is provided.
+     * Get usage history for all parts on a workorder, or a specific part if
+     * partLineId is provided.
      */
     @GetMapping("/usageHistory")
     @PreAuthorize("hasAuthority('workorder:parts:view')")
-    @Operation(
-        summary = "Get parts usage history",
-        description = "Retrieve usage history (issue, consume, return events) for parts on the workorder"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Usage history retrieved successfully",
-        content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class))
-    )
+    @Operation(summary = "Get parts usage history", description = "Retrieve usage history (issue, consume, return events) for parts on the workorder")
+    @ApiResponse(responseCode = "200", description = "Usage history retrieved successfully", content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<List<WorkorderPartUsageEventResponse>> getUsageHistory(
             @PathVariable @NonNull UUID workorderId,
-            @RequestParam(required = false) @Nullable 
-            @Parameter(description = "Optional part line ID to filter history for a specific part")
-            UUID partLineId) {
+            @RequestParam(required = false) @Nullable @Parameter(description = "Optional part line ID to filter history for a specific part") UUID partLineId) {
 
         List<WorkorderPartUsageEventResponse> responses;
         if (partLineId != null) {

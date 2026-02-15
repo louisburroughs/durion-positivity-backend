@@ -12,7 +12,8 @@ import java.util.UUID;
 
 /**
  * Represents a technician assignment to a workorder.
- * Maintains history of assignments, with the most recent assignment marked as current.
+ * Maintains history of assignments, with the most recent assignment marked as
+ * current.
  */
 @Entity
 @Table(name = "technician_assignment")
@@ -21,53 +22,53 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class TechnicianAssignment {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @NonNull
     @Column(nullable = false, columnDefinition = "UUID")
     private UUID workorderId;
-    
+
     @NonNull
     @Column(nullable = false, columnDefinition = "UUID")
     private UUID technicianId;
-    
+
     @NonNull
     @Column(nullable = false)
     private LocalDateTime assignedAt;
-    
+
     @NonNull
     @Column(nullable = false, columnDefinition = "UUID")
     private UUID assignedBy;
-    
+
     @Nullable
     @Column
     private LocalDateTime unassignedAt;
-    
+
     @Nullable
     @Column(columnDefinition = "TEXT")
     private String reassignmentReason;
-    
+
     @Nullable
     @Column(columnDefinition = "TEXT")
     private String notes;
-    
+
     @NonNull
     @Column(nullable = false)
     @Builder.Default
     private Boolean current = true;
-    
+
     // Audit fields
     @NonNull
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
-    
+
     @NonNull
     @Column(nullable = false)
     private LocalDateTime updatedAt;
-    
+
     @PrePersist
     public void prePersist() {
         if (assignedAt == null) {
@@ -83,17 +84,17 @@ public class TechnicianAssignment {
             current = true;
         }
     }
-    
+
     @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
     }
-    
+
     /**
      * Mark this assignment as no longer current and set unassignment timestamp.
      * 
      * @param unassignmentTime the time the technician was unassigned
-     * @param reason optional reason for unassignment
+     * @param reason           optional reason for unassignment
      */
     public void markAsNotCurrent(@NonNull LocalDateTime unassignmentTime, @Nullable String reason) {
         this.current = false;

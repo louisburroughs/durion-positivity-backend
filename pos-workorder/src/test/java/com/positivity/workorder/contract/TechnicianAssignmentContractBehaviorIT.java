@@ -35,12 +35,13 @@ import io.restassured.http.ContentType;
  * Contract behavior integration tests for technician assignment to workorders.
  * CAP:005 Story #161 - Assign Technician to Workorder
  *
- * <p>Tests cover:
+ * <p>
+ * Tests cover:
  * <ul>
- *   <li>TA-001: Happy path assign technician to APPROVED workorder</li>
- *   <li>TA-002: Reassign technician with reason</li>
- *   <li>TA-003: View assignment history</li>
- *   <li>TA-004: Error - invalid workorder status</li>
+ * <li>TA-001: Happy path assign technician to APPROVED workorder</li>
+ * <li>TA-002: Reassign technician with reason</li>
+ * <li>TA-003: View assignment history</li>
+ * <li>TA-004: Error - invalid workorder status</li>
  * </ul>
  */
 @DisplayName("Technician Assignment Contract Behavior Tests (CAP:005 Story #161)")
@@ -81,7 +82,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         // Given: A workorder in APPROVED status
         UUID workorderId = seedApprovedWorkorder();
         testTechnicianId1 = UUID.randomUUID();
-        
+
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
         assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
 
@@ -89,8 +90,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         Map<String, Object> assignRequest = Map.of(
                 "technicianId", testTechnicianId1.toString(),
                 "assignedByUserId", SYSTEM_USER_ID.toString(),
-                "notes", "Assigned to senior tech for brake system work"
-        );
+                "notes", "Assigned to senior tech for brake system work");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -115,7 +115,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         List<TechnicianAssignment> assignments = assignmentRepository
                 .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
         assertThat(assignments).hasSize(1);
-        
+
         TechnicianAssignment assignment = assignments.get(0);
         assertThat(assignment.getTechnicianId()).isEqualTo(testTechnicianId1);
         assertThat(assignment.getWorkorderId()).isEqualTo(workorderId);
@@ -131,7 +131,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         // Given: A workorder with an existing technician assignment
         UUID workorderId = seedWorkorderWithAssignedTechnician();
         testTechnicianId2 = UUID.randomUUID();
-        
+
         // Verify initial assignment
         TechnicianAssignment initialAssignment = assignmentRepository
                 .findByWorkorderIdAndCurrentTrue(workorderId)
@@ -145,8 +145,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 "reassignedByUserId", SYSTEM_USER_ID.toString(),
                 "reason", "Original technician unavailable, reassigning to available tech",
                 "notes", "Customer requested different technician",
-                "notifyPreviousTechnician", true
-        );
+                "notifyPreviousTechnician", true);
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -175,7 +174,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         List<TechnicianAssignment> allAssignments = assignmentRepository
                 .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
         assertThat(allAssignments).hasSize(2);
-        
+
         TechnicianAssignment previousAssignment = allAssignments.stream()
                 .filter(a -> a.getTechnicianId().equals(previousTechId))
                 .findFirst()
@@ -212,7 +211,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         List<TechnicianAssignment> history = assignmentRepository
                 .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
         assertThat(history.size()).isGreaterThanOrEqualTo(2);
-        
+
         // Verify most recent is first
         LocalDateTime previousTimestamp = history.get(0).getAssignedAt();
         for (int i = 1; i < history.size(); i++) {
@@ -228,7 +227,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         // Given: A workorder in COMPLETED status
         UUID workorderId = seedCompletedWorkorder();
         testTechnicianId1 = UUID.randomUUID();
-        
+
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
         assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
 
@@ -236,8 +235,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         Map<String, Object> assignRequest = Map.of(
                 "technicianId", testTechnicianId1.toString(),
                 "assignedByUserId", SYSTEM_USER_ID.toString(),
-                "notes", "Attempting to assign to completed workorder"
-        );
+                "notes", "Attempting to assign to completed workorder");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -260,7 +258,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         // Given: A workorder with NO existing assignment
         UUID workorderId = seedApprovedWorkorder();
         testTechnicianId1 = UUID.randomUUID();
-        
+
         // Verify no current assignment
         assertThat(assignmentRepository.findByWorkorderIdAndCurrentTrue(workorderId)).isEmpty();
 
@@ -268,8 +266,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         Map<String, Object> reassignRequest = Map.of(
                 "newTechnicianId", testTechnicianId1.toString(),
                 "reassignedByUserId", SYSTEM_USER_ID.toString(),
-                "reason", "Attempting reassignment without existing assignment"
-        );
+                "reason", "Attempting reassignment without existing assignment");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -385,7 +382,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         testTechnicianId2 = UUID.randomUUID();
 
         LocalDateTime now = LocalDateTime.now();
-        
+
         // Create first assignment (now inactive)
         TechnicianAssignment firstAssignment = TechnicianAssignment.builder()
                 .workorderId(workorderId)
@@ -427,7 +424,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
      */
     private UUID seedCompletedWorkorder() {
         UUID workorderId = seedApprovedWorkorder();
-        
+
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
         workorder.setStatus(WorkorderStatus.COMPLETED);
         workorder = workorderRepository.save(workorder);

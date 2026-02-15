@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 @Repository
 public interface TechnicianAssignmentRepository extends JpaRepository<TechnicianAssignment, Long> {
-    
+
     /**
      * Find the current assignment for a workorder.
      * 
@@ -23,7 +23,7 @@ public interface TechnicianAssignmentRepository extends JpaRepository<Technician
      */
     @NonNull
     Optional<TechnicianAssignment> findByWorkorderIdAndCurrentTrue(@NonNull UUID workorderId);
-    
+
     /**
      * Find all assignments for a workorder ordered by most recent first.
      * 

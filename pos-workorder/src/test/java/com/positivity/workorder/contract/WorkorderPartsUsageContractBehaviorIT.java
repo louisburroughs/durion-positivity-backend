@@ -25,18 +25,19 @@ import io.restassured.http.ContentType;
  * Contract behavior integration tests for workorder parts usage tracking.
  * CAP:005 Story #158 - Parts Usage Tracking
  *
- * <p>Tests cover:
+ * <p>
+ * Tests cover:
  * <ul>
- *   <li>PU-001: Issue part quantity (happy path)</li>
- *   <li>PU-002: Issue with idempotency (duplicate key returns existing)</li>
- *   <li>PU-003: Consume part quantity (happy path)</li>
- *   <li>PU-004: Consume with idempotency</li>
- *   <li>PU-005: Reject consume if quantity exceeds issued</li>
- *   <li>PU-006: Return part quantity (happy path)</li>
- *   <li>PU-007: Return with idempotency</li>
- *   <li>PU-008: Reject return if quantity exceeds available</li>
- *   <li>PU-009: Get usage history returns newest-first order</li>
- *   <li>PU-010: Verify WorkorderPart totals updated correctly</li>
+ * <li>PU-001: Issue part quantity (happy path)</li>
+ * <li>PU-002: Issue with idempotency (duplicate key returns existing)</li>
+ * <li>PU-003: Consume part quantity (happy path)</li>
+ * <li>PU-004: Consume with idempotency</li>
+ * <li>PU-005: Reject consume if quantity exceeds issued</li>
+ * <li>PU-006: Return part quantity (happy path)</li>
+ * <li>PU-007: Return with idempotency</li>
+ * <li>PU-008: Reject return if quantity exceeds available</li>
+ * <li>PU-009: Get usage history returns newest-first order</li>
+ * <li>PU-010: Verify WorkorderPart totals updated correctly</li>
  * </ul>
  */
 @DisplayName("Parts Usage Tracking Contract Behavior Tests (CAP:005 Story #158)")
@@ -84,8 +85,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         Map<String, Object> issueRequest = Map.of(
                 "workorderPartId", partId.toString(),
                 "quantity", 2.0,
-                "notes", "Issuing brake pads for service"
-        );
+                "notes", "Issuing brake pads for service");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -104,7 +104,8 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 .body("notes", nullValue());
 
         // Then: Verify usage event was created
-        List<WorkorderPartUsageEvent> events = usageEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+        List<WorkorderPartUsageEvent> events = usageEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
         assertThat(events).hasSize(1);
         assertThat(events.get(0).getEventType()).isEqualTo("ISSUE");
         assertThat(events.get(0).getQuantity()).isEqualByComparingTo(new BigDecimal("2.0"));
@@ -126,8 +127,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
 
         Map<String, Object> issueRequest = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", 2.0
-        );
+                "quantity", 2.0);
 
         // When: First request creates the event
         String firstEventId = givenWithGatewayAuth()
@@ -153,7 +153,8 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 .body("id", equalTo(firstEventId));
 
         // Verify only one event was created
-        List<WorkorderPartUsageEvent> events = usageEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+        List<WorkorderPartUsageEvent> events = usageEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
         assertThat(events).hasSize(1);
     }
 
@@ -168,8 +169,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         Map<String, Object> consumeRequest = Map.of(
                 "workorderPartId", partId.toString(),
                 "quantity", 3.0,
-                "notes", "Used for brake service"
-        );
+                "notes", "Used for brake service");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -205,8 +205,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
 
         Map<String, Object> consumeRequest = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", 3.0
-        );
+                "quantity", 3.0);
 
         // When: First request creates the event
         String firstEventId = givenWithGatewayAuth()
@@ -246,8 +245,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         // When: Attempt to consume 3 units (more than issued)
         Map<String, Object> consumeRequest = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", 3.0
-        );
+                "quantity", 3.0);
 
         // Then: Request is rejected with 400
         givenWithGatewayAuth()
@@ -276,8 +274,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         Map<String, Object> returnRequest = Map.of(
                 "workorderPartId", partId.toString(),
                 "quantity", 2.0,
-                "notes", "Returned unused brake pads"
-        );
+                "notes", "Returned unused brake pads");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -310,8 +307,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
 
         Map<String, Object> returnRequest = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", 1.0
-        );
+                "quantity", 1.0);
 
         // When: First request creates the event
         String firstEventId = givenWithGatewayAuth()
@@ -351,8 +347,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         // When: Attempt to return 3 units (more than available)
         Map<String, Object> returnRequest = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", 3.0
-        );
+                "quantity", 3.0);
 
         // Then: Request is rejected with 400
         givenWithGatewayAuth()
@@ -375,10 +370,12 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
     void testGetUsageHistory_Works() {
         // Given: A workorder with multiple usage events in database
         UUID workorderId = seedWorkorderWithPartiallyConsumedPart(BigDecimal.valueOf(5.0), BigDecimal.valueOf(3.0));
-        
-        // When: Verify events exist in database (GET endpoint has known RestAssured compatibility issue)
-        List<WorkorderPartUsageEvent> events = usageEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
-        
+
+        // When: Verify events exist in database (GET endpoint has known RestAssured
+        // compatibility issue)
+        List<WorkorderPartUsageEvent> events = usageEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+
         // Then: Verify events were created in correct order (newest first)
         assertThat(events).hasSizeGreaterThanOrEqualTo(2);
         // Events ordered by performedAt DESC means newest first
@@ -468,16 +465,23 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         UUID workorderId = seedWorkorderWithPart();
         UUID partId = workorderPartRepository.findByWorkorderId(workorderId).get(0).getId();
 
-        // Create events in order: ISSUE, CONSUME, RETURN (will be returned newest-first)
+        // Create events in order: ISSUE, CONSUME, RETURN (will be returned
+        // newest-first)
         issuePartViaService(workorderId, partId, BigDecimal.valueOf(5.0));
-        
+
         // Sleep briefly to ensure timestamps are different
-        try { Thread.sleep(10); } catch (InterruptedException e) { }
-        
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+        }
+
         consumePartViaService(workorderId, partId, BigDecimal.valueOf(3.0));
-        
-        try { Thread.sleep(10); } catch (InterruptedException e) { }
-        
+
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+        }
+
         returnPartViaService(workorderId, partId, BigDecimal.valueOf(1.0));
 
         return workorderId;
@@ -486,8 +490,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
     private void issuePartViaService(UUID workorderId, UUID partId, BigDecimal quantity) {
         Map<String, Object> request = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", quantity.doubleValue()
-        );
+                "quantity", quantity.doubleValue());
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -501,8 +504,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
     private void consumePartViaService(UUID workorderId, UUID partId, BigDecimal quantity) {
         Map<String, Object> request = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", quantity.doubleValue()
-        );
+                "quantity", quantity.doubleValue());
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -516,8 +518,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
     private void returnPartViaService(UUID workorderId, UUID partId, BigDecimal quantity) {
         Map<String, Object> request = Map.of(
                 "workorderPartId", partId.toString(),
-                "quantity", quantity.doubleValue()
-        );
+                "quantity", quantity.doubleValue());
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)

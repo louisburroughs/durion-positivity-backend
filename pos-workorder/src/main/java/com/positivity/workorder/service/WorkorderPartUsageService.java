@@ -59,15 +59,15 @@ public class WorkorderPartUsageService {
     /**
      * Issue parts to a workorder, reserving them for consumption.
      * 
-     * @param workorderId workorder ID
-     * @param partLineId part line item ID
-     * @param quantity quantity to issue (must be positive)
-     * @param performedBy user issuing parts
+     * @param workorderId    workorder ID
+     * @param partLineId     part line item ID
+     * @param quantity       quantity to issue (must be positive)
+     * @param performedBy    user issuing parts
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws NoSuchElementException if workorder or part not found
+     * @throws NoSuchElementException   if workorder or part not found
      * @throws IllegalArgumentException if quantity is not positive
-     * @throws IllegalStateException if part line does not belong to workorder
+     * @throws IllegalStateException    if part line does not belong to workorder
      */
     @Transactional
     @NonNull
@@ -82,8 +82,8 @@ public class WorkorderPartUsageService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing event {}", 
-                         idempotencyKey, existingEventId.get());
+                log.info("Idempotency key {} already processed, returning existing event {}",
+                        idempotencyKey, existingEventId.get());
                 return usageEventRepository.findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException("Event not found: " + existingEventId.get()));
             }
@@ -135,13 +135,13 @@ public class WorkorderPartUsageService {
     /**
      * Consume parts on a workorder.
      * 
-     * @param workorderId workorder ID
-     * @param partLineId part line item ID
-     * @param quantity quantity to consume (must be positive)
-     * @param performedBy user consuming parts
+     * @param workorderId    workorder ID
+     * @param partLineId     part line item ID
+     * @param quantity       quantity to consume (must be positive)
+     * @param performedBy    user consuming parts
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws NoSuchElementException if workorder or part not found
+     * @throws NoSuchElementException   if workorder or part not found
      * @throws IllegalArgumentException if quantity exceeds issued quantity
      */
     @Transactional
@@ -157,8 +157,8 @@ public class WorkorderPartUsageService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing event {}", 
-                         idempotencyKey, existingEventId.get());
+                log.info("Idempotency key {} already processed, returning existing event {}",
+                        idempotencyKey, existingEventId.get());
                 return usageEventRepository.findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException("Event not found: " + existingEventId.get()));
             }
@@ -185,7 +185,8 @@ public class WorkorderPartUsageService {
         BigDecimal newConsumed = part.getQuantityConsumed().add(quantity);
         if (newConsumed.compareTo(part.getQuantityIssued()) > 0) {
             throw new IllegalArgumentException(
-                    String.format("Consumption exceeds issued quantity. Issued: %s, Already consumed: %s, Attempting to consume: %s",
+                    String.format(
+                            "Consumption exceeds issued quantity. Issued: %s, Already consumed: %s, Attempting to consume: %s",
                             part.getQuantityIssued(), part.getQuantityConsumed(), quantity));
         }
 
@@ -218,14 +219,15 @@ public class WorkorderPartUsageService {
     /**
      * Return unused parts to inventory.
      * 
-     * @param workorderId workorder ID
-     * @param partLineId part line item ID
-     * @param quantity quantity to return (must be positive)
-     * @param performedBy user returning parts
+     * @param workorderId    workorder ID
+     * @param partLineId     part line item ID
+     * @param quantity       quantity to return (must be positive)
+     * @param performedBy    user returning parts
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws NoSuchElementException if workorder or part not found
-     * @throws IllegalArgumentException if quantity exceeds available (issued - consumed)
+     * @throws NoSuchElementException   if workorder or part not found
+     * @throws IllegalArgumentException if quantity exceeds available (issued -
+     *                                  consumed)
      */
     @Transactional
     @NonNull
@@ -240,8 +242,8 @@ public class WorkorderPartUsageService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartUsageEventId(idempotencyKey);
             if (existingEventId.isPresent()) {
-                log.info("Idempotency key {} already processed, returning existing event {}", 
-                         idempotencyKey, existingEventId.get());
+                log.info("Idempotency key {} already processed, returning existing event {}",
+                        idempotencyKey, existingEventId.get());
                 return usageEventRepository.findById(existingEventId.get())
                         .orElseThrow(() -> new IllegalStateException("Event not found: " + existingEventId.get()));
             }
@@ -264,15 +266,18 @@ public class WorkorderPartUsageService {
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
 
-        // Validate return does not exceed available (issued - consumed - already returned)
+        // Validate return does not exceed available (issued - consumed - already
+        // returned)
         BigDecimal available = part.getQuantityIssued()
                 .subtract(part.getQuantityConsumed())
                 .subtract(part.getQuantityReturned());
-        
+
         if (quantity.compareTo(available) > 0) {
             throw new IllegalArgumentException(
-                    String.format("Return quantity exceeds available. Issued: %s, Consumed: %s, Already returned: %s, Available: %s, Attempting to return: %s",
-                            part.getQuantityIssued(), part.getQuantityConsumed(), part.getQuantityReturned(), available, quantity));
+                    String.format(
+                            "Return quantity exceeds available. Issued: %s, Consumed: %s, Already returned: %s, Available: %s, Attempting to return: %s",
+                            part.getQuantityIssued(), part.getQuantityConsumed(), part.getQuantityReturned(), available,
+                            quantity));
         }
 
         // Create usage event
@@ -358,7 +363,8 @@ public class WorkorderPartUsageService {
     }
 
     /**
-     * Helper to get workorder ID from a part (handles both direct and service-linked parts).
+     * Helper to get workorder ID from a part (handles both direct and
+     * service-linked parts).
      */
     private UUID getWorkorderIdForPart(WorkorderPart part) {
         if (part.getWorkorder() != null) {

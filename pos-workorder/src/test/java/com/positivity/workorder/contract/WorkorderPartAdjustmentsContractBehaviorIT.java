@@ -24,18 +24,19 @@ import io.restassured.http.ContentType;
  * Contract behavior integration tests for workorder part adjustments.
  * CAP:005 Story #157 - Handle Part Substitutions and Returns
  *
- * <p>Tests cover:
+ * <p>
+ * Tests cover:
  * <ul>
- *   <li>PA-001: Substitute part (happy path, original part preserved)</li>
- *   <li>PA-002: Substitute with idempotency</li>
- *   <li>PA-003: Return unused quantity (happy path)</li>
- *   <li>PA-004: Return with idempotency</li>
- *   <li>PA-005: Reject return if quantity exceeds available</li>
- *   <li>PA-006: Correct part quantity (admin correction)</li>
- *   <li>PA-007: Correct with idempotency</li>
- *   <li>PA-008: Get adjustment history returns newest-first</li>
- *   <li>PA-009: Verify original part NOT deleted after substitution</li>
- *   <li>PA-010: Verify substitute part created with correct quantities</li>
+ * <li>PA-001: Substitute part (happy path, original part preserved)</li>
+ * <li>PA-002: Substitute with idempotency</li>
+ * <li>PA-003: Return unused quantity (happy path)</li>
+ * <li>PA-004: Return with idempotency</li>
+ * <li>PA-005: Reject return if quantity exceeds available</li>
+ * <li>PA-006: Correct part quantity (admin correction)</li>
+ * <li>PA-007: Correct with idempotency</li>
+ * <li>PA-008: Get adjustment history returns newest-first</li>
+ * <li>PA-009: Verify original part NOT deleted after substitution</li>
+ * <li>PA-010: Verify substitute part created with correct quantities</li>
  * </ul>
  */
 @DisplayName("Part Adjustments Contract Behavior Tests (CAP:005 Story #157)")
@@ -77,8 +78,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 "originalPartId", originalPartId.toString(),
                 "substitutePartId", substitutePartId.toString(),
                 "reason", "Original part out of stock",
-                "notes", "Used equivalent premium part"
-        );
+                "notes", "Used equivalent premium part");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -92,13 +92,14 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .body("originalPartId", equalTo(originalPartId.toString()))
                 .body("adjustmentType", equalTo("SUBSTITUTION"))
                 .body("substitutedWithPartId", notNullValue())
-                .body("quantityAdjustment", equalTo(0))  // Integer comparison for 0
+                .body("quantityAdjustment", equalTo(0)) // Integer comparison for 0
                 .body("reason", equalTo("Original part out of stock"))
                 .body("performedBy", notNullValue())
                 .body("performedAt", notNullValue());
 
         // Then: Verify adjustment event was created
-        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
         assertThat(events).hasSize(1);
         assertThat(events.get(0).getAdjustmentType()).isEqualTo("SUBSTITUTION");
         assertThat(events.get(0).getOriginalPart().getId()).isEqualTo(originalPartId);
@@ -125,8 +126,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> substituteRequest = Map.of(
                 "originalPartId", originalPartId.toString(),
                 "substitutePartId", substitutePartId.toString(),
-                "reason", "Out of stock"
-        );
+                "reason", "Out of stock");
 
         // When: First request creates the event
         String firstEventId = givenWithGatewayAuth()
@@ -152,10 +152,12 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .body("id", equalTo(firstEventId));
 
         // Verify only one adjustment event was created
-        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
         assertThat(events).hasSize(1);
 
-        // Verify only one substitute part was created (2 total: original + 1 substitute)
+        // Verify only one substitute part was created (2 total: original + 1
+        // substitute)
         List<WorkorderPart> allParts = workorderPartRepository.findByWorkorderId(workorderId);
         assertThat(allParts).hasSize(2);
     }
@@ -171,8 +173,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> substituteRequest = Map.of(
                 "originalPartId", originalPartId.toString(),
                 "substitutePartId", UUID.randomUUID().toString(),
-                "reason", "Substitution test"
-        );
+                "reason", "Substitution test");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -209,8 +210,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> substituteRequest = Map.of(
                 "originalPartId", originalPart.getId().toString(),
                 "substitutePartId", UUID.randomUUID().toString(),
-                "reason", "Quantity test"
-        );
+                "reason", "Quantity test");
 
         String substitutePartIdStr = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -224,7 +224,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         // Then: Substitute part should have same quantities as original
         UUID substitutePartId = UUID.fromString(substitutePartIdStr);
         WorkorderPart substitutePart = workorderPartRepository.findById(substitutePartId).orElseThrow();
-        
+
         assertThat(substitutePart.getQuantity()).isEqualByComparingTo(originalQuantity);
         assertThat(substitutePart.getQuantityIssued()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(substitutePart.getQuantityConsumed()).isEqualByComparingTo(BigDecimal.ZERO);
@@ -245,8 +245,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 "workorderPartId", partId.toString(),
                 "quantity", 3.0,
                 "reason", "Part not needed for this service",
-                "notes", "Returning to inventory"
-        );
+                "notes", "Returning to inventory");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -258,11 +257,12 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .statusCode(201)
                 .body("workorderId", equalTo(workorderId.toString()))
                 .body("adjustmentType", equalTo("ADDITIONAL_RETURN"))
-                .body("quantityAdjustment", equalTo(-3.0f))  // Negative for return
+                .body("quantityAdjustment", equalTo(-3.0f)) // Negative for return
                 .body("reason", equalTo("Part not needed for this service"));
 
         // Then: Verify adjustment event was created
-        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
         assertThat(events).hasSize(1);
         assertThat(events.get(0).getAdjustmentType()).isEqualTo("ADDITIONAL_RETURN");
         assertThat(events.get(0).getQuantityAdjustment()).isEqualByComparingTo(new BigDecimal("-3.0"));
@@ -283,8 +283,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> returnRequest = Map.of(
                 "workorderPartId", partId.toString(),
                 "quantity", 2.0,
-                "reason", "Not needed"
-        );
+                "reason", "Not needed");
 
         // When: First request creates the event
         String firstEventId = givenWithGatewayAuth()
@@ -325,8 +324,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> returnRequest = Map.of(
                 "workorderPartId", partId.toString(),
                 "quantity", 3.0,
-                "reason", "Return too much"
-        );
+                "reason", "Return too much");
 
         // Then: Should fail with 400 Bad Request
         givenWithGatewayAuth()
@@ -339,7 +337,8 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .statusCode(400);
 
         // Verify no event was created
-        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
         assertThat(events).isEmpty();
     }
 
@@ -360,8 +359,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 "workorderPartId", partId.toString(),
                 "newQuantity", 5.0,
                 "reason", "Data entry error - should be 5 units",
-                "notes", "Corrected after invoice review"
-        );
+                "notes", "Corrected after invoice review");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -373,11 +371,12 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .statusCode(201)
                 .body("workorderId", equalTo(workorderId.toString()))
                 .body("adjustmentType", equalTo("CORRECTION"))
-                .body("quantityAdjustment", equalTo(3.0f))  // 5 - 2 = 3
+                .body("quantityAdjustment", equalTo(3.0f)) // 5 - 2 = 3
                 .body("reason", equalTo("Data entry error - should be 5 units"));
 
         // Then: Verify adjustment event was created
-        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId);
+        List<WorkorderPartAdjustmentEvent> events = adjustmentEventRepository
+                .findByWorkorderIdOrderByPerformedAtDesc(workorderId);
         assertThat(events).hasSize(1);
         assertThat(events.get(0).getAdjustmentType()).isEqualTo("CORRECTION");
         assertThat(events.get(0).getQuantityAdjustment()).isEqualByComparingTo(new BigDecimal("3.0"));
@@ -398,8 +397,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> correctRequest = Map.of(
                 "workorderPartId", partId.toString(),
                 "newQuantity", 4.0,
-                "reason", "Correction"
-        );
+                "reason", "Correction");
 
         // When: First request creates the event
         String firstEventId = givenWithGatewayAuth()
@@ -437,7 +435,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
     void testGetAdjustmentHistory_NewestFirst() {
         // Given: A workorder with multiple adjustments
         UUID workorderId = seedWorkorderWithMultipleAdjustments();
-        
+
         // Verify workorderId is not null
         assertThat(workorderId).isNotNull();
 
@@ -450,9 +448,9 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .log().all()
                 .statusCode(200)
                 .body("size()", equalTo(3))
-                .body("[0].adjustmentType", equalTo("CORRECTION"))  // Last
-                .body("[1].adjustmentType", equalTo("ADDITIONAL_RETURN"))  // Second
-                .body("[2].adjustmentType", equalTo("SUBSTITUTION"));  // First
+                .body("[0].adjustmentType", equalTo("CORRECTION")) // Last
+                .body("[1].adjustmentType", equalTo("ADDITIONAL_RETURN")) // Second
+                .body("[2].adjustmentType", equalTo("SUBSTITUTION")); // First
     }
 
     // ========== HELPER METHODS FOR TEST DATA SEEDING ==========
@@ -510,8 +508,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> substituteRequest = Map.of(
                 "originalPartId", originalPartId.toString(),
                 "substitutePartId", UUID.randomUUID().toString(),
-                "reason", "First adjustment"
-        );
+                "reason", "First adjustment");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -520,7 +517,10 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .then().statusCode(201);
 
         // Brief sleep to ensure different timestamps
-        try { Thread.sleep(10); } catch (InterruptedException e) { }
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+        }
 
         // Update part to have issued/consumed for return test
         WorkorderPart part = workorderPartRepository.findById(originalPartId).orElseThrow();
@@ -532,8 +532,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> returnRequest = Map.of(
                 "workorderPartId", originalPartId.toString(),
                 "quantity", 2.0,
-                "reason", "Second adjustment"
-        );
+                "reason", "Second adjustment");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -541,14 +540,16 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .post("/v1/workorders/{workorderId}/parts/returnUnused", workorderId)
                 .then().statusCode(201);
 
-        try { Thread.sleep(10); } catch (InterruptedException e) { }
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+        }
 
         // Create correction (third adjustment)
         Map<String, Object> correctRequest = Map.of(
                 "workorderPartId", originalPartId.toString(),
                 "newQuantity", 5.0,
-                "reason", "Third adjustment"
-        );
+                "reason", "Third adjustment");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)

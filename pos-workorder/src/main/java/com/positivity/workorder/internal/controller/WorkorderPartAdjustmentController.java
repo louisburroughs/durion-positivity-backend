@@ -22,7 +22,8 @@ import java.util.NoSuchElementException;
 import java.util.UUID;
 
 /**
- * REST controller for workorder part adjustments (substitutions, returns, corrections).
+ * REST controller for workorder part adjustments (substitutions, returns,
+ * corrections).
  * 
  * CAP:005 Story #157 - Handle Part Substitutions and Returns
  * 
@@ -49,15 +50,8 @@ public class WorkorderPartAdjustmentController {
     @PostMapping("/substitute")
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_SUBSTITUTE", apiVersion = "1")
-    @Operation(
-        summary = "Substitute part",
-        description = "Replace one part with another. Original part preserved for history."
-    )
-    @ApiResponse(
-        responseCode = "201",
-        description = "Part substituted successfully",
-        content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class))
-    )
+    @Operation(summary = "Substitute part", description = "Replace one part with another. Original part preserved for history.")
+    @ApiResponse(responseCode = "201", description = "Part substituted successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (part already consumed, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(responseCode = "409", description = "Idempotency conflict")
@@ -91,15 +85,8 @@ public class WorkorderPartAdjustmentController {
     @PostMapping("/returnUnused")
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_RETURN_UNUSED", apiVersion = "1")
-    @Operation(
-        summary = "Return unused quantity",
-        description = "Return unused part quantity beyond normal return flow"
-    )
-    @ApiResponse(
-        responseCode = "201",
-        description = "Unused quantity returned successfully",
-        content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class))
-    )
+    @Operation(summary = "Return unused quantity", description = "Return unused part quantity beyond normal return flow")
+    @ApiResponse(responseCode = "201", description = "Unused quantity returned successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> returnUnusedQuantity(
@@ -132,15 +119,8 @@ public class WorkorderPartAdjustmentController {
     @PostMapping("/correct")
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_CORRECT", apiVersion = "1")
-    @Operation(
-        summary = "Correct part quantity",
-        description = "Administrative correction for data entry errors"
-    )
-    @ApiResponse(
-        responseCode = "201",
-        description = "Part quantity corrected successfully",
-        content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class))
-    )
+    @Operation(summary = "Correct part quantity", description = "Administrative correction for data entry errors")
+    @ApiResponse(responseCode = "201", description = "Part quantity corrected successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> correctPartQuantity(
@@ -168,25 +148,17 @@ public class WorkorderPartAdjustmentController {
     }
 
     /**
-     * Get adjustment history for all parts on a workorder, or a specific part if partId is provided.
+     * Get adjustment history for all parts on a workorder, or a specific part if
+     * partId is provided.
      */
     @GetMapping("/adjustments")
     @PreAuthorize("hasAuthority('workorder:parts:view')")
-    @Operation(
-        summary = "Get part adjustment history",
-        description = "Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Adjustment history retrieved successfully (newest first)",
-        content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class))
-    )
+    @Operation(summary = "Get part adjustment history", description = "Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder")
+    @ApiResponse(responseCode = "200", description = "Adjustment history retrieved successfully (newest first)", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<List<WorkorderPartAdjustmentEventResponse>> getAdjustmentHistory(
             @PathVariable @NonNull UUID workorderId,
-            @RequestParam(required = false) @Nullable 
-            @Parameter(description = "Optional part ID to filter history for a specific part")
-            UUID partId) {
+            @RequestParam(required = false) @Nullable @Parameter(description = "Optional part ID to filter history for a specific part") UUID partId) {
 
         List<WorkorderPartAdjustmentEventResponse> responses;
         if (partId != null) {

@@ -78,10 +78,12 @@ public class IdempotencyService {
     }
 
     /**
-     * Check if an idempotency key exists and return the associated change request ID.
+     * Check if an idempotency key exists and return the associated change request
+     * ID.
      * 
      * @param keyValue the idempotency key to check
-     * @return Optional containing the change request ID if the key has been processed
+     * @return Optional containing the change request ID if the key has been
+     *         processed
      *         before, empty otherwise
      */
     @Transactional(readOnly = true)
@@ -90,7 +92,8 @@ public class IdempotencyService {
         if (existing.isPresent()) {
             IdempotencyKey key = existing.get();
             if (key.getExpiresAt().isAfter(Instant.now()) && key.getChangeRequestId() != null) {
-                log.info("Idempotency key {} already processed for change request {}", keyValue, key.getChangeRequestId());
+                log.info("Idempotency key {} already processed for change request {}", keyValue,
+                        key.getChangeRequestId());
                 return Optional.of(key.getChangeRequestId());
             } else if (key.getExpiresAt().isBefore(Instant.now())) {
                 log.info("Idempotency key {} has expired", keyValue);
@@ -168,10 +171,12 @@ public class IdempotencyService {
     }
 
     /**
-     * Check if an idempotency key exists and return the associated part usage event ID.
+     * Check if an idempotency key exists and return the associated part usage event
+     * ID.
      * 
      * @param keyValue the idempotency key to check
-     * @return Optional containing the part usage event ID if the key has been processed
+     * @return Optional containing the part usage event ID if the key has been
+     *         processed
      *         before, empty otherwise
      */
     @Transactional(readOnly = true)
@@ -180,7 +185,8 @@ public class IdempotencyService {
         if (existing.isPresent()) {
             IdempotencyKey key = existing.get();
             if (key.getExpiresAt().isAfter(Instant.now()) && key.getPartUsageEventId() != null) {
-                log.info("Idempotency key {} already processed for part usage event {}", keyValue, key.getPartUsageEventId());
+                log.info("Idempotency key {} already processed for part usage event {}", keyValue,
+                        key.getPartUsageEventId());
                 return Optional.of(key.getPartUsageEventId());
             } else if (key.getExpiresAt().isBefore(Instant.now())) {
                 log.info("Idempotency key {} has expired", keyValue);
@@ -192,7 +198,7 @@ public class IdempotencyService {
     /**
      * Mark an idempotency key as processed for a part usage event.
      * 
-     * @param keyValue        the idempotency key value
+     * @param keyValue         the idempotency key value
      * @param partUsageEventId the ID of the created part usage event
      */
     @Transactional
@@ -208,10 +214,12 @@ public class IdempotencyService {
     }
 
     /**
-     * Check if an idempotency key exists and return the associated part adjustment event ID.
+     * Check if an idempotency key exists and return the associated part adjustment
+     * event ID.
      * 
      * @param keyValue the idempotency key to check
-     * @return Optional containing the part adjustment event ID if the key has been processed
+     * @return Optional containing the part adjustment event ID if the key has been
+     *         processed
      *         before, empty otherwise
      */
     @Transactional(readOnly = true)
@@ -220,7 +228,8 @@ public class IdempotencyService {
         if (existing.isPresent()) {
             IdempotencyKey key = existing.get();
             if (key.getExpiresAt().isAfter(Instant.now()) && key.getPartAdjustmentEventId() != null) {
-                log.info("Idempotency key {} already processed for part adjustment event {}", keyValue, key.getPartAdjustmentEventId());
+                log.info("Idempotency key {} already processed for part adjustment event {}", keyValue,
+                        key.getPartAdjustmentEventId());
                 return Optional.of(key.getPartAdjustmentEventId());
             } else if (key.getExpiresAt().isBefore(Instant.now())) {
                 log.info("Idempotency key {} has expired", keyValue);
@@ -232,7 +241,7 @@ public class IdempotencyService {
     /**
      * Mark an idempotency key as processed for a part adjustment event.
      * 
-     * @param keyValue        the idempotency key value
+     * @param keyValue              the idempotency key value
      * @param partAdjustmentEventId the ID of the created part adjustment event
      */
     @Transactional
