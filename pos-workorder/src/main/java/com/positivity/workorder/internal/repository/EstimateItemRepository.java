@@ -42,4 +42,12 @@ public interface EstimateItemRepository extends JpaRepository<EstimateItem, UUID
     List<EstimateItem> findByEstimateIdAndApprovalStatus(
             @NonNull UUID estimateId,
             @NonNull ApprovalStatus approvalStatus);
+
+        /**
+         * Find all non-deleted items for a given estimate with a specific approval status.
+         */
+        @NonNull
+        List<EstimateItem> findByEstimateIdAndApprovalStatusAndDeletedFalse(
+            @NonNull UUID estimateId,
+            @NonNull ApprovalStatus approvalStatus);
 }
