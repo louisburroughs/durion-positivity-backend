@@ -35,6 +35,7 @@ import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.service.EstimateService;
+import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,6 +55,7 @@ import lombok.extern.slf4j.Slf4j;
 public class EstimateController {
     private final EstimateService estimateService;
     private final WorkorderService workorderService;
+    private final IdempotencyService idempotencyService;
 
     @Operation(summary = "Get all estimates", description = "Retrieve a list of all estimates.")
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
@@ -233,10 +235,32 @@ public class EstimateController {
         try {
             log.info("Promoting estimate {} to workorder (idempotencyKey={})", estimateId, idempotencyKey);
 
+            // Check idempotency key if provided
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                var existingWorkorderId = idempotencyService.getProcessedWorkorderId(idempotencyKey);
+                if (existingWorkorderId.isPresent()) {
+                    log.info("Idempotency key {} already processed - returning existing workorder {}",
+                            idempotencyKey, existingWorkorderId.get());
+                    return workorderService.getWorkorderById(existingWorkorderId.get())
+                            .map(WorkorderResponse::fromEntity)
+                            .map(ResponseEntity::ok)
+                            .orElseGet(() -> {
+                                log.error("Existing workorder {} not found for idempotency key {}",
+                                        existingWorkorderId.get(), idempotencyKey);
+                                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+                            });
+                }
+            }
+
             // The WorkorderService.createWorkorder method already validates promotion
             // preconditions
             // and throws PromotionValidationException if validation fails
             Workorder workorder = workorderService.createWorkorder(estimateId, null);
+
+            // Register idempotency key if provided
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.registerKey(idempotencyKey, workorder.getId());
+            }
 
             log.info("Successfully promoted estimate {} to workorder {}", estimateId, workorder.getId());
             return ResponseEntity.ok(WorkorderResponse.fromEntity(workorder));
