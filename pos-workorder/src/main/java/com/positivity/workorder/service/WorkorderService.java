@@ -14,11 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import com.positivity.workorder.internal.entity.AuditEvent;
+import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class WorkorderService {
     private final WorkorderRepository workorderRepository;
+    private final EstimateRepository estimateRepository;
     private final RestClient restClient;
     private final WorkorderStateMachine stateMachine;
     private final AuditEventRepository auditEventRepository;
@@ -49,6 +52,14 @@ public class WorkorderService {
 
     @Transactional
     public Workorder createWorkorder(UUID estimateId, UUID customerId) {
+        // If customerId is null, fetch it from the estimate
+        if (customerId == null && estimateId != null) {
+            Estimate estimate = estimateRepository.findById(estimateId)
+                    .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId));
+            customerId = estimate.getCustomerId();
+            log.debug("Fetched customerId {} from estimate {}", customerId, estimateId);
+        }
+
         Workorder workorder = Workorder.builder()
                 .estimateId(estimateId)
                 .customerId(customerId)

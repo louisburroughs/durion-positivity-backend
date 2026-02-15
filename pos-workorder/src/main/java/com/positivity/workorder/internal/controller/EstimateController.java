@@ -31,7 +31,11 @@ import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
+import com.positivity.workorder.internal.dto.WorkorderResponse;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.service.EstimateService;
+import com.positivity.workorder.service.WorkorderService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -49,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class EstimateController {
     private final EstimateService estimateService;
+    private final WorkorderService workorderService;
 
     @Operation(summary = "Get all estimates", description = "Retrieve a list of all estimates.")
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
@@ -203,6 +208,72 @@ public class EstimateController {
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(summary = "Promote approved estimate to workorder", description = "Promote an approved estimate to a workorder. "
+            +
+            "Validates preconditions: estimate must be APPROVED, not expired, have approved items, and not already promoted. "
+            +
+            "Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate was previously promoted (idempotency). "
+            +
+            "CAP:004 Story #26 - Create Workorder from Approved Estimate.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Workorder created successfully from estimate"),
+            @ApiResponse(responseCode = "400", description = "Validation error - estimate not in correct state"),
+            @ApiResponse(responseCode = "404", description = "Estimate not found"),
+            @ApiResponse(responseCode = "409", description = "Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired")
+    })
+    @PostMapping("/{estimateId}/promote")
+    @EmitEvent(id = "WORKORDER_ESTIMATE_PROMOTE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:promote')")
+    public ResponseEntity<WorkorderResponse> promoteEstimateToWorkorder(
+            @Parameter(description = "ID of the estimate to promote", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
+            @Parameter(description = "Idempotency-Key header for safe retries") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        try {
+            log.info("Promoting estimate {} to workorder (idempotencyKey={})", estimateId, idempotencyKey);
+
+            // The WorkorderService.createWorkorder method already validates promotion preconditions
+            // and throws PromotionValidationException if validation fails
+            Workorder workorder = workorderService.createWorkorder(estimateId, null);
+
+            log.info("Successfully promoted estimate {} to workorder {}", estimateId, workorder.getId());
+            return ResponseEntity.ok(WorkorderResponse.fromEntity(workorder));
+
+        } catch (PromotionValidationException e) {
+            // Handle idempotency - if estimate already promoted, return existing workorder
+            if (e.getErrorCode() == PromotionValidationException.PromotionErrorCode.ALREADY_PROMOTED
+                    && e.getExistingWorkorderId() != null) {
+                log.info("Estimate {} already promoted to workorder {} (idempotent retry)",
+                        estimateId, e.getExistingWorkorderId());
+
+                // Fetch the existing workorder and return it
+                return workorderService.getWorkorderById(e.getExistingWorkorderId())
+                        .map(WorkorderResponse::fromEntity)
+                        .map(ResponseEntity::ok)
+                        .orElseGet(() -> {
+                            log.error("Existing workorder {} not found after ALREADY_PROMOTED validation",
+                                    e.getExistingWorkorderId());
+                            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+                        });
+            }
+
+            // Other validation errors - return 409 Conflict
+            log.warn("Promotion validation failed for estimate {}: {} - {}",
+                    estimateId, e.getErrorCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+
+        } catch (EntityNotFoundException e) {
+            log.warn("Estimate {} not found", estimateId);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid argument promoting estimate {}: {}", estimateId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+
+        } catch (Exception e) {
+            log.error("Unexpected error promoting estimate {}", estimateId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 

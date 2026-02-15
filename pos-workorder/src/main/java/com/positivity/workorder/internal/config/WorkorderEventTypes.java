@@ -112,6 +112,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Promote approved estimate to workorder (CAP:004 Story #26) */
+        public static final EventTypeRegistration WORKORDER_ESTIMATE_PROMOTE = EventTypeRegistration
+                        .write("WORKORDER_ESTIMATE_PROMOTE",
+                                        "Promote an approved estimate to a workorder")
+                        .apiVersion("1")
+                        .build();
+
         /** Submit estimate for customer approval (CAP:004 Issue #162) */
         public static final EventTypeRegistration WORKORDER_ESTIMATE_SUBMIT = EventTypeRegistration
                         .write("WORKORDER_ESTIMATE_SUBMIT",
@@ -271,6 +278,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_ESTIMATE_DECLINE,
                         WORKORDER_ESTIMATE_REOPEN,
                         WORKORDER_ESTIMATE_APPROVE,
+                        WORKORDER_ESTIMATE_PROMOTE,
                         WORKORDER_ESTIMATE_SUBMIT,
                         WORKORDER_ESTIMATE_DELETE,
                         // Estimate item management (CAP:002)
