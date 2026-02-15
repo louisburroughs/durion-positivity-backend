@@ -294,6 +294,73 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
         assertThat(partItems).isEmpty();
     }
 
+    @Test
+    @DisplayName("WI-006: Verify only approved items are copied when estimate has mixed approval statuses")
+    void testPromotionWithMixedApprovalStatuses() {
+        // Given: An approved estimate with mixed approval statuses
+        // 2 APPROVED items, 1 DECLINED item, 1 PENDING_APPROVAL item
+        UUID estimateId = seedApprovedEstimateWithMixedApprovalStatuses();
+
+        List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+        assertThat(allItems).hasSize(4);
+
+        List<EstimateItem> approvedItems = estimateItemRepository.findByEstimateIdAndApprovalStatusAndDeletedFalse(
+                estimateId, ApprovalStatus.APPROVED);
+        assertThat(approvedItems).hasSize(2);
+
+        // When: Promote estimate to workorder
+        String workorderIdStr = givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{id}/promote", estimateId)
+                .then()
+                .log().ifValidationFails()
+                .statusCode(200)
+                .body("id", notNullValue())
+                .body("estimateId", equalTo(estimateId.toString()))
+                .extract()
+                .path("id");
+
+        UUID workorderId = UUID.fromString(workorderIdStr);
+
+        // Then: Verify only APPROVED items were copied to workorder
+        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+
+        // Count total workorder items (labor + parts)
+        List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                .findAll().stream()
+                .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
+                .toList();
+
+        List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
+
+        int totalWorkorderItems = laborItems.size() + partItems.size();
+        assertThat(totalWorkorderItems).isEqualTo(2); // Only 2 APPROVED items should be copied
+
+        // Verify each workorder item traces back to an APPROVED estimate item
+        List<UUID> approvedItemIds = approvedItems.stream().map(EstimateItem::getId).toList();
+        for (com.positivity.workorder.internal.entity.WorkorderService laborItem : laborItems) {
+            assertThat(approvedItemIds).contains(laborItem.getOriginEstimateItemId());
+        }
+        for (WorkorderPart partItem : partItems) {
+            assertThat(approvedItemIds).contains(partItem.getOriginEstimateItemId());
+        }
+
+        // Verify declined and pending items were NOT copied
+        List<EstimateItem> nonApprovedItems = allItems.stream()
+                .filter(item -> item.getApprovalStatus() != ApprovalStatus.APPROVED)
+                .toList();
+
+        for (EstimateItem nonApprovedItem : nonApprovedItems) {
+            boolean foundInWorkorder = laborItems.stream()
+                    .anyMatch(ws -> ws.getOriginEstimateItemId().equals(nonApprovedItem.getId()))
+                    || partItems.stream()
+                            .anyMatch(wp -> wp.getOriginEstimateItemId().equals(nonApprovedItem.getId()));
+
+            assertThat(foundInWorkorder).as("Non-approved item %s should not be in workorder", nonApprovedItem.getId())
+                    .isFalse();
+        }
+    }
+
     // ========== TEST DATA SEEDING HELPERS ==========
 
     private UUID seedApprovedEstimateWithMixedItems() {
@@ -421,6 +488,94 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
         estimate = estimateRepository.save(estimate);
 
         // No items created
+        return estimate.getId();
+    }
+
+    /**
+     * Seed an approved estimate with mixed approval statuses:
+     * - 1 LABOR item (APPROVED)
+     * - 1 PART item (APPROVED)
+     * - 1 LABOR item (DECLINED)
+     * - 1 PART item (PENDING_APPROVAL)
+     */
+    private UUID seedApprovedEstimateWithMixedApprovalStatuses() {
+        initTestIds();
+
+        Estimate estimate = Estimate.builder()
+                .estimateNumber("EST-TEST-MIXED-" + UUID.randomUUID().toString().substring(0, 8))
+                .customerId(testCustomerId)
+                .vehicleId(testVehicleId)
+                .locationId(testLocationId)
+                .status(EstimateStatus.APPROVED)
+                .approvedAt(LocalDateTime.now().minusHours(1))
+                .expiresAt(LocalDateTime.now().plusDays(30))
+                .subtotal(new BigDecimal("175.00")) // Only approved items: $90 + $85
+                .taxAmount(new BigDecimal("14.44"))
+                .total(new BigDecimal("189.44"))
+                .currencyUomId("USD")
+                .createdByUserId("test-user")
+                .createdById("test-user")
+                .build();
+        estimate = estimateRepository.save(estimate);
+
+        // Item 1: LABOR, APPROVED (Oil change)
+        EstimateItem laborApproved = EstimateItem.builder()
+                .estimateId(estimate.getId())
+                .itemType(EstimateItemType.LABOR)
+                .description("Oil change labor")
+                .quantity(new BigDecimal("1.5000"))
+                .unitPrice(new BigDecimal("60.00"))
+                .lineTotal(new BigDecimal("90.00"))
+                .taxCode("LABOR_TAX")
+                .approvalStatus(ApprovalStatus.APPROVED)
+                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                .createdById("test-user")
+                .build();
+
+        // Item 2: PART, APPROVED (Oil filter)
+        EstimateItem partApproved = EstimateItem.builder()
+                .estimateId(estimate.getId())
+                .itemType(EstimateItemType.PART)
+                .description("Oil filter")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("85.00"))
+                .lineTotal(new BigDecimal("85.00"))
+                .taxCode("PARTS_TAX")
+                .approvalStatus(ApprovalStatus.APPROVED)
+                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                .createdById("test-user")
+                .build();
+
+        // Item 3: LABOR, DECLINED (Tire rotation)
+        EstimateItem laborDeclined = EstimateItem.builder()
+                .estimateId(estimate.getId())
+                .itemType(EstimateItemType.LABOR)
+                .description("Tire rotation labor")
+                .quantity(new BigDecimal("0.7500"))
+                .unitPrice(new BigDecimal("60.00"))
+                .lineTotal(new BigDecimal("45.00"))
+                .taxCode("LABOR_TAX")
+                .approvalStatus(ApprovalStatus.DECLINED)
+                .rejectionReason("CUSTOMER_DECLINED")
+                .approvalTimestamp(LocalDateTime.now().minusHours(1))
+                .createdById("test-user")
+                .build();
+
+        // Item 4: PART, PENDING_APPROVAL (Air filter)
+        EstimateItem partPending = EstimateItem.builder()
+                .estimateId(estimate.getId())
+                .itemType(EstimateItemType.PART)
+                .description("Air filter")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("60.00"))
+                .lineTotal(new BigDecimal("60.00"))
+                .taxCode("PARTS_TAX")
+                .approvalStatus(ApprovalStatus.PENDING_APPROVAL)
+                .createdById("test-user")
+                .build();
+
+        estimateItemRepository.saveAll(List.of(laborApproved, partApproved, laborDeclined, partPending));
+
         return estimate.getId();
     }
 
