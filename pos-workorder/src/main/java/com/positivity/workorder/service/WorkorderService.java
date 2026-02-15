@@ -116,7 +116,7 @@ public class WorkorderService {
         Workorder created = createWorkorderInternal(workorder);
 
         // Register idempotency key if provided
-        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             idempotencyService.registerKey(idempotencyKey, created.getId());
         }
 
