@@ -79,7 +79,34 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("PR-002: Idempotent promotion - second call returns existing workorder")
+    @DisplayName("PR-002: Idempotent promotion with Idempotency-Key returns same workorder")
+    void testPromoteEstimate_IdempotencyWithHeader() {
+        UUID estimateId = seedApprovedEstimateWithItems();
+        String idempotencyKey = "test-key-" + UUID.randomUUID();
+
+        // First promotion with idempotency key
+        String workorderId = givenWithGatewayAuth()
+                .header("Idempotency-Key", idempotencyKey)
+                .when()
+                .post("/v1/workorders/estimates/{id}/promote", estimateId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("id");
+
+        // Second promotion attempt with same idempotency key - should return same workorder
+        givenWithGatewayAuth()
+                .header("Idempotency-Key", idempotencyKey)
+                .when()
+                .post("/v1/workorders/estimates/{id}/promote", estimateId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(workorderId))
+                .log().ifValidationFails();
+    }
+
+    @Test
+    @DisplayName("PR-003: Promotion without Idempotency-Key uses business logic idempotency")
     void testPromoteEstimate_Idempotency() {
         UUID estimateId = seedApprovedEstimateWithItems();
 
@@ -92,9 +119,35 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 .extract()
                 .path("id");
 
-        // Second promotion attempt - should return same workorder
+        // Second promotion attempt - should return same workorder (business logic idempotency)
         givenWithGatewayAuth()
-                .header("Idempotency-Key", "test-key-" + estimateId)
+                .when()
+                .post("/v1/workorders/estimates/{id}/promote", estimateId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(workorderId))
+                .log().ifValidationFails();
+    }
+
+    @Test
+    @DisplayName("PR-004: Different Idempotency-Keys for same estimate return same workorder")
+    void testPromoteEstimate_DifferentKeys_SameEstimate() {
+        UUID estimateId = seedApprovedEstimateWithItems();
+
+        // First promotion with first idempotency key
+        String workorderId = givenWithGatewayAuth()
+                .header("Idempotency-Key", "test-key-1-" + UUID.randomUUID())
+                .when()
+                .post("/v1/workorders/estimates/{id}/promote", estimateId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("id");
+
+        // Second promotion with different idempotency key but same estimate
+        // Should return same workorder (business logic idempotency takes precedence)
+        givenWithGatewayAuth()
+                .header("Idempotency-Key", "test-key-2-" + UUID.randomUUID())
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
                 .then()
@@ -106,7 +159,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
     // ========== PROMOTION VALIDATION FAILURE TESTS ==========
 
     @Test
-    @DisplayName("PR-003: Reject promotion - estimate not found")
+    @DisplayName("PR-005: Reject promotion - estimate not found")
     void testPromoteEstimate_NotFound() {
         UUID nonExistentId = UUID.randomUUID();
 
@@ -119,7 +172,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("PR-004: Reject promotion - estimate not in APPROVED status")
+    @DisplayName("PR-006: Reject promotion - estimate not in APPROVED status")
     void testPromoteEstimate_NotApproved() {
         UUID estimateId = seedDraftEstimateWithItems();
 
@@ -132,7 +185,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("PR-005: Reject promotion - estimate approval expired")
+    @DisplayName("PR-007: Reject promotion - estimate approval expired")
     void testPromoteEstimate_Expired() {
         UUID estimateId = seedExpiredApprovedEstimate();
 
@@ -145,7 +198,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("PR-006: Reject promotion - estimate has no approved items")
+    @DisplayName("PR-008: Reject promotion - estimate has no approved items")
     void testPromoteEstimate_NoApprovedItems() {
         UUID estimateId = seedApprovedEstimateWithoutApprovedItems();
 
