@@ -320,6 +320,29 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== PARTS ADJUSTMENT EVENTS (CAP:005 Story #157) ====================
+
+        /** Substitute one part for another */
+        public static final EventTypeRegistration WORKORDER_PART_SUBSTITUTE = EventTypeRegistration
+                        .write("WORKORDER_PART_SUBSTITUTE",
+                                        "Substitute one part for another (preserves original for history)")
+                        .apiVersion("1")
+                        .build();
+
+        /** Return unused quantity beyond normal return flow */
+        public static final EventTypeRegistration WORKORDER_PART_RETURN_UNUSED = EventTypeRegistration
+                        .write("WORKORDER_PART_RETURN_UNUSED",
+                                        "Return unused part quantity beyond normal return flow")
+                        .apiVersion("1")
+                        .build();
+
+        /** Correct part quantity (administrative correction) */
+        public static final EventTypeRegistration WORKORDER_PART_CORRECT = EventTypeRegistration
+                        .write("WORKORDER_PART_CORRECT",
+                                        "Administrative correction for part quantity data entry errors")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -363,6 +386,10 @@ public final class WorkorderEventTypes {
                         WORKORDER_PART_ISSUE,
                         WORKORDER_PART_CONSUME,
                         WORKORDER_PART_RETURN,
+                        // Parts adjustment events (CAP:005 Story #157)
+                        WORKORDER_PART_SUBSTITUTE,
+                        WORKORDER_PART_RETURN_UNUSED,
+                        WORKORDER_PART_CORRECT,
                         // Change request events
                         WORKORDER_CHANGE_REQUEST_CREATE,
                         WORKORDER_CHANGE_REQUEST_APPROVE,
