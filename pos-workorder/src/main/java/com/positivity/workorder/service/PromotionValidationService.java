@@ -59,7 +59,7 @@ public class PromotionValidationService {
                         "Estimate not found: " + estimateId));
 
         // 2. Idempotency Check - has this estimate already been promoted?
-        Optional<Workorder> existingWorkorder = workorderRepository.findByEstimateId(estimateId);
+        Optional<Workorder> existingWorkorder = workorderRepository.findFirstByEstimateId(estimateId);
         if (existingWorkorder.isPresent()) {
             UUID workorderId = existingWorkorder.get().getId();
             log.warn("Estimate {} already promoted to workorder {}", estimateId, workorderId);

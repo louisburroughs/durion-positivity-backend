@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -117,7 +118,23 @@ public class WorkorderService {
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.registerKey(idempotencyKey, created.getId());
+            try {
+                idempotencyService.registerKey(idempotencyKey, created.getId());
+            } catch (DataIntegrityViolationException e) {
+                // Race condition: another request already registered this key
+                // Check if it points to the same workorder or a different one
+                Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+                if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(created.getId())) {
+                    log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",
+                            idempotencyKey, existingWorkorderId.get());
+                    // Return the existing workorder to maintain idempotency semantics
+                    return workorderRepository.findById(existingWorkorderId.get())
+                            .orElse(created); // Fallback to current if not found
+                }
+                // If it points to the same workorder, we can proceed normally
+                log.debug("Idempotency key {} already registered for current workorder {}", 
+                        idempotencyKey, created.getId());
+            }
         }
 
         return created;
