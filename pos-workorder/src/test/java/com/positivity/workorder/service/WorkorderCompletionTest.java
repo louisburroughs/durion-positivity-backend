@@ -50,6 +50,9 @@ class WorkorderCompletionTest {
     private AuditEventRepository auditEventRepository;
 
     @Mock
+    private IdempotencyService idempotencyService;
+
+    @Mock
     private ChangeRequestService changeRequestService;
 
     @Mock

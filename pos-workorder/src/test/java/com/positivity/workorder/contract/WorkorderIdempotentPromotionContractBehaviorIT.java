@@ -253,6 +253,60 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
         org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
     }
 
+    @Test
+    @DisplayName("WO-IDM-005: Whitespace-only idempotency key treated as missing")
+    void testCreateWorkorder_WithWhitespaceIdempotencyKey_TreatedAsMissing() {
+        UUID estimateId = seedApprovedEstimate();
+
+        String requestBody = String.format("""
+                {
+                    "estimateId": "%s",
+                    "customerId": "%s"
+                }
+                """, estimateId, testCustomerId);
+
+        // First request with whitespace-only key (spaces)
+        Response firstResponse = givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .header("Idempotency-Key", "   ")
+                .body(requestBody)
+                .when()
+                .post("/v1/workorders")
+                .then()
+                .statusCode(200)
+                .body("id", notNullValue())
+                .log().ifValidationFails()
+                .extract().response();
+
+        String firstWorkorderId = firstResponse.path("id");
+
+        // Second request with whitespace-only key (tabs and spaces) - should create new workorder
+        Response secondResponse = givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .header("Idempotency-Key", " \t ")
+                .body(requestBody)
+                .when()
+                .post("/v1/workorders")
+                .then()
+                .statusCode(200)
+                .body("id", notNullValue())
+                .log().ifValidationFails()
+                .extract().response();
+
+        String secondWorkorderId = secondResponse.path("id");
+
+        // Assert different workorders created (whitespace keys treated as missing)
+        org.assertj.core.api.Assertions.assertThat(secondWorkorderId).isNotEqualTo(firstWorkorderId);
+
+        // Verify two workorders exist
+        long count = workorderRepository.count();
+        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
+
+        // Verify no idempotency keys were registered (whitespace keys are ignored)
+        long keyCount = idempotencyKeyRepository.count();
+        org.assertj.core.api.Assertions.assertThat(keyCount).isEqualTo(0);
+    }
+
     // ========== HELPER METHODS ==========
 
     /**
@@ -268,6 +322,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                 .locationId(testLocationId)
                 .vehicleId(testVehicleId)
                 .status(EstimateStatus.APPROVED)
+                .createdById(SYSTEM_USER_ID.toString())
                 .build();
 
         Estimate saved = estimateRepository.save(estimate);
