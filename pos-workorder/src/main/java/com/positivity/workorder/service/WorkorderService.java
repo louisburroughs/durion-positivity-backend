@@ -35,6 +35,7 @@ public class WorkorderService {
     private final EstimateService estimateService;
     private final WorkorderStateMachine stateMachine;
     private final AuditEventRepository auditEventRepository;
+    private final IdempotencyService idempotencyService;
 
     @Value("${customer.service.url:http://localhost:8080/api/customers}")
     private String customerServiceUrl;
@@ -57,6 +58,47 @@ public class WorkorderService {
                 .status(WorkorderStatus.DRAFT)
                 .build();
         return createWorkorderInternal(workorder);
+    }
+
+    /**
+     * Create a workorder with idempotency key support.
+     * 
+     * <p>If an idempotency key is provided and has been processed before,
+     * returns the existing workorder instead of creating a duplicate.</p>
+     * 
+     * @param estimateId the estimate ID
+     * @param customerId the customer ID
+     * @param idempotencyKey optional idempotency key for duplicate prevention; if null, idempotency is not enforced
+     * @return the created or existing workorder
+     */
+    @Transactional
+    public Workorder createWorkorderWithIdempotency(UUID estimateId, UUID customerId, String idempotencyKey) {
+        // Check for existing workorder if idempotency key is provided
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+            if (existingWorkorderId.isPresent()) {
+                log.info("Idempotent request detected for key {}; returning existing workorder {}", 
+                         idempotencyKey, existingWorkorderId.get());
+                return workorderRepository.findById(existingWorkorderId.get())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Idempotency key points to non-existent workorder: " + existingWorkorderId.get()));
+            }
+        }
+
+        // Create new workorder
+        Workorder workorder = Workorder.builder()
+                .estimateId(estimateId)
+                .customerId(customerId)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        Workorder created = createWorkorderInternal(workorder);
+
+        // Register idempotency key if provided
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            idempotencyService.registerKey(idempotencyKey, created.getId());
+        }
+
+        return created;
     }
 
     @Transactional
