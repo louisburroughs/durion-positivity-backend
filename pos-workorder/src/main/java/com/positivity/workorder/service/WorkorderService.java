@@ -169,8 +169,6 @@ public class WorkorderService {
                         .build();
 
                 laborItems.add(workorderService);
-                log.debug("Created workorder service item from estimate item {}: {}",
-                        estimateItem.getId(), workorderService.getId());
 
             } else if (estimateItem.getItemType() == EstimateItemType.PART) {
                 // Create WorkorderPart for PART items
@@ -192,8 +190,6 @@ public class WorkorderService {
                         .build();
 
                 partItems.add(workorderPart);
-                log.debug("Created workorder part item from estimate item {}: {}",
-                        estimateItem.getId(), workorderPart.getId());
             } else {
                 log.warn("Unsupported EstimateItemType {} for estimate item {}, skipping",
                         estimateItem.getItemType(), estimateItem.getId());
@@ -204,12 +200,16 @@ public class WorkorderService {
         if (!laborItems.isEmpty()) {
             workorderServiceRepository.saveAll(laborItems);
             log.info("Persisted {} labor items for workorder {}", laborItems.size(), workorder.getId());
+            laborItems.forEach(item -> log.debug("Created workorder service item with ID {}: from estimate item {}",
+                    item.getId(), item.getOriginEstimateItemId()));
         }
 
         // Persist all part items
         if (!partItems.isEmpty()) {
             workorderPartRepository.saveAll(partItems);
             log.info("Persisted {} part items for workorder {}", partItems.size(), workorder.getId());
+            partItems.forEach(item -> log.debug("Created workorder part item with ID {}: from estimate item {}",
+                    item.getId(), item.getOriginEstimateItemId()));
         }
 
         log.info("Successfully copied {} estimate items to workorder {} ({} labor, {} parts)",
