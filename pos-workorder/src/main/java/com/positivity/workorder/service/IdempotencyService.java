@@ -168,6 +168,46 @@ public class IdempotencyService {
     }
 
     /**
+     * Check if an idempotency key exists and return the associated part usage event ID.
+     * 
+     * @param keyValue the idempotency key to check
+     * @return Optional containing the part usage event ID if the key has been processed
+     *         before, empty otherwise
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> getExistingPartUsageEventId(@NonNull String keyValue) {
+        Optional<IdempotencyKey> existing = repository.findByKeyValue(keyValue);
+        if (existing.isPresent()) {
+            IdempotencyKey key = existing.get();
+            if (key.getExpiresAt().isAfter(Instant.now()) && key.getPartUsageEventId() != null) {
+                log.info("Idempotency key {} already processed for part usage event {}", keyValue, key.getPartUsageEventId());
+                return Optional.of(key.getPartUsageEventId());
+            } else if (key.getExpiresAt().isBefore(Instant.now())) {
+                log.info("Idempotency key {} has expired", keyValue);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Mark an idempotency key as processed for a part usage event.
+     * 
+     * @param keyValue        the idempotency key value
+     * @param partUsageEventId the ID of the created part usage event
+     */
+    @Transactional
+    public void markKeyProcessedForPartUsage(@NonNull String keyValue, @NonNull UUID partUsageEventId) {
+        Instant expiresAt = Instant.now().plus(KEY_EXPIRATION);
+        IdempotencyKey key = new IdempotencyKey();
+        key.setKeyValue(keyValue);
+        key.setPartUsageEventId(partUsageEventId);
+        key.setCreatedAt(Instant.now());
+        key.setExpiresAt(expiresAt);
+        repository.save(key);
+        log.info("Registered idempotency key {} for part usage event {}", keyValue, partUsageEventId);
+    }
+
+    /**
      * Clean up expired idempotency keys.
      * 
      * <p>

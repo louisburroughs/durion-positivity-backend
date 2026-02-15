@@ -108,6 +108,19 @@ public class WorkorderPart {
     // Customer denial acknowledgment for emergency items
     private Boolean customerDenialAcknowledged;
 
+    // CAP:005 Story #158 - Parts usage tracking fields
+    @Column(precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal quantityIssued = BigDecimal.ZERO;
+
+    @Column(precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal quantityConsumed = BigDecimal.ZERO;
+
+    @Column(precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal quantityReturned = BigDecimal.ZERO;
+
     /**
      * Check if this item can be executed (not pending approval unless emergency
      * exception)

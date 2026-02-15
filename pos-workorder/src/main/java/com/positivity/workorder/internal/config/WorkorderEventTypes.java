@@ -297,6 +297,29 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        // ==================== PARTS USAGE EVENTS (CAP:005 Story #158) ====================
+
+        /** Issue parts to a workorder */
+        public static final EventTypeRegistration WORKORDER_PART_ISSUE = EventTypeRegistration
+                        .write("WORKORDER_PART_ISSUE",
+                                        "Issue parts from inventory to a workorder")
+                        .apiVersion("1")
+                        .build();
+
+        /** Consume parts on a workorder */
+        public static final EventTypeRegistration WORKORDER_PART_CONSUME = EventTypeRegistration
+                        .write("WORKORDER_PART_CONSUME",
+                                        "Record actual consumption of parts on a workorder")
+                        .apiVersion("1")
+                        .build();
+
+        /** Return unused parts to inventory */
+        public static final EventTypeRegistration WORKORDER_PART_RETURN = EventTypeRegistration
+                        .write("WORKORDER_PART_RETURN",
+                                        "Return unused parts to inventory after partial consumption")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== ALL EVENT TYPES ====================
 
         /** All event types for registration at startup */
@@ -336,6 +359,10 @@ public final class WorkorderEventTypes {
                         // Estimate summary (CAP:002)
                         ESTIMATE_SUMMARY_VIEW,
                         ESTIMATE_SNAPSHOT_CREATE,
+                        // Parts usage events (CAP:005 Story #158)
+                        WORKORDER_PART_ISSUE,
+                        WORKORDER_PART_CONSUME,
+                        WORKORDER_PART_RETURN,
                         // Change request events
                         WORKORDER_CHANGE_REQUEST_CREATE,
                         WORKORDER_CHANGE_REQUEST_APPROVE,
