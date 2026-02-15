@@ -112,6 +112,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Submit estimate for customer approval (CAP:004 Issue #162) */
+        public static final EventTypeRegistration WORKORDER_ESTIMATE_SUBMIT = EventTypeRegistration
+                        .write("WORKORDER_ESTIMATE_SUBMIT",
+                                        "Submit estimate for customer approval, creating immutable snapshot and transitioning to PENDING_APPROVAL")
+                        .apiVersion("1")
+                        .build();
+
         /** Delete an estimate */
         public static final EventTypeRegistration WORKORDER_ESTIMATE_DELETE = EventTypeRegistration
                         .write("WORKORDER_ESTIMATE_DELETE",
@@ -264,6 +271,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_ESTIMATE_DECLINE,
                         WORKORDER_ESTIMATE_REOPEN,
                         WORKORDER_ESTIMATE_APPROVE,
+                        WORKORDER_ESTIMATE_SUBMIT,
                         WORKORDER_ESTIMATE_DELETE,
                         // Estimate item management (CAP:002)
                         ESTIMATE_ITEM_ADD,
