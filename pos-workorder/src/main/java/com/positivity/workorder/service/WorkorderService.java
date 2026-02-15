@@ -11,8 +11,10 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.client.RestClient;
 
 import com.positivity.workorder.internal.entity.AuditEvent;
@@ -117,7 +119,38 @@ public class WorkorderService {
 
         // Register idempotency key if provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.registerKey(idempotencyKey, created.getId());
+            try {
+                idempotencyService.registerKey(idempotencyKey, created.getId());
+                // Force flush so any unique-constraint violation is raised within this try/catch
+                TransactionAspectSupport.currentTransactionStatus().flush();
+            } catch (DataIntegrityViolationException e) {
+                // Race condition: another request already registered this key
+                // The unique constraint violation means another transaction has committed the key.
+                // Mark our transaction for rollback to prevent persisting the duplicate workorder.
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                
+                // Retrieve the existing workorder that won the race
+                // Note: The DataIntegrityViolationException indicates the other transaction has
+                // committed, so the workorder should be visible with READ_COMMITTED isolation.
+                Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+                if (existingWorkorderId.isPresent()) {
+                    log.warn("Race condition detected: idempotency key {} already registered for workorder {}, returning existing workorder",
+                            idempotencyKey, existingWorkorderId.get());
+                    // Return the existing workorder to maintain idempotency semantics
+                    // The transaction will be rolled back, preventing the duplicate 'created' workorder
+                    return workorderRepository.findById(existingWorkorderId.get())
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Idempotency key " + idempotencyKey + " points to non-existent workorder: " 
+                                    + existingWorkorderId.get()));
+                } else {
+                    // This should not happen - if DataIntegrityViolationException was thrown,
+                    // the key must exist. This indicates a serious data inconsistency.
+                    log.error("Race condition detected but no existing workorder found for idempotency key {}", 
+                            idempotencyKey);
+                    throw new IllegalStateException(
+                            "DataIntegrityViolationException occurred but no workorder found for key: " + idempotencyKey);
+                }
+            }
         }
 
         return created;

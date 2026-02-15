@@ -46,18 +46,18 @@ class IdempotencyServiceTest {
         testWorkorderId = UUID.randomUUID();
     }
 
-    // ===== GET PROCESSED WORKORDER ID TESTS =====
+    // ===== GET EXISTING WORKORDER ID TESTS =====
 
     @Test
-    @DisplayName("getProcessedWorkorderId - returns workorder ID for existing non-expired key")
-    void getProcessedWorkorderId_existingNotExpired_returnsWorkorderId() {
+    @DisplayName("getExistingWorkorderId - returns workorder ID for existing non-expired key")
+    void getExistingWorkorderId_existingNotExpired_returnsWorkorderId() {
         // Arrange
         Instant futureExpiry = Instant.now().plus(1, ChronoUnit.HOURS);
         IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, futureExpiry);
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
 
         // Act
-        Optional<UUID> result = service.getProcessedWorkorderId(testKeyValue);
+        Optional<UUID> result = service.getExistingWorkorderId(testKeyValue);
 
         // Assert
         assertThat(result).isPresent();
@@ -66,15 +66,15 @@ class IdempotencyServiceTest {
     }
 
     @Test
-    @DisplayName("getProcessedWorkorderId - returns empty for expired key")
-    void getProcessedWorkorderId_expired_returnsEmpty() {
+    @DisplayName("getExistingWorkorderId - returns empty for expired key")
+    void getExistingWorkorderId_expired_returnsEmpty() {
         // Arrange
         Instant pastExpiry = Instant.now().minus(1, ChronoUnit.HOURS);
         IdempotencyKey key = new IdempotencyKey(testKeyValue, testWorkorderId, pastExpiry);
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
 
         // Act
-        Optional<UUID> result = service.getProcessedWorkorderId(testKeyValue);
+        Optional<UUID> result = service.getExistingWorkorderId(testKeyValue);
 
         // Assert
         assertThat(result).isEmpty();
@@ -82,13 +82,13 @@ class IdempotencyServiceTest {
     }
 
     @Test
-    @DisplayName("getProcessedWorkorderId - returns empty for non-existent key")
-    void getProcessedWorkorderId_notFound_returnsEmpty() {
+    @DisplayName("getExistingWorkorderId - returns empty for non-existent key")
+    void getExistingWorkorderId_notFound_returnsEmpty() {
         // Arrange
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.empty());
 
         // Act
-        Optional<UUID> result = service.getProcessedWorkorderId(testKeyValue);
+        Optional<UUID> result = service.getExistingWorkorderId(testKeyValue);
 
         // Assert
         assertThat(result).isEmpty();
