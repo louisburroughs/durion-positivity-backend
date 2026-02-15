@@ -270,6 +270,72 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                 .statusCode(409);
     }
 
+    @Test
+    @DisplayName("WI-006: Only copy APPROVED items, exclude PENDING and DECLINED items")
+    void testOnlyApprovedItemsCopied() {
+        // Given: Estimate with mix of approved, pending, and declined items
+        UUID estimateId = seedEstimateWithMixedApprovalStatuses();
+
+        // When: Promote estimate to workorder
+        String workorderIdStr = givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{id}/promote", estimateId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("id");
+
+        UUID workorderId = UUID.fromString(workorderIdStr);
+
+        // Then: Verify only APPROVED items were copied to the workorder
+        List<EstimateItem> estimateItems = estimateItemRepository.findAll().stream()
+                .filter(ei -> ei.getEstimate().getId().equals(estimateId))
+                .toList();
+
+        long approvedCount = estimateItems.stream()
+                .filter(ei -> ei.getApprovalStatus() == ApprovalStatus.APPROVED)
+                .count();
+
+        long nonApprovedCount = estimateItems.stream()
+                .filter(ei -> ei.getApprovalStatus() != ApprovalStatus.APPROVED)
+                .count();
+
+        // Sanity check: ensure we actually have some non-approved items in this scenario
+        assertThat(nonApprovedCount).isGreaterThan(0);
+
+        List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
+                .findAll().stream()
+                .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
+                .toList();
+
+        List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
+
+        int totalWorkorderItems = laborItems.size() + partItems.size();
+
+        // Only APPROVED estimate items should have corresponding workorder items
+        assertThat(totalWorkorderItems).isEqualTo((int) approvedCount);
+    }
+
+    private UUID seedEstimateWithMixedApprovalStatuses() {
+        // Start from an approved estimate with all items initially APPROVED
+        UUID estimateId = seedApprovedEstimateWithMixedItems();
+
+        List<EstimateItem> items = estimateItemRepository.findAll().stream()
+                .filter(ei -> ei.getEstimate().getId().equals(estimateId))
+                .toList();
+
+        // Ensure we have enough items to vary statuses; test will fail loudly if assumptions break
+        assertThat(items.size()).isGreaterThanOrEqualTo(3);
+
+        // Set a mix of approval statuses
+        items.get(0).setApprovalStatus(ApprovalStatus.APPROVED);
+        items.get(1).setApprovalStatus(ApprovalStatus.PENDING_APPROVAL);
+        items.get(2).setApprovalStatus(ApprovalStatus.DECLINED);
+
+        estimateItemRepository.saveAll(items);
+
+        return estimateId;
+    }
     // ========== TEST DATA SEEDING HELPERS ==========
 
     private UUID seedApprovedEstimateWithMixedItems() {
