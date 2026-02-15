@@ -380,8 +380,8 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 .hoursWorked(BigDecimal.ZERO)
                 .notes("Test active session")
                 .createdBy(SYSTEM_USER_ID)
+                .createdAt(java.time.Instant.now())
                 .build();
-        entry.generateId(); // Generate ID and set createdAt
         laborEntryRepository.save(entry);
 
         return workorderId;
@@ -408,8 +408,8 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 .hoursWorked(BigDecimal.valueOf(2.0))
                 .notes("Test stopped session")
                 .createdBy(SYSTEM_USER_ID)
+                .createdAt(java.time.Instant.now())
                 .build();
-        entry.generateId(); // Generate ID and set createdAt
         laborEntryRepository.save(entry);
 
         return workorderId;
@@ -436,8 +436,8 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 .hoursWorked(BigDecimal.valueOf(2.0))
                 .notes("First session")
                 .createdBy(SYSTEM_USER_ID)
+                .createdAt(java.time.Instant.now())
                 .build();
-        entry1.generateId(); // Generate ID and set createdAt
         laborEntryRepository.save(entry1);
 
         // Create second entry (newer)
@@ -451,8 +451,8 @@ class WorkorderLaborContractBehaviorIT extends BaseContractIntegrationTest {
                 .hoursWorked(BigDecimal.valueOf(3.0))
                 .notes("Second session")
                 .createdBy(SYSTEM_USER_ID)
+                .createdAt(java.time.Instant.now())
                 .build();
-        entry2.generateId(); // Generate ID and set createdAt
         laborEntryRepository.save(entry2);
 
         return workorderId;
