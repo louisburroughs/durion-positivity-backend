@@ -121,6 +121,8 @@ public class WorkorderService {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             try {
                 idempotencyService.registerKey(idempotencyKey, created.getId());
+                // Force flush so any unique-constraint violation is raised within this try/catch
+                TransactionAspectSupport.currentTransactionStatus().flush();
             } catch (DataIntegrityViolationException e) {
                 // Race condition: another request already registered this key
                 // The unique constraint violation means another transaction has committed the key.
