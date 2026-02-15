@@ -391,9 +391,8 @@ public class ChangeRequestService {
         return WorkorderPart.builder()
                 .productEntityId(dto.getProductEntityId())
                 .nonInventoryProductEntityId(dto.getNonInventoryProductEntityId())
-                .quantity(dto.getQuantity() != null ? new java.math.BigDecimal(dto.getQuantity()) : null) // Convert
-                                                                                                          // Integer to
-                                                                                                          // BigDecimal
+                // Convert Integer quantity to BigDecimal for WorkorderPart entity
+                .quantity(dto.getQuantity() != null ? java.math.BigDecimal.valueOf(dto.getQuantity()) : null)
                 .status(WorkorderItemStatus.PENDING_APPROVAL)
                 .changeRequestId(changeRequest.getId())
                 .isEmergencySafety(Boolean.TRUE.equals(dto.getIsEmergencySafety()))

@@ -37,19 +37,24 @@ public interface EstimateItemRepository extends JpaRepository<EstimateItem, UUID
      *
      * @param estimateId     the ID of the estimate
      * @param approvalStatus the approval status to filter by
-     * @return list of items matching the criteria
+     * @return list of non-deleted items matching the criteria
      */
     @NonNull
-    List<EstimateItem> findByEstimateIdAndDeletedFalseAndApprovalStatus(
+    List<EstimateItem> findByEstimateIdAndApprovalStatusAndDeletedFalse(
             @NonNull UUID estimateId,
             @NonNull ApprovalStatus approvalStatus);
 
     /**
-     * Find all non-deleted items for a given estimate with a specific approval
-     * status.
+     * Find all items for a given estimate with a specific approval status, including soft-deleted items.
+     * Prefer {@link #findByEstimateIdAndApprovalStatusAndDeletedFalse(UUID, ApprovalStatus)} for most use cases.
+     *
+     * @param estimateId     the ID of the estimate
+     * @param approvalStatus the approval status to filter by
+     * @return list of items matching the criteria (may include soft-deleted items)
      */
+    @Deprecated
     @NonNull
-    List<EstimateItem> findByEstimateIdAndApprovalStatusAndDeletedFalse(
+    List<EstimateItem> findByEstimateIdAndApprovalStatus(
             @NonNull UUID estimateId,
             @NonNull ApprovalStatus approvalStatus);
 }

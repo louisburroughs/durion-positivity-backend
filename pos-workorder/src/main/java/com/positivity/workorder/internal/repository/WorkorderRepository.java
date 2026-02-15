@@ -23,10 +23,10 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     /**
      * Find the first workorder associated with a specific estimate.
      * Used for idempotency checks in promotion validation.
-     * 
+     *
      * @param estimateId the ID of the estimate
-     * @return Optional containing the workorder if found
+     * @return Optional containing the first matching workorder if found
      */
     @NonNull
-    Optional<Workorder> findByEstimateId(@NonNull UUID estimateId);
+    Optional<Workorder> findFirstByEstimateId(@NonNull UUID estimateId);
 }
