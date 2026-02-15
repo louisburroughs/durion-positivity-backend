@@ -14,6 +14,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@jakarta.persistence.Table(name = "workorder_part", uniqueConstraints = {
+        // CAP:004 Story #27 - prevent the same estimate item from being promoted more
+        // than once
+        @UniqueConstraint(name = "uq_workorder_part_origin_estimate_item", columnNames = { "origin_estimate_item_id" })
+}, check = {
+        @CheckConstraint(name = "ck_workorder_part_has_reference", constraint = "work_order_service_id IS NOT NULL OR work_order_id IS NOT NULL")
+})
 public class WorkorderPart {
     @Id
     @Column(columnDefinition = "UUID")
