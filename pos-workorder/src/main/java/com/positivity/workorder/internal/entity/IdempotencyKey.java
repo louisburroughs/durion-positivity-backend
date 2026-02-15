@@ -21,7 +21,7 @@ import lombok.ToString;
 @ToString
 @Entity
 @Table(name = "idempotency_keys", indexes = {
-        @Index(name = "idx_key_value", columnList = "keyValue", unique = true)
+        @Index(name = "idx_key_value", columnList = "keyValue")
 })
 public class IdempotencyKey {
 
