@@ -238,7 +238,7 @@ public class EstimateController {
 
             // Check idempotency key if provided
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                var existingWorkorderId = idempotencyService.getProcessedWorkorderId(idempotencyKey);
+                var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
                 if (existingWorkorderId.isPresent()) {
                     log.info("Idempotency key {} already processed - returning existing workorder {}",
                             idempotencyKey, existingWorkorderId.get());
@@ -268,7 +268,7 @@ public class EstimateController {
                 } catch (DataIntegrityViolationException e) {
                     // Race condition: another request already registered this key
                     // Check if it points to the same workorder or a different one
-                    var existingWorkorderId = idempotencyService.getProcessedWorkorderId(idempotencyKey);
+                    var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
                     if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(response.getId())) {
                         log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",
                                 idempotencyKey, existingWorkorderId.get());
