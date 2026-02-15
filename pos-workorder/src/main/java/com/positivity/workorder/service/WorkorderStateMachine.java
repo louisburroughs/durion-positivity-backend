@@ -118,6 +118,8 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
+    // TODO: Consider updating this method to accept String username instead of UUID userId
+    // for consistency with the new user tracking pattern (see EstimateService changes)
     public void completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
@@ -154,7 +156,7 @@ public class WorkorderStateMachine {
         transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, userId, "Work Order Completed");
 
         // Create audit event
-        createAuditEvent(workorderId, userId, "StateTransition",
+        createAuditEvent(workorderId, userId.toString(), "StateTransition",
                 String.format("{\"fromState\":\"%s\",\"toState\":\"COMPLETED\"}", currentStatus));
 
         log.info("Workorder {} completed successfully by user {} at {}", workorderId, userId, completedAt);
@@ -206,12 +208,12 @@ public class WorkorderStateMachine {
         return snapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(workorderId);
     }
 
-    private void createAuditEvent(UUID workorderId, UUID userId, String eventType, String details) {
+    private void createAuditEvent(UUID workorderId, String username, String eventType, String details) {
         AuditEvent auditEvent = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorderId)
                 .eventType(eventType)
-                .userId(userId)
+                .userId(username)
                 .details(details)
                 .eventTimestamp(Instant.now())
                 .build();

@@ -92,7 +92,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("600.00"), // new subtotal
                                 new BigDecimal("50.00"), // new tax
                                 new BigDecimal("650.00"), // new total
-                                TEST_USER_ID);
+                                TEST_USER_ID.toString());
 
                 // Then: Workorder status should be AWAITING_APPROVAL
                 Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
@@ -111,7 +111,7 @@ class EstimateRevisionWorkflowTest {
                 assertThat(audit.getEntityType()).isEqualTo("Workorder");
                 assertThat(audit.getEntityId()).isEqualTo(testWorkorder.getId());
                 assertThat(audit.getEventType()).isEqualTo("approval.invalidated");
-                assertThat(audit.getUserId()).isEqualTo(TEST_USER_ID);
+                assertThat(audit.getUserId()).isEqualTo(TEST_USER_ID.toString());
                 assertThat(audit.getDetails())
                                 .contains("500.00") // old total
                                 .contains("650.00") // new total
@@ -142,7 +142,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("425.00"), // lower subtotal
                                 new BigDecimal("25.00"),
                                 new BigDecimal("450.00"), // lower total
-                                TEST_USER_ID);
+                                TEST_USER_ID.toString());
 
                 // Then
                 Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
@@ -174,7 +174,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("480.00"), // changed subtotal
                                 new BigDecimal("20.00"), // changed tax
                                 new BigDecimal("500.00"), // same total
-                                TEST_USER_ID);
+                                TEST_USER_ID.toString());
 
                 // Then: Status should remain APPROVED
                 Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
@@ -215,7 +215,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("600.00"),
                                 new BigDecimal("50.00"),
                                 new BigDecimal("650.00"),
-                                TEST_USER_ID);
+                                TEST_USER_ID.toString());
 
                 // Then: Status should remain unchanged
                 Workorder updatedWorkorder = workorderRepository.findById(testWorkorder.getId())
@@ -255,7 +255,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("600.00"),
                                 new BigDecimal("50.00"),
                                 new BigDecimal("650.00"),
-                                TEST_USER_ID);
+                                TEST_USER_ID.toString());
 
                 // Then: Both should be invalidated
                 Workorder updated1 = workorderRepository.findById(workorder1.getId()).orElseThrow();
@@ -294,7 +294,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("600.00"),
                                 new BigDecimal("50.00"),
                                 new BigDecimal("650.00"),
-                                TEST_USER_ID);
+                                TEST_USER_ID.toString());
 
                 // Then: Version should increment
                 Estimate updated = estimateRepository.findById(testEstimate.getId()).orElseThrow();
@@ -320,7 +320,7 @@ class EstimateRevisionWorkflowTest {
                                 new BigDecimal("480.00"),
                                 new BigDecimal("20.00"),
                                 new BigDecimal("500.00"), // same total
-                                TEST_USER_ID);
+                                TEST_USER_ID.toString());
 
                 // Then: Version should not increment
                 Estimate updated = estimateRepository.findById(testEstimate.getId()).orElseThrow();
@@ -342,7 +342,7 @@ class EstimateRevisionWorkflowTest {
                                 .taxAmount(taxAmount)
                                 .total(total)
                                 .version(1)
-                                .createdById(TEST_USER_ID)
+                                .createdById(TEST_USER_ID.toString())
                                 .build();
 
                 return estimateRepository.save(estimate);

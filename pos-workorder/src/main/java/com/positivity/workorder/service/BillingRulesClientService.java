@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.service;
+package com.positivity.workorder.service;
 
 import com.positivity.workorder.internal.dto.BillingRulesDTO;
 import lombok.RequiredArgsConstructor;

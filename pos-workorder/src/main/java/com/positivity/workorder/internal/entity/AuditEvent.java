@@ -34,7 +34,7 @@ public class AuditEvent {
     private LocalDateTime updatedAt;
 
     @Column(nullable = false)
-    private UUID userId;
+    private String userId;
 
     @Column(columnDefinition = "TEXT")
     private String details;
