@@ -96,7 +96,7 @@ class WorkorderCompletionTest {
         // dependency
         workOrderService = new WorkorderService(workOrderRepository, estimateRepository, estimateItemRepository,
                 workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
-                auditEventRepository, promotionValidationService);
+                auditEventRepository, idempotencyService, promotionValidationService);
     }
 
     @Test
