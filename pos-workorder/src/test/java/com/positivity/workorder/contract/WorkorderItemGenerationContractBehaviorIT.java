@@ -262,26 +262,12 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
         UUID estimateId = seedApprovedEstimateWithNoItems();
 
         // When: Promote estimate to workorder
-        String workorderIdStr = givenWithGatewayAuth()
+        givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
                 .then()
-                .statusCode(200) // Should succeed but create no items
-                .extract()
-                .path("id");
-
-        UUID workorderId = UUID.fromString(workorderIdStr);
-
-        // Then: Verify no workorder items were created
-        List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
-                .findAll().stream()
-                .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
-                .toList();
-
-        List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
-
-        assertThat(laborItems).isEmpty();
-        assertThat(partItems).isEmpty();
+                // Expect validation failure: no approved items available for promotion
+                .statusCode(409);
     }
 
     // ========== TEST DATA SEEDING HELPERS ==========
