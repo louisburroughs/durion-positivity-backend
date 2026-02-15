@@ -73,7 +73,8 @@ class WorkorderCompletionTest {
 
         // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
         // dependency
-        workOrderService = new WorkorderService(workOrderRepository, null, null, stateMachine, auditEventRepository);
+        workOrderService = new WorkorderService(workOrderRepository, null, stateMachine,
+                auditEventRepository, null);
     }
 
     @Test

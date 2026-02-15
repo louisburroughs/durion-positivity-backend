@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.repository;
 
+import com.positivity.workorder.internal.entity.ApprovalStatus;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,4 +29,17 @@ public interface EstimateItemRepository extends JpaRepository<EstimateItem, UUID
      * Count non-deleted items for an estimate.
      */
     long countByEstimateIdAndDeletedFalse(@NonNull UUID estimateId);
+
+    /**
+     * Find all items for a given estimate with a specific approval status.
+     * Used for promotion validation to verify approved scope exists.
+     * 
+     * @param estimateId     the ID of the estimate
+     * @param approvalStatus the approval status to filter by
+     * @return list of items matching the criteria
+     */
+    @NonNull
+    List<EstimateItem> findByEstimateIdAndApprovalStatus(
+            @NonNull UUID estimateId,
+            @NonNull ApprovalStatus approvalStatus);
 }
