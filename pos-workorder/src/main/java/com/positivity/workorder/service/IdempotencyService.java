@@ -208,6 +208,46 @@ public class IdempotencyService {
     }
 
     /**
+     * Check if an idempotency key exists and return the associated part adjustment event ID.
+     * 
+     * @param keyValue the idempotency key to check
+     * @return Optional containing the part adjustment event ID if the key has been processed
+     *         before, empty otherwise
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> getExistingPartAdjustmentEventId(@NonNull String keyValue) {
+        Optional<IdempotencyKey> existing = repository.findByKeyValue(keyValue);
+        if (existing.isPresent()) {
+            IdempotencyKey key = existing.get();
+            if (key.getExpiresAt().isAfter(Instant.now()) && key.getPartAdjustmentEventId() != null) {
+                log.info("Idempotency key {} already processed for part adjustment event {}", keyValue, key.getPartAdjustmentEventId());
+                return Optional.of(key.getPartAdjustmentEventId());
+            } else if (key.getExpiresAt().isBefore(Instant.now())) {
+                log.info("Idempotency key {} has expired", keyValue);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Mark an idempotency key as processed for a part adjustment event.
+     * 
+     * @param keyValue        the idempotency key value
+     * @param partAdjustmentEventId the ID of the created part adjustment event
+     */
+    @Transactional
+    public void markKeyProcessedForPartAdjustment(@NonNull String keyValue, @NonNull UUID partAdjustmentEventId) {
+        Instant expiresAt = Instant.now().plus(KEY_EXPIRATION);
+        IdempotencyKey key = new IdempotencyKey();
+        key.setKeyValue(keyValue);
+        key.setPartAdjustmentEventId(partAdjustmentEventId);
+        key.setCreatedAt(Instant.now());
+        key.setExpiresAt(expiresAt);
+        repository.save(key);
+        log.info("Registered idempotency key {} for part adjustment event {}", keyValue, partAdjustmentEventId);
+    }
+
+    /**
      * Clean up expired idempotency keys.
      * 
      * <p>
