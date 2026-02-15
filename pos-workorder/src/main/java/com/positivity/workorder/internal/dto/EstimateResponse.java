@@ -66,8 +66,8 @@ public class EstimateResponse {
     @Schema(description = "Date and time the estimate was submitted for approval")
     private LocalDateTime submittedAt;
 
-    @Schema(description = "User ID who submitted the estimate for approval")
-    private UUID submittedBy;
+    @Schema(description = "Username who submitted the estimate for approval", example = "john.doe")
+    private String submittedBy;
 
     @Schema(description = "Date and time the approval window expires")
     private LocalDateTime expiresAt;
@@ -75,8 +75,8 @@ public class EstimateResponse {
     @Schema(description = "Date and time the estimate was approved")
     private LocalDateTime approvedAt;
 
-    @Schema(description = "User ID who approved the estimate")
-    private UUID approvedBy;
+    @Schema(description = "Username who approved the estimate", example = "jane.smith")
+    private String approvedBy;
 
     @Schema(description = "Base64-encoded signature image")
     private String signatureData;
