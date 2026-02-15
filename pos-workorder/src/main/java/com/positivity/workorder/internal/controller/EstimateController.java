@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.ApproveEstimateRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -112,14 +113,14 @@ public class EstimateController {
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:create')")
     public ResponseEntity<EstimateResponse> createEstimate(
-            @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request,
-            @Parameter(description = "ID of the user creating the estimate", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
+            @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody CreateEstimateRequest request) {
 
         try {
             log.info("Received create estimate request for customerId={}, vehicleId={}",
                     request.getCustomerId(), request.getVehicleId());
 
-            EstimateResponse response = estimateService.createEstimate(request, userId);
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            EstimateResponse response = estimateService.createEstimate(request, username);
 
             log.info("Estimate created successfully: id={}, number={}",
                     response.getId(), response.getEstimateNumber());
@@ -184,7 +185,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate:approve')")
     public ResponseEntity<EstimateResponse> approveEstimate(
             @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveEstimateRequest request) {
+            @Parameter(description = "Approval request with customer ID, signature capture, and optional selective line item approvals") @Valid @RequestBody ApproveEstimateRequest request) {
         try {
             EstimateResponse approved = estimateService.approveEstimate(
                     estimateId,
@@ -193,10 +194,39 @@ public class EstimateController {
                     request.getSignatureMimeType(),
                     request.getSignerName(),
                     request.getNotes(),
-                    request.getPurchaseOrderNumber());
+                    request.getPurchaseOrderNumber(),
+                    request.getLineItemApprovals()); // CAP:003 - Pass selective line item approvals
             return ResponseEntity.ok(approved);
+        } catch (EntityNotFoundException e) {
+            log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException | IllegalArgumentException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(summary = "Submit estimate for customer approval", description = "Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. "
+            + "Validates completeness (has customer, vehicle, line items, calculated totals). "
+            + "CAP:003 Issue #168 - Submit Estimate for Customer Approval")
+    @ApiResponse(responseCode = "200", description = "Estimate submitted for approval successfully")
+    @ApiResponse(responseCode = "400", description = "Estimate is incomplete or not in DRAFT state")
+    @ApiResponse(responseCode = "404", description = "Estimate not found")
+    @PostMapping("/{estimateId}/submit-for-approval")
+    @EmitEvent(id = "WORKORDER_ESTIMATE_SUBMIT", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:estimate:submit')")
+    public ResponseEntity<EstimateResponse> submitForApproval(
+            @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
+        try {
+            // Get authenticated username from security context
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            EstimateResponse submitted = estimateService.submitForApproval(estimateId, username);
+            return ResponseEntity.ok(submitted);
+        } catch (EntityNotFoundException e) {
+            log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            log.warn("Failed to submit estimate {} for approval: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -230,10 +260,10 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate_item:add')")
     public ResponseEntity<EstimateItemResponse> addEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Line item details", required = true) @Valid @RequestBody AddEstimateItemRequest request,
-            @Parameter(description = "ID of the user adding the item", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
+            @Parameter(description = "Line item details", required = true) @Valid @RequestBody AddEstimateItemRequest request) {
         try {
-            EstimateItemResponse item = estimateService.addEstimateItem(estimateId, request, userId);
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            EstimateItemResponse item = estimateService.addEstimateItem(estimateId, request, username);
             return ResponseEntity.ok(item);
         } catch (org.springframework.web.server.ResponseStatusException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
@@ -328,10 +358,10 @@ public class EstimateController {
     @EmitEvent(id = "ESTIMATE_CALCULATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:calculate')")
     public ResponseEntity<Map<String, Object>> calculateEstimateTotals(
-            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "ID of the user requesting calculation", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
+            @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
-            EstimateResponse estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, userId);
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            EstimateResponse estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, username);
             Map<String, Object> response = new java.util.HashMap<>();
             response.put("estimate", estimate);
             response.put("subtotal", estimate.getSubtotal());
@@ -384,10 +414,10 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate_snapshot:create')")
     public ResponseEntity<EstimateSnapshotResponse> createEstimateSnapshot(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Optional notes about why snapshot was created") @RequestParam(required = false) @Nullable String notes,
-            @Parameter(description = "ID of the user creating snapshot", example = "00000000-0000-0000-0000-000000000001") @RequestHeader(value = "X-User-Id", required = false, defaultValue = "00000000-0000-0000-0000-000000000001") UUID userId) {
+            @Parameter(description = "Optional notes about why snapshot was created") @RequestParam(required = false) @Nullable String notes) {
         try {
-            EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, userId, notes);
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, username, notes);
             return ResponseEntity.ok(snapshot);
         } catch (IllegalArgumentException e) {
             log.warn("Estimate {} not found for snapshot: {}", estimateId, e.getMessage());

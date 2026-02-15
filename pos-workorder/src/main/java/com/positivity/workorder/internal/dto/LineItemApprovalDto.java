@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,8 +18,8 @@ import lombok.NoArgsConstructor;
 public class LineItemApprovalDto {
 
     @NotNull(message = "lineItemId is required")
-    @Schema(description = "ID of the line item (service/product) being approved or rejected", example = "123", requiredMode = RequiredMode.REQUIRED)
-    private Long lineItemId;
+    @Schema(description = "ID of the line item (service/product) being approved or rejected", example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = RequiredMode.REQUIRED)
+    private UUID lineItemId;
 
     @NotNull(message = "approved status is required")
     @Schema(description = "Whether this line item is approved (true) or rejected (false)", example = "true", requiredMode = RequiredMode.REQUIRED)

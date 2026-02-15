@@ -46,8 +46,8 @@ public class EstimateResponse {
     @Schema(description = "Estimate status", example = "DRAFT")
     private String status;
 
-    @Schema(description = "User ID who created the estimate", example = "550e8400-e29b-41d4-a716-446655440005")
-    private UUID createdByUserId;
+    @Schema(description = "Username who created the estimate", example = "john.doe")
+    private String createdByUserId;
 
     @Schema(description = "Date and time the estimate was created")
     private LocalDateTime createdAt;
@@ -60,6 +60,41 @@ public class EstimateResponse {
 
     @Schema(description = "Total amount including tax", example = "162.38")
     private BigDecimal total;
+
+    // CAP:003 — Approval workflow fields
+
+    @Schema(description = "Date and time the estimate was submitted for approval")
+    private LocalDateTime submittedAt;
+
+    @Schema(description = "Username who submitted the estimate for approval", example = "john.doe")
+    private String submittedBy;
+
+    @Schema(description = "Date and time the approval window expires")
+    private LocalDateTime expiresAt;
+
+    @Schema(description = "Date and time the estimate was approved")
+    private LocalDateTime approvedAt;
+
+    @Schema(description = "Customer UUID who approved the estimate", example = "550e8400-e29b-41d4-a716-446655440005")
+    private UUID approvedBy;
+
+    @Schema(description = "Base64-encoded signature image")
+    private String signatureData;
+
+    @Schema(description = "MIME type of the signature image", example = "image/png")
+    private String signatureMimeType;
+
+    @Schema(description = "Name of person who signed")
+    private String signerName;
+
+    @Schema(description = "Additional notes provided at approval time")
+    private String approvalNotes;
+
+    @Schema(description = "Purchase order number for commercial accounts", example = "PO-2024-12345")
+    private String purchaseOrderNumber;
+
+    @Schema(description = "Optimistic locking version")
+    private Integer version;
 
     /**
      * Convert entity to response DTO
@@ -83,6 +118,17 @@ public class EstimateResponse {
                 .subtotal(entity.getSubtotal())
                 .taxAmount(entity.getTaxAmount())
                 .total(entity.getTotal())
+                .submittedAt(entity.getSubmittedAt())
+                .submittedBy(entity.getSubmittedBy())
+                .expiresAt(entity.getExpiresAt())
+                .approvedAt(entity.getApprovedAt())
+                .approvedBy(entity.getApprovedBy())
+                .signatureData(entity.getSignatureData())
+                .signatureMimeType(entity.getSignatureMimeType())
+                .signerName(entity.getSignerName())
+                .approvalNotes(entity.getApprovalNotes())
+                .purchaseOrderNumber(entity.getPurchaseOrderNumber())
+                .version(entity.getVersion())
                 .build();
     }
 }

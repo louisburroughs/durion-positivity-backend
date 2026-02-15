@@ -26,7 +26,7 @@ public class EstimateSnapshotResponse {
     private EstimateStatus status;
     private String snapshotData;
     private LocalDateTime capturedAt;
-    private UUID capturedById;
+    private String capturedById;
     @Nullable
     private String notes;
 

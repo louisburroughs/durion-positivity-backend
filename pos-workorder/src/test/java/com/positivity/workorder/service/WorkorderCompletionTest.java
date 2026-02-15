@@ -201,7 +201,7 @@ class WorkorderCompletionTest {
         assertEquals("Workorder", auditEvent.getEntityType());
         assertEquals(testWorkorderId, auditEvent.getEntityId());
         assertEquals("StateTransition", auditEvent.getEventType());
-        assertEquals(userId, auditEvent.getUserId());
+        assertEquals(userId.toString(), auditEvent.getUserId());
         assertTrue(auditEvent.getDetails().contains("WORK_IN_PROGRESS"));
         assertTrue(auditEvent.getDetails().contains("COMPLETED"));
     }
