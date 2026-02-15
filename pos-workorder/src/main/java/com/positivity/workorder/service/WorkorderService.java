@@ -123,10 +123,13 @@ public class WorkorderService {
                 idempotencyService.registerKey(idempotencyKey, created.getId());
             } catch (DataIntegrityViolationException e) {
                 // Race condition: another request already registered this key
-                // Mark transaction for rollback to prevent persisting the duplicate workorder
+                // The unique constraint violation means another transaction has committed the key.
+                // Mark our transaction for rollback to prevent persisting the duplicate workorder.
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
                 
                 // Retrieve the existing workorder that won the race
+                // Note: The DataIntegrityViolationException indicates the other transaction has
+                // committed, so the workorder should be visible with READ_COMMITTED isolation.
                 Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
                 if (existingWorkorderId.isPresent()) {
                     log.warn("Race condition detected: idempotency key {} already registered for workorder {}, returning existing workorder",
