@@ -194,6 +194,9 @@ public class WorkorderService {
                 partItems.add(workorderPart);
                 log.debug("Created workorder part item from estimate item {}: {}",
                         estimateItem.getId(), workorderPart.getId());
+            } else {
+                log.warn("Unsupported EstimateItemType {} for estimate item {}, skipping",
+                        estimateItem.getItemType(), estimateItem.getId());
             }
         }
 
