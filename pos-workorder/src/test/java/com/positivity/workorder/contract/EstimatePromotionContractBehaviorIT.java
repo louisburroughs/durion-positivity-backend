@@ -31,7 +31,8 @@ import org.springframework.context.annotation.Import;
  * Tests cover:
  * - Successful promotion of approved estimate to workorder
  * - Idempotency: duplicate promotion attempts return existing workorder
- * - Validation failures: estimate not found, not approved, expired, no approved items
+ * - Validation failures: estimate not found, not approved, expired, no approved
+ * items
  * - Authorization checks
  */
 @DisplayName("Estimate Promotion Contract Behavior Tests (CAP:004 Story #26)")

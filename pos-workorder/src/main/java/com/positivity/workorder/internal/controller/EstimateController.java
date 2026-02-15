@@ -233,7 +233,8 @@ public class EstimateController {
         try {
             log.info("Promoting estimate {} to workorder (idempotencyKey={})", estimateId, idempotencyKey);
 
-            // The WorkorderService.createWorkorder method already validates promotion preconditions
+            // The WorkorderService.createWorkorder method already validates promotion
+            // preconditions
             // and throws PromotionValidationException if validation fails
             Workorder workorder = workorderService.createWorkorder(estimateId, null);
 
