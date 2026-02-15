@@ -74,7 +74,7 @@ public class WorkorderService {
     @Transactional
     public Workorder createWorkorderWithIdempotency(UUID estimateId, UUID customerId, String idempotencyKey) {
         // Check for existing workorder if idempotency key is provided
-        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
             if (existingWorkorderId.isPresent()) {
                 log.info("Idempotent request detected for key {}; returning existing workorder {}", 
@@ -94,7 +94,7 @@ public class WorkorderService {
         Workorder created = createWorkorderInternal(workorder);
 
         // Register idempotency key if provided
-        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             idempotencyService.registerKey(idempotencyKey, created.getId());
         }
 
