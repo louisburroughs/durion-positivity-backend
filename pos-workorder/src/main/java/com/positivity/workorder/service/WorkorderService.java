@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import com.positivity.workorder.internal.entity.AuditEvent;
+import com.positivity.workorder.internal.entity.ApprovalStatus;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
@@ -141,19 +142,16 @@ public class WorkorderService {
 
         // CAP:004 Story #29: Fetch only APPROVED and non-deleted items to support
         // partial approval
-        List<EstimateItem> allItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
-        List<EstimateItem> estimateItems = allItems.stream()
-                .filter(item -> item
-                        .getApprovalStatus() == com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED)
-                .toList();
+        List<EstimateItem> estimateItems = estimateItemRepository
+            .findByEstimateIdAndApprovalStatusAndDeletedFalse(estimateId, ApprovalStatus.APPROVED);
 
         if (estimateItems.isEmpty()) {
             log.warn("No approved estimate items found for estimate {}, no workorder items created", estimateId);
             return;
         }
 
-        log.info("Found {} approved estimate items to copy to workorder {} (out of {} total items)",
-                estimateItems.size(), workorder.getId(), allItems.size());
+        log.info("Found {} approved estimate items to copy to workorder {}",
+            estimateItems.size(), workorder.getId());
 
         List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = new ArrayList<>();
         List<WorkorderPart> partItems = new ArrayList<>();
