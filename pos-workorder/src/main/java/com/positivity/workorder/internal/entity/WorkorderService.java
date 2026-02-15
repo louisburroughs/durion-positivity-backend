@@ -3,6 +3,9 @@ package com.positivity.workorder.internal.entity;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
+import org.jspecify.annotations.Nullable;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +44,31 @@ public class WorkorderService {
 
     private UUID serviceEntityId; // Reference to ServiceEntity in pos-catalog
     private UUID technicianId; // Reference to Technician
+
+    // CAP:004 Story #27 - Financial snapshot fields from estimate promotion
+    @Column(length = 500)
+    @Nullable
+    private String description; // Snapshotted description from estimate
+
+    @Column(precision = 19, scale = 4)
+    @Nullable
+    private BigDecimal quantity; // Snapshotted quantity (hours for labor)
+
+    @Column(precision = 19, scale = 2)
+    @Nullable
+    private BigDecimal unitPrice; // Snapshotted unit price (hourly rate for labor)
+
+    @Column(precision = 19, scale = 2)
+    @Nullable
+    private BigDecimal lineTotal; // Snapshotted line total = quantity * unitPrice
+
+    @Column(length = 50)
+    @Nullable
+    private String taxCode; // Snapshotted tax code at promotion time
+
+    @Column(columnDefinition = "UUID")
+    @Nullable
+    private UUID originEstimateItemId; // Traceability link to source EstimateItem
 
     // Flag to indicate this service was declined by customer during estimate
     // approval
