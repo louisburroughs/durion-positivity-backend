@@ -256,14 +256,17 @@ public class EstimateController {
             // preconditions
             // and throws PromotionValidationException if validation fails
             Workorder workorder = workorderService.createWorkorder(estimateId, null);
+            
+            // Convert to DTO
+            WorkorderResponse response = WorkorderResponse.fromEntity(workorder);
 
             // Register idempotency key if provided
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                idempotencyService.registerKey(idempotencyKey, workorder.getId());
+                idempotencyService.registerKey(idempotencyKey, response.getId());
             }
 
-            log.info("Successfully promoted estimate {} to workorder {}", estimateId, workorder.getId());
-            return ResponseEntity.ok(WorkorderResponse.fromEntity(workorder));
+            log.info("Successfully promoted estimate {} to workorder {}", estimateId, response.getId());
+            return ResponseEntity.ok(response);
 
         } catch (PromotionValidationException e) {
             // Handle idempotency - if estimate already promoted, return existing workorder
