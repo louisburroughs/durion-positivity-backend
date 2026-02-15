@@ -16,15 +16,12 @@ public class ContractTestConfiguration {
     @Bean
     @Primary
     public RestClient restClient() {
-        RestClient mockRestClient = Mockito.mock(RestClient.class);
-        RestClient.RequestHeadersUriSpec requestHeadersUriSpec = Mockito.mock(RestClient.RequestHeadersUriSpec.class);
-        RestClient.ResponseSpec responseSpec = Mockito.mock(RestClient.ResponseSpec.class);
+        RestClient mockRestClient = Mockito.mock(RestClient.class, Mockito.RETURNS_DEEP_STUBS);
 
         // Mock the RestClient chain for customer requirements check
-        Mockito.when(mockRestClient.get()).thenReturn(requestHeadersUriSpec);
-        Mockito.when(requestHeadersUriSpec.uri(Mockito.anyString())).thenReturn(requestHeadersUriSpec);
-        Mockito.when(requestHeadersUriSpec.retrieve()).thenReturn(responseSpec);
-        Mockito.when(responseSpec.body(Boolean.class)).thenReturn(Boolean.TRUE);
+        // Using RETURNS_DEEP_STUBS handles the chaining automatically
+        Mockito.when(mockRestClient.get().uri(Mockito.anyString()).retrieve().body(Boolean.class))
+                .thenReturn(Boolean.TRUE);
 
         return mockRestClient;
     }

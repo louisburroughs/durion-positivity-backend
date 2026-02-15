@@ -1,6 +1,8 @@
 package com.positivity.workorder.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,13 +17,20 @@ import org.springframework.web.client.RestClient;
 
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderItemStatus;
+import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +41,9 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkorderService {
     private final WorkorderRepository workorderRepository;
     private final EstimateRepository estimateRepository;
+    private final EstimateItemRepository estimateItemRepository;
+    private final WorkorderServiceRepository workorderServiceRepository;
+    private final WorkorderPartRepository workorderPartRepository;
     private final RestClient restClient;
     private final WorkorderStateMachine stateMachine;
     private final AuditEventRepository auditEventRepository;
@@ -96,7 +108,109 @@ public class WorkorderService {
             throw new IllegalArgumentException("Customer approval not found or not valid");
         }
 
-        return workorderRepository.save(workorder);
+        // Save the workorder first to get the persisted entity
+        Workorder savedWorkorder = workorderRepository.save(workorder);
+
+        // CAP:004 Story #27 - Copy estimate items to workorder items if promoting from
+        // estimate
+        if (savedWorkorder.getEstimateId() != null) {
+            log.info("Copying estimate items to workorder items for estimate {} and workorder {}",
+                    savedWorkorder.getEstimateId(), savedWorkorder.getId());
+            copyEstimateItemsToWorkorder(savedWorkorder);
+        }
+
+        return savedWorkorder;
+    }
+
+    /**
+     * Copy approved estimate items to workorder items (CAP:004 Story #27).
+     * Creates an immutable financial snapshot of pricing, quantity, and tax
+     * information.
+     * 
+     * @param workorder the workorder to populate with items
+     */
+    private void copyEstimateItemsToWorkorder(Workorder workorder) {
+        UUID estimateId = workorder.getEstimateId();
+        if (estimateId == null) {
+            log.warn("Workorder {} has no estimateId, skipping item copy", workorder.getId());
+            return;
+        }
+
+        // Fetch all approved/non-deleted items from the estimate
+        List<EstimateItem> estimateItems = estimateItemRepository.findByEstimateIdAndDeletedFalse(estimateId);
+
+        if (estimateItems.isEmpty()) {
+            log.warn("No estimate items found for estimate {}, no workorder items created", estimateId);
+            return;
+        }
+
+        log.info("Found {} estimate items to copy to workorder {}", estimateItems.size(), workorder.getId());
+
+        List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = new ArrayList<>();
+        List<WorkorderPart> partItems = new ArrayList<>();
+
+        for (EstimateItem estimateItem : estimateItems) {
+            if (estimateItem.getItemType() == EstimateItemType.LABOR) {
+                // Create WorkorderService for LABOR items
+                com.positivity.workorder.internal.entity.WorkorderService workorderService = com.positivity.workorder.internal.entity.WorkorderService
+                        .builder()
+                        .workOrder(workorder)
+                        .description(estimateItem.getDescription())
+                        .quantity(estimateItem.getQuantity())
+                        .unitPrice(estimateItem.getUnitPrice())
+                        .lineTotal(estimateItem.getLineTotal())
+                        .taxCode(estimateItem.getTaxCode())
+                        .originEstimateItemId(estimateItem.getId())
+                        .serviceEntityId(estimateItem.getServiceId())
+                        .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
+                        .declined(false)
+                        .isEmergencySafety(false)
+                        .photoNotPossible(false)
+                        .build();
+
+                laborItems.add(workorderService);
+                log.debug("Created workorder service item from estimate item {}: {}",
+                        estimateItem.getId(), workorderService.getId());
+
+            } else if (estimateItem.getItemType() == EstimateItemType.PART) {
+                // Create WorkorderPart for PART items
+                // CAP:004 Story #27: Parts can be standalone (not tied to a service)
+                WorkorderPart workorderPart = WorkorderPart.builder()
+                        .workOrderService(null) // Standalone part not tied to a service
+                        .workorder(workorder) // Direct reference to workorder for standalone parts
+                        .description(estimateItem.getDescription())
+                        .quantity(estimateItem.getQuantity())
+                        .unitPrice(estimateItem.getUnitPrice())
+                        .lineTotal(estimateItem.getLineTotal())
+                        .taxCode(estimateItem.getTaxCode())
+                        .originEstimateItemId(estimateItem.getId())
+                        .productEntityId(estimateItem.getProductId())
+                        .status(WorkorderItemStatus.OPEN) // Initial status: OPEN (Authorized in contract)
+                        .declined(false)
+                        .isEmergencySafety(false)
+                        .photoNotPossible(false)
+                        .build();
+
+                partItems.add(workorderPart);
+                log.debug("Created workorder part item from estimate item {}: {}",
+                        estimateItem.getId(), workorderPart.getId());
+            }
+        }
+
+        // Persist all labor items
+        if (!laborItems.isEmpty()) {
+            workorderServiceRepository.saveAll(laborItems);
+            log.info("Persisted {} labor items for workorder {}", laborItems.size(), workorder.getId());
+        }
+
+        // Persist all part items
+        if (!partItems.isEmpty()) {
+            workorderPartRepository.saveAll(partItems);
+            log.info("Persisted {} part items for workorder {}", partItems.size(), workorder.getId());
+        }
+
+        log.info("Successfully copied {} estimate items to workorder {} ({} labor, {} parts)",
+                estimateItems.size(), workorder.getId(), laborItems.size(), partItems.size());
     }
 
     public void deleteWorkorder(UUID id) {
