@@ -62,6 +62,14 @@ public class RoleAssignment {
     private LocalDate effectiveEndDate;
 
     /**
+     * Immutable timestamp tracking when this assignment was revoked.
+     * This provides an audit trail independent of effectiveEndDate, which may be
+     * in the past or future.
+     * Null if the assignment has never been revoked.
+     */
+    private Instant revokedAt;
+
+    /**
      * When this assignment was created
      */
     @Column(nullable = false)

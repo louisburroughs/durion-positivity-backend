@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.repository;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.enums.ScopeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,6 +18,8 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
     List<RoleAssignment> findByUser(User user);
 
     List<RoleAssignment> findAllByUser_Id(UUID userId);
+
+    List<RoleAssignment> findByUser_IdAndRole_IdAndScopeType(UUID userId, UUID roleId, ScopeType scopeType);
 
     List<RoleAssignment> findByRole(Role role);
 

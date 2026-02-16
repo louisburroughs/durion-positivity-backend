@@ -136,13 +136,13 @@ public class RoleController {
     @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_REVOKE", apiVersion = "1")
     @DeleteMapping("/assignments/{assignmentId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date. Defaults to today when endDate is omitted")
+    @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date. Supports past, present, or future dates. An immutable revokedAt timestamp tracks when the revocation was entered. Defaults to today when endDate is omitted")
     @ApiResponse(responseCode = "204", description = "Role assignment revoked")
     @ApiResponse(responseCode = "400", description = "Invalid endDate")
     @ApiResponse(responseCode = "404", description = "Role assignment not found")
     public ResponseEntity<Void> revokeRoleAssignment(
             @Parameter(description = "Role assignment ID", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID assignmentId,
-            @Parameter(description = "Effective end date for revocation. Defaults to current date", example = "2026-02-16") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @Parameter(description = "Effective end date for revocation. Supports past, present, or future dates. Defaults to current date", example = "2026-02-16") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         LocalDate effectiveEndDate = endDate != null ? endDate : LocalDate.now();
         roleManagementService.revokeRoleAssignment(assignmentId, effectiveEndDate);
         return ResponseEntity.noContent().build();

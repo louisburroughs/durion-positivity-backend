@@ -254,21 +254,19 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public void revokeRoleAssignment(@NonNull UUID assignmentId, @NonNull LocalDate endDate) {
-        if (endDate.isAfter(LocalDate.now())) {
-            throw new IllegalArgumentException("End date cannot be in the future");
-        }
-
         RoleAssignment assignment = roleAssignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new RoleAssignmentNotFoundException("Role assignment not found: " + assignmentId));
 
         assignment.setEffectiveEndDate(endDate);
+        assignment.setRevokedAt(Instant.now());
         assignment.setLastModifiedBy(getCurrentUsername());
         assignment.setLastModifiedAt(Instant.now());
 
         roleAssignmentRepository.save(assignment);
 
-        log.info("Revoked role assignment: id={}, user={}, role={}",
-                assignmentId, assignment.getUser().getUsername(), assignment.getRole().getName());
+        log.info("Revoked role assignment: id={}, user={}, role={}, endDate={}, revokedAt={}",
+                assignmentId, assignment.getUser().getUsername(), assignment.getRole().getName(),
+                endDate, assignment.getRevokedAt());
     }
 
     /**
