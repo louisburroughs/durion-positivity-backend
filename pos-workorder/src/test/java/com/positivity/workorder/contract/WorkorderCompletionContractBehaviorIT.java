@@ -36,266 +36,320 @@ import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
+import tools.jackson.databind.ObjectMapper;
 
 @DisplayName("Workorder Completion Contract Behavior Tests (CAP:006)")
 @Import(ContractTestConfiguration.class)
 class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest {
 
-    @Autowired
-    private WorkorderRepository workorderRepository;
+        @Autowired
+        private WorkorderRepository workorderRepository;
 
-    @Autowired
-    private WorkorderServiceRepository workorderServiceRepository;
+        @Autowired
+        private WorkorderServiceRepository workorderServiceRepository;
 
-    @Autowired
-    private WorkorderPartRepository workorderPartRepository;
+        @Autowired
+        private WorkorderPartRepository workorderPartRepository;
 
-    @Autowired
-    private ChangeRequestRepository changeRequestRepository;
+        @Autowired
+        private ChangeRequestRepository changeRequestRepository;
 
-    @Autowired
-    private WorkorderSnapshotRepository workorderSnapshotRepository;
+        @Autowired
+        private WorkorderSnapshotRepository workorderSnapshotRepository;
 
-    @Autowired
-    private AuditEventRepository auditEventRepository;
+        @Autowired
+        private AuditEventRepository auditEventRepository;
 
-    @AfterEach
-    void tearDown() {
-        changeRequestRepository.deleteAll();
-        workorderPartRepository.deleteAll();
-        workorderServiceRepository.deleteAll();
-        workorderSnapshotRepository.deleteAll();
-        auditEventRepository.deleteAll();
-        workorderRepository.deleteAll();
-    }
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @Test
-    @DisplayName("CWC-001: completion preconditions expose pending approval-gated change request blockers")
-    void completionPreconditions_ShouldReportPendingApprovalGatedChangeRequests() {
-        UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
-        seedServiceItem(workorderId, WorkorderItemStatus.COMPLETED, new BigDecimal("120.00"));
-        seedPartItem(workorderId, WorkorderItemStatus.COMPLETED, new BigDecimal("40.00"));
-        seedPendingApprovalGatedChangeRequest(workorderId);
+        @AfterEach
+        void tearDown() {
+                changeRequestRepository.deleteAll();
+                workorderPartRepository.deleteAll();
+                workorderServiceRepository.deleteAll();
+                workorderSnapshotRepository.deleteAll();
+                auditEventRepository.deleteAll();
+                workorderRepository.deleteAll();
+        }
 
-        givenWithGatewayAuth()
-                .when()
-                .get("/v1/workorders/" + workorderId + "/completion-preconditions")
-                .then()
-                .statusCode(200)
-                .body("workorderId", equalTo(workorderId.toString()))
-                .body("canComplete", equalTo(false))
-                .body("unresolvedApprovalGatedChangeRequests", equalTo(1))
-                .body("blockingReasons", hasSize(greaterThan(0)));
-    }
+        @Test
+        @DisplayName("CWC-001: completion preconditions expose pending approval-gated change request blockers")
+        void completionPreconditions_ShouldReportPendingApprovalGatedChangeRequests() {
+                UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
+                seedServiceItem(workorderId, WorkorderItemStatus.COMPLETED, new BigDecimal("120.00"));
+                seedPartItem(workorderId, WorkorderItemStatus.COMPLETED, new BigDecimal("40.00"));
+                seedPendingApprovalGatedChangeRequest(workorderId);
 
-    @Test
-    @DisplayName("CWC-002: complete workorder finalizes billable scope snapshot and records completion")
-    void completeWorkorder_ShouldFinalizeBillableSnapshotAndTransitionState() {
-        UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
-        seedServiceItem(workorderId, WorkorderItemStatus.COMPLETED, new BigDecimal("180.00"));
-        seedPartItem(workorderId, WorkorderItemStatus.CANCELLED, new BigDecimal("30.00"));
+                givenWithGatewayAuth()
+                                .when()
+                                .get("/v1/workorders/" + workorderId + "/completion-preconditions")
+                                .then()
+                                .statusCode(200)
+                                .body("workorderId", equalTo(workorderId.toString()))
+                                .body("canComplete", equalTo(false))
+                                .body("unresolvedApprovalGatedChangeRequests", equalTo(1))
+                                .body("blockingReasons", hasSize(greaterThan(0)));
+        }
 
-        Map<String, Object> request = Map.of(
-                "userId", SYSTEM_USER_ID.toString(),
-                "completionNotes", "All required repair operations completed");
+        @Test
+        @DisplayName("CWC-002: complete workorder finalizes billable scope snapshot and records completion")
+        void completeWorkorder_ShouldFinalizeBillableSnapshotAndTransitionState() {
+                UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
+                seedServiceItem(workorderId, WorkorderItemStatus.COMPLETED, new BigDecimal("180.00"));
+                seedPartItem(workorderId, WorkorderItemStatus.CANCELLED, new BigDecimal("30.00"));
 
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(request)
-                .when()
-                .post("/v1/workorders/{workorderId}/complete", workorderId)
-                .then()
-                .statusCode(200)
-                .body("workorderId", equalTo(workorderId.toString()))
-                .body("previousStatus", equalTo("WORK_IN_PROGRESS"))
-                .body("currentStatus", equalTo("COMPLETED"))
-                .body("completedAt", notNullValue());
+                Map<String, Object> request = Map.of(
+                                "userId", SYSTEM_USER_ID.toString(),
+                                "completionNotes", "All required repair operations completed");
 
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
-        assertThat(workorder.getCompletedAt()).isNotNull();
-        assertThat(workorder.getCompletedBy()).isEqualTo(SYSTEM_USER_ID);
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when()
+                                .post("/v1/workorders/{workorderId}/complete", workorderId)
+                                .then()
+                                .statusCode(200)
+                                .body("workorderId", equalTo(workorderId.toString()))
+                                .body("previousStatus", equalTo("WORK_IN_PROGRESS"))
+                                .body("currentStatus", equalTo("COMPLETED"))
+                                .body("completedAt", notNullValue());
 
-        List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
-                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
-        assertThat(snapshots)
-                .extracting(WorkorderSnapshot::getSnapshotType)
-                .contains("BILLABLE_SCOPE_FINALIZED");
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
+                assertThat(workorder.getCompletedAt()).isNotNull();
+                assertThat(workorder.getCompletedBy()).isEqualTo(SYSTEM_USER_ID);
 
-        List<AuditEvent> auditEvents = auditEventRepository
-                .findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workorderId);
-        assertThat(auditEvents)
-                .extracting(AuditEvent::getEventType)
-                .contains("StateTransition");
-    }
+                List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
+                                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
+                assertThat(snapshots)
+                                .extracting(WorkorderSnapshot::getSnapshotType)
+                                .contains("BILLABLE_SCOPE_FINALIZED");
 
-    @Test
-    @DisplayName("CWC-003: complete workorder is blocked when service/part items are not terminal")
-    void completeWorkorder_ShouldBlockWhenItemsNotTerminal() {
-        UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
-        seedServiceItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("95.00"));
+                WorkorderSnapshot finalizedSnapshot = snapshots.stream()
+                                .filter(snapshot -> "BILLABLE_SCOPE_FINALIZED".equals(snapshot.getSnapshotType()))
+                                .findFirst()
+                                .orElseThrow();
 
-        Map<String, Object> request = Map.of(
-                "userId", SYSTEM_USER_ID.toString(),
-                "completionNotes", "Attempt completion with open items");
+                try {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> payload = objectMapper.readValue(finalizedSnapshot.getSnapshotData(),
+                                        Map.class);
+                        assertThat(payload)
+                                        .containsEntry("snapshotVersion", "1.0")
+                                        .containsEntry("workorderId", workorderId.toString())
+                                        .containsEntry("invoiceReady", true)
+                                        .containsEntry("estimateId", workorder.getEstimateId().toString())
+                                        .containsEntry("approvalId", workorder.getApprovalId().toString())
+                                        .containsEntry("customerAccountId", workorder.getCustomerId().toString())
+                                        .containsEntry("serviceLocationId", workorder.getShopId().toString())
+                                        .containsEntry("serviceCount", 1)
+                                        .containsEntry("partCount", 0);
+                        assertThat(toBigDecimal(payload.get("serviceTotal"))).isEqualByComparingTo("180.00");
+                        assertThat(toBigDecimal(payload.get("partTotal"))).isEqualByComparingTo("0.00");
+                        assertThat(toBigDecimal(payload.get("grandTotal"))).isEqualByComparingTo("180.00");
 
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(request)
-                .when()
-                .post("/v1/workorders/{workorderId}/complete", workorderId)
-                .then()
-                .statusCode(400)
-                .body("message", notNullValue());
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> lineItems = (List<Map<String, Object>>) payload.get("lineItems");
+                        assertThat(lineItems).hasSize(1);
 
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
-    }
+                        Map<String, Object> lineItem = lineItems.get(0);
+                        assertThat(lineItem)
+                                        .containsEntry("itemType", "LABOR")
+                                        .containsEntry("description", "Service line for completion contract test")
+                                        .containsEntry("taxCategoryCode", "TAX_STANDARD")
+                                        .containsEntry("taxable", true)
+                                        .containsEntry("status", "COMPLETED");
+                        assertThat(toBigDecimal(lineItem.get("lineTotal"))).isEqualByComparingTo("180.00");
+                } catch (Exception e) {
+                        throw new AssertionError("Failed to parse or validate billable scope snapshot payload", e);
+                }
 
-    @Test
-    @DisplayName("CWC-004: reopen completed workorder requires non-empty reason")
-    void reopenWorkorder_ShouldRequireReason() {
-        UUID workorderId = seedWorkorder(WorkorderStatus.COMPLETED, false);
+                List<AuditEvent> auditEvents = auditEventRepository
+                                .findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workorderId);
+                assertThat(auditEvents)
+                                .extracting(AuditEvent::getEventType)
+                                .contains("StateTransition");
+        }
 
-        Map<String, Object> request = Map.of(
-                "userId", SYSTEM_USER_ID.toString(),
-                "reopenReason", "   ");
+        @Test
+        @DisplayName("CWC-003: complete workorder is blocked when service/part items are not terminal")
+        void completeWorkorder_ShouldBlockWhenItemsNotTerminal() {
+                UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
+                seedServiceItem(workorderId, WorkorderItemStatus.OPEN, new BigDecimal("95.00"));
 
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(request)
-                .when()
-                .post("/v1/workorders/{workorderId}/reopen", workorderId)
-                .then()
-                .statusCode(400)
-                .body("message", notNullValue());
-    }
+                Map<String, Object> request = Map.of(
+                                "userId", SYSTEM_USER_ID.toString(),
+                                "completionNotes", "Attempt completion with open items");
 
-    @Test
-    @DisplayName("CWC-005: authorized controlled reopen marks completed workorder as reopened and audits action")
-    void reopenWorkorder_ShouldMarkReopenedAndAudit() {
-        UUID workorderId = seedWorkorder(WorkorderStatus.COMPLETED, false);
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when()
+                                .post("/v1/workorders/{workorderId}/complete", workorderId)
+                                .then()
+                                .statusCode(400)
+                                .body("message", notNullValue());
 
-        Map<String, Object> request = Map.of(
-                "userId", SYSTEM_USER_ID.toString(),
-                "reopenReason", "Correcting part quantity before invoicing");
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
+        }
 
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(request)
-                .when()
-                .post("/v1/workorders/{workorderId}/reopen", workorderId)
-                .then()
-                .statusCode(200)
-                .body("workorderId", equalTo(workorderId.toString()))
-                .body("currentStatus", equalTo("COMPLETED"))
-                .body("isReopened", equalTo(true))
-                .body("reopenedAt", notNullValue());
+        @Test
+        @DisplayName("CWC-004: reopen completed workorder requires non-empty reason")
+        void reopenWorkorder_ShouldRequireReason() {
+                UUID workorderId = seedWorkorder(WorkorderStatus.COMPLETED, false);
 
-        Workorder reopened = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(reopened.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
-        assertThat(reopened.getIsReopened()).isTrue();
-        assertThat(reopened.getReopenedBy()).isEqualTo(SYSTEM_USER_ID);
-        assertThat(reopened.getReopenReason()).isEqualTo("Correcting part quantity before invoicing");
+                Map<String, Object> request = Map.of(
+                                "userId", SYSTEM_USER_ID.toString(),
+                                "reopenReason", "   ");
 
-        List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
-                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
-        assertThat(snapshots)
-                .extracting(WorkorderSnapshot::getSnapshotType)
-                .contains("BILLABLE_SCOPE_SUPERSEDED");
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when()
+                                .post("/v1/workorders/{workorderId}/reopen", workorderId)
+                                .then()
+                                .statusCode(400)
+                                .body("message", notNullValue());
+        }
 
-        List<AuditEvent> auditEvents = auditEventRepository
-                .findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workorderId);
-        assertThat(auditEvents)
-                .extracting(AuditEvent::getEventType)
-                .contains("WORKORDER_REOPENED");
-    }
+        @Test
+        @DisplayName("CWC-005: authorized controlled reopen marks completed workorder as reopened and audits action")
+        void reopenWorkorder_ShouldMarkReopenedAndAudit() {
+                UUID workorderId = seedWorkorder(WorkorderStatus.COMPLETED, false);
 
-    @Test
-    @DisplayName("CWC-006: cannot reopen workorder unless status is COMPLETED")
-    void reopenWorkorder_ShouldRejectNonCompletedWorkorders() {
-        UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
+                Map<String, Object> request = Map.of(
+                                "userId", SYSTEM_USER_ID.toString(),
+                                "reopenReason", "Correcting part quantity before invoicing");
 
-        Map<String, Object> request = Map.of(
-                "userId", SYSTEM_USER_ID.toString(),
-                "reopenReason", "Attempting invalid reopen");
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when()
+                                .post("/v1/workorders/{workorderId}/reopen", workorderId)
+                                .then()
+                                .statusCode(200)
+                                .body("workorderId", equalTo(workorderId.toString()))
+                                .body("currentStatus", equalTo("COMPLETED"))
+                                .body("isReopened", equalTo(true))
+                                .body("reopenedAt", notNullValue());
 
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(request)
-                .when()
-                .post("/v1/workorders/{workorderId}/reopen", workorderId)
-                .then()
-                .statusCode(400)
-                .body("message", notNullValue());
-    }
+                Workorder reopened = workorderRepository.findById(workorderId).orElseThrow();
+                assertThat(reopened.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
+                assertThat(reopened.getIsReopened()).isTrue();
+                assertThat(reopened.getReopenedBy()).isEqualTo(SYSTEM_USER_ID);
+                assertThat(reopened.getReopenReason()).isEqualTo("Correcting part quantity before invoicing");
 
-    private UUID seedWorkorder(WorkorderStatus status, boolean isReopened) {
-        Workorder workorder = Workorder.builder()
-                .customerId(UUID.randomUUID())
-                .shopId(UUID.randomUUID())
-                .vehicleId(UUID.randomUUID())
-                .status(status)
-                .isReopened(isReopened)
-                .completedAt(status == WorkorderStatus.COMPLETED ? Instant.now().minusSeconds(120) : null)
-                .completedBy(status == WorkorderStatus.COMPLETED ? SYSTEM_USER_ID : null)
-                .build();
+                List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
+                                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
+                assertThat(snapshots)
+                                .extracting(WorkorderSnapshot::getSnapshotType)
+                                .contains("BILLABLE_SCOPE_SUPERSEDED");
 
-        Workorder saved = workorderRepository.save(workorder);
-        return saved.getId();
-    }
+                List<AuditEvent> auditEvents = auditEventRepository
+                                .findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workorderId);
+                assertThat(auditEvents)
+                                .extracting(AuditEvent::getEventType)
+                                .contains("WORKORDER_REOPENED");
+        }
 
-    private void seedServiceItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+        @Test
+        @DisplayName("CWC-006: cannot reopen workorder unless status is COMPLETED")
+        void reopenWorkorder_ShouldRejectNonCompletedWorkorders() {
+                UUID workorderId = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, false);
 
-        WorkorderService service = WorkorderService.builder()
-                .workOrder(workorder)
-                .serviceEntityId(UUID.randomUUID())
-                .description("Service line for completion contract test")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(lineTotal)
-                .lineTotal(lineTotal)
-                .status(status)
-                .declined(false)
-                .isEmergencySafety(false)
-                .build();
+                Map<String, Object> request = Map.of(
+                                "userId", SYSTEM_USER_ID.toString(),
+                                "reopenReason", "Attempting invalid reopen");
 
-        workorderServiceRepository.save(service);
-    }
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when()
+                                .post("/v1/workorders/{workorderId}/reopen", workorderId)
+                                .then()
+                                .statusCode(400)
+                                .body("message", notNullValue());
+        }
 
-    private void seedPartItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+        private UUID seedWorkorder(WorkorderStatus status, boolean isReopened) {
+                Workorder workorder = Workorder.builder()
+                                .customerId(UUID.randomUUID())
+                                .shopId(UUID.randomUUID())
+                                .vehicleId(UUID.randomUUID())
+                                .estimateId(UUID.randomUUID())
+                                .approvalId(UUID.randomUUID())
+                                .status(status)
+                                .isReopened(isReopened)
+                                .completedAt(status == WorkorderStatus.COMPLETED ? Instant.now().minusSeconds(120)
+                                                : null)
+                                .completedBy(status == WorkorderStatus.COMPLETED ? SYSTEM_USER_ID : null)
+                                .build();
 
-        WorkorderPart part = WorkorderPart.builder()
-                .workorder(workorder)
-                .productEntityId(UUID.randomUUID())
-                .description("Part line for completion contract test")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(lineTotal)
-                .lineTotal(lineTotal)
-                .status(status)
-                .declined(false)
-                .isEmergencySafety(false)
-                .quantityIssued(BigDecimal.ZERO)
-                .quantityConsumed(BigDecimal.ZERO)
-                .quantityReturned(BigDecimal.ZERO)
-                .build();
+                Workorder saved = workorderRepository.save(workorder);
+                return saved.getId();
+        }
 
-        workorderPartRepository.save(part);
-    }
+        private void seedServiceItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
-    private void seedPendingApprovalGatedChangeRequest(UUID workorderId) {
-        ChangeRequest changeRequest = ChangeRequest.builder()
-                .workorderId(workorderId)
-                .requestedByUserId(SYSTEM_USER_ID)
-                .requestedAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .status(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
-                .description("Pending advisor approval before completion")
-                .isApprovalGated(true)
-                .isEmergencyException(false)
-                .build();
+                WorkorderService service = WorkorderService.builder()
+                                .workOrder(workorder)
+                                .serviceEntityId(UUID.randomUUID())
+                                .description("Service line for completion contract test")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(lineTotal)
+                                .lineTotal(lineTotal)
+                                .taxCode("TAX_STANDARD")
+                                .status(status)
+                                .declined(false)
+                                .isEmergencySafety(false)
+                                .build();
 
-        changeRequestRepository.save(changeRequest);
-    }
+                workorderServiceRepository.save(service);
+        }
+
+        private void seedPartItem(UUID workorderId, WorkorderItemStatus status, BigDecimal lineTotal) {
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+
+                WorkorderPart part = WorkorderPart.builder()
+                                .workorder(workorder)
+                                .productEntityId(UUID.randomUUID())
+                                .description("Part line for completion contract test")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(lineTotal)
+                                .lineTotal(lineTotal)
+                                .status(status)
+                                .declined(false)
+                                .isEmergencySafety(false)
+                                .quantityIssued(BigDecimal.ZERO)
+                                .quantityConsumed(BigDecimal.ZERO)
+                                .quantityReturned(BigDecimal.ZERO)
+                                .build();
+
+                workorderPartRepository.save(part);
+        }
+
+        private void seedPendingApprovalGatedChangeRequest(UUID workorderId) {
+                ChangeRequest changeRequest = ChangeRequest.builder()
+                                .workorderId(workorderId)
+                                .requestedByUserId(SYSTEM_USER_ID)
+                                .requestedAt(LocalDateTime.now())
+                                .updatedAt(LocalDateTime.now())
+                                .status(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
+                                .description("Pending advisor approval before completion")
+                                .isApprovalGated(true)
+                                .isEmergencyException(false)
+                                .build();
+
+                changeRequestRepository.save(changeRequest);
+        }
+
+        private static BigDecimal toBigDecimal(Object value) {
+                if (value instanceof Number number) {
+                        return new BigDecimal(number.toString());
+                }
+                return new BigDecimal(String.valueOf(value));
+        }
 }

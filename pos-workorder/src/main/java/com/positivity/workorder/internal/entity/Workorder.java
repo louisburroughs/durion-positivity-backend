@@ -41,6 +41,10 @@ public class Workorder {
     private UUID customerId; // Reference to Customer
     private UUID approvalId; // Reference to CustomerApproval (from pos-customer-approval)
     private UUID estimateId; // Reference to Estimate - work order created from approved estimate
+
+    @Column(name = "invoice_id", columnDefinition = "UUID")
+    private UUID invoiceId; // Reference to generated invoice for reverse lookup traceability
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private WorkorderStatus status = WorkorderStatus.DRAFT;

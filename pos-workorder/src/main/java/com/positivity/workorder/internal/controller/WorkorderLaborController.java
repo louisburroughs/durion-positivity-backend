@@ -146,7 +146,7 @@ public class WorkorderLaborController {
 
         List<WorkorderLaborEntryResponse> responses = entries.stream()
                 .map(WorkorderLaborEntryResponse::fromEntity)
-                .collect(Collectors.toList());
+                .toList();
 
         log.debug("Retrieved {} labor entries for workorder {}", responses.size(), workorderId);
 
