@@ -57,6 +57,8 @@ logging:
 #     autoStart:
 #       onFirstLaborEntry: false
 springdoc:
+  packages-to-scan: com.positivity.workorder
+  paths-to-match: /v1/workorders/**, /v1/workexec/**
   api-docs:
     enabled: true
     path: /v3/api-docs
