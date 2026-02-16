@@ -55,7 +55,10 @@ public class PersonAccessController {
             @RequestParam(required = false) Boolean includeHistory,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
         return ResponseEntity
-                .ok(peopleAccessControlService.getPersonRoleAssignments(personUuid, includeHistory, endDate));
+                .ok(peopleAccessControlService.getPersonRoleAssignments(
+                        personUuid, 
+                        Boolean.TRUE.equals(includeHistory), 
+                        endDate));
     }
 
     @PostMapping("/{personUuid}/access/assignments")
