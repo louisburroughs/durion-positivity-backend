@@ -1,12 +1,12 @@
 package com.positivity.documents.internal.service;
 
+import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.exception.TemplateNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,9 +34,9 @@ public class TemplateService {
 
     public TemplateService(
             ResourceLoader resourceLoader,
-            @Value("${documents.pdf.template-base-path:classpath:/templates}") String templateBasePath) {
+            PdfConfiguration pdfConfiguration) {
         this.resourceLoader = resourceLoader;
-        this.templateBasePath = templateBasePath;
+        this.templateBasePath = pdfConfiguration.templateBasePath();
     }
 
     public String resolveTemplate(String templateId) {
@@ -56,7 +56,7 @@ public class TemplateService {
         rendered = applyIfBlocks(rendered, context);
 
         Matcher variableMatcher = VARIABLE_PATTERN.matcher(rendered);
-        StringBuffer output = new StringBuffer();
+        StringBuilder output = new StringBuilder();
         while (variableMatcher.find()) {
             String key = variableMatcher.group(1);
             Object value = resolvePath(context, key);
@@ -68,7 +68,7 @@ public class TemplateService {
 
     private String applyEachBlocks(String template, Map<String, Object> context) {
         Matcher matcher = EACH_PATTERN.matcher(template);
-        StringBuffer output = new StringBuffer();
+        StringBuilder output = new StringBuilder();
         while (matcher.find()) {
             String listPath = matcher.group(1);
             String block = matcher.group(2);
@@ -98,7 +98,7 @@ public class TemplateService {
 
     private String applyIfBlocks(String template, Map<String, Object> context) {
         Matcher matcher = IF_PATTERN.matcher(template);
-        StringBuffer output = new StringBuffer();
+        StringBuilder output = new StringBuilder();
         while (matcher.find()) {
             String key = matcher.group(1);
             String block = matcher.group(2);
