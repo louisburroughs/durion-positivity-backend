@@ -24,9 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -168,21 +165,20 @@ public class WorkorderInvoiceService {
 
     @NonNull
     private InvoiceGenerationResponse buildExistingResponse(@NonNull Workorder workorder, @NonNull UUID invoiceId) {
-        BigDecimal subtotal = calculateSubtotal(workorder.getId());
-        BigDecimal taxAmount = BigDecimal.ZERO;
-        BigDecimal totalAmount = subtotal.add(taxAmount);
+        InvoiceGenerationResponse invoiceDetails = invoiceClient.getInvoice(invoiceId);
 
-        return InvoiceGenerationResponse.builder()
-                .invoiceId(invoiceId)
-                .status("DRAFT")
-                .workorderId(workorder.getId())
-                .estimateId(workorder.getEstimateId())
-                .approvalId(workorder.getApprovalId())
-                .subtotal(subtotal)
-                .taxAmount(taxAmount)
-                .totalAmount(totalAmount)
-                .createdAt(resolveCreatedAt(workorder))
-                .build();
+        // Ensure workorder links are populated (invoice service might not return them)
+        if (invoiceDetails.getWorkorderId() == null) {
+            invoiceDetails.setWorkorderId(workorder.getId());
+        }
+        if (invoiceDetails.getEstimateId() == null) {
+            invoiceDetails.setEstimateId(workorder.getEstimateId());
+        }
+        if (invoiceDetails.getApprovalId() == null) {
+            invoiceDetails.setApprovalId(workorder.getApprovalId());
+        }
+
+        return invoiceDetails;
     }
 
     @NonNull
@@ -244,13 +240,6 @@ public class WorkorderInvoiceService {
     }
 
     @NonNull
-    private BigDecimal calculateSubtotal(@NonNull UUID workorderId) {
-        return buildLineItems(workorderId).stream()
-                .map(InvoiceLineItem::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    @NonNull
     private BigDecimal resolveLineAmount(
             @Nullable BigDecimal lineTotal,
             @Nullable BigDecimal quantity,
@@ -264,27 +253,9 @@ public class WorkorderInvoiceService {
         return safeQuantity.multiply(safeUnitPrice);
     }
 
-    @NonNull
-    private Instant resolveCreatedAt(@NonNull Workorder workorder) {
-        if (workorder.getCompletedAt() != null) {
-            return workorder.getCompletedAt();
-        }
-
-        LocalDateTime updatedAt = workorder.getUpdatedAt();
-        if (updatedAt != null) {
-            return updatedAt.toInstant(ZoneOffset.UTC);
-        }
-
-        return Instant.now();
-    }
-
     /**
-     * Check if an item status should be excluded from billable totals.
-     * Aligned with WorkorderStateMachine#isExcludedFromBillableTotal.
-     * 
-     * Note: null statuses are treated as billable since WorkorderService and WorkorderPart
-     * entities have @Builder.Default with status=OPEN, making null statuses rare edge cases
-     * that should not block invoice generation.
+     * Determines if a workorder item status should be excluded from billable totals.
+     * Used to filter out items (like CANCELLED) that should not block invoice generation.
      */
     private boolean isExcludedFromBillableTotal(@Nullable WorkorderItemStatus status) {
         return status != null && EXCLUDED_BILLABLE_TOTAL_STATUSES.contains(status);
