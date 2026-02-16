@@ -6,6 +6,9 @@ import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.service.ApprovalConfigurationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +62,7 @@ public class ApprovalConfigurationController {
 
     @Operation(summary = "Create a new approval configuration", description = "Add a new approval configuration.")
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Configuration object to be created", required = true, content = @Content(schema = @Schema(implementation = ApprovalConfigurationRequest.class), examples = @ExampleObject(name = "createApprovalConfig", value = "{\"locationId\":\"550e8400-e29b-41d4-a716-446655440020\",\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"approvalThreshold\":500.0,\"requiresManagerApproval\":true}")))
     @PostMapping("/approvalConfigurations")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:approval_config:create')")
@@ -71,6 +75,7 @@ public class ApprovalConfigurationController {
     @Operation(summary = "Update an approval configuration", description = "Update an existing approval configuration.")
     @ApiResponse(responseCode = "200", description = "Configuration updated successfully.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated configuration object", required = true, content = @Content(schema = @Schema(implementation = ApprovalConfigurationRequest.class), examples = @ExampleObject(name = "updateApprovalConfig", value = "{\"approvalThreshold\":750.0,\"requiresManagerApproval\":true}")))
     @PutMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:approval_config:edit')")

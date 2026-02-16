@@ -41,6 +41,9 @@ import com.positivity.workorder.service.WorkorderService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -117,6 +120,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "400", description = "Invalid request - missing required fields.")
     @ApiResponse(responseCode = "403", description = "Forbidden - user does not have ESTIMATE_CREATE permission.")
     @ApiResponse(responseCode = "500", description = "Internal server error - estimate creation failed.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Estimate creation request with customer and vehicle IDs", required = true, content = @Content(schema = @Schema(implementation = CreateEstimateRequest.class), examples = @ExampleObject(name = "createEstimate", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"vehicleId\":\"550e8400-e29b-41d4-a716-446655440011\",\"locationId\":\"550e8400-e29b-41d4-a716-446655440020\"}")))
     @PostMapping()
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:create')")
@@ -188,6 +192,7 @@ public class EstimateController {
     @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
     @ApiResponse(responseCode = "400", description = "Estimate cannot be approved in current state, customer ID mismatch, or PO required but not provided.")
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval request with customer ID, signature capture, and optional selective line item approvals", required = true, content = @Content(schema = @Schema(implementation = ApproveEstimateRequest.class), examples = @ExampleObject(name = "approveEstimate", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved estimate\",\"purchaseOrderNumber\":\"PO-12345\"}")))
     @PostMapping("/{estimateId}/approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_APPROVE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:approve')")
@@ -374,6 +379,7 @@ public class EstimateController {
             @ApiResponse(responseCode = "404", description = "Estimate not found"),
             @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
     })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Line item details", required = true, content = @Content(schema = @Schema(implementation = AddEstimateItemRequest.class), examples = @ExampleObject(name = "addEstimateItem", value = "{\"itemType\":\"LABOR\",\"description\":\"Brake inspection\",\"quantity\":1,\"unitPrice\":129.99,\"taxCode\":\"LABOR_STANDARD\"}")))
     @PostMapping("/{estimateId}/items")
     @EmitEvent(id = "ESTIMATE_ITEM_ADD", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate_item:add')")
@@ -415,6 +421,7 @@ public class EstimateController {
             @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
             @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
     })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated item fields", required = true, content = @Content(schema = @Schema(implementation = UpdateEstimateItemRequest.class), examples = @ExampleObject(name = "updateEstimateItem", value = "{\"description\":\"Brake inspection and adjustment\",\"quantity\":1,\"unitPrice\":149.99,\"taxCode\":\"LABOR_STANDARD\"}")))
     @PatchMapping("/{estimateId}/items/{itemId}")
     @EmitEvent(id = "ESTIMATE_ITEM_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate_item:edit')")

@@ -10,6 +10,9 @@ import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.service.ChangeRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +38,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "Change request created successfully, or existing change request returned if idempotency key was previously processed")
     @ApiResponse(responseCode = "400", description = "Invalid request - missing description, no items, or validation failed")
     @ApiResponse(responseCode = "404", description = "Work order not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Change request details including items", required = true, content = @Content(schema = @Schema(implementation = CreateChangeRequestDTO.class), examples = @ExampleObject(name = "createChangeRequest", value = "{\"description\":\"Customer requested additional diagnostics\",\"approvalGated\":true}")))
     @PostMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:change_request:create')")
@@ -57,6 +61,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "Change request approved successfully")
     @ApiResponse(responseCode = "400", description = "Cannot approve - invalid state or missing approval note")
     @ApiResponse(responseCode = "404", description = "Change request not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval details including user ID and note", required = true, content = @Content(schema = @Schema(implementation = ApproveChangeRequestDTO.class), examples = @ExampleObject(name = "approveChangeRequest", value = "{\"approvedBy\":\"550e8400-e29b-41d4-a716-446655440100\",\"approvalNote\":\"Approved after customer confirmation\"}")))
     @PostMapping("/changeRequests/{changeId}/approve")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_APPROVE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:change_request:approve')")
@@ -78,6 +83,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "200", description = "Change request declined successfully")
     @ApiResponse(responseCode = "400", description = "Cannot decline - invalid state or missing note")
     @ApiResponse(responseCode = "404", description = "Change request not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Decline details including note", required = true, content = @Content(schema = @Schema(implementation = DeclineChangeRequestDTO.class), examples = @ExampleObject(name = "declineChangeRequest", value = "{\"approvalNote\":\"Declined by customer\"}")))
     @PostMapping("/changeRequests/{changeId}/decline")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DECLINE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:change_request:decline')")
@@ -118,6 +124,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "400", description = "Cannot apply override - invalid state or missing reason")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions - Manager role required")
     @ApiResponse(responseCode = "404", description = "Change request not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Emergency override details including manager ID and reason", required = true, content = @Content(schema = @Schema(implementation = EmergencyOverrideDTO.class), examples = @ExampleObject(name = "emergencyOverride", value = "{\"managerId\":\"550e8400-e29b-41d4-a716-446655440110\",\"exceptionReason\":\"Safety-critical repair authorized\"}")))
     @PostMapping("/changeRequests/{changeId}/emergency-override")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:change_request:emergency_override')")
