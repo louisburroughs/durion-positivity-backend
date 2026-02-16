@@ -3,9 +3,11 @@ package com.positivity.people.internal.controller;
 import com.positivity.people.BaseIntegrationTest;
 import com.positivity.people.internal.client.dto.RoleDto;
 import com.positivity.people.internal.client.dto.UserRoleDto;
+import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.service.PeopleAccessControlService;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -23,6 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@SpringBootTest
 class PersonAccessControllerIT extends BaseIntegrationTest {
 
         @MockitoBean
@@ -37,6 +40,19 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
                 mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/roles", personUuid)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$[0].code").value("MANAGER"));
+        }
+
+        @Test
+        void getRoles_returns404WhenPersonNotFound() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+                when(peopleAccessControlService.getAvailableRolesForPerson(personUuid))
+                                .thenThrow(new PersonNotFoundException(personUuid));
+
+                mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/roles", personUuid)))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.status").value(404))
+                                .andExpect(jsonPath("$.detail").value("Person not found with id: " + personUuid))
+                                .andExpect(jsonPath("$.timestamp").exists());
         }
 
         @Test
