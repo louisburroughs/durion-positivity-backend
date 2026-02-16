@@ -1,5 +1,6 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -10,7 +11,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "person_id" }))
+@Table(name = "user_person_links", 
+       uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "person_id" }))
 @Getter
 @Setter
 public class UserPersonLink {
@@ -29,6 +31,11 @@ public class UserPersonLink {
 
     @Column(name = "link_type", length = 50)
     private String linkType = "PRIMARY";
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @NonNull
+    private UserLinkStatus status = UserLinkStatus.ACTIVE;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

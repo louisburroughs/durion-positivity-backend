@@ -1,13 +1,13 @@
 package com.positivity.people.service;
 
 import com.positivity.people.internal.entity.UserPersonLink;
+import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.internal.service.UserPersonTranslationServiceImpl;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,7 +55,8 @@ class UserPersonTranslationServiceTest {
         UserPersonLink link = new UserPersonLink();
         link.setPersonId(personUuid);
         link.setUserId("user-123");
-        when(userPersonLinkRepository.findByPersonId(personUuid)).thenReturn(List.of(link));
+        when(userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE))
+            .thenReturn(Optional.of(link));
 
         Optional<String> result = userPersonTranslationService.getUserIdForPerson(personUuid);
 
@@ -65,7 +66,8 @@ class UserPersonTranslationServiceTest {
     @Test
     void getUserIdForPerson_returnsEmptyWhenNoLinkExists() {
         UUID personUuid = UUID.randomUUID();
-        when(userPersonLinkRepository.findByPersonId(personUuid)).thenReturn(List.of());
+        when(userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE))
+            .thenReturn(Optional.empty());
 
         Optional<String> result = userPersonTranslationService.getUserIdForPerson(personUuid);
 

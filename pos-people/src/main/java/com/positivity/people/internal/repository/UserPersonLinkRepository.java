@@ -1,6 +1,7 @@
 package com.positivity.people.internal.repository;
 
 import com.positivity.people.internal.entity.UserPersonLink;
+import com.positivity.people.internal.enums.UserLinkStatus;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -15,6 +16,8 @@ public interface UserPersonLinkRepository extends JpaRepository<UserPersonLink, 
     Optional<UserPersonLink> findByUserId(@NonNull String userId);
 
     List<UserPersonLink> findByPersonId(@NonNull UUID personId);
+
+    Optional<UserPersonLink> findByPersonIdAndStatus(@NonNull UUID personId, @NonNull UserLinkStatus status);
 
     boolean existsByUserId(@NonNull String userId);
 
