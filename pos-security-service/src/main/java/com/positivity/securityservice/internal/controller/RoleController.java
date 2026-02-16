@@ -51,7 +51,7 @@ public class RoleController {
         String description = request.get("description");
 
         if (name == null || name.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            throw new IllegalArgumentException("Role name is required and cannot be blank");
         }
 
         Role role = roleManagementService.createRole(name, description);

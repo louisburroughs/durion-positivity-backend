@@ -7,7 +7,6 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.ScopeType;
-import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
@@ -79,7 +78,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         Set<Permission> permissions = new HashSet<>();
         for (String permissionName : request.getPermissionNames()) {
             Permission permission = permissionRepository.findByName(permissionName)
-                    .orElseThrow(() -> new PermissionNotFoundException(
+                    .orElseThrow(() -> new IllegalArgumentException(
                             "Permission not found: " + permissionName + ". It must be registered first."));
             permissions.add(permission);
         }
