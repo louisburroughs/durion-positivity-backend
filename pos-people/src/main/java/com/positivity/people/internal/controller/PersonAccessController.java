@@ -69,6 +69,8 @@ public class PersonAccessController {
     @EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENT_REVOKE", apiVersion = "1")
     @Operation(summary = "Revoke role assignment", description = "Revoke a role assignment from a person")
     @ApiResponse(responseCode = "204", description = "Role assignment revoked successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request for revoking role assignment")
+    @ApiResponse(responseCode = "404", description = "Person or role assignment not found")
     public ResponseEntity<Void> revokeAssignment(
             @PathVariable UUID personUuid,
             @PathVariable String roleCode,
