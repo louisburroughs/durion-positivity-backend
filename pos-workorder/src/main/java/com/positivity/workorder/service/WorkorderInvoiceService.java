@@ -114,7 +114,7 @@ public class WorkorderInvoiceService {
                 // try/catch
                 try {
                     TransactionAspectSupport.currentTransactionStatus().flush();
-                } catch (NoTransactionException | IllegalStateException e) {
+                } catch (NoTransactionException e) {
                     // No active transaction (e.g., in unit tests) - flush not needed
                     log.debug("Flush skipped: no active transaction");
                 }
@@ -124,7 +124,12 @@ public class WorkorderInvoiceService {
                 // key.
                 // Mark our transaction for rollback to prevent persisting the duplicate
                 // invoice reference.
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                try {
+                    TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                } catch (NoTransactionException ex) {
+                    // No active transaction (e.g., in unit tests) - rollback not needed
+                    log.debug("Rollback skipped: no active transaction");
+                }
 
                 // Retrieve the existing invoice that won the race
                 // Note: The DataIntegrityViolationException indicates the other transaction has
