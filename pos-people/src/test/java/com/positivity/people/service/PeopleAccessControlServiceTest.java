@@ -1,18 +1,20 @@
 package com.positivity.people.service;
 
 import com.positivity.people.internal.client.SecurityServiceClient;
-import com.positivity.people.internal.client.dto.Role;
-import com.positivity.people.internal.client.dto.RoleAssignment;
-import com.positivity.people.internal.client.dto.RoleAssignmentRequest;
+import com.positivity.people.internal.client.dto.RoleDto;
+import com.positivity.people.internal.client.dto.UserRoleDto;
+import com.positivity.people.internal.service.PeopleAccessControlServiceImpl;
+import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -28,65 +30,76 @@ class PeopleAccessControlServiceTest {
     void setUp() {
         securityServiceClient = mock(SecurityServiceClient.class);
         userPersonTranslationService = mock(UserPersonTranslationService.class);
-        peopleAccessControlService = new PeopleAccessControlService(securityServiceClient,
-                userPersonTranslationService);
+        peopleAccessControlService = new PeopleAccessControlServiceImpl(userPersonTranslationService,
+                securityServiceClient);
     }
 
     @Test
-    void getRolesForPerson_returnsAllRoles() {
-        Role role = new Role(UUID.randomUUID(), "MANAGER", "Manager role");
-        when(securityServiceClient.getAllRoles()).thenReturn(List.of(role));
+    void getAvailableRolesForPeople_combinesLocationAndGlobalRoles() {
+        RoleDto locationRole = RoleDto.builder().code("MANAGER").scopeType("LOCATION").build();
+        RoleDto globalRole = RoleDto.builder().code("ADMIN").scopeType("GLOBAL").build();
+        when(securityServiceClient.getAvailableRoles("LOCATION")).thenReturn(List.of(locationRole));
+        when(securityServiceClient.getAvailableRoles("GLOBAL")).thenReturn(List.of(globalRole));
 
-        List<Role> result = peopleAccessControlService.getRolesForPerson();
+        List<RoleDto> result = peopleAccessControlService.getAvailableRolesForPeople();
+
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void getPersonRoleAssignments_translatesPersonAndFetchesAssignments() {
+        UUID personUuid = UUID.randomUUID();
+        String userId = "user-123";
+        UserRoleDto assignment = UserRoleDto.builder().roleCode("MANAGER").build();
+        when(userPersonTranslationService.getUserIdForPerson(personUuid)).thenReturn(Optional.of(userId));
+        when(securityServiceClient.getUserRoleAssignments(userId, true, null)).thenReturn(List.of(assignment));
+
+        List<UserRoleDto> result = peopleAccessControlService.getPersonRoleAssignments(personUuid, true, null);
 
         assertEquals(1, result.size());
-        assertEquals("MANAGER", result.get(0).getName());
+        verify(userPersonTranslationService).getUserIdForPerson(personUuid);
+        verify(securityServiceClient).getUserRoleAssignments(userId, true, null);
     }
 
     @Test
-    void getAssignmentsForPerson_translatesPersonAndFetchesAssignments() {
-        UUID personId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        RoleAssignment assignment = new RoleAssignment();
-        assignment.setId(UUID.randomUUID());
-        when(userPersonTranslationService.getUserIdByPersonId(personId)).thenReturn(userId);
-        when(securityServiceClient.getAssignmentsForUser(userId, true)).thenReturn(List.of(assignment));
+    void assignRoleToPerson_translatesPersonAndCreatesAssignment() {
+        UUID personUuid = UUID.randomUUID();
+        String userId = "user-123";
+        UUID locationId = UUID.randomUUID();
+        UserRoleDto created = UserRoleDto.builder().roleCode("MANAGER").build();
 
-        List<RoleAssignment> result = peopleAccessControlService.getAssignmentsForPerson(personId, true);
+        when(userPersonTranslationService.getUserIdForPerson(personUuid)).thenReturn(Optional.of(userId));
+        when(securityServiceClient.assignRole(any())).thenReturn(created);
 
-        assertEquals(1, result.size());
-        verify(userPersonTranslationService).getUserIdByPersonId(personId);
-        verify(securityServiceClient).getAssignmentsForUser(userId, true);
+        UserRoleDto result = peopleAccessControlService.assignRoleToPerson(
+                personUuid,
+                "MANAGER",
+                locationId,
+                LocalDateTime.parse("2026-02-16T10:00:00"),
+                null);
+
+        assertEquals("MANAGER", result.getRoleCode());
+        verify(securityServiceClient).assignRole(any());
     }
 
     @Test
-    void createAssignmentForPerson_translatesPersonAndSetsUserId() {
-        UUID personId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        RoleAssignmentRequest request = new RoleAssignmentRequest();
-        request.setRoleId(UUID.randomUUID());
-        RoleAssignment created = new RoleAssignment();
-        created.setId(UUID.randomUUID());
+    void revokeRoleFromPerson_callsSecurityClient() {
+        UUID personUuid = UUID.randomUUID();
+        String userId = "user-123";
+        LocalDateTime endDate = LocalDateTime.parse("2026-02-16T11:00:00");
+        when(userPersonTranslationService.getUserIdForPerson(personUuid)).thenReturn(Optional.of(userId));
 
-        when(userPersonTranslationService.getUserIdByPersonId(personId)).thenReturn(userId);
-        when(securityServiceClient.createRoleAssignment(any(RoleAssignmentRequest.class))).thenReturn(created);
+        peopleAccessControlService.revokeRoleFromPerson(personUuid, "MANAGER", endDate);
 
-        RoleAssignment result = peopleAccessControlService.createAssignmentForPerson(personId, request);
-
-        assertEquals(created.getId(), result.getId());
-        ArgumentCaptor<RoleAssignmentRequest> requestCaptor = ArgumentCaptor.forClass(RoleAssignmentRequest.class);
-        verify(securityServiceClient).createRoleAssignment(requestCaptor.capture());
-        assertEquals(userId, requestCaptor.getValue().getUserId());
-        assertEquals(request.getRoleId(), requestCaptor.getValue().getRoleId());
+        verify(securityServiceClient).revokeRole(userId, "MANAGER", endDate);
     }
 
     @Test
-    void revokeAssignmentForPerson_callsSecurityClient() {
-        UUID assignmentId = UUID.randomUUID();
-        LocalDate endDate = LocalDate.now();
+    void personMethods_throwWhenNoUserLinkExists() {
+        UUID personUuid = UUID.randomUUID();
+        when(userPersonTranslationService.getUserIdForPerson(personUuid)).thenReturn(Optional.empty());
 
-        peopleAccessControlService.revokeAssignmentForPerson(assignmentId, endDate);
-
-        verify(securityServiceClient).revokeRoleAssignment(assignmentId, endDate);
+        assertThrows(EntityNotFoundException.class,
+                () -> peopleAccessControlService.getPersonRoleAssignments(personUuid, false, null));
     }
 }

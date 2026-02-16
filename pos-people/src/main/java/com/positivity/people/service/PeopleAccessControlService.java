@@ -1,55 +1,28 @@
 package com.positivity.people.service;
 
-import com.positivity.people.internal.client.SecurityServiceClient;
-import com.positivity.people.internal.client.dto.Role;
-import com.positivity.people.internal.client.dto.RoleAssignment;
-import com.positivity.people.internal.client.dto.RoleAssignmentRequest;
+import com.positivity.people.internal.client.dto.RoleDto;
+import com.positivity.people.internal.client.dto.UserRoleDto;
 import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-@Service
-public class PeopleAccessControlService {
-
-    private final SecurityServiceClient securityServiceClient;
-    private final UserPersonTranslationService userPersonTranslationService;
-
-    public PeopleAccessControlService(
-            @NonNull SecurityServiceClient securityServiceClient,
-            @NonNull UserPersonTranslationService userPersonTranslationService) {
-        this.securityServiceClient = securityServiceClient;
-        this.userPersonTranslationService = userPersonTranslationService;
-    }
+public interface PeopleAccessControlService {
 
     @NonNull
-    @Transactional(readOnly = true)
-    public List<Role> getRolesForPerson() {
-        return securityServiceClient.getAllRoles();
-    }
+    List<RoleDto> getAvailableRolesForPeople();
 
     @NonNull
-    @Transactional(readOnly = true)
-    public List<RoleAssignment> getAssignmentsForPerson(@NonNull UUID personId, boolean includeHistory) {
-        UUID userId = userPersonTranslationService.getUserIdByPersonId(personId);
-        return securityServiceClient.getAssignmentsForUser(userId, includeHistory);
-    }
+    List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, Boolean includeHistory, LocalDateTime endDate);
 
     @NonNull
-    @Transactional
-    public RoleAssignment createAssignmentForPerson(
-            @NonNull UUID personId,
-            @NonNull RoleAssignmentRequest request) {
-        UUID userId = userPersonTranslationService.getUserIdByPersonId(personId);
-        request.setUserId(userId);
-        return securityServiceClient.createRoleAssignment(request);
-    }
+    UserRoleDto assignRoleToPerson(
+            @NonNull UUID personUuid,
+            @NonNull String roleCode,
+            UUID locationId,
+            LocalDateTime startDate,
+            LocalDateTime endDate);
 
-    @Transactional
-    public void revokeAssignmentForPerson(@NonNull UUID assignmentId, @NonNull LocalDate endDate) {
-        securityServiceClient.revokeRoleAssignment(assignmentId, endDate);
-    }
+    void revokeRoleFromPerson(@NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime endDate);
 }
