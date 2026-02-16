@@ -50,8 +50,8 @@ public class ApprovalConfigurationController {
     @GetMapping("/approvalConfigurations/applicable")
     @PreAuthorize("hasAuthority('workorder:approval_config:view')")
     public ResponseEntity<ApprovalConfigurationResponse> getApplicableConfiguration(
-            @Parameter(description = "Location ID") @RequestParam(required = false) UUID locationId,
-            @Parameter(description = "Customer ID") @RequestParam(required = false) UUID customerId) {
+            @Parameter(description = "Location ID", example = "550e8400-e29b-41d4-a716-446655440020") @RequestParam(required = false) UUID locationId,
+            @Parameter(description = "Customer ID", example = "550e8400-e29b-41d4-a716-446655440010") @RequestParam(required = false) UUID customerId) {
         return approvalConfigurationService.getApplicableConfiguration(locationId, customerId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());

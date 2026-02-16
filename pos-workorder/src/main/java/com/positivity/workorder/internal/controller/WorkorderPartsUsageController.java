@@ -140,7 +140,7 @@ public class WorkorderPartsUsageController {
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<List<WorkorderPartUsageEventResponse>> getUsageHistory(
             @PathVariable @NonNull UUID workorderId,
-            @RequestParam(required = false) @Nullable @Parameter(description = "Optional part line ID to filter history for a specific part") UUID partLineId) {
+            @RequestParam(required = false) @Nullable @Parameter(description = "Optional part line ID to filter history for a specific part", example = "550e8400-e29b-41d4-a716-446655440050") UUID partLineId) {
 
         List<WorkorderPartUsageEventResponse> responses;
         if (partLineId != null) {

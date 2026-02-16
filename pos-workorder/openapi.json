@@ -17,16 +17,36 @@
             "description": "Endpoints for work order management"
         },
         {
+            "name": "Workorder Detail",
+            "description": "Workorder detail with role-based visibility"
+        },
+        {
             "name": "Approval Configuration API",
             "description": "Endpoints for managing approval configurations by location and customer"
+        },
+        {
+            "name": "Workorder Part Adjustments",
+            "description": "Part substitutions, returns, and corrections"
         },
         {
             "name": "Tax",
             "description": "Tax calculation API"
         },
         {
+            "name": "Technician Assignment API",
+            "description": "Endpoints for assigning technicians to workorders"
+        },
+        {
             "name": "Change Request API",
             "description": "Endpoints for managing additional work requests and approvals"
+        },
+        {
+            "name": "Workorder Labor API",
+            "description": "Endpoints for tracking labor performed on workorders"
+        },
+        {
+            "name": "Workorder Parts Usage",
+            "description": "Track parts issue, consumption, and returns"
         },
         {
             "name": "Estimate API",
@@ -34,6 +54,328 @@
         }
     ],
     "paths": {
+        "/v1/workorders/{workorderId}/technician": {
+            "get": {
+                "tags": [
+                    "Technician Assignment API"
+                ],
+                "summary": "Get technician assignment",
+                "description": "Retrieve the current technician assignment and full assignment history for a workorder.",
+                "operationId": "getTechnicianAssignment",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Assignment retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder not found or no assignment exists",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Technician Assignment API"
+                ],
+                "summary": "Reassign workorder to different technician",
+                "description": "Reassign a workorder to a different technician. Records reassignment reason and maintains history.",
+                "operationId": "reassignTechnician",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate reassignments",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "description": "User ID from gateway authentication",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReassignTechnicianRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Technician reassigned successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid state transition or no current assignment",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Permission denied",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Technician Assignment API"
+                ],
+                "summary": "Assign technician to workorder",
+                "description": "Assign a technician to a work order. Transitions workorder to ASSIGNED status if currently APPROVED.",
+                "operationId": "assignTechnician",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate assignments",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "description": "User ID from gateway authentication",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AssignTechnicianRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Technician assigned successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid state transition",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Permission denied",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or technician not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TechnicianAssignmentResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/labor/{entryId}/adjust": {
+            "put": {
+                "tags": [
+                    "Workorder Labor API"
+                ],
+                "summary": "Adjust labor hours",
+                "description": "Manually adjust hours worked on a labor entry with a reason for audit trail.",
+                "operationId": "adjustLaborHours",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    {
+                        "name": "entryId",
+                        "in": "path",
+                        "description": "ID of the labor entry to adjust",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440100"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate adjustments",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdjustLaborRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Labor hours adjusted successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid hours value",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Permission denied",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Labor entry not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/workexec/approvalConfigurations/{approvalId}": {
             "get": {
                 "tags": [
@@ -292,6 +634,770 @@
                 }
             }
         },
+        "/v1/workorders/{workorderId}/services/{serviceId}/labor/start": {
+            "post": {
+                "tags": [
+                    "Workorder Labor API"
+                ],
+                "summary": "Start labor session",
+                "description": "Start tracking labor on a specific service item. Only one active session allowed per service.",
+                "operationId": "startLaborSession",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    {
+                        "name": "serviceId",
+                        "in": "path",
+                        "description": "ID of the service item",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440010"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate starts",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "description": "User ID from gateway authentication",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StartLaborRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Labor session started successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Idempotent request - existing session returned",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid state - active session exists or invalid status",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Permission denied",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or service not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/reopen": {
+            "post": {
+                "tags": [
+                    "Work Order API"
+                ],
+                "summary": "Reopen completed workorder",
+                "description": "Controlled reopen for completed workorders. Requires elevated permission and mandatory reason.",
+                "operationId": "reopenWorkorder",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the completed workorder to reopen",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReopenWorkorderRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Workorder reopened successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReopenWorkorderResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Workorder cannot be reopened or reason missing.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReopenWorkorderResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Work order not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReopenWorkorderResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/parts/substitute": {
+            "post": {
+                "tags": [
+                    "Workorder Part Adjustments"
+                ],
+                "summary": "Substitute part",
+                "description": "Replace one part with another. Original part preserved for history.",
+                "operationId": "substitutePart",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SubstitutePartRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Part substituted successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Idempotency conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request (part already consumed, etc.)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/parts/return": {
+            "post": {
+                "tags": [
+                    "Workorder Parts Usage"
+                ],
+                "summary": "Return unused parts to inventory",
+                "description": "Return unused parts after partial consumption or service completion",
+                "operationId": "returnParts",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReturnPartRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Parts returned successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request (exceeds available quantity, etc.)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/parts/returnUnused": {
+            "post": {
+                "tags": [
+                    "Workorder Part Adjustments"
+                ],
+                "summary": "Return unused quantity",
+                "description": "Return unused part quantity beyond normal return flow",
+                "operationId": "returnUnusedQuantity",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReturnPartQuantityRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request (exceeds available quantity, etc.)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Unused quantity returned successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/parts/issue": {
+            "post": {
+                "tags": [
+                    "Workorder Parts Usage"
+                ],
+                "summary": "Issue parts to workorder",
+                "description": "Issue parts from inventory, reserving them for consumption on the workorder",
+                "operationId": "issueParts",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IssuePartRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Idempotency conflict (duplicate key)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Parts issued successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request (negative quantity, etc.)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/parts/correct": {
+            "post": {
+                "tags": [
+                    "Workorder Part Adjustments"
+                ],
+                "summary": "Correct part quantity",
+                "description": "Administrative correction for data entry errors",
+                "operationId": "correctPartQuantity",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CorrectPartQuantityRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Part quantity corrected successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/parts/consume": {
+            "post": {
+                "tags": [
+                    "Workorder Parts Usage"
+                ],
+                "summary": "Consume parts on workorder",
+                "description": "Record actual consumption of parts. Quantity consumed cannot exceed quantity issued.",
+                "operationId": "consumeParts",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConsumePartRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request (exceeds issued quantity, etc.)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Parts consumption recorded successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/labor/{entryId}/stop": {
+            "post": {
+                "tags": [
+                    "Workorder Labor API"
+                ],
+                "summary": "Stop labor session",
+                "description": "Stop an active labor session and calculate hours worked.",
+                "operationId": "stopLaborSession",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    {
+                        "name": "entryId",
+                        "in": "path",
+                        "description": "ID of the labor entry to stop",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440100"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate stops",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Labor session stopped successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Session already stopped",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Permission denied",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Labor entry not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/workorders/{workorderId}/complete": {
             "post": {
                 "tags": [
@@ -434,8 +1540,8 @@
                     "required": true
                 },
                 "responses": {
-                    "400": {
-                        "description": "Invalid request - missing description, no items, or validation failed",
+                    "200": {
+                        "description": "Change request created successfully, or existing change request returned if idempotency key was previously processed",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -444,8 +1550,8 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "Change request created successfully, or existing change request returned if idempotency key was previously processed",
+                    "400": {
+                        "description": "Invalid request - missing description, no items, or validation failed",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1709,6 +2815,268 @@
                 }
             }
         },
+        "/v1/workorders/{workorderId}/parts/usageHistory": {
+            "get": {
+                "tags": [
+                    "Workorder Parts Usage"
+                ],
+                "summary": "Get parts usage history",
+                "description": "Retrieve usage history (issue, consume, return events) for parts on the workorder",
+                "operationId": "getUsageHistory",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "partLineId",
+                        "in": "query",
+                        "description": "Optional part line ID to filter history for a specific part",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Usage history retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/parts/adjustments": {
+            "get": {
+                "tags": [
+                    "Workorder Part Adjustments"
+                ],
+                "summary": "Get part adjustment history",
+                "description": "Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder",
+                "operationId": "getAdjustmentHistory",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "partId",
+                        "in": "query",
+                        "description": "Optional part ID to filter history for a specific part",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Adjustment history retrieved successfully (newest first)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/labor": {
+            "get": {
+                "tags": [
+                    "Workorder Labor API"
+                ],
+                "summary": "Get labor history",
+                "description": "Retrieve all labor entries for a workorder, ordered newest first.",
+                "operationId": "getLaborHistory",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Labor history retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Permission denied",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/detail": {
+            "get": {
+                "tags": [
+                    "Workorder Detail"
+                ],
+                "summary": "Get workorder detail with role-based visibility",
+                "description": "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. Capability flags indicate which actions the user can perform.",
+                "operationId": "getWorkorderDetail",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "Workorder ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "X-Authorities",
+                        "in": "header",
+                        "description": "User authorities (comma-separated)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "workorder:workorder:view,workorder:financials:view"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Workorder detail retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderDetailResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Workorder not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderDetailResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/completion-preconditions": {
+            "get": {
+                "tags": [
+                    "Work Order API"
+                ],
+                "summary": "Validate completion preconditions",
+                "description": "Evaluate completion preconditions for a workorder and return checklist + blocking reasons.",
+                "operationId": "getCompletionPreconditions",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the workorder to validate",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Completion preconditions evaluated successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CompletionPreconditionsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Work order not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CompletionPreconditionsResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/workorders/{workorderId}/canClose": {
             "get": {
                 "tags": [
@@ -2126,6 +3494,271 @@
     },
     "components": {
         "schemas": {
+            "AssignmentHistoryEntry": {
+                "type": "object",
+                "description": "Assignment history entry",
+                "properties": {
+                    "technicianId": {
+                        "type": "string",
+                        "description": "Technician ID for this assignment period",
+                        "example": "550e8400-e29b-41d4-a716-446655440050"
+                    },
+                    "technicianName": {
+                        "type": "string",
+                        "description": "Technician display name",
+                        "example": "John Smith"
+                    },
+                    "assignedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the technician was assigned",
+                        "example": "2024-01-27T14:30:00"
+                    },
+                    "assignedBy": {
+                        "type": "string",
+                        "description": "ID of user who assigned the technician",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "unassignedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the technician was unassigned (null for current assignment)",
+                        "example": "2024-01-27T16:00:00"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for reassignment/unassignment",
+                        "example": "Technician called out sick"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Assignment notes"
+                    }
+                }
+            },
+            "TechnicianAssignmentResponse": {
+                "type": "object",
+                "description": "Technician assignment response",
+                "properties": {
+                    "workorderId": {
+                        "type": "string",
+                        "description": "Work order ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    "technicianId": {
+                        "type": "string",
+                        "description": "Assigned technician ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440050"
+                    },
+                    "technicianName": {
+                        "type": "string",
+                        "description": "Technician display name",
+                        "example": "John Smith"
+                    },
+                    "assignedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the technician was assigned",
+                        "example": "2024-01-27T14:30:00"
+                    },
+                    "assignedBy": {
+                        "type": "string",
+                        "description": "ID of user who assigned the technician",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "previousTechnicianId": {
+                        "type": "string",
+                        "description": "Previous technician ID if this was a reassignment",
+                        "example": "550e8400-e29b-41d4-a716-446655440049"
+                    },
+                    "previousTechnicianName": {
+                        "type": "string",
+                        "description": "Previous technician name if this was a reassignment",
+                        "example": "Jane Doe"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Status of the workorder after assignment",
+                        "example": "ASSIGNED"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Operation result message",
+                        "example": "Technician assigned successfully"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Assignment notes"
+                    },
+                    "reassignmentReason": {
+                        "type": "string",
+                        "description": "Reason for reassignment if applicable"
+                    },
+                    "reassignedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When technician was reassigned",
+                        "example": "2024-01-27T15:30:00"
+                    },
+                    "reassignedBy": {
+                        "type": "string",
+                        "description": "ID of user who performed reassignment",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "technicianCertifications": {
+                        "type": "array",
+                        "description": "Technician certifications",
+                        "example": [
+                            "ASE Master Technician",
+                            "Brake Specialist"
+                        ],
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "currentStatus": {
+                        "type": "string",
+                        "description": "Current workorder status",
+                        "example": "WORK_IN_PROGRESS"
+                    },
+                    "assignmentHistory": {
+                        "type": "array",
+                        "description": "Full assignment history for the workorder",
+                        "items": {
+                            "$ref": "#/components/schemas/AssignmentHistoryEntry"
+                        }
+                    }
+                }
+            },
+            "ReassignTechnicianRequest": {
+                "type": "object",
+                "description": "Request to reassign a workorder to a different technician",
+                "properties": {
+                    "newTechnicianId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the new technician",
+                        "example": "550e8400-e29b-41d4-a716-446655440051"
+                    },
+                    "reassignedByUserId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the user performing the reassignment (defaults from X-User-Id header if not provided)",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for reassignment",
+                        "example": "Original technician unavailable, reassigning to available tech"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Additional notes for the reassignment"
+                    },
+                    "notifyPreviousTechnician": {
+                        "type": "boolean",
+                        "default": "false",
+                        "description": "Whether to send notification to previous technician"
+                    }
+                },
+                "required": [
+                    "newTechnicianId"
+                ]
+            },
+            "WorkorderLaborEntryResponse": {
+                "type": "object",
+                "description": "Labor entry response",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Unique ID of the labor entry",
+                        "example": "550e8400-e29b-41d4-a716-446655440100"
+                    },
+                    "workorderId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Workorder ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    "workorderServiceId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Service line item ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440010"
+                    },
+                    "technicianId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Technician ID who performed the work",
+                        "example": "550e8400-e29b-41d4-a716-446655440050"
+                    },
+                    "startTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Labor session start time",
+                        "example": "2024-01-27T14:30:00"
+                    },
+                    "endTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Labor session end time (null if still active)",
+                        "example": "2024-01-27T16:30:00"
+                    },
+                    "hoursWorked": {
+                        "type": "number",
+                        "description": "Hours worked",
+                        "example": 2.0
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Session notes",
+                        "example": "Brake pads replaced successfully"
+                    },
+                    "adjustmentReason": {
+                        "type": "string",
+                        "description": "Adjustment reason (if hours were manually adjusted)",
+                        "example": "Corrected for break time"
+                    },
+                    "active": {
+                        "type": "boolean",
+                        "description": "Whether this session is still active (not stopped)",
+                        "example": false
+                    },
+                    "createdBy": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "User who created this entry",
+                        "example": "550e8400-e29b-41d4-a716-446655440002"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation timestamp",
+                        "example": "2024-01-27T14:30:00Z"
+                    }
+                }
+            },
+            "AdjustLaborRequest": {
+                "type": "object",
+                "description": "Request to manually adjust labor hours",
+                "properties": {
+                    "hoursWorked": {
+                        "type": "number",
+                        "description": "Adjusted hours worked",
+                        "example": 2.5
+                    },
+                    "adjustmentReason": {
+                        "type": "string",
+                        "description": "Reason for the adjustment",
+                        "example": "Manual correction for break time"
+                    }
+                },
+                "required": [
+                    "adjustmentReason",
+                    "hoursWorked"
+                ]
+            },
             "ApprovalConfigurationRequest": {
                 "type": "object",
                 "description": "Configuration object to be created",
@@ -2287,8 +3920,43 @@
                         "type": "string",
                         "format": "date-time",
                         "description": "Date and time the workorder was completed"
+                    },
+                    "isReopened": {
+                        "type": "boolean",
+                        "description": "Whether the completed workorder is currently reopened for controlled edits"
+                    },
+                    "reopenedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Date and time the workorder was reopened"
                     }
                 }
+            },
+            "AssignTechnicianRequest": {
+                "type": "object",
+                "description": "Request to assign a technician to a workorder",
+                "properties": {
+                    "technicianId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the technician to assign",
+                        "example": "550e8400-e29b-41d4-a716-446655440050"
+                    },
+                    "assignedByUserId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the user performing the assignment (defaults from X-User-Id header if not provided)",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Assignment notes or reason",
+                        "example": "Assigned to senior tech for brake system work"
+                    }
+                },
+                "required": [
+                    "technicianId"
+                ]
             },
             "StartWorkorderRequest": {
                 "type": "object",
@@ -2323,6 +3991,285 @@
                         "type": "string"
                     }
                 }
+            },
+            "StartLaborRequest": {
+                "type": "object",
+                "description": "Request to start a labor session on a workorder service",
+                "properties": {
+                    "technicianId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the technician performing the work",
+                        "example": "550e8400-e29b-41d4-a716-446655440050"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Optional notes about the labor session",
+                        "example": "Beginning brake pad replacement"
+                    }
+                },
+                "required": [
+                    "technicianId"
+                ]
+            },
+            "ReopenWorkorderRequest": {
+                "type": "object",
+                "description": "Request payload for controlled workorder reopen",
+                "properties": {
+                    "userId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "User initiating reopen action",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "reopenReason": {
+                        "type": "string",
+                        "description": "Mandatory reason for reopening completed workorder",
+                        "example": "Corrected labor hours"
+                    }
+                }
+            },
+            "ReopenWorkorderResponse": {
+                "type": "object",
+                "description": "Response payload for controlled workorder reopen",
+                "properties": {
+                    "workorderId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Workorder identifier"
+                    },
+                    "currentStatus": {
+                        "type": "string",
+                        "description": "Current lifecycle status"
+                    },
+                    "isReopened": {
+                        "type": "boolean",
+                        "description": "Whether the workorder is reopened for controlled edits"
+                    },
+                    "reopenedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Reopen timestamp"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Operation message"
+                    }
+                }
+            },
+            "SubstitutePartRequest": {
+                "type": "object",
+                "properties": {
+                    "originalPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "substitutePartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "originalPartId",
+                    "reason",
+                    "substitutePartId"
+                ]
+            },
+            "WorkorderPartAdjustmentEventResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "originalPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "originalPartDescription": {
+                        "type": "string"
+                    },
+                    "workorderId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "adjustmentType": {
+                        "type": "string"
+                    },
+                    "substitutedWithPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "substitutedWithPartDescription": {
+                        "type": "string"
+                    },
+                    "quantityAdjustment": {
+                        "type": "number"
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "performedBy": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "performedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ReturnPartRequest": {
+                "type": "object",
+                "properties": {
+                    "workorderPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "minimum": 0.0001
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "quantity",
+                    "workorderPartId"
+                ]
+            },
+            "WorkorderPartUsageEventResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "workorderPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "workorderId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "eventType": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "number"
+                    },
+                    "performedBy": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "performedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "partDescription": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ReturnPartQuantityRequest": {
+                "type": "object",
+                "properties": {
+                    "workorderPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "quantity": {
+                        "type": "number"
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "quantity",
+                    "reason",
+                    "workorderPartId"
+                ]
+            },
+            "IssuePartRequest": {
+                "type": "object",
+                "properties": {
+                    "workorderPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "minimum": 0.0001
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "quantity",
+                    "workorderPartId"
+                ]
+            },
+            "CorrectPartQuantityRequest": {
+                "type": "object",
+                "properties": {
+                    "workorderPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "newQuantity": {
+                        "type": "number"
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "newQuantity",
+                    "reason",
+                    "workorderPartId"
+                ]
+            },
+            "ConsumePartRequest": {
+                "type": "object",
+                "properties": {
+                    "workorderPartId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "minimum": 0.0001
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "quantity",
+                    "workorderPartId"
+                ]
             },
             "CompleteWorkorderRequest": {
                 "type": "object",
@@ -3200,6 +5147,385 @@
                     "reason": {
                         "type": "string",
                         "description": "Reason for capturing the snapshot"
+                    }
+                }
+            },
+            "WorkorderCapabilities": {
+                "type": "object",
+                "description": "Capability flags for workorder actions based on user authorities",
+                "properties": {
+                    "canStart": {
+                        "type": "boolean",
+                        "description": "User can start workorder",
+                        "example": true
+                    },
+                    "canApprove": {
+                        "type": "boolean",
+                        "description": "User can approve workorder",
+                        "example": false
+                    },
+                    "canAssignTechnician": {
+                        "type": "boolean",
+                        "description": "User can assign/reassign technicians",
+                        "example": true
+                    },
+                    "canRecordLabor": {
+                        "type": "boolean",
+                        "description": "User can record labor entries",
+                        "example": true
+                    },
+                    "canRecordPartsUsage": {
+                        "type": "boolean",
+                        "description": "User can record parts usage",
+                        "example": true
+                    },
+                    "canViewFinancials": {
+                        "type": "boolean",
+                        "description": "User can view financial data",
+                        "example": false
+                    },
+                    "canEditWorkorder": {
+                        "type": "boolean",
+                        "description": "User can edit workorder",
+                        "example": true
+                    },
+                    "canDeleteWorkorder": {
+                        "type": "boolean",
+                        "description": "User can delete workorder",
+                        "example": false
+                    }
+                }
+            },
+            "WorkorderDetailResponse": {
+                "type": "object",
+                "description": "Comprehensive workorder detail with role-based visibility",
+                "properties": {
+                    "workorderId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Workorder ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "workorderNumber": {
+                        "type": "string",
+                        "description": "Workorder number (from sequence)",
+                        "example": "WO-2024-5001"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Workorder status",
+                        "enum": [
+                            "DRAFT",
+                            "APPROVED",
+                            "ASSIGNED",
+                            "WORK_IN_PROGRESS",
+                            "AWAITING_PARTS",
+                            "AWAITING_APPROVAL",
+                            "READY_FOR_PICKUP",
+                            "COMPLETED",
+                            "CANCELLED"
+                        ],
+                        "example": "WORK_IN_PROGRESS"
+                    },
+                    "customerId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Customer ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    "customerName": {
+                        "type": "string",
+                        "description": "Customer name",
+                        "example": "John Doe"
+                    },
+                    "vehicleId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Vehicle ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440002"
+                    },
+                    "vehicleDescription": {
+                        "type": "string",
+                        "description": "Vehicle description",
+                        "example": 2020
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation timestamp",
+                        "example": "2024-01-27T10:00:00Z"
+                    },
+                    "createdBy": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Created by user ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440003"
+                    },
+                    "isStarted": {
+                        "type": "boolean",
+                        "description": "Is workorder started (derived from status)",
+                        "example": true
+                    },
+                    "isInProgress": {
+                        "type": "boolean",
+                        "description": "Is workorder in progress (derived from status)",
+                        "example": true
+                    },
+                    "isCompleted": {
+                        "type": "boolean",
+                        "description": "Is workorder completed (derived from status)",
+                        "example": false
+                    },
+                    "startedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Start timestamp",
+                        "example": "2024-01-27T14:30:00Z"
+                    },
+                    "assignedTechnicianId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Assigned technician ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440004"
+                    },
+                    "assignedTechnicianName": {
+                        "type": "string",
+                        "description": "Assigned technician name",
+                        "example": "Jane Smith"
+                    },
+                    "services": {
+                        "type": "array",
+                        "description": "Service line items with labor totals",
+                        "items": {
+                            "$ref": "#/components/schemas/WorkorderServiceResponse"
+                        }
+                    },
+                    "parts": {
+                        "type": "array",
+                        "description": "Part line items with usage totals",
+                        "items": {
+                            "$ref": "#/components/schemas/WorkorderPartResponse"
+                        }
+                    },
+                    "estimatedTotal": {
+                        "type": "number",
+                        "description": "Estimated total (conditionally included based on canViewFinancials)",
+                        "example": 1245.5
+                    },
+                    "laborTotal": {
+                        "type": "number",
+                        "description": "Total labor cost (conditionally included)",
+                        "example": 425.0
+                    },
+                    "partsTotal": {
+                        "type": "number",
+                        "description": "Total parts cost (conditionally included)",
+                        "example": 720.5
+                    },
+                    "taxTotal": {
+                        "type": "number",
+                        "description": "Total tax (conditionally included)",
+                        "example": 100.0
+                    },
+                    "capabilities": {
+                        "$ref": "#/components/schemas/WorkorderCapabilities",
+                        "description": "Capability flags indicating allowed actions"
+                    }
+                },
+                "required": [
+                    "capabilities",
+                    "createdAt",
+                    "customerId",
+                    "status",
+                    "vehicleId",
+                    "workorderId"
+                ]
+            },
+            "WorkorderPartResponse": {
+                "type": "object",
+                "description": "Workorder part line item with usage totals",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Part line item ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "productEntityId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Product entity ID from catalog",
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Part description",
+                        "example": "Brake Rotor - Front"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Part line status",
+                        "enum": [
+                            "PENDING_APPROVAL",
+                            "OPEN",
+                            "READY_TO_EXECUTE",
+                            "IN_PROGRESS",
+                            "COMPLETED",
+                            "CANCELLED"
+                        ],
+                        "example": "OPEN"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "description": "Authorized quantity from estimate",
+                        "example": 2.0
+                    },
+                    "unitPrice": {
+                        "type": "number",
+                        "description": "Unit price per part",
+                        "example": 65.0
+                    },
+                    "quantityIssued": {
+                        "type": "number",
+                        "description": "Quantity issued from inventory",
+                        "example": 2.0
+                    },
+                    "quantityConsumed": {
+                        "type": "number",
+                        "description": "Quantity consumed (cannot be returned)",
+                        "example": 1.5
+                    },
+                    "quantityReturned": {
+                        "type": "number",
+                        "description": "Quantity returned to inventory",
+                        "example": 0.5
+                    },
+                    "partCost": {
+                        "type": "number",
+                        "description": "Total part cost (authorized quantity * unit price)",
+                        "example": 130.0
+                    },
+                    "lineTotal": {
+                        "type": "number",
+                        "description": "Line total from estimate",
+                        "example": 130.0
+                    }
+                }
+            },
+            "WorkorderServiceResponse": {
+                "type": "object",
+                "description": "Workorder service line item with labor totals",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Service line item ID",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "serviceEntityId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Service entity ID from catalog",
+                        "example": "550e8400-e29b-41d4-a716-446655440001"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Service description",
+                        "example": "Brake Pad Replacement"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Service line status",
+                        "enum": [
+                            "PENDING_APPROVAL",
+                            "OPEN",
+                            "READY_TO_EXECUTE",
+                            "IN_PROGRESS",
+                            "COMPLETED",
+                            "CANCELLED"
+                        ],
+                        "example": "OPEN"
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "description": "Authorized quantity (hours for labor)",
+                        "example": 2.5
+                    },
+                    "unitPrice": {
+                        "type": "number",
+                        "description": "Unit price (hourly rate)",
+                        "example": 85.0
+                    },
+                    "totalLaborHours": {
+                        "type": "number",
+                        "description": "Total labor hours recorded",
+                        "example": 1.5
+                    },
+                    "laborCost": {
+                        "type": "number",
+                        "description": "Total labor cost",
+                        "example": 127.5
+                    },
+                    "lineTotal": {
+                        "type": "number",
+                        "description": "Line total from estimate",
+                        "example": 212.5
+                    }
+                }
+            },
+            "CompletionPreconditionsResponse": {
+                "type": "object",
+                "description": "Completion precondition evaluation response",
+                "properties": {
+                    "workorderId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Workorder identifier"
+                    },
+                    "canComplete": {
+                        "type": "boolean",
+                        "description": "Whether the workorder can be completed"
+                    },
+                    "currentStatus": {
+                        "type": "string",
+                        "description": "Current status"
+                    },
+                    "checklistItems": {
+                        "type": "array",
+                        "description": "Checklist items evaluated before completion",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "blockingReasons": {
+                        "type": "array",
+                        "description": "Blocking reasons that prevent completion",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "unresolvedApprovalGatedChangeRequests": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Number of unresolved approval-gated change requests"
+                    },
+                    "nonTerminalServiceItems": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Number of service items not in COMPLETED/CANCELLED status"
+                    },
+                    "nonTerminalPartItems": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Number of part items not in COMPLETED/CANCELLED status"
+                    },
+                    "emergencyDenialAcknowledged": {
+                        "type": "boolean",
+                        "description": "Whether emergency denial acknowledgment requirements are satisfied"
+                    },
+                    "hasBillableItems": {
+                        "type": "boolean",
+                        "description": "Whether at least one billable item exists for final snapshot"
                     }
                 }
             },

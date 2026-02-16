@@ -85,7 +85,7 @@ public class EstimateController {
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByCustomer(
-            @Parameter(description = "ID of the customer", example = "1") @PathVariable UUID customerId) {
+            @Parameter(description = "ID of the customer", example = "550e8400-e29b-41d4-a716-446655440010") @PathVariable UUID customerId) {
         return estimateService.getEstimatesByCustomer(customerId);
     }
 
@@ -95,7 +95,7 @@ public class EstimateController {
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_SHOP", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByShop(
-            @Parameter(description = "ID of the shop", example = "1") @PathVariable UUID locationId) {
+            @Parameter(description = "ID of the shop", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable UUID locationId) {
         return estimateService.getEstimatesByLocation(locationId);
     }
 
@@ -105,7 +105,7 @@ public class EstimateController {
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_LOCATION", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:estimate:view')")
     public List<EstimateResponse> getEstimatesByLocation(
-            @Parameter(description = "ID of the location", example = "1") @PathVariable UUID locationId) {
+            @Parameter(description = "ID of the location", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable UUID locationId) {
         return estimateService.getEstimatesByLocation(locationId);
     }
 
@@ -154,7 +154,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate:decline')")
     public ResponseEntity<EstimateResponse> declineEstimate(
             @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Reason for decline") @RequestParam(required = false) String reason) {
+            @Parameter(description = "Reason for decline", example = "Customer declined additional work") @RequestParam(required = false) String reason) {
         try {
             EstimateResponse declined = estimateService.declineEstimate(estimateId, reason);
             return ResponseEntity.ok(declined);
@@ -232,7 +232,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate:promote')")
     public ResponseEntity<WorkorderResponse> promoteEstimateToWorkorder(
             @Parameter(description = "ID of the estimate to promote", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Idempotency-Key header for safe retries") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "Idempotency-Key header for safe retries", example = "estimate-promote-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         try {
             log.info("Promoting estimate {} to workorder (idempotencyKey={})", estimateId, idempotencyKey);
 
@@ -257,7 +257,7 @@ public class EstimateController {
             // preconditions
             // and throws PromotionValidationException if validation fails
             Workorder workorder = workorderService.createWorkorder(estimateId, null);
-            
+
             // Convert to DTO
             WorkorderResponse response = WorkorderResponse.fromEntity(workorder);
 
@@ -270,7 +270,8 @@ public class EstimateController {
                     // Check if it points to the same workorder or a different one
                     var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
                     if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(response.getId())) {
-                        log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",
+                        log.warn(
+                                "Race condition detected: idempotency key {} already registered for different workorder {}",
                                 idempotencyKey, existingWorkorderId.get());
                         // Return the existing workorder to maintain idempotency semantics
                         return workorderService.getWorkorderById(existingWorkorderId.get())
@@ -279,7 +280,7 @@ public class EstimateController {
                                 .orElse(ResponseEntity.ok(response)); // Fallback to current if not found
                     }
                     // If it points to the same workorder, we can proceed normally
-                    log.debug("Idempotency key {} already registered for current workorder {}", 
+                    log.debug("Idempotency key {} already registered for current workorder {}",
                             idempotencyKey, response.getId());
                 }
             }
@@ -532,7 +533,7 @@ public class EstimateController {
     @PreAuthorize("hasAuthority('workorder:estimate_snapshot:create')")
     public ResponseEntity<EstimateSnapshotResponse> createEstimateSnapshot(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
-            @Parameter(description = "Optional notes about why snapshot was created") @RequestParam(required = false) @Nullable String notes) {
+            @Parameter(description = "Optional notes about why snapshot was created", example = "Snapshot captured before approval") @RequestParam(required = false) @Nullable String notes) {
         try {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
             EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, username, notes);

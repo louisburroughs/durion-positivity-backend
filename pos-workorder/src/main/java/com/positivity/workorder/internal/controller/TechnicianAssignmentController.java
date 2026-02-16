@@ -60,8 +60,8 @@ public class TechnicianAssignmentController {
     public ResponseEntity<TechnicianAssignmentResponse> assignTechnician(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Valid @RequestBody AssignTechnicianRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate assignments") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate assignments", example = "tech-assign-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "User ID from gateway authentication", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
 
         UUID assignedBy = resolveUserId(request.getAssignedByUserId(), userIdHeader);
 
@@ -113,8 +113,8 @@ public class TechnicianAssignmentController {
     public ResponseEntity<TechnicianAssignmentResponse> reassignTechnician(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Valid @RequestBody ReassignTechnicianRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate reassignments") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate reassignments", example = "tech-reassign-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "User ID from gateway authentication", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
 
         UUID reassignedBy = resolveUserId(request.getReassignedByUserId(), userIdHeader);
 

@@ -57,8 +57,8 @@ public class WorkorderLaborController {
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Parameter(description = "ID of the service item", example = "550e8400-e29b-41d4-a716-446655440010") @PathVariable UUID serviceId,
             @Valid @RequestBody StartLaborRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate starts") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @Parameter(description = "User ID from gateway authentication") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate starts", example = "labor-start-550e8400-e29b-41d4-a716-446655440001") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "User ID from gateway authentication", example = "550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
 
         UUID userId = resolveUserId(userIdHeader);
 
@@ -107,7 +107,7 @@ public class WorkorderLaborController {
     public ResponseEntity<WorkorderLaborEntryResponse> stopLaborSession(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Parameter(description = "ID of the labor entry to stop", example = "550e8400-e29b-41d4-a716-446655440100") @PathVariable UUID entryId,
-            @Parameter(description = "Optional idempotency key to prevent duplicate stops") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate stops", example = "labor-stop-550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         try {
             var entry = laborService.stopLaborSession(entryId, idempotencyKey);
@@ -167,7 +167,7 @@ public class WorkorderLaborController {
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001") @PathVariable UUID workorderId,
             @Parameter(description = "ID of the labor entry to adjust", example = "550e8400-e29b-41d4-a716-446655440100") @PathVariable UUID entryId,
             @Valid @RequestBody AdjustLaborRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate adjustments") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate adjustments", example = "labor-adjust-550e8400-e29b-41d4-a716-446655440100") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         try {
             WorkorderLaborEntry entry = laborService.adjustLaborHours(

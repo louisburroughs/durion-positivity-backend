@@ -42,7 +42,7 @@ public class WorkorderDetailController {
                     @ApiResponse(responseCode = "404", description = "Workorder not found")
             })
     public ResponseEntity<WorkorderDetailResponse> getWorkorderDetail(
-            @Parameter(description = "Workorder ID", required = true) @PathVariable @NonNull UUID workorderId,
+            @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable @NonNull UUID workorderId,
             @Parameter(description = "User authorities (comma-separated)", example = "workorder:workorder:view,workorder:financials:view") @RequestHeader(value = "X-Authorities", required = false) String authorities) {
 
         // Extract authorities from header
