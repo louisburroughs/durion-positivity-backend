@@ -26,20 +26,26 @@ public class TaxServiceClient {
 
     @NonNull
     public BigDecimal calculateTax(@NonNull BigDecimal subtotal, String partyId) {
-        try {
-            TaxCalculationResponse response = restClient.post()
-                    .uri("/calculate")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of(
-                            "subtotal", subtotal,
-                            "partyId", partyId == null ? "" : partyId))
-                    .retrieve()
-                    .body(TaxCalculationResponse.class);
+        log.debug("Calculating tax for subtotal {} and partyId {}", subtotal, partyId);
+        
+        TaxCalculationResponse response = restClient.post()
+                .uri("/calculate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "subtotal", subtotal,
+                        "partyId", partyId == null ? "" : partyId))
+                .retrieve()
+                .body(TaxCalculationResponse.class);
 
-            return response.getTaxAmount();
-        } catch (Exception ex) {
-            log.warn("Tax service unavailable; using zero tax fallback: {}", ex.getMessage());
-            return BigDecimal.ZERO;
+        if (response == null) {
+            throw new IllegalStateException("Tax service returned an empty response for tax calculation");
         }
+        
+        BigDecimal taxAmount = response.getTaxAmount();
+        if (taxAmount == null) {
+            throw new IllegalStateException("Tax service returned a null taxAmount in the response");
+        }
+
+        return taxAmount;
     }
 }
