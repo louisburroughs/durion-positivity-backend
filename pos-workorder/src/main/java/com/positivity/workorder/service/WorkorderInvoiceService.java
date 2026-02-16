@@ -160,7 +160,15 @@ public class WorkorderInvoiceService {
         // Use explicit ID-based deduplication to ensure correctness regardless of equals/hashCode implementation
         var seenIds = new HashSet<UUID>();
         parts = parts.stream()
-                .filter(part -> seenIds.add(part.getId()))
+                .filter(part -> {
+                    UUID id = part.getId();
+                    if (id == null) {
+                        // If a part has a null ID, skip deduplication for it to avoid silently dropping items
+                        log.warn("WorkorderPart with null id encountered while building invoice line items for workorder {}", workorderId);
+                        return true;
+                    }
+                    return seenIds.add(id);
+                })
                 .toList();
 
         parts.forEach(part -> lineItems.add(InvoiceLineItem.builder()
