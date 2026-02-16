@@ -215,17 +215,26 @@ class WorkorderInvoiceServiceTest {
     void generateInvoice_DeduplicatesParts_WhenPartHasBothReferences() {
         Workorder workorder = completedWorkorder();
         
-        // Create a part that would appear in service-related query
-        UUID partId1 = UUID.randomUUID();
-        WorkorderPart partFromService = WorkorderPart.builder()
-                .id(partId1)
+        // Create a duplicate part that will be returned by both queries (same ID)
+        // This simulates a scenario where a part has both workorder and workOrderService references
+        UUID duplicatePartId = UUID.randomUUID();
+        WorkorderPart duplicatePart1 = WorkorderPart.builder()
+                .id(duplicatePartId)
                 .description("Oil Filter")
                 .quantity(new BigDecimal("1.0000"))
                 .unitPrice(new BigDecimal("15.0000"))
                 .lineTotal(new BigDecimal("15.0000"))
                 .build();
         
-        // Create a standalone part with only workorder reference
+        WorkorderPart duplicatePart2 = WorkorderPart.builder()
+                .id(duplicatePartId)  // Same ID as duplicatePart1
+                .description("Oil Filter")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("15.0000"))
+                .lineTotal(new BigDecimal("15.0000"))
+                .build();
+        
+        // Create a standalone part with unique ID
         WorkorderPart standalonePart = WorkorderPart.builder()
                 .id(UUID.randomUUID())
                 .description("Standalone Part")
@@ -237,14 +246,12 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of());
         
-        // The new repository query findByWorkorderIdAndWorkOrderServiceIsNull only returns
-        // parts where workOrderService is null. Parts with both references would only be
-        // returned by findByWorkOrderService_WorkOrder_Id.
-        // The service-level deduplication provides additional safety.
+        // Simulate a scenario where the same part (by ID) is returned by both queries
+        // This tests the service-level deduplication safety measure
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
-                .thenReturn(List.of(partFromService));
+                .thenReturn(List.of(duplicatePart1));
         when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
-                .thenReturn(List.of(standalonePart));
+                .thenReturn(List.of(duplicatePart2, standalonePart));
         
     @DisplayName("generateInvoice excludes CANCELLED services and parts from invoice line items")
     void generateInvoice_ExcludesCancelledItems() {
@@ -307,15 +314,15 @@ class WorkorderInvoiceServiceTest {
 
         List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
         
-        // Verify we have exactly 2 distinct parts (no duplicates)
+        // Verify we have exactly 2 distinct parts (duplicate was filtered out)
         assertThat(lineItems).hasSize(2);
         
-        // Verify both parts are present
+        // Verify both parts are present (Oil Filter should appear once, not twice)
         assertThat(lineItems)
                 .extracting(InvoiceLineItem::getDescription)
                 .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
         
-        // Verify amounts are correct (no double-billing)
+        // Verify amounts are correct (no double-billing - Oil Filter $15 + Standalone Part $25 = $40)
         BigDecimal totalAmount = lineItems.stream()
                 .map(InvoiceLineItem::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
