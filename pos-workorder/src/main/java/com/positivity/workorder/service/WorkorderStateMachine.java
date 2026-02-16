@@ -48,6 +48,9 @@ public class WorkorderStateMachine {
             WorkorderItemStatus.COMPLETED,
             WorkorderItemStatus.CANCELLED);
 
+    private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES = Set.of(
+            WorkorderItemStatus.CANCELLED);
+
     private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
 
     public record CompletionPreconditions(
@@ -111,15 +114,7 @@ public class WorkorderStateMachine {
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
                 .findByWorkOrder_Id(workorderId);
 
-        List<WorkorderPart> parts = new ArrayList<>();
-        parts.addAll(workorderPartRepository.findByWorkorderId(workorderId));
-        List<WorkorderPart> partsByService = workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId);
-        for (WorkorderPart part : partsByService) {
-            boolean alreadyPresent = parts.stream().anyMatch(existing -> existing.getId().equals(part.getId()));
-            if (!alreadyPresent) {
-                parts.add(part);
-            }
-        }
+        List<WorkorderPart> parts = loadDeduplicatedWorkorderParts(workorderId);
 
         long nonTerminalServiceItems = services.stream()
                 .filter(service -> service.getStatus() == null || !TERMINAL_ITEM_STATUSES.contains(service.getStatus()))
@@ -153,6 +148,11 @@ public class WorkorderStateMachine {
                     "Workorder %s cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
                     workorderId));
         }
+        if (!hasBillableItems) {
+            blockingReasons.add(String.format(
+                    "Workorder %s cannot be completed. There are no billable service or part items for final snapshot",
+                    workorderId));
+        }
         List<String> checklistItems = List.of(
                 "All workorder services are COMPLETED or CANCELLED",
                 "All workorder parts are COMPLETED or CANCELLED",
@@ -160,10 +160,12 @@ public class WorkorderStateMachine {
                 "All emergency/safety denial acknowledgments are captured",
                 "At least one billable service or part exists for final snapshot");
 
+        boolean canComplete = blockingReasons.isEmpty();
+
         return new CompletionPreconditions(
                 workorderId,
                 workorder.getStatus().name(),
-                blockingReasons.isEmpty(),
+                canComplete,
                 checklistItems,
                 blockingReasons,
                 unresolvedApprovalGated.size(),
@@ -304,23 +306,16 @@ public class WorkorderStateMachine {
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
                 .findByWorkOrder_Id(workorder.getId());
 
-        List<WorkorderPart> parts = new ArrayList<>();
-        parts.addAll(workorderPartRepository.findByWorkorderId(workorder.getId()));
-        List<WorkorderPart> partsByService = workorderPartRepository
-                .findByWorkOrderService_WorkOrder_Id(workorder.getId());
-        for (WorkorderPart part : partsByService) {
-            boolean alreadyPresent = parts.stream().anyMatch(existing -> existing.getId().equals(part.getId()));
-            if (!alreadyPresent) {
-                parts.add(part);
-            }
-        }
+        List<WorkorderPart> parts = loadDeduplicatedWorkorderParts(workorder.getId());
 
         BigDecimal serviceTotal = services.stream()
+                .filter(service -> !isExcludedFromBillableTotal(service.getStatus()))
                 .map(com.positivity.workorder.internal.entity.WorkorderService::getLineTotal)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal partTotal = parts.stream()
+                .filter(part -> !isExcludedFromBillableTotal(part.getStatus()))
                 .map(WorkorderPart::getLineTotal)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -402,6 +397,24 @@ public class WorkorderStateMachine {
                 .build();
 
         transitionRepository.save(transition);
+    }
+
+    private List<WorkorderPart> loadDeduplicatedWorkorderParts(UUID workorderId) {
+        Map<UUID, WorkorderPart> partsById = new LinkedHashMap<>();
+
+        for (WorkorderPart part : workorderPartRepository.findByWorkorderId(workorderId)) {
+            partsById.putIfAbsent(part.getId(), part);
+        }
+
+        for (WorkorderPart part : workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)) {
+            partsById.putIfAbsent(part.getId(), part);
+        }
+
+        return new ArrayList<>(partsById.values());
+    }
+
+    private boolean isExcludedFromBillableTotal(WorkorderItemStatus status) {
+        return status != null && EXCLUDED_BILLABLE_TOTAL_STATUSES.contains(status);
     }
 
     public List<WorkorderStateTransition> getTransitionHistory(UUID workorderId) {
