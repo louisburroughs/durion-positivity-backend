@@ -425,10 +425,11 @@ class WorkorderInvoiceServiceTest {
         
         // Only the completed items should be included
         assertThat(lineItems).hasSize(2);
-        assertThat(lineItems).extracting(InvoiceLineItem::getDescription)
-                .containsExactlyInAnyOrder("Completed Service", "Completed Part");
-        assertThat(lineItems).extracting(InvoiceLineItem::getDescription)
-                .doesNotContain("Cancelled Service", "Cancelled Part");
+        List<String> descriptions = lineItems.stream()
+                .map(InvoiceLineItem::getDescription)
+                .toList();
+        assertThat(descriptions).containsExactlyInAnyOrder("Completed Service", "Completed Part");
+        assertThat(descriptions).doesNotContain("Cancelled Service", "Cancelled Part");
     }
 
     @Test
