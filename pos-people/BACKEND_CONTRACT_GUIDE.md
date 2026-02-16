@@ -2,6 +2,7 @@
 
 **Version:** 1.0  
 **Audience:** Backend developers and API consumers  
+**Last Updated:** 2026-02-16  
 **OpenAPI Source:** `pos-people/docs/openapi.json`
 
 ## Overview
