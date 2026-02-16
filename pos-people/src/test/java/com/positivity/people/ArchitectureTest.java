@@ -76,4 +76,5 @@ public class ArchitectureTest {
                         .should().bePublic()
                         .allowEmptyShould(true)
                         .because("service layer is the public API of this module");
+
 }

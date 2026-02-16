@@ -1,1 +1,1520 @@
-{"openapi":"3.1.0","info":{"title":"POS Human Resources Service API","description":"Human Resources service for employee management, payroll, and benefits administration","contact":{"name":"Durion Team","email":"louis.burroughs@gmail.com"},"version":"v1"},"servers":[{"url":"http://localhost:8085","description":"Generated server url"}],"tags":[{"name":"People Reports API","description":"Reporting endpoints for people and attendance data"},{"name":"Time Entry Approval API","description":"Approve/reject time entries (batch)"},{"name":"People Availability API","description":"Operations for querying people availability"},{"name":"Work Sessions API","description":"Operations for managing work sessions and breaks"},{"name":"People API","description":"Operations related to people records"},{"name":"People - TimeEntries","description":"Time entry adjustments and related APIs"},{"name":"People TimeEntries","description":"Time entry adjustments and related APIs"},{"name":"People - Exceptions","description":"Time entry exception APIs"},{"name":"User-Person Linking API","description":"Link authentication users to person records"}],"paths":{"/v1/people/{personId}":{"get":{"tags":["People API"],"summary":"Get person by ID","description":"Retrieve a person by their unique ID.","operationId":"getPersonById","parameters":[{"name":"personId","in":"path","description":"ID of the person to retrieve","required":true,"schema":{"type":"string","format":"uuid"},"example":"123e4567-e89b-12d3-a456-426614174000"}],"responses":{"200":{"description":"Person found and returned.","content":{"*/*":{"schema":{"$ref":"#/components/schemas/Person"}}}},"404":{"description":"Person not found.","content":{"*/*":{"schema":{"$ref":"#/components/schemas/Person"}}}}}},"put":{"tags":["People API"],"summary":"Update an existing person","description":"Update the details of an existing person.","operationId":"updatePerson","parameters":[{"name":"personId","in":"path","description":"ID of the person to update","required":true,"schema":{"type":"string","format":"uuid"},"example":"123e4567-e89b-12d3-a456-426614174000"}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Person"}}},"required":true},"responses":{"404":{"description":"Person not found.","content":{"*/*":{"schema":{"$ref":"#/components/schemas/Person"}}}},"200":{"description":"Person updated successfully.","content":{"*/*":{"schema":{"$ref":"#/components/schemas/Person"}}}}}},"delete":{"tags":["People API"],"summary":"Delete a person","description":"Delete a person by their unique ID.","operationId":"deletePerson","parameters":[{"name":"personId","in":"path","description":"ID of the person to delete","required":true,"schema":{"type":"string","format":"uuid"},"example":"123e4567-e89b-12d3-a456-426614174000"}],"responses":{"404":{"description":"Person not found."},"204":{"description":"Person deleted successfully."}}}},"/v1/people":{"get":{"tags":["People API"],"summary":"Get all people","description":"Retrieve a list of all people.","operationId":"getAllPeople","responses":{"200":{"description":"List of people returned successfully.","content":{"*/*":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/Person"}}}}}}},"post":{"tags":["People API"],"summary":"Create a new person","description":"Add a new person to the system.","operationId":"createPerson","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Person"}}},"required":true},"responses":{"200":{"description":"Person created successfully.","content":{"*/*":{"schema":{"$ref":"#/components/schemas/Person"}}}}}}},"/v1/people/{personUuid}/access/assignments":{"get":{"tags":["person-access-controller"],"operationId":"getAssignments","parameters":[{"name":"personUuid","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"includeHistory","in":"query","required":false,"schema":{"type":"boolean"}},{"name":"endDate","in":"query","required":false,"schema":{"type":"string","format":"date-time"}}],"responses":{"200":{"description":"OK","content":{"*/*":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/UserRoleDto"}}}}}}},"post":{"tags":["person-access-controller"],"operationId":"createAssignment","parameters":[{"name":"personUuid","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/PersonRoleAssignmentRequest"}}},"required":true},"responses":{"200":{"description":"OK","content":{"*/*":{"schema":{"$ref":"#/components/schemas/UserRoleDto"}}}}}}},"/v1/people/workSessions/{id}/breaks/stop":{"post":{"tags":["Work Sessions API"],"summary":"Stop work session break","description":"End a break within a work session.","operationId":"stopWorkSessionBreak","parameters":[{"name":"id","in":"path","description":"Work session ID","required":true,"schema":{"type":"integer","format":"int64"},"example":1}],"requestBody":{"content":{"application/json":{"schema":{"description":"Break stop request body"}}}},"responses":{"404":{"description":"Work session or break not found.","content":{"*/*":{"schema":{}}}},"200":{"description":"Break stopped successfully.","content":{"*/*":{"schema":{}}}}}}},"/v1/people/workSessions/{id}/breaks/start":{"post":{"tags":["Work Sessions API"],"summary":"Start work session break","description":"Start a break within an active work session.","operationId":"startWorkSessionBreak","parameters":[{"name":"id","in":"path","description":"Work session ID","required":true,"schema":{"type":"integer","format":"int64"},"example":1}],"requestBody":{"content":{"application/json":{"schema":{"description":"Break start request body"}}}},"responses":{"404":{"description":"Work session not found.","content":{"*/*":{"schema":{}}}},"200":{"description":"Break started successfully.","content":{"*/*":{"schema":{}}}}}}},"/v1/people/workSessions/stop":{"post":{"tags":["Work Sessions API"],"summary":"Stop work session","description":"Stop an active work session.","operationId":"stopWorkSession","requestBody":{"content":{"application/json":{"schema":{"description":"Work session stop request body"}}}},"responses":{"200":{"description":"Work session stopped successfully.","content":{"*/*":{"schema":{}}}}}}},"/v1/people/workSessions/start":{"post":{"tags":["Work Sessions API"],"summary":"Start work session","description":"Create/start a work session for a person.","operationId":"startWorkSession","requestBody":{"content":{"application/json":{"schema":{"description":"Work session start request body"}}}},"responses":{"200":{"description":"Work session started successfully.","content":{"*/*":{"schema":{}}}}}}},"/v1/people/users/{userId}/link":{"post":{"tags":["User-Person Linking API"],"summary":"Link user to person","description":"Create a link between an authentication user and a person record","operationId":"linkUserToPerson","parameters":[{"name":"userId","in":"path","description":"User ID from authentication system","required":true,"schema":{"type":"string"}}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/LinkUserToPersonRequest"}}},"required":true},"responses":{"201":{"description":"Link created successfully","content":{"*/*":{"schema":{"$ref":"#/components/schemas/UserPersonLinkResponse"}}}},"409":{"description":"User already linked","content":{"*/*":{"schema":{"$ref":"#/components/schemas/UserPersonLinkResponse"}}}},"404":{"description":"Person not found","content":{"*/*":{"schema":{"$ref":"#/components/schemas/UserPersonLinkResponse"}}}},"400":{"description":"Invalid request","content":{"*/*":{"schema":{"$ref":"#/components/schemas/UserPersonLinkResponse"}}}}}},"delete":{"tags":["User-Person Linking API"],"summary":"Unlink user from person","description":"Remove the link between a user and person","operationId":"unlinkUserFromPerson","parameters":[{"name":"userId","in":"path","description":"User ID","required":true,"schema":{"type":"string"}}],"responses":{"204":{"description":"Link deleted successfully"},"404":{"description":"Link not found"}}}},"/v1/people/timeEntries/reject":{"post":{"tags":["Time Entry Approval API"],"summary":"Batch reject time entries","description":"Reject multiple time entries. rejectionReason is required for each decision.","operationId":"rejectTimeEntries","parameters":[{"name":"X-User-Id","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Permissions","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Correlation-Id","in":"header","required":false,"schema":{"type":"string"}}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryDecisionBatchRequest"}}},"required":true},"responses":{"400":{"description":"Invalid request - rejectionReason required for all decisions","content":{"*/*":{"schema":{}}}},"200":{"description":"Time entries rejected successfully","content":{"*/*":{"schema":{}}}}}}},"/v1/people/timeEntries/approve":{"post":{"tags":["Time Entry Approval API"],"summary":"Batch approve time entries","description":"Approve multiple time entries. pos-people is authoritative for approval execution.","operationId":"approveTimeEntries","parameters":[{"name":"X-User-Id","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Permissions","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Correlation-Id","in":"header","required":false,"schema":{"type":"string"}}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryDecisionBatchRequest"}}},"required":true},"responses":{"200":{"description":"Time entries approved successfully","content":{"*/*":{"schema":{}}}},"400":{"description":"Invalid request - decisions required","content":{"*/*":{"schema":{}}}}}}},"/v1/people/timeEntries/adjustments":{"post":{"tags":["People TimeEntries"],"summary":"Create a time entry adjustment","description":"Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.","operationId":"createAdjustment","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryAdjustmentRequest"}}},"required":true},"responses":{"200":{"description":"Adjustment created","content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryAdjustmentResponse"}}}},"400":{"description":"Invalid request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryAdjustmentResponse"}}}}}}},"/v1/people/timeEntries/adjustments/{adjustmentId}/approve":{"post":{"tags":["People TimeEntries"],"summary":"Approve a time entry adjustment","description":"Approve a pending time entry adjustment. Requires approval permissions.","operationId":"approveAdjustment","parameters":[{"name":"adjustmentId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"X-Permissions","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-User-Id","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Correlation-Id","in":"header","required":false,"schema":{"type":"string"}}],"responses":{"200":{"description":"Adjustment approved successfully","content":{"application/json":{"schema":{}}}},"404":{"description":"Adjustment not found","content":{"application/json":{"schema":{}}}},"403":{"description":"Forbidden - insufficient permissions","content":{"application/json":{"schema":{}}}}}}},"/v1/people/exceptions":{"get":{"tags":["People - Exceptions"],"summary":"List exceptions, optional filter by employeeId","description":"Retrieve all exceptions or filter by a specific employee ID.","operationId":"listByEmployee","parameters":[{"name":"employeeId","in":"query","required":false,"schema":{"type":"string"}}],"responses":{"200":{"description":"List returned","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/TimeEntryException"}}}}}}},"post":{"tags":["People - Exceptions"],"summary":"Create a time entry exception","description":"Create a new time entry exception record with validation of required fields.","operationId":"createException","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryExceptionRequest"}}},"required":true},"responses":{"200":{"description":"Exception created","content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryExceptionResponse"}}}},"400":{"description":"Invalid request","content":{"application/json":{"schema":{"$ref":"#/components/schemas/TimeEntryExceptionResponse"}}}}}}},"/v1/people/exceptions/{exceptionId}/waive":{"post":{"tags":["People - Exceptions"],"summary":"Waive an exception","description":"Waive an exception with a reason. waiveReason is required.","operationId":"waiveException","parameters":[{"name":"exceptionId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"X-User-Id","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Correlation-Id","in":"header","required":false,"schema":{"type":"string"}}],"requestBody":{"content":{"application/json":{"schema":{"type":"object","additionalProperties":{"type":"string"}}}},"required":true},"responses":{"200":{"description":"Exception waived successfully","content":{"application/json":{"schema":{}}}},"400":{"description":"Invalid request - waiveReason is required","content":{"application/json":{"schema":{}}}},"404":{"description":"Exception not found","content":{"application/json":{"schema":{}}}}}}},"/v1/people/exceptions/{exceptionId}/resolve":{"post":{"tags":["People - Exceptions"],"summary":"Resolve an exception","description":"Mark an exception as resolved with optional resolution notes.","operationId":"resolveException","parameters":[{"name":"exceptionId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"X-User-Id","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Correlation-Id","in":"header","required":false,"schema":{"type":"string"}}],"requestBody":{"content":{"application/json":{"schema":{"type":"object","additionalProperties":{"type":"string"}}}}},"responses":{"404":{"description":"Exception not found","content":{"application/json":{"schema":{}}}},"200":{"description":"Exception resolved successfully","content":{"application/json":{"schema":{}}}}}}},"/v1/people/exceptions/{exceptionId}/acknowledge":{"post":{"tags":["People - Exceptions"],"summary":"Acknowledge an exception","description":"Mark an exception as acknowledged by the specified actor.","operationId":"acknowledgeException","parameters":[{"name":"exceptionId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"X-User-Id","in":"header","required":false,"schema":{"type":"string"}},{"name":"X-Correlation-Id","in":"header","required":false,"schema":{"type":"string"}}],"responses":{"200":{"description":"OK","content":{"application/json":{"schema":{}}}}}}},"/v1/people/{personUuid}/access/roles":{"get":{"tags":["person-access-controller"],"operationId":"getRoles","parameters":[{"name":"personUuid","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"OK","content":{"*/*":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/RoleDto"}}}}}}}},"/v1/people/{personId}/users":{"get":{"tags":["User-Person Linking API"],"summary":"Get users linked to person","description":"Retrieve all user IDs linked to a person record","operationId":"getUserIdsByPersonId","parameters":[{"name":"personId","in":"path","description":"Person ID","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"User IDs returned","content":{"*/*":{"schema":{"type":"array","items":{"type":"string"}}}}},"404":{"description":"Person not found","content":{"*/*":{"schema":{"type":"array","items":{"type":"string"}}}}}}}},"/v1/people/users/{userId}/person":{"get":{"tags":["User-Person Linking API"],"summary":"Get person by user ID","description":"Retrieve the person record linked to a user","operationId":"getPersonByUserId","parameters":[{"name":"userId","in":"path","description":"User ID","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Person found","content":{"*/*":{"schema":{"$ref":"#/components/schemas/PersonResponse"}}}},"404":{"description":"Link or person not found","content":{"*/*":{"schema":{"$ref":"#/components/schemas/PersonResponse"}}}}}}},"/v1/people/timeEntries/{timeEntryId}/adjustments":{"get":{"tags":["People TimeEntries"],"summary":"List adjustments for a time entry","description":"Retrieve all adjustments associated with a specific time entry.","operationId":"listForTimeEntry","parameters":[{"name":"timeEntryId","in":"path","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"List returned","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/TimeEntryAdjustment"}}}}}}}},"/v1/people/reports/attendanceJobtimeDiscrepancy":{"get":{"tags":["People Reports API"],"summary":"Get attendance and job time discrepancy report","description":"Reporting endpoint for attendance vs. job time discrepancies.","operationId":"getAttendanceDiscrepancyReport","responses":{"200":{"description":"Report generated successfully.","content":{"*/*":{"schema":{}}}}}}},"/v1/people/availability":{"get":{"tags":["People Availability API"],"summary":"Get people availability","description":"Return availability with optional locationId and date filters.","operationId":"getPeopleAvailability","parameters":[{"name":"locationId","in":"query","description":"Filter by location ID","required":false,"schema":{"type":"integer","format":"int64"}},{"name":"date","in":"query","description":"Filter by date (ISO format: yyyy-MM-dd)","required":false,"schema":{"type":"string","format":"date"}}],"responses":{"200":{"description":"Availability data returned successfully.","content":{"*/*":{"schema":{}}}}}}},"/v1/people/{personUuid}/access/assignments/{roleCode}":{"delete":{"tags":["person-access-controller"],"operationId":"revokeAssignment","parameters":[{"name":"personUuid","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"roleCode","in":"path","required":true,"schema":{"type":"string"}},{"name":"endDate","in":"query","required":false,"schema":{"type":"string","format":"date-time"}}],"responses":{"200":{"description":"OK"}}}}},"components":{"schemas":{"Person":{"type":"object","description":"Person object to be created","properties":{"id":{"type":"string","format":"uuid"},"firstName":{"type":"string"},"lastName":{"type":"string"},"primaryEmail":{"type":"string"},"secondaryEmail":{"type":"string"},"phoneNumbers":{"type":"array","items":{"type":"string"}},"username":{"type":"string"}}},"PersonRoleAssignmentRequest":{"type":"object","properties":{"roleCode":{"type":"string"},"locationId":{"type":"string","format":"uuid"},"startDate":{"type":"string","format":"date-time"},"endDate":{"type":"string","format":"date-time"}},"required":["roleCode"]},"UserRoleDto":{"type":"object","properties":{"userId":{"type":"string"},"roleCode":{"type":"string"},"locationId":{"type":"string","format":"uuid"},"startDate":{"type":"string","format":"date-time"},"endDate":{"type":"string","format":"date-time"},"active":{"type":"boolean"}}},"LinkUserToPersonRequest":{"type":"object","properties":{"userId":{"type":"string"},"personId":{"type":"string","format":"uuid"},"linkType":{"type":"string"},"notes":{"type":"string"}},"required":["personId","userId"]},"UserPersonLinkResponse":{"type":"object","properties":{"linkId":{"type":"string","format":"uuid"},"userId":{"type":"string"},"personId":{"type":"string","format":"uuid"},"linkType":{"type":"string"},"createdAt":{"type":"string","format":"date-time"},"createdBy":{"type":"string"},"notes":{"type":"string"}}},"Decision":{"type":"object","properties":{"timeEntryId":{"type":"string"},"rejectionReason":{"type":"string"}}},"TimeEntryDecisionBatchRequest":{"type":"object","properties":{"decisions":{"type":"array","items":{"$ref":"#/components/schemas/Decision"}}}},"TimeEntryAdjustmentRequest":{"type":"object","properties":{"timeEntryId":{"type":"string"},"reasonCode":{"type":"string"},"notes":{"type":"string"},"proposedStartAt":{"type":"string","format":"date-time"},"proposedEndAt":{"type":"string","format":"date-time"},"minutesDelta":{"type":"integer","format":"int32"},"createdBy":{"type":"string"}}},"TimeEntryAdjustmentResponse":{"type":"object","properties":{"adjustmentId":{"type":"string","format":"uuid"},"success":{"type":"boolean"},"message":{"type":"string"}}},"TimeEntryExceptionRequest":{"type":"object","properties":{"employeeId":{"type":"string"},"exceptionCode":{"type":"string"},"severity":{"type":"string"},"timeEntryId":{"type":"string"},"resolutionNotes":{"type":"string"},"detectedAt":{"type":"string","format":"date-time"}}},"TimeEntryExceptionResponse":{"type":"object","properties":{"exceptionId":{"type":"string","format":"uuid"},"success":{"type":"boolean"},"message":{"type":"string"}}},"RoleDto":{"type":"object","properties":{"code":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},"scopeType":{"type":"string"},"active":{"type":"boolean"}}},"PersonResponse":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"firstName":{"type":"string"},"lastName":{"type":"string"},"primaryEmail":{"type":"string"},"secondaryEmail":{"type":"string"},"phoneNumbers":{"type":"array","items":{"type":"string"}},"username":{"type":"string"}}},"TimeEntryAdjustment":{"type":"object","properties":{"adjustmentId":{"type":"string","format":"uuid"},"timeEntryId":{"type":"string"},"reasonCode":{"type":"string"},"notes":{"type":"string"},"proposedStartAt":{"type":"string","format":"date-time"},"proposedEndAt":{"type":"string","format":"date-time"},"minutesDelta":{"type":"integer","format":"int32"},"status":{"type":"string","enum":["PROPOSED","PENDING","APPROVED","REJECTED"]},"createdBy":{"type":"string"},"createdAt":{"type":"string","format":"date-time"},"decidedBy":{"type":"string"},"decidedAt":{"type":"string","format":"date-time"}}},"TimeEntryException":{"type":"object","properties":{"exceptionId":{"type":"string","format":"uuid"},"employeeId":{"type":"string"},"workDate":{"type":"string","format":"date"},"exceptionCode":{"type":"string"},"severity":{"type":"string","enum":["WARNING","BLOCKING"]},"status":{"type":"string","enum":["OPEN","ACKNOWLEDGED","RESOLVED","WAIVED"]},"timeEntryId":{"type":"string"},"resolutionNotes":{"type":"string"},"detectedAt":{"type":"string","format":"date-time"},"resolvedBy":{"type":"string"},"resolvedAt":{"type":"string","format":"date-time"}}}}}}
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "POS Human Resources Service API",
+        "description": "Human Resources service for employee management, payroll, and benefits administration",
+        "contact": {
+            "name": "Durion Team",
+            "email": "louis.burroughs@gmail.com"
+        },
+        "version": "v1"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8085",
+            "description": "Generated server url"
+        }
+    ],
+    "tags": [
+        {
+            "name": "People Reports API",
+            "description": "Reporting endpoints for people and attendance data"
+        },
+        {
+            "name": "Time Entry Approval API",
+            "description": "Approve/reject time entries (batch)"
+        },
+        {
+            "name": "People Availability API",
+            "description": "Operations for querying people availability"
+        },
+        {
+            "name": "Work Sessions API",
+            "description": "Operations for managing work sessions and breaks"
+        },
+        {
+            "name": "People API",
+            "description": "Operations related to people records"
+        },
+        {
+            "name": "People - TimeEntries",
+            "description": "Time entry adjustments and related APIs"
+        },
+        {
+            "name": "People TimeEntries",
+            "description": "Time entry adjustments and related APIs"
+        },
+        {
+            "name": "People - Exceptions",
+            "description": "Time entry exception APIs"
+        },
+        {
+            "name": "User-Person Linking API",
+            "description": "Link authentication users to person records"
+        }
+    ],
+    "paths": {
+        "/v1/people/{personId}": {
+            "get": {
+                "tags": [
+                    "People API"
+                ],
+                "summary": "Get person by ID",
+                "description": "Retrieve a person by their unique ID.",
+                "operationId": "getPersonById",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "in": "path",
+                        "description": "ID of the person to retrieve",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Person found and returned.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Person"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Person"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "People API"
+                ],
+                "summary": "Update an existing person",
+                "description": "Update the details of an existing person.",
+                "operationId": "updatePerson",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "in": "path",
+                        "description": "ID of the person to update",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Person"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "404": {
+                        "description": "Person not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Person"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Person updated successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Person"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "People API"
+                ],
+                "summary": "Delete a person",
+                "description": "Delete a person by their unique ID.",
+                "operationId": "deletePerson",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "in": "path",
+                        "description": "ID of the person to delete",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Person not found."
+                    },
+                    "204": {
+                        "description": "Person deleted successfully."
+                    }
+                }
+            }
+        },
+        "/v1/people": {
+            "get": {
+                "tags": [
+                    "People API"
+                ],
+                "summary": "Get all people",
+                "description": "Retrieve a list of all people.",
+                "operationId": "getAllPeople",
+                "responses": {
+                    "200": {
+                        "description": "List of people returned successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Person"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "People API"
+                ],
+                "summary": "Create a new person",
+                "description": "Add a new person to the system.",
+                "operationId": "createPerson",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Person"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Person created successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Person"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/workSessions/{id}/breaks/stop": {
+            "post": {
+                "tags": [
+                    "Work Sessions API"
+                ],
+                "summary": "Stop work session break",
+                "description": "End a break within a work session.",
+                "operationId": "stopWorkSessionBreak",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Work session ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        },
+                        "example": 1
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "description": "Break stop request body"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "404": {
+                        "description": "Work session or break not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Break stopped successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/workSessions/{id}/breaks/start": {
+            "post": {
+                "tags": [
+                    "Work Sessions API"
+                ],
+                "summary": "Start work session break",
+                "description": "Start a break within an active work session.",
+                "operationId": "startWorkSessionBreak",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Work session ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        },
+                        "example": 1
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "description": "Break start request body"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "404": {
+                        "description": "Work session not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Break started successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/workSessions/stop": {
+            "post": {
+                "tags": [
+                    "Work Sessions API"
+                ],
+                "summary": "Stop work session",
+                "description": "Stop an active work session.",
+                "operationId": "stopWorkSession",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "description": "Work session stop request body"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Work session stopped successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/workSessions/start": {
+            "post": {
+                "tags": [
+                    "Work Sessions API"
+                ],
+                "summary": "Start work session",
+                "description": "Create/start a work session for a person.",
+                "operationId": "startWorkSession",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "description": "Work session start request body"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Work session started successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/users/{userId}/link": {
+            "post": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Link user to person",
+                "description": "Create a link between an authentication user and a person record",
+                "operationId": "linkUserToPerson",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "User ID from authentication system",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LinkUserToPersonRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Link created successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "User already linked",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Unlink user from person",
+                "description": "Remove the link between a user and person",
+                "operationId": "unlinkUserFromPerson",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "User ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Link deleted successfully"
+                    },
+                    "404": {
+                        "description": "Link not found"
+                    }
+                }
+            }
+        },
+        "/v1/people/timeEntries/reject": {
+            "post": {
+                "tags": [
+                    "Time Entry Approval API"
+                ],
+                "summary": "Batch reject time entries",
+                "description": "Reject multiple time entries. rejectionReason is required for each decision.",
+                "operationId": "rejectTimeEntries",
+                "parameters": [
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Permissions",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Correlation-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TimeEntryDecisionBatchRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request - rejectionReason required for all decisions",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Time entries rejected successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/timeEntries/approve": {
+            "post": {
+                "tags": [
+                    "Time Entry Approval API"
+                ],
+                "summary": "Batch approve time entries",
+                "description": "Approve multiple time entries. pos-people is authoritative for approval execution.",
+                "operationId": "approveTimeEntries",
+                "parameters": [
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Permissions",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Correlation-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TimeEntryDecisionBatchRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Time entries approved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request - decisions required",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/timeEntries/adjustments": {
+            "post": {
+                "tags": [
+                    "People TimeEntries"
+                ],
+                "summary": "Create a time entry adjustment",
+                "description": "Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.",
+                "operationId": "createAdjustment",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TimeEntryAdjustmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Adjustment created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TimeEntryAdjustmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TimeEntryAdjustmentResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/timeEntries/adjustments/{adjustmentId}/approve": {
+            "post": {
+                "tags": [
+                    "People TimeEntries"
+                ],
+                "summary": "Approve a time entry adjustment",
+                "description": "Approve a pending time entry adjustment. Requires approval permissions.",
+                "operationId": "approveAdjustment",
+                "parameters": [
+                    {
+                        "name": "adjustmentId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "X-Permissions",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Correlation-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Adjustment approved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Adjustment not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/exceptions": {
+            "get": {
+                "tags": [
+                    "People - Exceptions"
+                ],
+                "summary": "List exceptions, optional filter by employeeId",
+                "description": "Retrieve all exceptions or filter by a specific employee ID.",
+                "operationId": "listByEmployee",
+                "parameters": [
+                    {
+                        "name": "employeeId",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/TimeEntryException"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "People - Exceptions"
+                ],
+                "summary": "Create a time entry exception",
+                "description": "Create a new time entry exception record with validation of required fields.",
+                "operationId": "createException",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TimeEntryExceptionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Exception created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TimeEntryExceptionResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TimeEntryExceptionResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/exceptions/{exceptionId}/waive": {
+            "post": {
+                "tags": [
+                    "People - Exceptions"
+                ],
+                "summary": "Waive an exception",
+                "description": "Waive an exception with a reason. waiveReason is required.",
+                "operationId": "waiveException",
+                "parameters": [
+                    {
+                        "name": "exceptionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Correlation-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Exception waived successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request - waiveReason is required",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Exception not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/exceptions/{exceptionId}/resolve": {
+            "post": {
+                "tags": [
+                    "People - Exceptions"
+                ],
+                "summary": "Resolve an exception",
+                "description": "Mark an exception as resolved with optional resolution notes.",
+                "operationId": "resolveException",
+                "parameters": [
+                    {
+                        "name": "exceptionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Correlation-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "404": {
+                        "description": "Exception not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Exception resolved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/exceptions/{exceptionId}/acknowledge": {
+            "post": {
+                "tags": [
+                    "People - Exceptions"
+                ],
+                "summary": "Acknowledge an exception",
+                "description": "Mark an exception as acknowledged by the specified actor.",
+                "operationId": "acknowledgeException",
+                "parameters": [
+                    {
+                        "name": "exceptionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Correlation-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/{personId}/users": {
+            "get": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Get users linked to person",
+                "description": "Retrieve all user IDs linked to a person record",
+                "operationId": "getUserIdsByPersonId",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "in": "path",
+                        "description": "Person ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User IDs returned",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/users/{userId}/person": {
+            "get": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Get person by user ID",
+                "description": "Retrieve the person record linked to a user",
+                "operationId": "getPersonByUserId",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "User ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Person found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PersonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Link or person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PersonResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/timeEntries/{timeEntryId}/adjustments": {
+            "get": {
+                "tags": [
+                    "People TimeEntries"
+                ],
+                "summary": "List adjustments for a time entry",
+                "description": "Retrieve all adjustments associated with a specific time entry.",
+                "operationId": "listForTimeEntry",
+                "parameters": [
+                    {
+                        "name": "timeEntryId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/TimeEntryAdjustment"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/reports/attendanceJobtimeDiscrepancy": {
+            "get": {
+                "tags": [
+                    "People Reports API"
+                ],
+                "summary": "Get attendance and job time discrepancy report",
+                "description": "Reporting endpoint for attendance vs. job time discrepancies.",
+                "operationId": "getAttendanceDiscrepancyReport",
+                "responses": {
+                    "200": {
+                        "description": "Report generated successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/availability": {
+            "get": {
+                "tags": [
+                    "People Availability API"
+                ],
+                "summary": "Get people availability",
+                "description": "Return availability with optional locationId and date filters.",
+                "operationId": "getPeopleAvailability",
+                "parameters": [
+                    {
+                        "name": "locationId",
+                        "in": "query",
+                        "description": "Filter by location ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "date",
+                        "in": "query",
+                        "description": "Filter by date (ISO format: yyyy-MM-dd)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Availability data returned successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Person": {
+                "type": "object",
+                "description": "Person object to be created",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "firstName": {
+                        "type": "string"
+                    },
+                    "lastName": {
+                        "type": "string"
+                    },
+                    "primaryEmail": {
+                        "type": "string"
+                    },
+                    "secondaryEmail": {
+                        "type": "string"
+                    },
+                    "phoneNumbers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "username": {
+                        "type": "string"
+                    }
+                }
+            },
+            "LinkUserToPersonRequest": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "linkType": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "personId",
+                    "userId"
+                ]
+            },
+            "UserPersonLinkResponse": {
+                "type": "object",
+                "properties": {
+                    "linkId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "userId": {
+                        "type": "string"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "linkType": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Decision": {
+                "type": "object",
+                "properties": {
+                    "timeEntryId": {
+                        "type": "string"
+                    },
+                    "rejectionReason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TimeEntryDecisionBatchRequest": {
+                "type": "object",
+                "properties": {
+                    "decisions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Decision"
+                        }
+                    }
+                }
+            },
+            "TimeEntryAdjustmentRequest": {
+                "type": "object",
+                "properties": {
+                    "timeEntryId": {
+                        "type": "string"
+                    },
+                    "reasonCode": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "proposedStartAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "proposedEndAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "minutesDelta": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TimeEntryAdjustmentResponse": {
+                "type": "object",
+                "properties": {
+                    "adjustmentId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TimeEntryExceptionRequest": {
+                "type": "object",
+                "properties": {
+                    "employeeId": {
+                        "type": "string"
+                    },
+                    "exceptionCode": {
+                        "type": "string"
+                    },
+                    "severity": {
+                        "type": "string"
+                    },
+                    "timeEntryId": {
+                        "type": "string"
+                    },
+                    "resolutionNotes": {
+                        "type": "string"
+                    },
+                    "detectedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "TimeEntryExceptionResponse": {
+                "type": "object",
+                "properties": {
+                    "exceptionId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PersonResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "firstName": {
+                        "type": "string"
+                    },
+                    "lastName": {
+                        "type": "string"
+                    },
+                    "primaryEmail": {
+                        "type": "string"
+                    },
+                    "secondaryEmail": {
+                        "type": "string"
+                    },
+                    "phoneNumbers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "username": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TimeEntryAdjustment": {
+                "type": "object",
+                "properties": {
+                    "adjustmentId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "timeEntryId": {
+                        "type": "string"
+                    },
+                    "reasonCode": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "proposedStartAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "proposedEndAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "minutesDelta": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "PROPOSED",
+                            "PENDING",
+                            "APPROVED",
+                            "REJECTED"
+                        ]
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "decidedBy": {
+                        "type": "string"
+                    },
+                    "decidedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "TimeEntryException": {
+                "type": "object",
+                "properties": {
+                    "exceptionId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "employeeId": {
+                        "type": "string"
+                    },
+                    "workDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "exceptionCode": {
+                        "type": "string"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "enum": [
+                            "WARNING",
+                            "BLOCKING"
+                        ]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "OPEN",
+                            "ACKNOWLEDGED",
+                            "RESOLVED",
+                            "WAIVED"
+                        ]
+                    },
+                    "timeEntryId": {
+                        "type": "string"
+                    },
+                    "resolutionNotes": {
+                        "type": "string"
+                    },
+                    "detectedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "resolvedBy": {
+                        "type": "string"
+                    },
+                    "resolvedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            }
+        }
+    }
+}

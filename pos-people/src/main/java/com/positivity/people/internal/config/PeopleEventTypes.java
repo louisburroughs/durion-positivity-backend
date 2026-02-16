@@ -59,13 +59,9 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE",
                                                 "Waive an exception with a reason").build(),
 
-                                // UserPersonLinkController - 2 events
-                                EventTypeRegistration.write("USER_PERSON_LINK_CREATE",
-                                                "Link user to person").build(),
-                                EventTypeRegistration.write("USER_PERSON_LINK_DELETE",
-                                                "Unlink user from person").build(),
-
-                                // PersonAccessController - 4 events
+                                // PersonAccessController - 6 events
+                                EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_CREATE",
+                                                "Link user to person").build());
                                 EventTypeRegistration.fastRead("PEOPLE_ACCESS_ROLES_LIST",
                                                 "List available access roles for people").build(),
                                 EventTypeRegistration.fastRead("PEOPLE_ACCESS_ASSIGNMENTS_LIST",
@@ -74,5 +70,7 @@ public final class PeopleEventTypes {
                                                 "Create role assignment for a person").build(),
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_REVOKE",
                                                 "Revoke role assignment for a person").build());
+                                EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_DELETE",
+                                                "Unlink user from person").build());
         }
 }
