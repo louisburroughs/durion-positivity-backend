@@ -214,6 +214,11 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .add(tax)
                 .add(adjustmentTotal)
                 .setScale(4, RoundingMode.HALF_UP);
+
+        if (total.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "invoice total cannot be negative; adjustments would require a credit memo");
+        }
         invoice.setTotal(total);
     }
 
