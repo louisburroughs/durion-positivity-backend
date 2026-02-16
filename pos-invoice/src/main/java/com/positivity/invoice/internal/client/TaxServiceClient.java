@@ -38,7 +38,7 @@ public class TaxServiceClient {
                 .body(TaxCalculationResponse.class);
 
         if (response == null) {
-            throw new IllegalStateException("Tax service returned an empty response for tax calculation");
+            throw new IllegalStateException("Tax service returned a null response for tax calculation");
         }
         
         BigDecimal taxAmount = response.getTaxAmount();
