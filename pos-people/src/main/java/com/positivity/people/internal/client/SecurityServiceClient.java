@@ -56,11 +56,10 @@ public class SecurityServiceClient {
             LocalDateTime endDate) {
         List<UserRoleDto> assignments = restClient.get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/v1/user-roles")
-                        .queryParam("userId", userId)
+                        .path("/v1/roles/assignments/user/{userId}")
                         .queryParam("includeHistory", includeHistory)
                         .queryParam("endDate", endDate)
-                        .build())
+                        .build(userId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400,
                         (request, response) -> {
