@@ -1,6 +1,5 @@
 package com.positivity.workorder.service;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +41,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderService {
+    public record ReopenResult(UUID workorderId, String currentStatus, Boolean isReopened, Instant reopenedAt) {
+    }
+
     private final WorkorderRepository workorderRepository;
     private final EstimateRepository estimateRepository;
     private final EstimateItemRepository estimateItemRepository;
@@ -378,6 +380,22 @@ public class WorkorderService {
         return stateMachine.getSnapshotHistory(workorderId);
     }
 
+    public WorkorderStateMachine.CompletionPreconditions getCompletionPreconditions(UUID workorderId) {
+        return stateMachine.evaluateCompletionPreconditions(workorderId);
+    }
+
+    public String getCurrentWorkorderStatus(UUID workorderId) {
+        return workorderRepository.findById(workorderId)
+                .map(workorder -> workorder.getStatus().name())
+                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+    }
+
+    public Instant getCompletedAt(UUID workorderId) {
+        return workorderRepository.findById(workorderId)
+                .map(Workorder::getCompletedAt)
+                .orElse(null);
+    }
+
     @Transactional
     public WorkCompletedEvent completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
         // Perform the completion logic
@@ -414,6 +432,16 @@ public class WorkorderService {
 
         log.info("WorkCompleted event created with eventId={} for workorderId={}", eventId, workorderId);
         return event;
+    }
+
+    @Transactional
+    public ReopenResult reopenCompletedWorkorder(UUID workorderId, UUID userId, String reopenReason) {
+        Workorder reopened = stateMachine.reopenCompletedWorkorder(workorderId, userId, reopenReason);
+        return new ReopenResult(
+                reopened.getId(),
+                reopened.getStatus().name(),
+                reopened.getIsReopened(),
+                reopened.getReopenedAt());
     }
 
     private Map<String, Object> buildFinalBillableScope(Workorder workorder) {

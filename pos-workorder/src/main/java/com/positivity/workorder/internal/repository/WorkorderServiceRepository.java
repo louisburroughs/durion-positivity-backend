@@ -10,4 +10,6 @@ import java.util.UUID;
 @Repository
 public interface WorkorderServiceRepository extends JpaRepository<WorkorderService, UUID> {
     List<WorkorderService> findByChangeRequestId(UUID changeRequestId);
+
+    List<WorkorderService> findByWorkOrder_Id(UUID workorderId);
 }

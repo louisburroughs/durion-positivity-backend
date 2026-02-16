@@ -44,6 +44,12 @@ public class WorkorderResponse {
     @Schema(description = "Date and time the workorder was completed")
     private Instant completedAt;
 
+    @Schema(description = "Whether the completed workorder is currently reopened for controlled edits")
+    private Boolean isReopened;
+
+    @Schema(description = "Date and time the workorder was reopened")
+    private Instant reopenedAt;
+
     /**
      * Convert entity to response DTO
      */
@@ -61,6 +67,8 @@ public class WorkorderResponse {
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)
                 .approvedAt(entity.getApprovedAt())
                 .completedAt(entity.getCompletedAt())
+                .isReopened(entity.getIsReopened())
+                .reopenedAt(entity.getReopenedAt())
                 .build();
     }
 }

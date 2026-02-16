@@ -16,4 +16,6 @@ public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UU
      * This includes standalone parts not tied to a service.
      */
     List<WorkorderPart> findByWorkorderId(UUID workorderId);
+
+    List<WorkorderPart> findByWorkOrderService_WorkOrder_Id(UUID workorderId);
 }

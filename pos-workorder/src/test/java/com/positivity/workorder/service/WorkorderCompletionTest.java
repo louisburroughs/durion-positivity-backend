@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -102,9 +103,8 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_Success_FromWorkInProgress() throws Exception {
         when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+        stubCompletionPreconditionsPass();
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
-        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
         stateMachine.completeWorkorder(testWorkorderId, userId, "Work completed successfully");
 
@@ -126,9 +126,8 @@ class WorkorderCompletionTest {
     void testCompleteWorkorder_Success_FromAwaitingParts() throws Exception {
         testWorkorder.setStatus(WorkorderStatus.AWAITING_PARTS);
         when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+        stubCompletionPreconditionsPass();
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
-        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
         stateMachine.completeWorkorder(testWorkorderId, userId, "Parts arrived, work completed");
 
@@ -144,9 +143,8 @@ class WorkorderCompletionTest {
     void testCompleteWorkorder_Success_FromReadyForPickup() throws Exception {
         testWorkorder.setStatus(WorkorderStatus.READY_FOR_PICKUP);
         when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+        stubCompletionPreconditionsPass();
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
-        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
         stateMachine.completeWorkorder(testWorkorderId, userId, "Customer picked up");
 
@@ -211,9 +209,8 @@ class WorkorderCompletionTest {
     @Test
     void testCompleteWorkorder_AuditEventCreated() throws Exception {
         when(workOrderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+        stubCompletionPreconditionsPass();
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
-        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
         stateMachine.completeWorkorder(testWorkorderId, userId, "Completion notes");
 
@@ -235,9 +232,8 @@ class WorkorderCompletionTest {
         when(workOrderRepository.findById(testWorkorderId))
                 .thenReturn(Optional.of(testWorkorder)) // First call by completeWorkorder in service
                 .thenReturn(Optional.of(testWorkorder)); // Second call after completion
+        stubCompletionPreconditionsPass();
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(changeRequestService.hasPendingApprovalGatedRequests(testWorkorderId)).thenReturn(false);
-        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
 
         // Simulate what happens when completeWorkorder is called
         WorkCompletedEvent event = workOrderService.completeWorkorder(testWorkorderId, userId, "Work done");
@@ -273,5 +269,14 @@ class WorkorderCompletionTest {
     void testWorkorderIsLocked_AfterCancellation() {
         testWorkorder.setStatus(WorkorderStatus.CANCELLED);
         assertTrue(testWorkorder.isLocked());
+    }
+
+    private void stubCompletionPreconditionsPass() {
+        when(changeRequestRepository.findByWorkorderIdAndStatus(testWorkorderId,
+                ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)).thenReturn(List.of());
+        when(workorderServiceRepository.findByWorkOrder_Id(testWorkorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderId(testWorkorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(testWorkorderId)).thenReturn(List.of());
+        when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
     }
 }
