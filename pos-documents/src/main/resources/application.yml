@@ -1,6 +1,6 @@
 spring:
   application:
-    name: documents
+    name: pos-documents
 
 server:
   port: 0

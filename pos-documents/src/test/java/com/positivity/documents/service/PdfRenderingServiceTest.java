@@ -24,16 +24,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class PdfRenderingServiceTest {
 
     private static final String TEMPLATE_BASE_PATH = "classpath:/templates";
+    private static final PdfConfiguration PDF_CONFIG = new PdfConfiguration(1_000_000, TEMPLATE_BASE_PATH, 200);
 
     private final PdfRenderingService service = new PdfRenderingServiceImpl(
             List.of(
                     new JsonFormatHandler(new ObjectMapper()),
                     new XmlFormatHandler(),
                     new MarkdownFormatHandler(),
-            new CsvFormatHandler(new PdfConfiguration(1_000_000, TEMPLATE_BASE_PATH, 200)),
+            new CsvFormatHandler(PDF_CONFIG),
                     new TextFormatHandler()),
-        new TemplateService(new DefaultResourceLoader(), TEMPLATE_BASE_PATH),
-        new PdfConfiguration(1_000_000, TEMPLATE_BASE_PATH, 200));
+        new TemplateService(new DefaultResourceLoader(), PDF_CONFIG),
+        PDF_CONFIG);
 
     @Test
     void shouldRenderPdfUsingDefaultTemplate() {
