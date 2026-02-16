@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.client;
 
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 
 @Component
@@ -27,7 +29,7 @@ public class TaxServiceClient {
     @NonNull
     public BigDecimal calculateTax(@NonNull BigDecimal subtotal, String partyId) {
         log.debug("Calculating tax for subtotal {} and partyId {}", subtotal, partyId);
-        
+
         TaxCalculationResponse response = restClient.post()
                 .uri("/calculate")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -40,12 +42,17 @@ public class TaxServiceClient {
         if (response == null) {
             throw new IllegalStateException("Tax service returned a null response for tax calculation");
         }
-        
-        BigDecimal taxAmount = response.getTaxAmount();
-        if (taxAmount == null) {
-            throw new IllegalStateException("Tax service returned a null taxAmount in the response");
-        }
 
-        return taxAmount;
+        BigDecimal taxAmount = response.getTaxAmount();
+        return safeMoney(taxAmount, BigDecimal.ZERO);
+    }
+
+    @NonNull
+    private BigDecimal safeMoney(@Nullable BigDecimal value, @NonNull BigDecimal fallback) {
+        if (value == null) {
+            log.warn("Tax service returned null taxAmount, using fallback value: {}", fallback);
+            return fallback.setScale(4, RoundingMode.HALF_UP);
+        }
+        return value.setScale(4, RoundingMode.HALF_UP);
     }
 }
