@@ -1,5 +1,6 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.entity.UserPersonLink;
 import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonTranslationService;
@@ -33,7 +34,7 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
     @NonNull
     public Optional<String> getUserIdForPerson(@NonNull UUID personUuid) {
         return userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE)
-                .map(link -> link.getUserId());
+                .map(UserPersonLink::getUserId);
     }
 
     @Override
