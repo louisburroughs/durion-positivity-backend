@@ -30,6 +30,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -208,6 +210,51 @@ class WorkorderInvoiceServiceTest {
         assertThat(response.getEstimateId()).isEqualTo(estimateId);
         assertThat(response.getApprovalId()).isEqualTo(approvalId);
         verify(invoiceClient, never()).createInvoice(any());
+    }
+
+    @Test
+    @DisplayName("generateInvoice handles race condition when idempotency key already registered")
+    void generateInvoice_RaceCondition_ReturnsExistingInvoice() {
+        Workorder workorder = completedWorkorder();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
+        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of(partLine()));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        UUID newInvoiceId = UUID.randomUUID();
+        UUID existingInvoiceId = UUID.randomUUID();
+        InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
+                .invoiceId(newInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("170.0000"))
+                .taxAmount(new BigDecimal("10.0000"))
+                .totalAmount(new BigDecimal("180.0000"))
+                .createdAt(Instant.now())
+                .build();
+
+        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
+        
+        // First call to getExistingInvoiceId (early check) returns empty, second call (after collision) returns existing
+        when(idempotencyService.getExistingInvoiceId("inv-key-race"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existingInvoiceId));
+        
+        // Simulate race condition: registerInvoiceKey throws DataIntegrityViolationException
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"))
+                .when(idempotencyService).registerInvoiceKey(eq("inv-key-race"), eq(newInvoiceId));
+
+        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "inv-key-race");
+
+        // Should return the existing invoice, not the newly created one
+        assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
+        assertThat(response.getStatus()).isEqualTo("DRAFT");
+        
+        // Verify workorder invoiceId was NOT set to the new invoice (no save should happen in race condition)
+        verify(workorderRepository, never()).save(any(Workorder.class));
+        assertThat(workorder.getInvoiceId()).isNull(); // workorder should remain unchanged
     }
 
     @Test
