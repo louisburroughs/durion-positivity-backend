@@ -62,6 +62,9 @@ public class IdempotencyKey {
     @Column(columnDefinition = "UUID")
     private UUID partAdjustmentEventId;
 
+    @Column(columnDefinition = "UUID")
+    private UUID invoiceId;
+
     @Column(nullable = false)
     private Instant createdAt;
 
