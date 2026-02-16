@@ -49,7 +49,7 @@ public class UserPersonLinkController {
     }
 
     @DeleteMapping("/users/{userId}/link")
-    @EmitEvent(id = "USER_PERSON_LINK_DELETE", apiVersion = "1")
+    @EmitEvent(id = "PEOPLE_USER_PERSON_LINK_DELETE", apiVersion = "1")
     @Operation(summary = "Unlink user from person", description = "Remove the link between a user and person")
     @ApiResponse(responseCode = "204", description = "Link deleted successfully")
     @ApiResponse(responseCode = "404", description = "Link not found")
