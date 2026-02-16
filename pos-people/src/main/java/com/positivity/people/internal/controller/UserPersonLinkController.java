@@ -32,7 +32,7 @@ public class UserPersonLinkController {
     }
 
     @PostMapping("/users/{userId}/link")
-    @EmitEvent(id = "USER_PERSON_LINK_CREATE", apiVersion = "1")
+    @EmitEvent(id = "PEOPLE_USER_PERSON_LINK_CREATE", apiVersion = "1")
     @Operation(summary = "Link user to person", description = "Create a link between an authentication user and a person record")
     @ApiResponse(responseCode = "201", description = "Link created successfully", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -49,7 +49,7 @@ public class UserPersonLinkController {
     }
 
     @DeleteMapping("/users/{userId}/link")
-    @EmitEvent(id = "USER_PERSON_LINK_DELETE", apiVersion = "1")
+    @EmitEvent(id = "PEOPLE_USER_PERSON_LINK_DELETE", apiVersion = "1")
     @Operation(summary = "Unlink user from person", description = "Remove the link between a user and person")
     @ApiResponse(responseCode = "204", description = "Link deleted successfully")
     @ApiResponse(responseCode = "404", description = "Link not found")
