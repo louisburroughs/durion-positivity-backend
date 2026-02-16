@@ -5,6 +5,8 @@ import com.positivity.people.internal.client.dto.RoleDto;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 import com.positivity.people.internal.dto.PersonRoleAssignmentRequest;
 import com.positivity.people.service.PeopleAccessControlService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import org.jspecify.annotations.NonNull;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -65,6 +67,8 @@ public class PersonAccessController {
 
     @DeleteMapping("/{personUuid}/access/assignments/{roleCode}")
     @EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENT_REVOKE", apiVersion = "1")
+    @Operation(summary = "Revoke role assignment", description = "Revoke a role assignment from a person")
+    @ApiResponse(responseCode = "204", description = "Role assignment revoked successfully")
     public ResponseEntity<Void> revokeAssignment(
             @PathVariable UUID personUuid,
             @PathVariable String roleCode,
