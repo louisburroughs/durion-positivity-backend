@@ -214,10 +214,10 @@ class WorkorderInvoiceServiceTest {
     void generateInvoice_DeduplicatesParts_WhenPartHasBothReferences() {
         Workorder workorder = completedWorkorder();
         
-        // Create a part with both workorder and workOrderService references (e.g., from substitution)
-        UUID partId = UUID.randomUUID();
-        WorkorderPart partWithBothRefs = WorkorderPart.builder()
-                .id(partId)
+        // Create a part that would appear in service-related query
+        UUID partId1 = UUID.randomUUID();
+        WorkorderPart partFromService = WorkorderPart.builder()
+                .id(partId1)
                 .description("Oil Filter")
                 .quantity(new BigDecimal("1.0000"))
                 .unitPrice(new BigDecimal("15.0000"))
@@ -236,13 +236,12 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of());
         
-        // With the new repository method findByWorkorderIdAndWorkOrderServiceIsNull,
-        // partWithBothRefs would not be returned by the second query (since it has workOrderService set).
-        // However, the code still has explicit ID-based deduplication as a safety measure.
-        // This test verifies that even if somehow the same part appeared in both queries,
-        // it would only be added to the invoice once.
+        // The new repository query findByWorkorderIdAndWorkOrderServiceIsNull only returns
+        // parts where workOrderService is null. Parts with both references would only be
+        // returned by findByWorkOrderService_WorkOrder_Id.
+        // The service-level deduplication provides additional safety.
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
-                .thenReturn(List.of(partWithBothRefs));
+                .thenReturn(List.of(partFromService));
         when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                 .thenReturn(List.of(standalonePart));
         
@@ -263,7 +262,7 @@ class WorkorderInvoiceServiceTest {
 
         List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
         
-        // Verify we have exactly 2 distinct parts, not 3 (no duplicates)
+        // Verify we have exactly 2 distinct parts (no duplicates)
         assertThat(lineItems).hasSize(2);
         
         // Verify both parts are present
