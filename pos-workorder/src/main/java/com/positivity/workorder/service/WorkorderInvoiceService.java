@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -201,9 +202,30 @@ public class WorkorderInvoiceService {
                                 service.getUnitPrice()))
                         .build()));
 
+        // CAP:007 - Load parts avoiding duplicates
+        // First, get all parts associated with workorder services
         List<WorkorderPart> parts = new ArrayList<>();
         parts.addAll(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId));
-        parts.addAll(workorderPartRepository.findByWorkorderId(workorderId));
+        
+        // Then, get standalone parts (those with direct workorder reference but no service)
+        // This query ensures we don't get duplicates when a part has both workorder and workOrderService set
+        parts.addAll(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId));
+
+        // Deduplicate by part ID as a safety measure (in case parts have both references)
+        // This protects against over-billing if the same part appears in both queries
+        // Use explicit ID-based deduplication to ensure correctness regardless of equals/hashCode implementation
+        var seenIds = new HashSet<UUID>();
+        parts = parts.stream()
+                .filter(part -> {
+                    UUID id = part.getId();
+                    if (id == null) {
+                        // If a part has a null ID, skip deduplication for it to avoid silently dropping items
+                        log.warn("WorkorderPart with null id encountered while building invoice line items for workorder {}", workorderId);
+                        return true;
+                    }
+                    return seenIds.add(id);
+                })
+                .toList();
 
         // Filter to only billable parts (exclude CANCELLED items)
         parts.stream()
