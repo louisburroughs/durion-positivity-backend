@@ -145,7 +145,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             LocalDate requestStart,
             LocalDate requestEnd) {
 
-        List<RoleAssignment> existingAssignments = roleAssignmentRepository.findEffectiveAssignmentsByUser_Id(userId);
+        List<RoleAssignment> existingAssignments = roleAssignmentRepository.findAllByUser_Id(userId);
 
         for (RoleAssignment existing : existingAssignments) {
             boolean sameRoleAndScope = existing.getRole().getId().equals(roleId)
