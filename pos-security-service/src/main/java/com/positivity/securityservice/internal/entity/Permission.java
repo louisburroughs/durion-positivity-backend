@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,7 +19,7 @@ import java.util.UUID;
 @Table(name = "permissions", uniqueConstraints = @UniqueConstraint(columnNames = "name"))
 public class Permission {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID")
     private UUID id;
 
     /**
@@ -72,6 +73,9 @@ public class Permission {
 
     @PrePersist
     protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
         if (registeredAt == null) {
             registeredAt = Instant.now();
         }
