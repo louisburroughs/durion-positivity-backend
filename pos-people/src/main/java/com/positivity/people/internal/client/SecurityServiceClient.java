@@ -43,7 +43,7 @@ public class SecurityServiceClient {
                 .onStatus(statusCode -> statusCode.value() == 404,
                         (request, response) -> {
                             throw new jakarta.persistence.EntityNotFoundException(
-                                    "Role not found with name: " + roleName);
+                                    "Role not found in security service: " + roleName);
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
