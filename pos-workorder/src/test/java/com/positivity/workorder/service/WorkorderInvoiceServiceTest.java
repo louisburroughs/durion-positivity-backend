@@ -255,6 +255,9 @@ class WorkorderInvoiceServiceTest {
         // Verify workorder invoiceId was NOT set to the new invoice (no save should happen in race condition)
         verify(workorderRepository, never()).save(any(Workorder.class));
         assertThat(workorder.getInvoiceId()).isNull(); // workorder should remain unchanged
+    }
+
+    @Test
     @DisplayName("generateInvoice excludes CANCELLED services and parts from invoice line items")
     void generateInvoice_ExcludesCancelledItems() {
         Workorder workorder = completedWorkorder();
