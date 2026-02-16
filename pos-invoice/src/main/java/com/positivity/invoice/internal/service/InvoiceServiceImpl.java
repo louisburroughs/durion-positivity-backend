@@ -57,7 +57,6 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         InvoiceCreationRequest creationRequest = InvoiceCreationRequest.builder()
                 .workorderId(request.getWorkorderId())
-                .idempotencyKey(request.getIdempotencyKey())
                 .lineItems(List.of())
                 .build();
 
@@ -146,7 +145,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             InvoiceItem item = new InvoiceItem();
             String description = sourceItem.getDescription();
             item.setDescription(
-                    description.isBlank()
+                    description == null || description.isBlank()
                             ? "Invoice line item"
                             : description.trim());
             item.setQuantity(safeMoney(sourceItem.getQuantity(), BigDecimal.ONE));
@@ -214,6 +213,11 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .add(tax)
                 .add(adjustmentTotal)
                 .setScale(4, RoundingMode.HALF_UP);
+
+        if (total.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "invoice total cannot be negative; adjustments would require a credit memo");
+        }
         invoice.setTotal(total);
     }
 
