@@ -86,7 +86,9 @@ public class PeopleExceptionHandler {
         int statusCode = ex.getHttpStatus();
         
         // Preserve the actual status code from the security service
-        if (statusCode == 503) {
+        if (statusCode == 502) {
+            return HttpStatus.BAD_GATEWAY;
+        } else if (statusCode == 503) {
             return HttpStatus.SERVICE_UNAVAILABLE;
         } else if (statusCode == 504) {
             return HttpStatus.GATEWAY_TIMEOUT;

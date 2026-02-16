@@ -70,7 +70,7 @@ public class SecurityServiceException extends RuntimeException {
     /**
      * Check if error is due to service unavailability (circuit breaker, timeout, etc).
      *
-     * @return true if status is 503 or 504
+     * @return true if status is 503, 504, or 0 (connection failure)
      */
     public boolean isServiceUnavailable() {
         return httpStatus == 503 || httpStatus == 504 || httpStatus == 0;

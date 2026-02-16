@@ -268,15 +268,17 @@ public class SecurityServiceClient {
             if (assignment.getScopeLocationIds().size() > 1) {
                 // The API supports multiple scopeLocationIds, but UserRoleDto currently exposes a single locationId.
                 // Log to make this limitation visible when multi-location assignments are encountered.
+                UUID userId = assignment.getUser() != null ? assignment.getUser().getId() : null;
                 log.warn("RoleAssignment {} for user {} and role {} has multiple scopeLocationIds; only the first will be used.",
-                        assignment.getId(), assignment.getUser().getId(), roleCode);
+                        assignment.getId(), userId, roleCode);
             }
             String firstLocationId = assignment.getScopeLocationIds().iterator().next();
             try {
                 locationId = java.util.UUID.fromString(firstLocationId);
             } catch (IllegalArgumentException e) {
                 log.error("Invalid UUID format in scopeLocationIds for assignment {}: {}", assignment.getId(), firstLocationId, e);
-                throw new SecurityServiceException("Invalid location ID format in role assignment: " + firstLocationId, 500, e);
+                // 502 Bad Gateway - upstream service returned malformed data
+                throw new SecurityServiceException("Invalid location ID format in role assignment: " + firstLocationId, 502, e);
             }
         }
 
