@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -157,7 +158,7 @@ public class WorkorderInvoiceService {
         // Deduplicate by part ID as a safety measure (in case parts have both references)
         // This protects against over-billing if the same part appears in both queries
         // Use explicit ID-based deduplication to ensure correctness regardless of equals/hashCode implementation
-        var seenIds = new java.util.HashSet<UUID>();
+        var seenIds = new HashSet<UUID>();
         parts = parts.stream()
                 .filter(part -> seenIds.add(part.getId()))
                 .toList();
