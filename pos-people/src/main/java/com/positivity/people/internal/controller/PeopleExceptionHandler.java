@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
@@ -37,6 +38,15 @@ public class PeopleExceptionHandler {
     public ProblemDetail handleUserAlreadyLinked(UserAlreadyLinkedException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public ProblemDetail handleNotFound(NotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
                 ex.getMessage());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problem;
