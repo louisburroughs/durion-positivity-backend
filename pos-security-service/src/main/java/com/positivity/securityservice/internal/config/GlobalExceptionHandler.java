@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.config;
 import java.time.Instant;
 import java.util.UUID;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
@@ -36,7 +37,7 @@ import org.springframework.web.context.request.WebRequest;
  * 
  * **Mapped Exceptions:**
  * - IllegalArgumentException → 400 Bad Request
- * - RoleNotFoundException, UserNotFoundException, RoleAssignmentNotFoundException → 404 Not Found
+ * - RoleNotFoundException, UserNotFoundException, RoleAssignmentNotFoundException, PermissionNotFoundException → 404 Not Found
  * - ObjectOptimisticLockingFailureException → 409 Conflict (retry needed)
  * - Exception (catch-all) → 500 Internal Server Error
  * 
@@ -125,13 +126,38 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles PermissionNotFoundException (permission not found by name).
+     * 
+     * **HTTP Status:** 404 Not Found
+     * 
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 404 status and correlation ID
+     */
+    @ExceptionHandler(PermissionNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResponseEntity<ErrorResponse> handlePermissionNotFoundException(
+            PermissionNotFoundException ex,
+            WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Permission not found (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(errorResponse(
+                        "PERMISSION_NOT_FOUND",
+                        ex.getMessage(),
+                        correlationId));
+    }
+
+    /**
      * Handles IllegalArgumentException (validation failures).
      * 
      * **Typical Causes:**
      * - Invalid username or roles format
      * - Blank or null required fields
      * - Invalid refresh token
-     * - Permission not found (validation error)
      * 
      * **HTTP Status:** 400 Bad Request
      * 
