@@ -151,6 +151,9 @@ public class SecurityServiceClient {
 
         // Build the proper RoleAssignmentRequest matching the API contract
         // Note: API supports multiple location IDs per assignment, but currently only passing one
+        // Note: Time information is lost in date conversion - LocalDateTime is truncated to LocalDate.
+        //       The security service API uses LocalDate, so time components (if provided) are discarded.
+        //       Example: "2026-02-16T14:30:00" becomes "2026-02-16" (stored as midnight in the API).
         RoleAssignmentRequest apiRequest = new RoleAssignmentRequest(
                 userIdUuid,
                 role.getId(),
@@ -195,11 +198,13 @@ public class SecurityServiceClient {
         // First, get the role by name to obtain its UUID
         Role role = getRoleByName(roleCode);
 
-        // Get all assignments (including future-dated and historical) for the user
+        // Get all current assignments for the user with full RoleAssignment objects
+        // TODO: Update pos-security-service to make /v1/roles/assignments/user/{userId} retrieve
+        //  current AND future-dated roles when includeHistory=false, or add a new flag if required
         List<RoleAssignment> fullAssignments = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/roles/assignments/user/{userId}")
-                        .queryParam("includeHistory", true)
+                        .queryParam("includeHistory", false)
                         .build(userId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 404,
@@ -259,6 +264,11 @@ public class SecurityServiceClient {
      *
      * Note: If a RoleAssignment contains multiple scopeLocationIds, only the first one
      * is mapped to UserRoleDto.locationId. The remaining IDs are ignored.
+     *
+     * Note: Date mapping uses .atStartOfDay() to convert LocalDate back to LocalDateTime,
+     * which hardcodes the time to midnight (00:00:00). This creates a lossy round-trip where
+     * time information is discarded. Example: if the caller requested startDate "2026-02-16T14:30:00",
+     * it gets stored as "2026-02-16" in the API, then mapped back as "2026-02-16T00:00:00".
      */
     private UserRoleDto mapToUserRoleDto(RoleAssignment assignment, String roleCode) {
         java.util.UUID locationId = null;
