@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import org.jspecify.annotations.NonNull;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -67,8 +68,10 @@ public class PersonAccessController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Role assignment created successfully", 
                     content = @Content(schema = @Schema(implementation = UserRoleDto.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Person or role not found", content = @Content)
+            @ApiResponse(responseCode = "400", description = "Invalid request", 
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
+            @ApiResponse(responseCode = "404", description = "Person or role not found", 
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     })
     public ResponseEntity<UserRoleDto> createAssignment(
             @PathVariable UUID personUuid,
@@ -86,8 +89,10 @@ public class PersonAccessController {
     @EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENT_REVOKE", apiVersion = "1")
     @Operation(summary = "Revoke role assignment", description = "Revoke a role assignment from a person")
     @ApiResponse(responseCode = "204", description = "Role assignment revoked successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request for revoking role assignment")
-    @ApiResponse(responseCode = "404", description = "Person or role assignment not found")
+    @ApiResponse(responseCode = "400", description = "Invalid request for revoking role assignment", 
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "404", description = "Person or role assignment not found", 
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<Void> revokeAssignment(
             @PathVariable UUID personUuid,
             @PathVariable String roleCode,
