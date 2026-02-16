@@ -301,7 +301,7 @@ class WorkorderInvoiceServiceTest {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalAmount).isEqualByComparingTo("40.0000");
     }
-
+        
     @Test
     @DisplayName("generateInvoice handles race condition when idempotency key already registered")
     void generateInvoice_RaceCondition_ReturnsExistingInvoice() {
@@ -331,6 +331,20 @@ class WorkorderInvoiceServiceTest {
         when(idempotencyService.getExistingInvoiceId("inv-key-race"))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(existingInvoiceId));
+        
+        // Stub getInvoice to return details for the existing invoice (used in buildExistingResponse)
+        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                .invoiceId(existingInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("170.0000"))
+                .taxAmount(new BigDecimal("10.0000"))
+                .totalAmount(new BigDecimal("180.0000"))
+                .createdAt(Instant.now())
+                .build();
+        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
         
         // Simulate race condition: registerInvoiceKey throws DataIntegrityViolationException
         doThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"))
@@ -423,13 +437,20 @@ class WorkorderInvoiceServiceTest {
 
         List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
         
-        // Only the completed items should be included
+         // Verify only billable items are included (CANCELLED items excluded)
         assertThat(lineItems).hasSize(2);
         List<String> descriptions = lineItems.stream()
                 .map(InvoiceLineItem::getDescription)
                 .toList();
+       // Verify only completed items are present (CANCELLED items should not appear)
         assertThat(descriptions).containsExactlyInAnyOrder("Completed Service", "Completed Part");
         assertThat(descriptions).doesNotContain("Cancelled Service", "Cancelled Part");
+        
+        // Verify amounts match only billable items (Completed Service $100 + Completed Part $50 = $150)
+        BigDecimal totalAmount = lineItems.stream()
+                .map(InvoiceLineItem::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(totalAmount).isEqualByComparingTo("150.0000");
     }
 
     @Test
