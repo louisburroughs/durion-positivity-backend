@@ -195,9 +195,20 @@ class WorkorderInvoiceServiceTest {
         workorder.setInvoiceId(existingInvoiceId);
 
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                .invoiceId(existingInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("120.00"))
+                .taxAmount(new BigDecimal("10.00"))
+                .totalAmount(new BigDecimal("130.00"))
+                .createdAt(Instant.now())
+                .build();
+
+        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
 
@@ -206,7 +217,11 @@ class WorkorderInvoiceServiceTest {
         assertThat(response.getWorkorderId()).isEqualTo(workorderId);
         assertThat(response.getEstimateId()).isEqualTo(estimateId);
         assertThat(response.getApprovalId()).isEqualTo(approvalId);
+        assertThat(response.getSubtotal()).isEqualByComparingTo("120.00");
+        assertThat(response.getTaxAmount()).isEqualByComparingTo("10.00");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("130.00");
         verify(invoiceClient, never()).createInvoice(any());
+        verify(invoiceClient).getInvoice(existingInvoiceId);
     }
 
     private Workorder completedWorkorder() {
