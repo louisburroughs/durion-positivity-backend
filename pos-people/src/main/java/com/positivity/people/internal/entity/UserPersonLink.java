@@ -35,7 +35,7 @@ public class UserPersonLink {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @NonNull
-    private UserLinkStatus status = UserLinkStatus.ACTIVE;
+    private UserLinkStatus status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
