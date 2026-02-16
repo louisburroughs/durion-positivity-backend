@@ -279,12 +279,23 @@ public class WorkorderStateMachine {
 
         Workorder saved = workorderRepository.save(workorder);
 
+        Map<String, Object> auditDetails = new LinkedHashMap<>();
+        auditDetails.put("state", "COMPLETED");
+        auditDetails.put("isReopened", true);
+        auditDetails.put("reopenReason", reopenReason);
+
+        String auditDetailsJson;
+        try {
+            auditDetailsJson = objectMapper.writeValueAsString(auditDetails);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize workorder reopen audit details", e);
+        }
+
         createAuditEvent(
                 workorderId,
                 userId.toString(),
                 "WORKORDER_REOPENED",
-                String.format("{\"state\":\"COMPLETED\",\"isReopened\":true,\"reopenReason\":\"%s\"}",
-                        reopenReason.replace("\"", "\\\"")));
+                auditDetailsJson);
 
         log.info("Workorder {} reopened by user {} at {}", workorderId, userId, reopenedAt);
         return saved;
