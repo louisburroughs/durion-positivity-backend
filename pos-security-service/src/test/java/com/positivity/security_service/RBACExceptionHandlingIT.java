@@ -4,7 +4,9 @@ import com.positivity.securityservice.BaseIntegrationTest;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
@@ -22,6 +24,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 
  * @see com.positivity.securityservice.internal.config.GlobalExceptionHandler
  */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
 @DisplayName("RBAC Exception Handling Integration Tests")
 class RBACExceptionHandlingIT extends BaseIntegrationTest {
 
