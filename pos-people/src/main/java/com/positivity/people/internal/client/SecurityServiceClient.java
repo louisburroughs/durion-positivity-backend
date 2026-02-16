@@ -1,6 +1,10 @@
 package com.positivity.people.internal.client;
 
+import com.positivity.people.internal.client.dto.Role;
+import com.positivity.people.internal.client.dto.RoleAssignment;
+import com.positivity.people.internal.client.dto.RoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.RoleDto;
+import com.positivity.people.internal.client.dto.ScopeType;
 import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 import org.jspecify.annotations.NonNull;
@@ -24,6 +28,34 @@ public class SecurityServiceClient {
 
     public SecurityServiceClient(@Qualifier("securityServiceRestClient") RestClient restClient) {
         this.restClient = restClient;
+    }
+
+    /**
+     * Get a role by its name to obtain its UUID
+     */
+    @NonNull
+    private Role getRoleByName(@NonNull String roleName) {
+        log.debug("Fetching role by name: {}", roleName);
+
+        Role role = restClient.get()
+                .uri("/v1/roles/{name}", roleName)
+                .retrieve()
+                .onStatus(statusCode -> statusCode.value() == 404,
+                        (request, response) -> {
+                            throw new jakarta.persistence.EntityNotFoundException(
+                                    "Role not found with name: " + roleName);
+                        })
+                .onStatus(HttpStatusCode::is5xxServerError,
+                        (request, response) -> {
+                            throw new IllegalStateException("Security service failed while fetching role");
+                        })
+                .body(Role.class);
+
+        if (role == null) {
+            throw new IllegalStateException("Security service returned null response for role: " + roleName);
+        }
+
+        return role;
     }
 
     @NonNull
@@ -102,9 +134,22 @@ public class SecurityServiceClient {
     public UserRoleDto assignRole(@NonNull UserRoleAssignmentRequest request) {
         log.debug("Assigning role {} to userId: {}", request.getRoleCode(), request.getUserId());
 
-        UserRoleDto assignment = restClient.post()
-                .uri("/v1/user-roles")
-                .body(request)
+        // First, get the role by name to obtain its UUID
+        Role role = getRoleByName(request.getRoleCode());
+
+        // Build the proper RoleAssignmentRequest matching the API contract
+        RoleAssignmentRequest apiRequest = new RoleAssignmentRequest(
+                java.util.UUID.fromString(request.getUserId()),
+                role.getId(),
+                request.getLocationId() != null ? ScopeType.LOCATION : ScopeType.GLOBAL,
+                request.getLocationId() != null ? java.util.Set.of(request.getLocationId().toString()) : null,
+                request.getStartDate() != null ? request.getStartDate().toLocalDate() : null,
+                request.getEndDate() != null ? request.getEndDate().toLocalDate() : null
+        );
+
+        RoleAssignment assignment = restClient.post()
+                .uri("/v1/roles/assignments")
+                .body(apiRequest)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400,
                         (httpRequest, httpResponse) -> {
@@ -120,23 +165,80 @@ public class SecurityServiceClient {
                         (httpRequest, httpResponse) -> {
                             throw new IllegalStateException("Security service failed while assigning role");
                         })
-                .body(UserRoleDto.class);
+                .body(RoleAssignment.class);
 
         if (assignment == null) {
             throw new IllegalStateException("Security service returned empty response for role assignment creation");
         }
 
-        return assignment;
+        // Map RoleAssignment to UserRoleDto for backward compatibility
+        return UserRoleDto.builder()
+                .userId(request.getUserId())
+                .roleCode(request.getRoleCode())
+                .locationId(request.getLocationId())
+                .startDate(assignment.getEffectiveStartDate() != null
+                        ? assignment.getEffectiveStartDate().atStartOfDay() : null)
+                .endDate(assignment.getEffectiveEndDate() != null
+                        ? assignment.getEffectiveEndDate().atStartOfDay() : null)
+                .active(assignment.getEffectiveEndDate() == null
+                        || assignment.getEffectiveEndDate().isAfter(java.time.LocalDate.now()))
+                .build();
     }
 
     public void revokeRole(@NonNull String userId, @NonNull String roleCode, LocalDateTime endDate) {
         log.debug("Revoking role {} from userId: {} with endDate: {}", roleCode, userId, endDate);
 
+        // First, get the role by name to obtain its UUID
+        Role role = getRoleByName(roleCode);
+
+        // Get all current assignments for the user to find the one matching this role
+        List<UserRoleDto> assignments = getUserRoleAssignments(userId, false, null);
+
+        // Find the assignment for this specific role
+        java.util.UUID assignmentId = assignments.stream()
+                .filter(a -> roleCode.equals(a.getRoleCode()))
+                .findFirst()
+                .map(a -> {
+                    // We need to fetch the full assignments with IDs
+                    // Unfortunately UserRoleDto doesn't have the assignment ID
+                    // So we need to call the raw API endpoint
+                    try {
+                        List<RoleAssignment> fullAssignments = restClient.get()
+                                .uri(uriBuilder -> uriBuilder
+                                        .path("/v1/roles/assignments/user/{userId}")
+                                        .queryParam("includeHistory", false)
+                                        .build(userId))
+                                .retrieve()
+                                .body(new ParameterizedTypeReference<List<RoleAssignment>>() {
+                                });
+
+                        if (fullAssignments == null) {
+                            throw new IllegalStateException("Security service returned null response");
+                        }
+
+                        return fullAssignments.stream()
+                                .filter(fa -> role.getId().equals(fa.getRoleId()))
+                                .map(RoleAssignment::getId)
+                                .findFirst()
+                                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
+                                        "Role assignment not found for userId: " + userId + ", roleCode: " + roleCode));
+                    } catch (Exception e) {
+                        if (e instanceof jakarta.persistence.EntityNotFoundException) {
+                            throw (jakarta.persistence.EntityNotFoundException) e;
+                        }
+                        throw new IllegalStateException("Failed to find assignment ID", e);
+                    }
+                })
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
+                        "Role assignment not found for userId: " + userId + ", roleCode: " + roleCode));
+
+        java.time.LocalDate effectiveEndDate = endDate != null ? endDate.toLocalDate() : java.time.LocalDate.now();
+
         restClient.delete()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/v1/user-roles/{userId}/{roleCode}")
-                        .queryParam("endDate", endDate)
-                        .build(userId, roleCode))
+                        .path("/v1/roles/assignments/{assignmentId}")
+                        .queryParam("endDate", effectiveEndDate)
+                        .build(assignmentId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400,
                         (request, response) -> {
