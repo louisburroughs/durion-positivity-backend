@@ -56,7 +56,7 @@ public class WorkorderController {
     @GetMapping("/{workorderId}")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")
     public ResponseEntity<WorkorderResponse> getWorkorderById(
-            @Parameter(description = "ID of the work order to retrieve", example = "1") @PathVariable UUID workorderId) {
+            @Parameter(description = "ID of the work order to retrieve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         return workorderService.getWorkorderById(workorderId)
                 .map(WorkorderResponse::fromEntity)
                 .map(ResponseEntity::ok)
@@ -69,7 +69,7 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
     public ResponseEntity<WorkorderResponse> createWorkorder(
             @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)", example = "workorder-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         // Service handles entity creation internally, including idempotency check
         Workorder created = workorderService.createWorkorderWithIdempotency(
                 request.getEstimateId(),
@@ -84,7 +84,7 @@ public class WorkorderController {
     @DeleteMapping("/{workorderId}")
     @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteWorkorder(
-            @Parameter(description = "ID of the work order to delete", example = "1") @PathVariable UUID workorderId) {
+            @Parameter(description = "ID of the work order to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         workorderService.deleteWorkorder(workorderId);
         return ResponseEntity.noContent().build();
     }
@@ -97,7 +97,7 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:start')")
     public ResponseEntity<StartWorkorderResponse> startWorkorder(
-            @Parameter(description = "ID of the work order to start", example = "1") @PathVariable UUID workorderId,
+            @Parameter(description = "ID of the work order to start", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @RequestBody StartWorkorderRequest request) {
         try {
             workorderService.startWorkorder(workorderId, request.getUserId(), request.getReason());
@@ -123,7 +123,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Transition history returned successfully.")
     @GetMapping("/{workorderId}/transitions")
     public ResponseEntity<List<WorkorderStateTransitionResponse>> getTransitionHistory(
-            @Parameter(description = "ID of the work order", example = "1") @PathVariable UUID workorderId) {
+            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         List<WorkorderStateTransition> history = workorderService.getTransitionHistory(workorderId);
         return ResponseEntity.ok(history.stream()
                 .map(WorkorderStateTransitionResponse::fromEntity)
@@ -134,7 +134,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Snapshot history returned successfully.")
     @GetMapping("/{workorderId}/snapshots")
     public ResponseEntity<List<WorkorderSnapshotResponse>> getSnapshotHistory(
-            @Parameter(description = "ID of the work order", example = "1") @PathVariable UUID workorderId) {
+            @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         List<WorkorderSnapshot> history = workorderService.getSnapshotHistory(workorderId);
         return ResponseEntity.ok(history.stream()
                 .map(WorkorderSnapshotResponse::fromEntity)
@@ -152,7 +152,7 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_APPROVE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:approve')")
     public ResponseEntity<WorkorderResponse> approveWorkorder(
-            @Parameter(description = "ID of the work order to approve", example = "1") @PathVariable UUID workorderId,
+            @Parameter(description = "ID of the work order to approve", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody ApproveWorkorderRequest request) {
         try {
             Workorder approved = workorderService.approveWorkorder(
@@ -176,7 +176,7 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:complete')")
     public ResponseEntity<CompleteWorkorderResponse> completeWorkorder(
-            @Parameter(description = "ID of the work order to complete", example = "1") @PathVariable UUID workorderId,
+            @Parameter(description = "ID of the work order to complete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @RequestBody CompleteWorkorderRequest request) {
         try {
             String previousStatus = workorderService.getCurrentWorkorderStatus(workorderId);

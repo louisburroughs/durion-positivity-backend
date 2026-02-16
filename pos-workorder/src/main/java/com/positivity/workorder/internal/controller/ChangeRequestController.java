@@ -41,7 +41,7 @@ public class ChangeRequestController {
     public ResponseEntity<ChangeRequestResponse> createChangeRequest(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @Parameter(description = "Change request details including items") @RequestBody CreateChangeRequestDTO dto,
-            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)", example = "change-request-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         try {
             dto.setWorkorderId(workorderId);
             ChangeRequest created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
