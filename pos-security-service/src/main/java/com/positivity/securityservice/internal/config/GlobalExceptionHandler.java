@@ -3,6 +3,9 @@ package com.positivity.securityservice.internal.config;
 import java.time.Instant;
 import java.util.UUID;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +36,7 @@ import org.springframework.web.context.request.WebRequest;
  * 
  * **Mapped Exceptions:**
  * - IllegalArgumentException → 400 Bad Request
+ * - RoleNotFoundException, UserNotFoundException, RoleAssignmentNotFoundException → 404 Not Found
  * - ObjectOptimisticLockingFailureException → 409 Conflict (retry needed)
  * - Exception (catch-all) → 500 Internal Server Error
  * 
@@ -43,12 +47,91 @@ import org.springframework.web.context.request.WebRequest;
 public class GlobalExceptionHandler {
 
     /**
+     * Handles RoleNotFoundException (role not found by ID or name).
+     * 
+     * **HTTP Status:** 404 Not Found
+     * 
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 404 status and correlation ID
+     */
+    @ExceptionHandler(RoleNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResponseEntity<ErrorResponse> handleRoleNotFoundException(
+            RoleNotFoundException ex,
+            WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Role not found (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(errorResponse(
+                        "ROLE_NOT_FOUND",
+                        ex.getMessage(),
+                        correlationId));
+    }
+
+    /**
+     * Handles UserNotFoundException (user not found by ID or username).
+     * 
+     * **HTTP Status:** 404 Not Found
+     * 
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 404 status and correlation ID
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResponseEntity<ErrorResponse> handleUserNotFoundException(
+            UserNotFoundException ex,
+            WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("User not found (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(errorResponse(
+                        "USER_NOT_FOUND",
+                        ex.getMessage(),
+                        correlationId));
+    }
+
+    /**
+     * Handles RoleAssignmentNotFoundException (role assignment not found by ID).
+     * 
+     * **HTTP Status:** 404 Not Found
+     * 
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 404 status and correlation ID
+     */
+    @ExceptionHandler(RoleAssignmentNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResponseEntity<ErrorResponse> handleRoleAssignmentNotFoundException(
+            RoleAssignmentNotFoundException ex,
+            WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Role assignment not found (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(errorResponse(
+                        "ROLE_ASSIGNMENT_NOT_FOUND",
+                        ex.getMessage(),
+                        correlationId));
+    }
+
+    /**
      * Handles IllegalArgumentException (validation failures).
      * 
      * **Typical Causes:**
      * - Invalid username or roles format
      * - Blank or null required fields
      * - Invalid refresh token
+     * - Permission not found (validation error)
      * 
      * **HTTP Status:** 400 Bad Request
      * 
