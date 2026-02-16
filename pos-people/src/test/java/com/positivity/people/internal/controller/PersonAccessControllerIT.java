@@ -31,7 +31,7 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
         @Test
         void getRoles_returns200() throws Exception {
                 UUID personUuid = UUID.randomUUID();
-                when(peopleAccessControlService.getAvailableRolesForPeople())
+                when(peopleAccessControlService.getAvailableRolesForPerson(personUuid))
                                 .thenReturn(List.of(RoleDto.builder().code("MANAGER").name("Manager role").build()));
 
                 mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/roles", personUuid)))
