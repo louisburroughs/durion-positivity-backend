@@ -3,7 +3,7 @@ package com.positivity.securityservice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
-import com.positivity.securityservice.internal.model.Permission;
+import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.service.PermissionRegistryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -47,6 +47,10 @@
         {
             "name": "People - Exceptions",
             "description": "Time entry exception APIs"
+        },
+        {
+            "name": "User-Person Linking API",
+            "description": "Link authentication users to person records"
         }
     ],
     "paths": {
@@ -386,6 +390,106 @@
                                 "schema": {}
                             }
                         }
+                    }
+                }
+            }
+        },
+        "/v1/people/users/{userId}/link": {
+            "post": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Link user to person",
+                "description": "Create a link between an authentication user and a person record",
+                "operationId": "linkUserToPerson",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "User ID from authentication system",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LinkUserToPersonRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "User already linked",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Link created successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Unlink user from person",
+                "description": "Remove the link between a user and person",
+                "operationId": "unlinkUserFromPerson",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "User ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Link deleted successfully"
+                    },
+                    "404": {
+                        "description": "Link not found"
                     }
                 }
             }
@@ -896,6 +1000,99 @@
                 }
             }
         },
+        "/v1/people/{personId}/users": {
+            "get": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Get users linked to person",
+                "description": "Retrieve all user IDs linked to a person record",
+                "operationId": "getUserIdsByPersonId",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "in": "path",
+                        "description": "Person ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User IDs returned",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/users/{userId}/person": {
+            "get": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Get person by user ID",
+                "description": "Retrieve the person record linked to a user",
+                "operationId": "getPersonByUserId",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "User ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Person found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PersonResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Link or person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PersonResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/people/timeEntries/{timeEntryId}/adjustments": {
             "get": {
                 "tags": [
@@ -1027,6 +1224,57 @@
                     }
                 }
             },
+            "LinkUserToPersonRequest": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "linkType": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "personId",
+                    "userId"
+                ]
+            },
+            "UserPersonLinkResponse": {
+                "type": "object",
+                "properties": {
+                    "linkId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "userId": {
+                        "type": "string"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "linkType": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                }
+            },
             "Decision": {
                 "type": "object",
                 "properties": {
@@ -1128,6 +1376,36 @@
                         "type": "boolean"
                     },
                     "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PersonResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "firstName": {
+                        "type": "string"
+                    },
+                    "lastName": {
+                        "type": "string"
+                    },
+                    "primaryEmail": {
+                        "type": "string"
+                    },
+                    "secondaryEmail": {
+                        "type": "string"
+                    },
+                    "phoneNumbers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "username": {
                         "type": "string"
                     }
                 }
