@@ -295,6 +295,49 @@ class WorkorderInvoiceServiceTest {
                 .doesNotContain("Cancelled Service", "Cancelled Part");
     }
 
+    @Test
+    @DisplayName("generateInvoice with idempotency key replay fetches existing invoice and updates workorder")
+    void generateInvoice_IdempotencyKeyReplay_FetchesExistingInvoiceAndUpdatesWorkorder() {
+        UUID existingInvoiceId = UUID.randomUUID();
+        Workorder workorder = completedWorkorder();
+        // Workorder does not have invoice ID yet (simulating a retry scenario)
+        workorder.setInvoiceId(null);
+
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(idempotencyService.getExistingInvoiceId("retry-key-123")).thenReturn(Optional.of(existingInvoiceId));
+
+        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                .invoiceId(existingInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("150.00"))
+                .taxAmount(new BigDecimal("12.00"))
+                .totalAmount(new BigDecimal("162.00"))
+                .createdAt(Instant.now())
+                .build();
+
+        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
+        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "retry-key-123");
+
+        assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
+        assertThat(response.getStatus()).isEqualTo("DRAFT");
+        assertThat(response.getSubtotal()).isEqualByComparingTo("150.00");
+        assertThat(response.getTaxAmount()).isEqualByComparingTo("12.00");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("162.00");
+        
+        // Verify workorder was updated with invoice ID
+        assertThat(workorder.getInvoiceId()).isEqualTo(existingInvoiceId);
+        verify(workorderRepository).save(workorder);
+        
+        // Verify invoice was fetched from service (not created)
+        verify(invoiceClient).getInvoice(existingInvoiceId);
+        verify(invoiceClient, never()).createInvoice(any());
+    }
+
     private Workorder completedWorkorder() {
         return Workorder.builder()
                 .id(workorderId)
