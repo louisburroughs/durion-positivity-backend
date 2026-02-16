@@ -116,7 +116,8 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         assertThat(workorder.getCompletedAt()).isNotNull();
         assertThat(workorder.getCompletedBy()).isEqualTo(SYSTEM_USER_ID);
 
-        List<WorkorderSnapshot> snapshots = workorderSnapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(workorderId);
+        List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
+                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
         assertThat(snapshots)
                 .extracting(WorkorderSnapshot::getSnapshotType)
                 .contains("BILLABLE_SCOPE_FINALIZED");
@@ -197,7 +198,8 @@ class WorkorderCompletionContractBehaviorIT extends BaseContractIntegrationTest 
         assertThat(reopened.getReopenedBy()).isEqualTo(SYSTEM_USER_ID);
         assertThat(reopened.getReopenReason()).isEqualTo("Correcting part quantity before invoicing");
 
-        List<WorkorderSnapshot> snapshots = workorderSnapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(workorderId);
+        List<WorkorderSnapshot> snapshots = workorderSnapshotRepository
+                .findByWorkorderIdOrderByCapturedAtDesc(workorderId);
         assertThat(snapshots)
                 .extracting(WorkorderSnapshot::getSnapshotType)
                 .contains("BILLABLE_SCOPE_SUPERSEDED");
