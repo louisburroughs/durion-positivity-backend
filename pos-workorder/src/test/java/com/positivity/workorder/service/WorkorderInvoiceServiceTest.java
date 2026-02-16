@@ -273,13 +273,46 @@ class WorkorderInvoiceServiceTest {
         when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                 .thenReturn(List.of(duplicatePart2, standalonePart));
         
+        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
+                .thenReturn(InvoiceGenerationResponse.builder()
+                        .invoiceId(UUID.randomUUID())
+                        .status("DRAFT")
+                        .subtotal(new BigDecimal("40.0000"))
+                        .taxAmount(BigDecimal.ZERO)
+                        .totalAmount(new BigDecimal("40.0000"))
+                        .build());
+        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        workorderInvoiceService.generateInvoice(workorderId, null);
+
+        ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor.forClass(InvoiceCreationRequest.class);
+        verify(invoiceClient).createInvoice(requestCaptor.capture());
+
+        List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
+        
+        // Verify we have exactly 2 distinct parts, not 3 (no duplicates)
+        assertThat(lineItems).hasSize(2);
+        
+        // Verify both parts are present
+        assertThat(lineItems)
+                .extracting(InvoiceLineItem::getDescription)
+                .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
+        
+        // Verify amounts are correct (no double-billing)
+        BigDecimal totalAmount = lineItems.stream()
+                .map(InvoiceLineItem::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(totalAmount).isEqualByComparingTo("40.0000");
+    }
+
+    @Test
     @DisplayName("generateInvoice handles race condition when idempotency key already registered")
     void generateInvoice_RaceCondition_ReturnsExistingInvoice() {
         Workorder workorder = completedWorkorder();
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of(partLine()));
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
 
         UUID newInvoiceId = UUID.randomUUID();
         UUID existingInvoiceId = UUID.randomUUID();
@@ -296,6 +329,21 @@ class WorkorderInvoiceServiceTest {
                 .build();
 
         when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
+        
+        // Mock the existing invoice details that will be fetched when race condition is detected
+        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                .invoiceId(existingInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("120.00"))
+                .taxAmount(new BigDecimal("10.00"))
+                .totalAmount(new BigDecimal("130.00"))
+                .createdAt(Instant.now())
+                .build();
+        
+        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
         
         // First call to getExistingInvoiceId (early check) returns empty, second call (after collision) returns existing
         when(idempotencyService.getExistingInvoiceId("inv-key-race"))
