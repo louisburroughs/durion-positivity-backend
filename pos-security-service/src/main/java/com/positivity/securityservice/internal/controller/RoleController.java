@@ -136,7 +136,7 @@ public class RoleController {
     @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_REVOKE", apiVersion = "1")
     @DeleteMapping("/assignments/{assignmentId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date. Supports past, present, or future dates. An immutable revokedAt timestamp tracks when the revocation was entered. Defaults to today when endDate is omitted")
+    @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted")
     @ApiResponse(responseCode = "204", description = "Role assignment revoked")
     @ApiResponse(responseCode = "400", description = "Invalid endDate")
     @ApiResponse(responseCode = "404", description = "Role assignment not found")
