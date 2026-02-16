@@ -54,5 +54,8 @@ public class UserPersonLink {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+        if (status == null) {
+            status = UserLinkStatus.ACTIVE;
+        }
     }
 }
