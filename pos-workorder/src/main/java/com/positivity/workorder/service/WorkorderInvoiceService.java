@@ -20,9 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -113,21 +110,20 @@ public class WorkorderInvoiceService {
 
     @NonNull
     private InvoiceGenerationResponse buildExistingResponse(@NonNull Workorder workorder, @NonNull UUID invoiceId) {
-        BigDecimal subtotal = calculateSubtotal(workorder.getId());
-        BigDecimal taxAmount = BigDecimal.ZERO;
-        BigDecimal totalAmount = subtotal.add(taxAmount);
+        InvoiceGenerationResponse invoiceDetails = invoiceClient.getInvoice(invoiceId);
 
-        return InvoiceGenerationResponse.builder()
-                .invoiceId(invoiceId)
-                .status("DRAFT")
-                .workorderId(workorder.getId())
-                .estimateId(workorder.getEstimateId())
-                .approvalId(workorder.getApprovalId())
-                .subtotal(subtotal)
-                .taxAmount(taxAmount)
-                .totalAmount(totalAmount)
-                .createdAt(resolveCreatedAt(workorder))
-                .build();
+        // Ensure workorder links are populated (invoice service might not return them)
+        if (invoiceDetails.getWorkorderId() == null) {
+            invoiceDetails.setWorkorderId(workorder.getId());
+        }
+        if (invoiceDetails.getEstimateId() == null) {
+            invoiceDetails.setEstimateId(workorder.getEstimateId());
+        }
+        if (invoiceDetails.getApprovalId() == null) {
+            invoiceDetails.setApprovalId(workorder.getApprovalId());
+        }
+
+        return invoiceDetails;
     }
 
     @NonNull
@@ -163,13 +159,6 @@ public class WorkorderInvoiceService {
     }
 
     @NonNull
-    private BigDecimal calculateSubtotal(@NonNull UUID workorderId) {
-        return buildLineItems(workorderId).stream()
-                .map(InvoiceLineItem::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    @NonNull
     private BigDecimal resolveLineAmount(
             @Nullable BigDecimal lineTotal,
             @Nullable BigDecimal quantity,
@@ -181,19 +170,5 @@ public class WorkorderInvoiceService {
         BigDecimal safeQuantity = quantity == null ? BigDecimal.ONE : quantity;
         BigDecimal safeUnitPrice = unitPrice == null ? BigDecimal.ZERO : unitPrice;
         return safeQuantity.multiply(safeUnitPrice);
-    }
-
-    @NonNull
-    private Instant resolveCreatedAt(@NonNull Workorder workorder) {
-        if (workorder.getCompletedAt() != null) {
-            return workorder.getCompletedAt();
-        }
-
-        LocalDateTime updatedAt = workorder.getUpdatedAt();
-        if (updatedAt != null) {
-            return updatedAt.toInstant(ZoneOffset.UTC);
-        }
-
-        return Instant.now();
     }
 }
