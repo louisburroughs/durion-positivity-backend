@@ -2,7 +2,6 @@ package com.positivity.invoice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
-import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.service.InvoiceService;
 import com.positivity.shared.dto.InvoiceCreationRequest;
@@ -53,23 +52,20 @@ public class InvoiceController {
     }
 
     @PostMapping("/{invoiceId}/adjustments")
-    @EmitEvent(id = "INVOICE_ADJUSTMENT_ADD", apiVersion = "1")
-    @Operation(summary = "Add invoice adjustment", description = "Add discount, fee, or correction to a draft invoice")
+    @EmitEvent(id = "INVOICE_ADJUSTMENT_APPLY", apiVersion = "1")
+    @Operation(summary = "Apply invoice adjustment", description = "Apply discount, fee, or correction to a draft invoice")
     @ApiResponse(responseCode = "200", description = "Adjustment applied")
-    public ResponseEntity<InvoiceDetailsResponse> addAdjustment(
+    public ResponseEntity<InvoiceDetailsResponse> applyAdjustment(
             @PathVariable @NonNull UUID invoiceId,
             @Valid @RequestBody @NonNull AdjustmentRequest request) {
-        return ResponseEntity.ok(invoiceService.addAdjustment(invoiceId, request));
+        return ResponseEntity.ok(invoiceService.applyAdjustment(invoiceId, request));
     }
 
     @PostMapping("/{invoiceId}/finalize")
     @EmitEvent(id = "INVOICE_FINALIZE", apiVersion = "1")
-    @Operation(summary = "Finalize invoice", description = "Finalize draft invoice and set status to ISSUED")
+    @Operation(summary = "Finalize invoice", description = "Finalize draft invoice and prevent further modifications")
     @ApiResponse(responseCode = "200", description = "Invoice finalized")
-    public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
-            @PathVariable @NonNull UUID invoiceId,
-            @Valid @RequestBody(required = false) FinalizationRequest request) {
-        FinalizationRequest safeRequest = request == null ? new FinalizationRequest() : request;
-        return ResponseEntity.ok(invoiceService.finalizeInvoice(invoiceId, safeRequest));
+    public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(@PathVariable @NonNull UUID invoiceId) {
+        return ResponseEntity.ok(invoiceService.finalizeInvoice(invoiceId));
     }
 }

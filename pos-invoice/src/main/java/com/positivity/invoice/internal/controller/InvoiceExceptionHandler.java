@@ -13,30 +13,34 @@ import java.util.Map;
 @RestControllerAdvice(assignableTypes = InvoiceController.class)
 public class InvoiceExceptionHandler {
 
-    @ExceptionHandler(InvoiceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleInvoiceNotFound(InvoiceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of(
-                        "timestamp", Instant.now().toString(),
-                        "error", "NOT_FOUND",
-                        "message", ex.getMessage()));
-    }
+        private static final String MESSAGE = "message";
+        private static final String ERROR = "error";
+        private static final String TIMESTAMP = "timestamp";
 
-    @ExceptionHandler(InvalidInvoiceStateException.class)
-    public ResponseEntity<Map<String, Object>> handleInvalidInvoiceState(InvalidInvoiceStateException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of(
-                        "timestamp", Instant.now().toString(),
-                        "error", "INVALID_STATE",
-                        "message", ex.getMessage()));
-    }
+        @ExceptionHandler(InvoiceNotFoundException.class)
+        public ResponseEntity<Map<String, Object>> handleInvoiceNotFound(InvoiceNotFoundException ex) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                .body(Map.of(
+                                                TIMESTAMP, Instant.now().toString(),
+                                                ERROR, "NOT_FOUND",
+                                                MESSAGE, ex.getMessage()));
+        }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of(
-                        "timestamp", Instant.now().toString(),
-                        "error", "VALIDATION_ERROR",
-                        "message", ex.getMessage()));
-    }
+        @ExceptionHandler(InvalidInvoiceStateException.class)
+        public ResponseEntity<Map<String, Object>> handleInvalidInvoiceState(InvalidInvoiceStateException ex) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(Map.of(
+                                                TIMESTAMP, Instant.now().toString(),
+                                                ERROR, "INVALID_STATE",
+                                                MESSAGE, ex.getMessage()));
+        }
+
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                .body(Map.of(
+                                                TIMESTAMP, Instant.now().toString(),
+                                                ERROR, "VALIDATION_ERROR",
+                                                MESSAGE, ex.getMessage()));
+        }
 }

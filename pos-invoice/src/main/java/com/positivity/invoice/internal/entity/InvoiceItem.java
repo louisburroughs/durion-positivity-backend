@@ -27,6 +27,9 @@ public class InvoiceItem {
     @JoinColumn(name = "invoice_id", nullable = false)
     private Invoice invoice;
 
+    @Column(name = "invoice_id", columnDefinition = "UUID", nullable = false, insertable = false, updatable = false)
+    private UUID invoiceId;
+
     @Column(name = "description", nullable = false, length = 512)
     private String description;
 
@@ -36,8 +39,8 @@ public class InvoiceItem {
     @Column(name = "unit_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal unitPrice;
 
-    @Column(name = "amount", nullable = false, precision = 19, scale = 4)
-    private BigDecimal amount;
+    @Column(name = "line_total", nullable = false, precision = 19, scale = 4)
+    private BigDecimal lineTotal;
 
     @Column(name = "workorder_item_id", columnDefinition = "UUID")
     private UUID workorderItemId;
@@ -65,6 +68,11 @@ public class InvoiceItem {
 
     public void setInvoice(@NonNull Invoice invoice) {
         this.invoice = invoice;
+    }
+
+    @Nullable
+    public UUID getInvoiceId() {
+        return invoiceId;
     }
 
     @NonNull
@@ -95,12 +103,12 @@ public class InvoiceItem {
     }
 
     @NonNull
-    public BigDecimal getAmount() {
-        return amount;
+    public BigDecimal getLineTotal() {
+        return lineTotal;
     }
 
-    public void setAmount(@NonNull BigDecimal amount) {
-        this.amount = amount;
+    public void setLineTotal(@NonNull BigDecimal lineTotal) {
+        this.lineTotal = lineTotal;
     }
 
     @Nullable

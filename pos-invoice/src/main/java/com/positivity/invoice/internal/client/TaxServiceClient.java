@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.util.Map;
 
 @Component
 public class TaxServiceClient {
@@ -17,53 +17,29 @@ public class TaxServiceClient {
     private static final Logger log = LoggerFactory.getLogger(TaxServiceClient.class);
 
     private final RestClient restClient;
-    private final boolean useStub;
-    private final BigDecimal stubRate;
 
     public TaxServiceClient(
             RestClient.Builder restClientBuilder,
-            @Value("${invoice.tax.base-url:http://pos-tax:8090/v1/tax}") String taxServiceBaseUrl,
-            @Value("${invoice.tax.use-stub:true}") boolean useStub,
-            @Value("${invoice.tax.stub-rate:0.10}") BigDecimal stubRate) {
+            @Value("${invoice.tax.base-url:http://pos-tax:8090/v1/tax}") String taxServiceBaseUrl) {
         this.restClient = restClientBuilder.baseUrl(taxServiceBaseUrl).build();
-        this.useStub = useStub;
-        this.stubRate = stubRate;
     }
 
     @NonNull
-    public TaxCalculationResponse calculateTax(@NonNull TaxCalculationRequest request) {
-        if (useStub) {
-            return calculateTaxStub(request);
-        }
-
+    public BigDecimal calculateTax(@NonNull BigDecimal subtotal, String partyId) {
         try {
             TaxCalculationResponse response = restClient.post()
                     .uri("/calculate")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
+                    .body(Map.of(
+                            "subtotal", subtotal,
+                            "partyId", partyId == null ? "" : partyId))
                     .retrieve()
                     .body(TaxCalculationResponse.class);
 
-            if (response == null || response.getTaxAmount() == null) {
-                log.warn("Tax service returned null response; falling back to stub tax calculation");
-                return calculateTaxStub(request);
-            }
-
-            return response;
+            return response.getTaxAmount();
         } catch (Exception ex) {
-            log.warn("Tax service unavailable; falling back to stub tax calculation: {}", ex.getMessage());
-            return calculateTaxStub(request);
+            log.warn("Tax service unavailable; using zero tax fallback: {}", ex.getMessage());
+            return BigDecimal.ZERO;
         }
-    }
-
-    @NonNull
-    private TaxCalculationResponse calculateTaxStub(@NonNull TaxCalculationRequest request) {
-        BigDecimal subtotal = request.getSubtotal() == null ? BigDecimal.ZERO : request.getSubtotal();
-        BigDecimal taxAmount = subtotal.multiply(stubRate).setScale(4, RoundingMode.HALF_UP);
-
-        TaxCalculationResponse response = new TaxCalculationResponse();
-        response.setRate(stubRate);
-        response.setTaxAmount(taxAmount);
-        return response;
     }
 }
