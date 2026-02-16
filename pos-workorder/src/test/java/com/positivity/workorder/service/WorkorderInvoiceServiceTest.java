@@ -212,9 +212,6 @@ class WorkorderInvoiceServiceTest {
                 .build();
 
         when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
 
@@ -290,15 +287,15 @@ class WorkorderInvoiceServiceTest {
 
         List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
         
-        // Verify we have exactly 2 distinct parts, not 3 (no duplicates)
+        // Verify we have exactly 2 distinct parts (duplicate was filtered out)
         assertThat(lineItems).hasSize(2);
         
-        // Verify both parts are present
+        // Verify both parts are present (Oil Filter should appear once, not twice)
         assertThat(lineItems)
                 .extracting(InvoiceLineItem::getDescription)
                 .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
         
-        // Verify amounts are correct (no double-billing)
+        // Verify amounts are correct (no double-billing - Oil Filter $15 + Standalone Part $25 = $40)
         BigDecimal totalAmount = lineItems.stream()
                 .map(InvoiceLineItem::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -350,9 +347,37 @@ class WorkorderInvoiceServiceTest {
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(existingInvoiceId));
         
+        // Stub getInvoice to return details for the existing invoice (used in buildExistingResponse)
+        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                .invoiceId(existingInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("170.0000"))
+                .taxAmount(new BigDecimal("10.0000"))
+                .totalAmount(new BigDecimal("180.0000"))
+                .createdAt(Instant.now())
+                .build();
+        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
+        
         // Simulate race condition: registerInvoiceKey throws DataIntegrityViolationException
         doThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"))
                 .when(idempotencyService).registerInvoiceKey(eq("inv-key-race"), eq(newInvoiceId));
+
+        // Mock the existing invoice that will be fetched when race condition is detected
+        InvoiceGenerationResponse existingInvoice = InvoiceGenerationResponse.builder()
+                .invoiceId(existingInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("170.0000"))
+                .taxAmount(new BigDecimal("10.0000"))
+                .totalAmount(new BigDecimal("180.0000"))
+                .createdAt(Instant.now())
+                .build();
+        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoice);
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "inv-key-race");
 
@@ -409,7 +434,7 @@ class WorkorderInvoiceServiceTest {
                 .thenReturn(List.of(completedService, cancelledService));
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
                 .thenReturn(List.of(completedPart, cancelledPart));
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
         when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                 .thenReturn(InvoiceGenerationResponse.builder()
                         .invoiceId(UUID.randomUUID())
@@ -427,19 +452,20 @@ class WorkorderInvoiceServiceTest {
 
         List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
         
-        // Verify we have exactly 2 distinct parts (duplicate was filtered out)
+         // Verify only billable items are included (CANCELLED items excluded)
         assertThat(lineItems).hasSize(2);
+        List<String> descriptions = lineItems.stream()
+                .map(InvoiceLineItem::getDescription)
+                .toList();
+       // Verify only completed items are present (CANCELLED items should not appear)
+        assertThat(descriptions).containsExactlyInAnyOrder("Completed Service", "Completed Part");
+        assertThat(descriptions).doesNotContain("Cancelled Service", "Cancelled Part");
         
-        // Verify both parts are present (Oil Filter should appear once, not twice)
-        assertThat(lineItems)
-                .extracting(InvoiceLineItem::getDescription)
-                .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
-        
-        // Verify amounts are correct (no double-billing - Oil Filter $15 + Standalone Part $25 = $40)
+        // Verify amounts match only billable items (Completed Service $100 + Completed Part $50 = $150)
         BigDecimal totalAmount = lineItems.stream()
                 .map(InvoiceLineItem::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(totalAmount).isEqualByComparingTo("40.0000");
+        assertThat(totalAmount).isEqualByComparingTo("150.0000");
     }
 
     @Test
