@@ -3,15 +3,23 @@ package com.positivity.workorder.internal.client;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * REST client for communication with pos-invoice service.
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class InvoiceClient {
 
     private final RestClient invoiceServiceRestClient;
@@ -29,5 +37,89 @@ public class InvoiceClient {
         }
 
         return response;
+    }
+
+    @NonNull
+    public InvoiceGenerationResponse getInvoice(@NonNull UUID invoiceId) {
+        log.debug("Fetching invoice details from pos-invoice service for invoice {}", invoiceId);
+        
+        Map<String, Object> invoiceData = invoiceServiceRestClient.get()
+                .uri("/v1/invoices/{invoiceId}", invoiceId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+
+        if (invoiceData == null) {
+            throw new IllegalStateException("Invoice service returned an empty response for invoice " + invoiceId);
+        }
+
+        return mapToInvoiceGenerationResponse(invoiceData);
+    }
+
+    @NonNull
+    private InvoiceGenerationResponse mapToInvoiceGenerationResponse(@NonNull Map<String, Object> data) {
+        InvoiceGenerationResponse response = new InvoiceGenerationResponse();
+        
+        response.setInvoiceId(parseUUID(data.get("invoiceId")));
+        response.setStatus(parseString(data.get("status")));
+        response.setWorkorderId(parseUUID(data.get("workorderId")));
+        response.setEstimateId(parseUUID(data.get("estimateId")));
+        response.setApprovalId(parseUUID(data.get("approvalId")));
+        response.setSubtotal(parseBigDecimal(data.get("subtotal")));
+        // Invoice service returns 'tax' and 'total' field names
+        response.setTaxAmount(parseBigDecimal(data.get("tax")));
+        response.setTotalAmount(parseBigDecimal(data.get("total")));
+        response.setCreatedAt(parseInstant(data.get("createdAt")));
+        
+        return response;
+    }
+
+    private UUID parseUUID(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return UUID.fromString((String) value);
+        }
+        return null;
+    }
+
+    private String parseString(Object value) {
+        return value != null ? value.toString() : null;
+    }
+
+    private BigDecimal parseBigDecimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            if (value instanceof Number) {
+                return new BigDecimal(value.toString());
+            }
+            if (value instanceof String) {
+                return new BigDecimal((String) value);
+            }
+        } catch (NumberFormatException e) {
+            log.warn("Failed to parse BigDecimal from value: {}", value, e);
+            return null;
+        }
+        return null;
+    }
+
+    private Instant parseInstant(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            if (value instanceof String) {
+                return Instant.parse((String) value);
+            }
+            if (value instanceof Number) {
+                return Instant.ofEpochMilli(((Number) value).longValue());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse Instant from value: {}", value, e);
+            return null;
+        }
+        return null;
     }
 }
