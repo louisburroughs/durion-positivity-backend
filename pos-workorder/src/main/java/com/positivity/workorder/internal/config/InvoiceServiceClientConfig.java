@@ -7,7 +7,8 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Configuration for pos-invoice service client.
- * Enables cross-service communication for billing rules lookup (CAP:092 Story #98).
+ * Enables cross-service communication for billing rules lookup (CAP:092 Story
+ * #98).
  */
 @Configuration
 public class InvoiceServiceClientConfig {
@@ -15,7 +16,7 @@ public class InvoiceServiceClientConfig {
     @Bean
     public RestClient invoiceServiceRestClient(
             RestClient.Builder restClientBuilder,
-            @Value("${pos.invoice.base-url:http://localhost:8085}") String invoiceBaseUrl) {
+            @Value("${pos.invoice.base-url:http://pos-invoice:8089}") String invoiceBaseUrl) {
         return restClientBuilder
                 .baseUrl(invoiceBaseUrl)
                 .build();
