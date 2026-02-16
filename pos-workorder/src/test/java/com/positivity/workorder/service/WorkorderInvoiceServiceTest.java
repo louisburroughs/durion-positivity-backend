@@ -76,7 +76,7 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of(partLine()));
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
         when(idempotencyService.getExistingInvoiceId("inv-key-1")).thenReturn(Optional.empty());
 
         UUID invoiceId = UUID.randomUUID();
@@ -110,7 +110,7 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
 
         UUID invoiceId = UUID.randomUUID();
         InvoiceGenerationResponse upstreamResponse = InvoiceGenerationResponse.builder()
@@ -158,7 +158,7 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(labor));
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of(part));
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
         when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                 .thenReturn(InvoiceGenerationResponse.builder()
                         .invoiceId(UUID.randomUUID())
@@ -200,7 +200,7 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
 
@@ -213,6 +213,48 @@ class WorkorderInvoiceServiceTest {
     }
 
     @Test
+    @DisplayName("generateInvoice deduplicates parts when same part has both workorder and workOrderService references")
+    void generateInvoice_DeduplicatesParts_WhenPartHasBothReferences() {
+        Workorder workorder = completedWorkorder();
+        
+        // Create a duplicate part that will be returned by both queries (same ID)
+        // This simulates a scenario where a part has both workorder and workOrderService references
+        UUID duplicatePartId = UUID.randomUUID();
+        WorkorderPart duplicatePart1 = WorkorderPart.builder()
+                .id(duplicatePartId)
+                .description("Oil Filter")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("15.0000"))
+                .lineTotal(new BigDecimal("15.0000"))
+                .build();
+        
+        WorkorderPart duplicatePart2 = WorkorderPart.builder()
+                .id(duplicatePartId)  // Same ID as duplicatePart1
+                .description("Oil Filter")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("15.0000"))
+                .lineTotal(new BigDecimal("15.0000"))
+                .build();
+        
+        // Create a standalone part with unique ID
+        WorkorderPart standalonePart = WorkorderPart.builder()
+                .id(UUID.randomUUID())
+                .description("Standalone Part")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("25.0000"))
+                .lineTotal(new BigDecimal("25.0000"))
+                .build();
+
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of());
+        
+        // Simulate a scenario where the same part (by ID) is returned by both queries
+        // This tests the service-level deduplication safety measure
+        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                .thenReturn(List.of(duplicatePart1));
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                .thenReturn(List.of(duplicatePart2, standalonePart));
+        
     @DisplayName("generateInvoice handles race condition when idempotency key already registered")
     void generateInvoice_RaceCondition_ReturnsExistingInvoice() {
         Workorder workorder = completedWorkorder();
@@ -319,12 +361,19 @@ class WorkorderInvoiceServiceTest {
 
         List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
         
-        // Only the completed items should be included
+        // Verify we have exactly 2 distinct parts (duplicate was filtered out)
         assertThat(lineItems).hasSize(2);
-        assertThat(lineItems).extracting(InvoiceLineItem::getDescription)
-                .containsExactlyInAnyOrder("Completed Service", "Completed Part");
-        assertThat(lineItems).extracting(InvoiceLineItem::getDescription)
-                .doesNotContain("Cancelled Service", "Cancelled Part");
+        
+        // Verify both parts are present (Oil Filter should appear once, not twice)
+        assertThat(lineItems)
+                .extracting(InvoiceLineItem::getDescription)
+                .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
+        
+        // Verify amounts are correct (no double-billing - Oil Filter $15 + Standalone Part $25 = $40)
+        BigDecimal totalAmount = lineItems.stream()
+                .map(InvoiceLineItem::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(totalAmount).isEqualByComparingTo("40.0000");
     }
 
     private Workorder completedWorkorder() {
