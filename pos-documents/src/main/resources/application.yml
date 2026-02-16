@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: documents
+
+server:
+  port: 0
+
+documents:
+  pdf:
+    max-input-characters: 1000000
+    template-base-path: classpath:/templates
+    max-table-rows: 200
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+
+pos:
+  events:
+    base-url: ${POS_EVENTS_BASE_URL:http://localhost:8085}
+    api-secret: ${POS_EVENTS_API_SECRET:}
