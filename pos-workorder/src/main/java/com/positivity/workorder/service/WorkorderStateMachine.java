@@ -43,15 +43,15 @@ public class WorkorderStateMachine {
             WorkorderStatus.AWAITING_APPROVAL,
             WorkorderStatus.READY_FOR_PICKUP);
 
-        private static final Set<WorkorderItemStatus> TERMINAL_ITEM_STATUSES = Set.of(
+    private static final Set<WorkorderItemStatus> TERMINAL_ITEM_STATUSES = Set.of(
             WorkorderItemStatus.COMPLETED,
             WorkorderItemStatus.CANCELLED);
 
-        private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
+    private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
 
-        public record CompletionPreconditions(
+    public record CompletionPreconditions(
             UUID workorderId,
-                String currentStatus,
+            String currentStatus,
             boolean canComplete,
             List<String> checklistItems,
             List<String> blockingReasons,
@@ -60,12 +60,12 @@ public class WorkorderStateMachine {
             int nonTerminalPartItems,
             boolean emergencyDenialAcknowledged,
             boolean hasBillableItems) {
-        }
+    }
 
     @Transactional
     public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
-            .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
         WorkorderStatus fromStatus = workorder.getStatus();
 
@@ -88,29 +88,29 @@ public class WorkorderStateMachine {
         log.info("Workorder {} transitioned from {} to {} by user {}", workorderId, fromStatus, toStatus, userId);
     }
 
-        private void validateCompletionRequirements(UUID workorderId) {
+    private void validateCompletionRequirements(UUID workorderId) {
         CompletionPreconditions preconditions = evaluateCompletionPreconditions(workorderId);
         if (!preconditions.canComplete()) {
             String message = preconditions.blockingReasons().isEmpty()
-                ? String.format("Workorder %s cannot be completed due to unmet preconditions", workorderId)
-                : String.join("; ", preconditions.blockingReasons());
+                    ? String.format("Workorder %s cannot be completed due to unmet preconditions", workorderId)
+                    : String.join("; ", preconditions.blockingReasons());
             throw new IllegalStateException(message);
         }
-        }
+    }
 
-        @Transactional(readOnly = true)
-        public CompletionPreconditions evaluateCompletionPreconditions(UUID workorderId) {
+    @Transactional(readOnly = true)
+    public CompletionPreconditions evaluateCompletionPreconditions(UUID workorderId) {
         Workorder workorder = workorderRepository.findById(workorderId)
-            .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
         List<ChangeRequest> unresolvedApprovalGated = changeRequestRepository
-            .findByWorkorderIdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
-            .stream()
-            .filter(changeRequest -> Boolean.TRUE.equals(changeRequest.getIsApprovalGated()))
-            .toList();
+                .findByWorkorderIdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
+                .stream()
+                .filter(changeRequest -> Boolean.TRUE.equals(changeRequest.getIsApprovalGated()))
+                .toList();
 
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
-            .findByWorkOrder_Id(workorderId);
+                .findByWorkOrder_Id(workorderId);
 
         List<WorkorderPart> parts = new ArrayList<>();
         parts.addAll(workorderPartRepository.findByWorkorderId(workorderId));
@@ -118,17 +118,17 @@ public class WorkorderStateMachine {
         for (WorkorderPart part : partsByService) {
             boolean alreadyPresent = parts.stream().anyMatch(existing -> existing.getId().equals(part.getId()));
             if (!alreadyPresent) {
-            parts.add(part);
+                parts.add(part);
             }
         }
 
         long nonTerminalServiceItems = services.stream()
-            .filter(service -> service.getStatus() == null || !TERMINAL_ITEM_STATUSES.contains(service.getStatus()))
-            .count();
+                .filter(service -> service.getStatus() == null || !TERMINAL_ITEM_STATUSES.contains(service.getStatus()))
+                .count();
 
         long nonTerminalPartItems = parts.stream()
-            .filter(part -> part.getStatus() == null || !TERMINAL_ITEM_STATUSES.contains(part.getStatus()))
-            .count();
+                .filter(part -> part.getStatus() == null || !TERMINAL_ITEM_STATUSES.contains(part.getStatus()))
+                .count();
 
         boolean emergencyDenialAcknowledged = changeRequestService.canCloseWorkorder(workorderId);
         boolean hasBillableItems = !services.isEmpty() || !parts.isEmpty();
@@ -136,42 +136,42 @@ public class WorkorderStateMachine {
         List<String> blockingReasons = new ArrayList<>();
         if (!unresolvedApprovalGated.isEmpty()) {
             blockingReasons.add(String.format(
-                "Workorder %s cannot be completed. There are %s unresolved approval-gated change request(s) pending approval",
-                workorderId, unresolvedApprovalGated.size()));
+                    "Workorder %s cannot be completed. There are %s unresolved approval-gated change request(s) pending approval",
+                    workorderId, unresolvedApprovalGated.size()));
         }
         if (nonTerminalServiceItems > 0) {
             blockingReasons.add(String.format(
-                "Workorder %s cannot be completed. There are %s service item(s) not in COMPLETED/CANCELLED state",
-                workorderId, nonTerminalServiceItems));
+                    "Workorder %s cannot be completed. There are %s service item(s) not in COMPLETED/CANCELLED state",
+                    workorderId, nonTerminalServiceItems));
         }
         if (nonTerminalPartItems > 0) {
             blockingReasons.add(String.format(
-                "Workorder %s cannot be completed. There are %s part item(s) not in COMPLETED/CANCELLED state",
-                workorderId, nonTerminalPartItems));
+                    "Workorder %s cannot be completed. There are %s part item(s) not in COMPLETED/CANCELLED state",
+                    workorderId, nonTerminalPartItems));
         }
         if (!emergencyDenialAcknowledged) {
             blockingReasons.add(String.format(
-                "Workorder %s cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
-                workorderId));
+                    "Workorder %s cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
+                    workorderId));
         }
         List<String> checklistItems = List.of(
-            "All workorder services are COMPLETED or CANCELLED",
-            "All workorder parts are COMPLETED or CANCELLED",
-            "No unresolved approval-gated change requests",
-            "All emergency/safety denial acknowledgments are captured",
-            "At least one billable service or part exists for final snapshot");
+                "All workorder services are COMPLETED or CANCELLED",
+                "All workorder parts are COMPLETED or CANCELLED",
+                "No unresolved approval-gated change requests",
+                "All emergency/safety denial acknowledgments are captured",
+                "At least one billable service or part exists for final snapshot");
 
         return new CompletionPreconditions(
-            workorderId,
-            workorder.getStatus().name(),
-            blockingReasons.isEmpty(),
-            checklistItems,
-            blockingReasons,
-            unresolvedApprovalGated.size(),
-            (int) nonTerminalServiceItems,
-            (int) nonTerminalPartItems,
-            emergencyDenialAcknowledged,
-            hasBillableItems);
+                workorderId,
+                workorder.getStatus().name(),
+                blockingReasons.isEmpty(),
+                checklistItems,
+                blockingReasons,
+                unresolvedApprovalGated.size(),
+                (int) nonTerminalServiceItems,
+                (int) nonTerminalPartItems,
+                emergencyDenialAcknowledged,
+                hasBillableItems);
     }
 
     /**
@@ -297,7 +297,8 @@ public class WorkorderStateMachine {
 
         List<WorkorderPart> parts = new ArrayList<>();
         parts.addAll(workorderPartRepository.findByWorkorderId(workorder.getId()));
-        List<WorkorderPart> partsByService = workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorder.getId());
+        List<WorkorderPart> partsByService = workorderPartRepository
+                .findByWorkOrderService_WorkOrder_Id(workorder.getId());
         for (WorkorderPart part : partsByService) {
             boolean alreadyPresent = parts.stream().anyMatch(existing -> existing.getId().equals(part.getId()));
             if (!alreadyPresent) {

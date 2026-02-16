@@ -69,11 +69,10 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
     public ResponseEntity<WorkorderResponse> createWorkorder(
             @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
-            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)") 
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
         // Service handles entity creation internally, including idempotency check
         Workorder created = workorderService.createWorkorderWithIdempotency(
-                request.getEstimateId(), 
+                request.getEstimateId(),
                 request.getCustomerId(),
                 idempotencyKey);
         return ResponseEntity.ok(WorkorderResponse.fromEntity(created));
@@ -187,7 +186,7 @@ public class WorkorderController {
 
             CompleteWorkorderResponse response = CompleteWorkorderResponse.builder()
                     .workorderId(workorderId)
-                .previousStatus(previousStatus)
+                    .previousStatus(previousStatus)
                     .currentStatus("COMPLETED")
                     .completedAt(workorderService.getCompletedAt(workorderId))
                     .message("Work order completed successfully")
@@ -252,10 +251,10 @@ public class WorkorderController {
                     request.getReopenReason());
 
             ReopenWorkorderResponse response = ReopenWorkorderResponse.builder()
-                .workorderId(reopened.workorderId())
-                .currentStatus(reopened.currentStatus())
-                .isReopened(reopened.isReopened())
-                .reopenedAt(reopened.reopenedAt())
+                    .workorderId(reopened.workorderId())
+                    .currentStatus(reopened.currentStatus())
+                    .isReopened(reopened.isReopened())
+                    .reopenedAt(reopened.reopenedAt())
                     .message("Workorder reopened successfully")
                     .build();
 
