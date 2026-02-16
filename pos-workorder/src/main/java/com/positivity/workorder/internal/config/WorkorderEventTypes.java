@@ -54,6 +54,13 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Generate invoice draft from completed workorder */
+        public static final EventTypeRegistration WORKORDER_INVOICE_GENERATE = EventTypeRegistration.write(
+                        "WORKORDER_INVOICE_GENERATE",
+                        "Generate invoice draft from completed workorder")
+                        .apiVersion("1")
+                        .build();
+
         /** Reopen a completed workorder for controlled edits */
         public static final EventTypeRegistration WORKORDER_REOPEN = EventTypeRegistration.write("WORKORDER_REOPEN",
                         "Reopen a completed workorder with mandatory reason and audit")
@@ -364,6 +371,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_START,
                         WORKORDER_APPROVE,
                         WORKORDER_COMPLETE,
+                        WORKORDER_INVOICE_GENERATE,
                         WORKORDER_REOPEN,
                         // Technician assignment events (CAP:005 Story #161)
                         WORKORDER_TECHNICIAN_ASSIGN,

@@ -52,6 +52,7 @@ public class WorkorderStateMachine {
             WorkorderItemStatus.CANCELLED);
 
     private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
+    private static final String STATUS_FIELD = "status";
 
     public record CompletionPreconditions(
             UUID workorderId,
@@ -303,28 +304,59 @@ public class WorkorderStateMachine {
     }
 
     public void captureBillableScopeSnapshot(Workorder workorder, UUID userId, String completionNotes) {
+        boolean invoiceReady = !Boolean.TRUE.equals(workorder.getIsReopened())
+                && (workorder.getStatus() == WorkorderStatus.COMPLETED
+                        || COMPLETION_ELIGIBLE_STATUSES.contains(workorder.getStatus()));
+
+        WorkorderStatus snapshotStatus = invoiceReady ? WorkorderStatus.COMPLETED : workorder.getStatus();
+        Instant workorderCompletedAt = workorder.getCompletedAt() != null ? workorder.getCompletedAt() : Instant.now();
+
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
                 .findByWorkOrder_Id(workorder.getId());
 
         List<WorkorderPart> parts = loadDeduplicatedWorkorderParts(workorder.getId());
 
-        BigDecimal serviceTotal = services.stream()
+        List<com.positivity.workorder.internal.entity.WorkorderService> billableServices = services.stream()
                 .filter(service -> !isExcludedFromBillableTotal(service.getStatus()))
+                .toList();
+
+        List<WorkorderPart> billableParts = parts.stream()
+                .filter(part -> !isExcludedFromBillableTotal(part.getStatus()))
+                .toList();
+
+        BigDecimal serviceTotal = billableServices.stream()
                 .map(com.positivity.workorder.internal.entity.WorkorderService::getLineTotal)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal partTotal = parts.stream()
-                .filter(part -> !isExcludedFromBillableTotal(part.getStatus()))
+        BigDecimal partTotal = billableParts.stream()
                 .map(WorkorderPart::getLineTotal)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        List<Map<String, Object>> billableItems = new ArrayList<>();
+        for (com.positivity.workorder.internal.entity.WorkorderService service : billableServices) {
+            billableItems.add(buildBillableServiceSnapshotItem(service));
+        }
+        for (WorkorderPart part : billableParts) {
+            billableItems.add(buildBillablePartSnapshotItem(part));
+        }
+
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("snapshotVersion", "1.0");
         payload.put("workorderId", workorder.getId());
-        payload.put("status", workorder.getStatus());
-        payload.put("serviceCount", services.size());
-        payload.put("partCount", parts.size());
+        payload.put("estimateId", workorder.getEstimateId());
+        payload.put("approvalId", workorder.getApprovalId());
+        payload.put("customerAccountId", workorder.getCustomerId());
+        payload.put("serviceLocationId", workorder.getShopId());
+        payload.put("workorderCompletedAt", workorderCompletedAt);
+        payload.put("invoiceReady", invoiceReady);
+        payload.put(STATUS_FIELD, snapshotStatus);
+        payload.put("serviceCount", billableServices.size());
+        payload.put("partCount", billableParts.size());
+        payload.put("totalServiceCount", services.size());
+        payload.put("totalPartCount", parts.size());
+        payload.put("lineItems", billableItems);
         payload.put("serviceTotal", serviceTotal);
         payload.put("partTotal", partTotal);
         payload.put("grandTotal", serviceTotal.add(partTotal));
@@ -411,6 +443,43 @@ public class WorkorderStateMachine {
         }
 
         return new ArrayList<>(partsById.values());
+    }
+
+    private Map<String, Object> buildBillableServiceSnapshotItem(
+            com.positivity.workorder.internal.entity.WorkorderService service) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("itemId", service.getId());
+        item.put("itemType", "LABOR");
+        item.put("sourceSnapshotItemId", service.getOriginEstimateItemId());
+        item.put("serviceEntityId", service.getServiceEntityId());
+        item.put("description", service.getDescription());
+        item.put("quantity", service.getQuantity());
+        item.put("unitPrice", service.getUnitPrice());
+        item.put("lineTotal", service.getLineTotal());
+        item.put("taxCategoryCode", service.getTaxCode());
+        item.put("taxable", isTaxable(service.getTaxCode()));
+        item.put(STATUS_FIELD, service.getStatus());
+        return item;
+    }
+
+    private Map<String, Object> buildBillablePartSnapshotItem(WorkorderPart part) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("itemId", part.getId());
+        item.put("itemType", "PART");
+        item.put("sourceSnapshotItemId", part.getOriginEstimateItemId());
+        item.put("productEntityId", part.getProductEntityId());
+        item.put("description", part.getDescription());
+        item.put("quantity", part.getQuantity());
+        item.put("unitPrice", part.getUnitPrice());
+        item.put("lineTotal", part.getLineTotal());
+        item.put("taxCategoryCode", part.getTaxCode());
+        item.put("taxable", isTaxable(part.getTaxCode()));
+        item.put(STATUS_FIELD, part.getStatus());
+        return item;
+    }
+
+    private boolean isTaxable(String taxCode) {
+        return taxCode != null && !taxCode.isBlank();
     }
 
     private boolean isExcludedFromBillableTotal(WorkorderItemStatus status) {

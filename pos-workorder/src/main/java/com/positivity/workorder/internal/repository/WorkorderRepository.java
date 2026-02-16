@@ -29,4 +29,13 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      */
     @NonNull
     Optional<Workorder> findFirstByEstimateId(@NonNull UUID estimateId);
+
+    /**
+     * Find workorder by generated invoice ID.
+     *
+     * @param invoiceId generated invoice ID
+     * @return optional workorder linked to the invoice
+     */
+    @NonNull
+    Optional<Workorder> findByInvoiceId(@NonNull UUID invoiceId);
 }

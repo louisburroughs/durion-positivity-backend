@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderResponse;
@@ -16,6 +17,7 @@ import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.entity.WorkorderSnapshot;
+import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
 import com.positivity.workorder.service.WorkorderStateMachine;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +42,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkorderController {
     private final WorkorderService workorderService;
+    private final WorkorderInvoiceService workorderInvoiceService;
 
     @Operation(summary = "Get all work orders", description = "Retrieve a list of all work orders.")
     @ApiResponse(responseCode = "200", description = "List of work orders returned successfully.")
@@ -209,6 +212,23 @@ public class WorkorderController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    @Operation(summary = "Generate invoice draft from completed workorder", description = "Generate an invoice draft from a completed workorder with optional idempotency key.")
+    @ApiResponse(responseCode = "200", description = "Invoice generated successfully or existing invoice returned for idempotent replay.")
+    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(responseCode = "409", description = "Work order is not in COMPLETED state.")
+    @PostMapping("/{workorderId}/generate-invoice")
+    @EmitEvent(id = "WORKORDER_INVOICE_GENERATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
+    public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
+            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000")
+            @PathVariable UUID workorderId,
+            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000")
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+
+        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Validate completion preconditions", description = "Evaluate completion preconditions for a workorder and return checklist + blocking reasons.")

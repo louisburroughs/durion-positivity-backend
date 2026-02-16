@@ -57,6 +57,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class EstimateController {
+    private static final String SYSTEM = "SYSTEM";
     private final EstimateService estimateService;
     private final WorkorderService workorderService;
     private final IdempotencyService idempotencyService;
@@ -131,7 +132,7 @@ public class EstimateController {
             log.info("Received create estimate request for customerId={}, vehicleId={}",
                     request.getCustomerId(), request.getVehicleId());
 
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateResponse response = estimateService.createEstimate(request, username);
 
             log.info("Estimate created successfully: id={}, number={}",
@@ -343,7 +344,7 @@ public class EstimateController {
             @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
             // Get authenticated username from security context
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateResponse submitted = estimateService.submitForApproval(estimateId, username);
             return ResponseEntity.ok(submitted);
         } catch (EntityNotFoundException e) {
@@ -387,7 +388,7 @@ public class EstimateController {
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Line item details", required = true) @Valid @RequestBody AddEstimateItemRequest request) {
         try {
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateItemResponse item = estimateService.addEstimateItem(estimateId, request, username);
             return ResponseEntity.ok(item);
         } catch (org.springframework.web.server.ResponseStatusException e) {
@@ -486,7 +487,7 @@ public class EstimateController {
     public ResponseEntity<Map<String, Object>> calculateEstimateTotals(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId) {
         try {
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateResponse estimate = estimateService.calculateEstimateTaxesAndTotals(estimateId, username);
             Map<String, Object> response = new java.util.HashMap<>();
             response.put("estimate", estimate);
@@ -542,7 +543,7 @@ public class EstimateController {
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID estimateId,
             @Parameter(description = "Optional notes about why snapshot was created", example = "Snapshot captured before approval") @RequestParam(required = false) @Nullable String notes) {
         try {
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM");
+            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, username, notes);
             return ResponseEntity.ok(snapshot);
         } catch (IllegalArgumentException e) {
