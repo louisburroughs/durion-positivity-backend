@@ -64,7 +64,7 @@ public class SecurityServiceClient {
             @NonNull String userId,
             Boolean includeHistory,
             LocalDateTime endDate) {
-        log.debug("Fetching role assignments for userId: {}, includeHistory: {}, endDate: {}", 
+        log.debug("Fetching role assignments for userId: {}, includeHistory: {}, endDate: {}",
                 userId, includeHistory, endDate);
 
         List<UserRoleDto> assignments = restClient.get()
