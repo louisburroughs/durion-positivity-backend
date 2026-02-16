@@ -3,6 +3,8 @@ package com.positivity.people.service;
 import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.client.dto.RoleDto;
 import com.positivity.people.internal.client.dto.UserRoleDto;
+import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.service.PeopleAccessControlServiceImpl;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,26 +26,41 @@ class PeopleAccessControlServiceTest {
 
     private SecurityServiceClient securityServiceClient;
     private UserPersonTranslationService userPersonTranslationService;
+    private PersonRepository personRepository;
     private PeopleAccessControlService peopleAccessControlService;
 
     @BeforeEach
     void setUp() {
         securityServiceClient = mock(SecurityServiceClient.class);
         userPersonTranslationService = mock(UserPersonTranslationService.class);
+        personRepository = mock(PersonRepository.class);
         peopleAccessControlService = new PeopleAccessControlServiceImpl(userPersonTranslationService,
-                securityServiceClient);
+                securityServiceClient, personRepository);
     }
 
     @Test
-    void getAvailableRolesForPeople_combinesLocationAndGlobalRoles() {
+    void getAvailableRolesForPerson_combinesLocationAndGlobalRoles() {
+        UUID personUuid = UUID.randomUUID();
         RoleDto locationRole = RoleDto.builder().code("MANAGER").scopeType("LOCATION").build();
         RoleDto globalRole = RoleDto.builder().code("ADMIN").scopeType("GLOBAL").build();
+        
+        when(personRepository.existsById(personUuid)).thenReturn(true);
         when(securityServiceClient.getAvailableRoles("LOCATION")).thenReturn(List.of(locationRole));
         when(securityServiceClient.getAvailableRoles("GLOBAL")).thenReturn(List.of(globalRole));
 
-        List<RoleDto> result = peopleAccessControlService.getAvailableRolesForPeople();
+        List<RoleDto> result = peopleAccessControlService.getAvailableRolesForPerson(personUuid);
 
         assertEquals(2, result.size());
+        verify(personRepository).existsById(personUuid);
+    }
+    
+    @Test
+    void getAvailableRolesForPerson_throwsWhenPersonNotFound() {
+        UUID personUuid = UUID.randomUUID();
+        when(personRepository.existsById(personUuid)).thenReturn(false);
+
+        assertThrows(PersonNotFoundException.class,
+                () -> peopleAccessControlService.getAvailableRolesForPerson(personUuid));
     }
 
     @Test

@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface PeopleAccessControlService {
 
     @NonNull
-    List<RoleDto> getAvailableRolesForPeople();
+    List<RoleDto> getAvailableRolesForPerson(@NonNull UUID personUuid);
 
     @NonNull
     List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, boolean includeHistory, LocalDateTime endDate);
