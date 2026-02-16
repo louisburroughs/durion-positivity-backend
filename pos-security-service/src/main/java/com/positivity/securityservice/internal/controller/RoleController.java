@@ -22,7 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -142,8 +142,8 @@ public class RoleController {
     @ApiResponse(responseCode = "404", description = "Role assignment not found")
     public ResponseEntity<Void> revokeRoleAssignment(
             @Parameter(description = "Role assignment ID", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID assignmentId,
-            @Parameter(description = "Effective end date for revocation. Defaults to current date", example = "2026-02-16") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        LocalDate effectiveEndDate = endDate != null ? endDate : LocalDate.now();
+            @Parameter(description = "Effective end date for revocation. Defaults to current date and time", example = "2026-02-16T10:30:00") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+        LocalDateTime effectiveEndDate = endDate != null ? endDate : LocalDateTime.now();
         roleManagementService.revokeRoleAssignment(assignmentId, effectiveEndDate);
         return ResponseEntity.noContent().build();
     }

@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -20,6 +20,6 @@ public class RoleAssignmentRequest {
     private UUID roleId;
     private ScopeType scopeType = ScopeType.GLOBAL;
     private Set<String> scopeLocationIds;
-    private LocalDate effectiveStartDate;
-    private LocalDate effectiveEndDate;
+    private LocalDateTime effectiveStartDate;
+    private LocalDateTime effectiveEndDate;
 }
