@@ -78,7 +78,11 @@ public class SecurityServiceClient {
                 .body(new ParameterizedTypeReference<List<UserRoleDto>>() {
                 });
 
-        return assignments != null ? assignments : List.of();
+        if (assignments == null) {
+            throw new IllegalStateException("Security service returned empty response for user role assignments");
+        }
+
+        return assignments;
     }
 
     @NonNull
