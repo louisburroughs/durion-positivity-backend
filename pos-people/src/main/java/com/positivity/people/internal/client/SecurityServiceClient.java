@@ -48,7 +48,7 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new IllegalStateException("Security service failed while fetching role");
+                            throw new SecurityServiceException("Security service failed while fetching role", 503);
                         })
                 .body(Role.class);
 
@@ -80,7 +80,7 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new IllegalStateException("Security service failed while listing roles");
+                            throw new SecurityServiceException("Security service failed while listing roles", 503);
                         })
                 .body(new ParameterizedTypeReference<List<RoleDto>>() {
                 });
@@ -119,7 +119,7 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new IllegalStateException("Security service failed while listing role assignments");
+                            throw new SecurityServiceException("Security service failed while listing role assignments", 503);
                         })
                 .body(new ParameterizedTypeReference<List<UserRoleDto>>() {
                 });
@@ -173,7 +173,7 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (httpRequest, httpResponse) -> {
-                            throw new IllegalStateException("Security service failed while assigning role");
+                            throw new SecurityServiceException("Security service failed while assigning role", 503);
                         })
                 .body(RoleAssignment.class);
 
@@ -205,7 +205,7 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new IllegalStateException("Security service failed while listing role assignments");
+                            throw new SecurityServiceException("Security service failed while listing role assignments in revokeRole", 503);
                         })
                 .body(new ParameterizedTypeReference<List<RoleAssignment>>() {
                 });
@@ -243,7 +243,7 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new IllegalStateException("Security service failed while revoking role assignment");
+                            throw new SecurityServiceException("Security service failed while revoking role assignment", 503);
                         })
                 .toBodilessEntity();
     }
