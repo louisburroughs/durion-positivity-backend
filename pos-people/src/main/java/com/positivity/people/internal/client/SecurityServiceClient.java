@@ -92,7 +92,7 @@ public class SecurityServiceClient {
                 });
 
         if (assignments == null) {
-            throw new IllegalStateException("Security service returned null response for role assignments for userId: " + userId);
+            throw new IllegalStateException("Security service returned empty response for user role assignments");
         }
 
         return assignments;
