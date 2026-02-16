@@ -64,7 +64,7 @@ public class GatewaySecurityConfig {
         @Bean
         @Order(1)
         public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
-                        GatewayAuthoritiesFilter gatewayAuthoritiesFilter) throws Exception {
+                        GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
                 http
                                 // Disable CSRF - stateless API protected by JWT at gateway
                                 .csrf(csrf -> csrf.disable())
@@ -82,6 +82,7 @@ public class GatewaySecurityConfig {
                                                 .requestMatchers("/v3/api-docs", "/v3/api-docs/**").permitAll()
                                                 .requestMatchers("/api-docs/**").permitAll()
                                                 .requestMatchers("/webjars/**").permitAll()
+                                                .requestMatchers("/error", "/error/**").permitAll()
 
                                                 // Permission registration endpoint - internal services only
                                                 // Note: This is called at startup before authentication is fully set up
