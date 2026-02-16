@@ -1,11 +1,11 @@
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS roles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     description VARCHAR(500),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS roles (
 );
 
 CREATE TABLE IF NOT EXISTS permissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     description VARCHAR(500),
     domain VARCHAR(50) NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 );
 
 CREATE TABLE IF NOT EXISTS role_assignments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     role_id UUID NOT NULL,
     scope_type VARCHAR(20) NOT NULL,
