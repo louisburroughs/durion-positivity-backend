@@ -146,6 +146,7 @@ public class SecurityServiceClient {
         }
 
         // Build the proper RoleAssignmentRequest matching the API contract
+        // Note: API supports multiple location IDs per assignment, but currently only passing one
         RoleAssignmentRequest apiRequest = new RoleAssignmentRequest(
                 userIdUuid,
                 role.getId(),
@@ -220,12 +221,12 @@ public class SecurityServiceClient {
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
                         "Role assignment not found for userId: " + userId + ", roleCode: " + roleCode));
 
-        java.time.LocalDate effectiveEndDate = endDate != null ? endDate.toLocalDate() : java.time.LocalDate.now();
+        java.time.LocalDate revocationDate = endDate != null ? endDate.toLocalDate() : java.time.LocalDate.now();
 
         restClient.delete()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/roles/assignments/{assignmentId}")
-                        .queryParam("endDate", effectiveEndDate)
+                        .queryParam("endDate", revocationDate)
                         .build(assignmentId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400,
