@@ -5,6 +5,7 @@ import com.positivity.people.internal.client.dto.RoleAssignment;
 import com.positivity.people.internal.client.dto.RoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.RoleDto;
 import com.positivity.people.internal.client.dto.ScopeType;
+import com.positivity.people.internal.client.dto.User;
 import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 import org.jspecify.annotations.NonNull;
@@ -190,11 +191,11 @@ public class SecurityServiceClient {
         // First, get the role by name to obtain its UUID
         Role role = getRoleByName(roleCode);
 
-        // Get all current assignments for the user with full RoleAssignment objects
+        // Get all assignments (including future-dated and historical) for the user
         List<RoleAssignment> fullAssignments = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/roles/assignments/user/{userId}")
-                        .queryParam("includeHistory", false)
+                        .queryParam("includeHistory", true)
                         .build(userId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 404,
@@ -215,7 +216,7 @@ public class SecurityServiceClient {
 
         // Find the assignment for this specific role
         java.util.UUID assignmentId = fullAssignments.stream()
-                .filter(fa -> role.getId().equals(fa.getRoleId()))
+                .filter(fa -> role.getId().equals(fa.getRole().getId()))
                 .map(RoleAssignment::getId)
                 .findFirst()
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
@@ -248,15 +249,35 @@ public class SecurityServiceClient {
     }
 
     /**
-     * Helper method to map RoleAssignment to UserRoleDto
+     * Helper method to map RoleAssignment to UserRoleDto.
+     *
+     * Note: If a RoleAssignment contains multiple scopeLocationIds, only the first one
+     * is mapped to UserRoleDto.locationId. The remaining IDs are ignored.
      */
     private UserRoleDto mapToUserRoleDto(RoleAssignment assignment, String roleCode) {
+        java.util.UUID locationId = null;
+        if (assignment.getScopeType() == ScopeType.LOCATION
+                && assignment.getScopeLocationIds() != null
+                && !assignment.getScopeLocationIds().isEmpty()) {
+            if (assignment.getScopeLocationIds().size() > 1) {
+                // The API supports multiple scopeLocationIds, but UserRoleDto currently exposes a single locationId.
+                // Log to make this limitation visible when multi-location assignments are encountered.
+                log.warn("RoleAssignment {} for user {} and role {} has multiple scopeLocationIds; only the first will be used.",
+                        assignment.getId(), assignment.getUser().getId(), roleCode);
+            }
+            String firstLocationId = assignment.getScopeLocationIds().iterator().next();
+            try {
+                locationId = java.util.UUID.fromString(firstLocationId);
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid UUID format in scopeLocationIds for assignment {}: {}", assignment.getId(), firstLocationId, e);
+                throw new IllegalStateException("Invalid location ID format in role assignment", e);
+            }
+        }
+
         return UserRoleDto.builder()
-                .userId(assignment.getUserId().toString())
+                .userId(assignment.getUser().getId().toString())
                 .roleCode(roleCode)
-                .locationId(assignment.getScopeType() == ScopeType.LOCATION && assignment.getScopeLocationIds() != null
-                        ? assignment.getScopeLocationIds().stream().findFirst().map(java.util.UUID::fromString).orElse(null)
-                        : null)
+                .locationId(locationId)
                 .startDate(assignment.getEffectiveStartDate() != null
                         ? assignment.getEffectiveStartDate().atStartOfDay() : null)
                 .endDate(assignment.getEffectiveEndDate() != null
@@ -275,7 +296,7 @@ public class SecurityServiceClient {
 
         // Active if started and not yet ended
         boolean hasStarted = startDate == null || !startDate.isAfter(today);
-        boolean hasNotEnded = endDate == null || !endDate.isBefore(today);
+        boolean hasNotEnded = endDate == null || today.isBefore(endDate);
 
         return hasStarted && hasNotEnded;
     }
