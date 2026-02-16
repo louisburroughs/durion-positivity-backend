@@ -236,7 +236,11 @@ class WorkorderInvoiceServiceTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of());
         
-        // Simulate the old behavior where the same part could be returned by both queries
+        // With the new repository method findByWorkorderIdAndWorkOrderServiceIsNull,
+        // partWithBothRefs would not be returned by the second query (since it has workOrderService set).
+        // However, the code still has explicit ID-based deduplication as a safety measure.
+        // This test verifies that even if somehow the same part appeared in both queries,
+        // it would only be added to the invoice once.
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
                 .thenReturn(List.of(partWithBothRefs));
         when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
