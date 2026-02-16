@@ -301,7 +301,7 @@ class WorkorderInvoiceServiceTest {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalAmount).isEqualByComparingTo("40.0000");
     }
-        
+
     @Test
     @DisplayName("generateInvoice handles race condition when idempotency key already registered")
     void generateInvoice_RaceCondition_ReturnsExistingInvoice() {
@@ -326,6 +326,21 @@ class WorkorderInvoiceServiceTest {
                 .build();
 
         when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
+        
+        // Mock the existing invoice details that will be fetched when race condition is detected
+        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                .invoiceId(existingInvoiceId)
+                .status("DRAFT")
+                .workorderId(workorderId)
+                .estimateId(estimateId)
+                .approvalId(approvalId)
+                .subtotal(new BigDecimal("120.00"))
+                .taxAmount(new BigDecimal("10.00"))
+                .totalAmount(new BigDecimal("130.00"))
+                .createdAt(Instant.now())
+                .build();
+        
+        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
         
         // First call to getExistingInvoiceId (early check) returns empty, second call (after collision) returns existing
         when(idempotencyService.getExistingInvoiceId("inv-key-race"))
