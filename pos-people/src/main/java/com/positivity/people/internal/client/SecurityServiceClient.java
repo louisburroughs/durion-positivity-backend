@@ -4,6 +4,8 @@ import com.positivity.people.internal.client.dto.RoleDto;
 import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
@@ -16,6 +18,8 @@ import java.util.List;
 @Component
 public class SecurityServiceClient {
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityServiceClient.class);
+
     private final RestClient restClient;
 
     public SecurityServiceClient(@Qualifier("securityServiceRestClient") RestClient restClient) {
@@ -24,6 +28,8 @@ public class SecurityServiceClient {
 
     @NonNull
     public List<RoleDto> getAvailableRoles(@NonNull String scope) {
+        log.debug("Fetching available roles for scope: {}", scope);
+
         List<RoleDto> roles = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/roles")
@@ -46,7 +52,11 @@ public class SecurityServiceClient {
                 .body(new ParameterizedTypeReference<List<RoleDto>>() {
                 });
 
-        return roles != null ? roles : List.of();
+        if (roles == null) {
+            throw new IllegalStateException("Security service returned null response for roles lookup with scope: " + scope);
+        }
+
+        return roles;
     }
 
     @NonNull
@@ -54,6 +64,9 @@ public class SecurityServiceClient {
             @NonNull String userId,
             Boolean includeHistory,
             LocalDateTime endDate) {
+        log.debug("Fetching role assignments for userId: {}, includeHistory: {}, endDate: {}", 
+                userId, includeHistory, endDate);
+
         List<UserRoleDto> assignments = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/roles/assignments/user/{userId}")
@@ -78,11 +91,17 @@ public class SecurityServiceClient {
                 .body(new ParameterizedTypeReference<List<UserRoleDto>>() {
                 });
 
-        return assignments != null ? assignments : List.of();
+        if (assignments == null) {
+            throw new IllegalStateException("Security service returned null response for role assignments for userId: " + userId);
+        }
+
+        return assignments;
     }
 
     @NonNull
     public UserRoleDto assignRole(@NonNull UserRoleAssignmentRequest request) {
+        log.debug("Assigning role {} to userId: {}", request.getRoleCode(), request.getUserId());
+
         UserRoleDto assignment = restClient.post()
                 .uri("/v1/user-roles")
                 .body(request)
@@ -111,6 +130,8 @@ public class SecurityServiceClient {
     }
 
     public void revokeRole(@NonNull String userId, @NonNull String roleCode, LocalDateTime endDate) {
+        log.debug("Revoking role {} from userId: {} with endDate: {}", roleCode, userId, endDate);
+
         restClient.delete()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/user-roles/{userId}/{roleCode}")
