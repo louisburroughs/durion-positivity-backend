@@ -31,6 +31,7 @@ public class WorkorderPermissionRegistration extends PermissionRegistrationSuppo
                 PermissionDefinition.of("workorder:workorder:delete", "Delete workorders"),
                 PermissionDefinition.of("workorder:workorder:start", "Start work on workorders"),
                 PermissionDefinition.of("workorder:workorder:complete", "Complete workorders"),
+                PermissionDefinition.of("workorder:workorder:reopen_completed", "Reopen completed workorders"),
                 PermissionDefinition.of("workorder:workorder:approve", "Approve workorders"),
 
                 // Estimate Management

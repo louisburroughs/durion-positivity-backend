@@ -54,6 +54,12 @@ public final class WorkorderEventTypes {
                         .apiVersion("1")
                         .build();
 
+        /** Reopen a completed workorder for controlled edits */
+        public static final EventTypeRegistration WORKORDER_REOPEN = EventTypeRegistration.write("WORKORDER_REOPEN",
+                        "Reopen a completed workorder with mandatory reason and audit")
+                        .apiVersion("1")
+                        .build();
+
         // ==================== TECHNICIAN ASSIGNMENT EVENTS (CAP:005 Story #161)
         // ====================
 
@@ -358,6 +364,7 @@ public final class WorkorderEventTypes {
                         WORKORDER_START,
                         WORKORDER_APPROVE,
                         WORKORDER_COMPLETE,
+                        WORKORDER_REOPEN,
                         // Technician assignment events (CAP:005 Story #161)
                         WORKORDER_TECHNICIAN_ASSIGN,
                         WORKORDER_TECHNICIAN_REASSIGN,
