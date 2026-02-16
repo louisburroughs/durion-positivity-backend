@@ -48,7 +48,8 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new SecurityServiceException("Security service failed while fetching role", 503);
+                            int statusCode = response.getStatusCode().value();
+                            throw new SecurityServiceException("Security service failed while fetching role", statusCode);
                         })
                 .body(Role.class);
 
@@ -80,7 +81,8 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new SecurityServiceException("Security service failed while listing roles", 503);
+                            int statusCode = response.getStatusCode().value();
+                            throw new SecurityServiceException("Security service failed while listing roles", statusCode);
                         })
                 .body(new ParameterizedTypeReference<List<RoleDto>>() {
                 });
@@ -119,7 +121,8 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new SecurityServiceException("Security service failed while listing role assignments", 503);
+                            int statusCode = response.getStatusCode().value();
+                            throw new SecurityServiceException("Security service failed while listing role assignments", statusCode);
                         })
                 .body(new ParameterizedTypeReference<List<UserRoleDto>>() {
                 });
@@ -173,7 +176,8 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (httpRequest, httpResponse) -> {
-                            throw new SecurityServiceException("Security service failed while assigning role", 503);
+                            int statusCode = httpResponse.getStatusCode().value();
+                            throw new SecurityServiceException("Security service failed while assigning role", statusCode);
                         })
                 .body(RoleAssignment.class);
 
@@ -205,7 +209,8 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new SecurityServiceException("Security service failed while listing role assignments in revokeRole", 503);
+                            int statusCode = response.getStatusCode().value();
+                            throw new SecurityServiceException("Security service failed while listing role assignments in revokeRole", statusCode);
                         })
                 .body(new ParameterizedTypeReference<List<RoleAssignment>>() {
                 });
@@ -243,7 +248,8 @@ public class SecurityServiceClient {
                         })
                 .onStatus(HttpStatusCode::is5xxServerError,
                         (request, response) -> {
-                            throw new SecurityServiceException("Security service failed while revoking role assignment", 503);
+                            int statusCode = response.getStatusCode().value();
+                            throw new SecurityServiceException("Security service failed while revoking role assignment", statusCode);
                         })
                 .toBodilessEntity();
     }
@@ -270,7 +276,7 @@ public class SecurityServiceClient {
                 locationId = java.util.UUID.fromString(firstLocationId);
             } catch (IllegalArgumentException e) {
                 log.error("Invalid UUID format in scopeLocationIds for assignment {}: {}", assignment.getId(), firstLocationId, e);
-                throw new IllegalStateException("Invalid location ID format in role assignment", e);
+                throw new SecurityServiceException("Invalid location ID format in role assignment: " + firstLocationId, 500, e);
             }
         }
 
