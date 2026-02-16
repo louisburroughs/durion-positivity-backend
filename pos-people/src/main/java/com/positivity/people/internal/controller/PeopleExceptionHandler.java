@@ -83,12 +83,20 @@ public class PeopleExceptionHandler {
     }
 
     private HttpStatus determineHttpStatus(SecurityServiceException ex) {
-        if (ex.isNotFound()) {
-            return HttpStatus.NOT_FOUND;
-        } else if (ex.isClientError()) {
-            return HttpStatus.BAD_REQUEST;
-        } else if (ex.isServiceUnavailable()) {
+        int statusCode = ex.getHttpStatus();
+        
+        // Preserve the actual status code from the security service
+        if (statusCode == 503) {
             return HttpStatus.SERVICE_UNAVAILABLE;
+        } else if (statusCode == 504) {
+            return HttpStatus.GATEWAY_TIMEOUT;
+        } else if (statusCode == 404) {
+            return HttpStatus.NOT_FOUND;
+        } else if (statusCode >= 400 && statusCode < 500) {
+            return HttpStatus.BAD_REQUEST;
+        } else if (statusCode >= 500 && statusCode < 600) {
+            // Preserve other 5xx codes as INTERNAL_SERVER_ERROR
+            return HttpStatus.INTERNAL_SERVER_ERROR;
         } else {
             return HttpStatus.INTERNAL_SERVER_ERROR;
         }
