@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -272,9 +273,14 @@ class WorkorderCompletionTest {
     }
 
     private void stubCompletionPreconditionsPass() {
+        com.positivity.workorder.internal.entity.WorkorderService billableService = mock(
+                com.positivity.workorder.internal.entity.WorkorderService.class);
+        when(billableService.getStatus()).thenReturn(WorkorderItemStatus.COMPLETED);
+        when(billableService.getLineTotal()).thenReturn(BigDecimal.TEN);
+
         when(changeRequestRepository.findByWorkorderIdAndStatus(testWorkorderId,
                 ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)).thenReturn(List.of());
-        when(workorderServiceRepository.findByWorkOrder_Id(testWorkorderId)).thenReturn(List.of());
+        when(workorderServiceRepository.findByWorkOrder_Id(testWorkorderId)).thenReturn(List.of(billableService));
         when(workorderPartRepository.findByWorkorderId(testWorkorderId)).thenReturn(List.of());
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(testWorkorderId)).thenReturn(List.of());
         when(changeRequestService.canCloseWorkorder(testWorkorderId)).thenReturn(true);
