@@ -7,6 +7,10 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.ScopeType;
+import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -70,12 +74,12 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Transactional
     public Role updateRolePermissions(RolePermissionsRequest request) {
         Role role = roleRepository.findById(request.getRoleId())
-                .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
 
         Set<Permission> permissions = new HashSet<>();
         for (String permissionName : request.getPermissionNames()) {
             Permission permission = permissionRepository.findByName(permissionName)
-                    .orElseThrow(() -> new IllegalArgumentException(
+                    .orElseThrow(() -> new PermissionNotFoundException(
                             "Permission not found: " + permissionName + ". It must be registered first."));
             permissions.add(permission);
         }
@@ -108,10 +112,10 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         }
 
         User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException(USER_NOT_FOUND_PREFIX + request.getUserId()));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + request.getUserId()));
 
         Role role = roleRepository.findById(request.getRoleId())
-                .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
 
         LocalDate requestStart = request.getEffectiveStartDate() != null
                 ? request.getEffectiveStartDate()
@@ -190,7 +194,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     public List<RoleAssignment> getAssignmentsForUser(@NonNull UUID userId, boolean includeHistory) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException(USER_NOT_FOUND_PREFIX + userId));
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
 
         if (includeHistory) {
             return roleAssignmentRepository.findAllByUser_Id(userId);
@@ -255,7 +259,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         }
 
         RoleAssignment assignment = roleAssignmentRepository.findById(assignmentId)
-                .orElseThrow(() -> new IllegalArgumentException("Role assignment not found: " + assignmentId));
+                .orElseThrow(() -> new RoleAssignmentNotFoundException("Role assignment not found: " + assignmentId));
 
         assignment.setEffectiveEndDate(endDate);
         assignment.setLastModifiedBy(getCurrentUsername());
@@ -281,7 +285,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     public Role getRoleByName(String name) {
         return roleRepository.findByName(name)
-                .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + name));
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + name));
     }
 
     private String getCurrentUsername() {
