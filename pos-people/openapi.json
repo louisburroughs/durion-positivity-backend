@@ -236,6 +236,120 @@
                 }
             }
         },
+        "/v1/people/{personUuid}/access/assignments": {
+            "get": {
+                "tags": [
+                    "person-access-controller"
+                ],
+                "summary": "Get role assignments",
+                "description": "Retrieve role assignments for a person with optional history and date filtering",
+                "operationId": "getAssignments",
+                "parameters": [
+                    {
+                        "name": "personUuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "includeHistory",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Assignments retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/UserRoleDto"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "person-access-controller"
+                ],
+                "summary": "Assign role to person",
+                "description": "Assign a role to a person with optional location scope and date range",
+                "operationId": "createAssignment",
+                "parameters": [
+                    {
+                        "name": "personUuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PersonRoleAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person or role not found",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Role assignment created successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRoleDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/people/workSessions/{id}/breaks/stop": {
             "post": {
                 "tags": [
@@ -424,8 +538,8 @@
                     "required": true
                 },
                 "responses": {
-                    "201": {
-                        "description": "Link created successfully",
+                    "409": {
+                        "description": "User already linked",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -434,8 +548,8 @@
                             }
                         }
                     },
-                    "409": {
-                        "description": "User already linked",
+                    "201": {
+                        "description": "Link created successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1000,6 +1114,42 @@
                 }
             }
         },
+        "/v1/people/{personUuid}/access/roles": {
+            "get": {
+                "tags": [
+                    "person-access-controller"
+                ],
+                "summary": "Get available roles",
+                "description": "Retrieve list of roles that can be assigned to people",
+                "operationId": "getRoles",
+                "parameters": [
+                    {
+                        "name": "personUuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Roles retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RoleDto"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/people/{personId}/users": {
             "get": {
                 "tags": [
@@ -1189,6 +1339,69 @@
                     }
                 }
             }
+        },
+        "/v1/people/{personUuid}/access/assignments/{roleCode}": {
+            "delete": {
+                "tags": [
+                    "person-access-controller"
+                ],
+                "summary": "Revoke role assignment",
+                "description": "Revoke a role assignment from a person",
+                "operationId": "revokeAssignment",
+                "parameters": [
+                    {
+                        "name": "personUuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "roleCode",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Invalid request for revoking role assignment",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person or role assignment not found",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "Role assignment revoked successfully"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -1221,6 +1434,82 @@
                     },
                     "username": {
                         "type": "string"
+                    }
+                }
+            },
+            "PersonRoleAssignmentRequest": {
+                "type": "object",
+                "properties": {
+                    "roleCode": {
+                        "type": "string"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "startDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "roleCode"
+                ]
+            },
+            "ProblemDetail": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "instance": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "properties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
+            "UserRoleDto": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string"
+                    },
+                    "roleCode": {
+                        "type": "string"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "startDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "active": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -1377,6 +1666,26 @@
                     },
                     "message": {
                         "type": "string"
+                    }
+                }
+            },
+            "RoleDto": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "scopeType": {
+                        "type": "string"
+                    },
+                    "active": {
+                        "type": "boolean"
                     }
                 }
             },
