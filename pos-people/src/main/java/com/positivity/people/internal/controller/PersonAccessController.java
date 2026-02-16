@@ -38,7 +38,7 @@ public class PersonAccessController {
     @GetMapping("/{personUuid}/access/roles")
     @EmitEvent(id = "PEOPLE_ACCESS_ROLES_LIST", apiVersion = "1")
     public ResponseEntity<List<RoleDto>> getRoles(@PathVariable UUID personUuid) {
-        return ResponseEntity.ok(peopleAccessControlService.getAvailableRolesForPeople());
+        return ResponseEntity.ok(peopleAccessControlService.getAvailableRolesForPerson(personUuid));
     }
 
     @GetMapping("/{personUuid}/access/assignments")
