@@ -328,24 +328,10 @@
                         }
                     },
                     "404": {
-                        "description": "Person or role not found",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UserRoleDto"
-                                }
-                            }
-                        }
+                        "description": "Person or role not found"
                     },
                     "400": {
-                        "description": "Invalid request",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UserRoleDto"
-                                }
-                            }
-                        }
+                        "description": "Invalid request"
                     }
                 }
             }
