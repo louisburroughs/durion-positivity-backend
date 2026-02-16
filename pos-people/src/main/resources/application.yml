@@ -42,8 +42,6 @@ logging:
     com:
       positivity:
         people: INFO
-    health:
-      show-details: always
 springdoc:
   api-docs:
     enabled: true

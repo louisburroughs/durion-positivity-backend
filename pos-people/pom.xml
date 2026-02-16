@@ -194,7 +194,7 @@
                         <artifactId>spring-boot-maven-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>start-app</id>
+                                <id>start-for-openapi</id>
                                 <phase>pre-integration-test</phase>
                                 <goals>
                                     <goal>start</goal>
@@ -202,18 +202,22 @@
                                 <configuration>
                                     <arguments>
                                         <argument>--server.port=8085</argument>
+                                        <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
                                         <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
                                         <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
                                         <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
-                                        <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
+                                        <argument>--logging.level.root=WARN</argument>
+                                        <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
                                     </arguments>
+                                    <wait>8000</wait>
+                                    <maxAttempts>180</maxAttempts>
                                 </configuration>
                             </execution>
                             <execution>
-                                <id>stop-app</id>
+                                <id>stop-after-openapi</id>
                                 <phase>post-integration-test</phase>
                                 <goals>
                                     <goal>stop</goal>
@@ -225,15 +229,16 @@
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
-                        <configuration>
-                            <apiDocsUrl>http://localhost:8085/v3/api-docs</apiDocsUrl>
-                        </configuration>
                         <executions>
                             <execution>
+                                <id>generate-openapi-profile</id>
                                 <phase>integration-test</phase>
                                 <goals>
                                     <goal>generate</goal>
                                 </goals>
+                                <configuration>
+                                    <apiDocsUrl>http://localhost:8085/v3/api-docs</apiDocsUrl>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
