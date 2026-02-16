@@ -57,7 +57,6 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         InvoiceCreationRequest creationRequest = InvoiceCreationRequest.builder()
                 .workorderId(request.getWorkorderId())
-                .idempotencyKey(request.getIdempotencyKey())
                 .lineItems(List.of())
                 .build();
 
