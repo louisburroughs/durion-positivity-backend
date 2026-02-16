@@ -63,6 +63,7 @@ public class InvoiceClient {
         response.setEstimateId(parseUUID(data.get("estimateId")));
         response.setApprovalId(parseUUID(data.get("approvalId")));
         response.setSubtotal(parseBigDecimal(data.get("subtotal")));
+        // Invoice service returns 'tax' and 'total' field names
         response.setTaxAmount(parseBigDecimal(data.get("tax")));
         response.setTotalAmount(parseBigDecimal(data.get("total")));
         response.setCreatedAt(parseInstant(data.get("createdAt")));
