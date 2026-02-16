@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -62,7 +63,6 @@ public class WorkorderStateMachine {
             boolean hasBillableItems) {
     }
 
-    @Transactional
     public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
@@ -98,7 +98,6 @@ public class WorkorderStateMachine {
         }
     }
 
-    @Transactional(readOnly = true)
     public CompletionPreconditions evaluateCompletionPreconditions(UUID workorderId) {
         Workorder workorder = workorderRepository.findById(workorderId)
                 .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
@@ -301,7 +300,6 @@ public class WorkorderStateMachine {
         return saved;
     }
 
-    @Transactional
     public void captureBillableScopeSnapshot(Workorder workorder, UUID userId, String completionNotes) {
         List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
                 .findByWorkOrder_Id(workorder.getId());
@@ -319,12 +317,12 @@ public class WorkorderStateMachine {
 
         BigDecimal serviceTotal = services.stream()
                 .map(com.positivity.workorder.internal.entity.WorkorderService::getLineTotal)
-                .filter(value -> value != null)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal partTotal = parts.stream()
                 .map(WorkorderPart::getLineTotal)
-                .filter(value -> value != null)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -342,7 +340,6 @@ public class WorkorderStateMachine {
                 "Final billable scope snapshot before completion");
     }
 
-    @Transactional
     public void captureStructuredSnapshot(
             Workorder workorder,
             UUID userId,
@@ -370,7 +367,6 @@ public class WorkorderStateMachine {
         }
     }
 
-    @Transactional
     public void captureSnapshot(Workorder workorder, UUID userId, String snapshotType, String reason) {
         try {
             String snapshotData = objectMapper.writeValueAsString(workorder);
