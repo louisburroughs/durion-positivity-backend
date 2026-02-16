@@ -68,7 +68,7 @@ public final class PeopleEventTypes {
                                 // PersonAccessController - 4 events
                                 EventTypeRegistration.fastRead("PEOPLE_ACCESS_ROLES_LIST",
                                                 "List available access roles for people").build(),
-                                EventTypeRegistration.search("PEOPLE_ACCESS_ASSIGNMENTS_LIST",
+                                EventTypeRegistration.fastRead("PEOPLE_ACCESS_ASSIGNMENTS_LIST",
                                                 "List role assignments for a person").build(),
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_CREATE",
                                                 "Create role assignment for a person").build(),
