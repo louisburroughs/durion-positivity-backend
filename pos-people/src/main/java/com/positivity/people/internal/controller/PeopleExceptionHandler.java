@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
@@ -69,5 +70,27 @@ public class PeopleExceptionHandler {
                 ex.getMessage());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problem;
+    }
+
+    @ExceptionHandler(SecurityServiceException.class)
+    public ProblemDetail handleSecurityServiceException(SecurityServiceException ex) {
+        HttpStatus status = determineHttpStatus(ex);
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                status,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    private HttpStatus determineHttpStatus(SecurityServiceException ex) {
+        if (ex.isNotFound()) {
+            return HttpStatus.NOT_FOUND;
+        } else if (ex.isClientError()) {
+            return HttpStatus.BAD_REQUEST;
+        } else if (ex.isServiceUnavailable()) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
+        } else {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
     }
 }
