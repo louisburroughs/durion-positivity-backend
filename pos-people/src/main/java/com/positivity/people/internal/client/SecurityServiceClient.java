@@ -151,9 +151,6 @@ public class SecurityServiceClient {
 
         // Build the proper RoleAssignmentRequest matching the API contract
         // Note: API supports multiple location IDs per assignment, but currently only passing one
-        // Note: Time information is lost in date conversion - LocalDateTime is truncated to LocalDate.
-        //       The security service API uses LocalDate, so time components (if provided) are discarded.
-        //       Example: "2026-02-16T14:30:00" becomes "2026-02-16" (stored as midnight in the API).
         RoleAssignmentRequest apiRequest = new RoleAssignmentRequest(
                 userIdUuid,
                 role.getId(),
@@ -264,11 +261,6 @@ public class SecurityServiceClient {
      *
      * Note: If a RoleAssignment contains multiple scopeLocationIds, only the first one
      * is mapped to UserRoleDto.locationId. The remaining IDs are ignored.
-     *
-     * Note: Date mapping uses .atStartOfDay() to convert LocalDate back to LocalDateTime,
-     * which hardcodes the time to midnight (00:00:00). This creates a lossy round-trip where
-     * time information is discarded. Example: if the caller requested startDate "2026-02-16T14:30:00",
-     * it gets stored as "2026-02-16" in the API, then mapped back as "2026-02-16T00:00:00".
      */
     private UserRoleDto mapToUserRoleDto(RoleAssignment assignment, String roleCode) {
         java.util.UUID locationId = null;
@@ -296,10 +288,8 @@ public class SecurityServiceClient {
                 .userId(assignment.getUser().getId().toString())
                 .roleCode(roleCode)
                 .locationId(locationId)
-                .startDate(assignment.getEffectiveStartDate() != null
-                        ? assignment.getEffectiveStartDate().atStartOfDay() : null)
-                .endDate(assignment.getEffectiveEndDate() != null
-                        ? assignment.getEffectiveEndDate().atStartOfDay() : null)
+                .startDate(assignment.getEffectiveStartDate())
+                .endDate(assignment.getEffectiveEndDate())
                 .active(isAssignmentActive(assignment))
                 .build();
     }
