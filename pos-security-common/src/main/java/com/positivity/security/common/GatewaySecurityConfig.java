@@ -63,10 +63,13 @@ public class GatewaySecurityConfig {
 
         @Bean
         @Order(1)
+        @SuppressWarnings("java:S4502") // CSRF not needed: stateless API, JWT in headers (not cookies)
         public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http,
                         GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
                 http
                                 // Disable CSRF - stateless API protected by JWT at gateway
+                                // Safe because: no cookies, JWT tokens require explicit headers, SOP prevents
+                                // CSRF
                                 .csrf(csrf -> csrf.disable())
 
                                 // Stateless session - no server-side session storage
