@@ -17,11 +17,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -104,12 +108,57 @@ public class WorkorderInvoiceService {
             response.setApprovalId(workorder.getApprovalId());
         }
 
+        // Register idempotency key first (if provided) to detect race conditions before persisting
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            try {
+                idempotencyService.registerInvoiceKey(idempotencyKey, response.getInvoiceId());
+                // Force flush so any unique-constraint violation is raised within this
+                // try/catch
+                try {
+                    TransactionAspectSupport.currentTransactionStatus().flush();
+                } catch (NoTransactionException e) {
+                    // No active transaction (e.g., in unit tests) - flush not needed
+                    log.debug("Flush skipped: no active transaction");
+                }
+            } catch (DataIntegrityViolationException e) {
+                // Race condition: another request already registered this key
+                // The unique constraint violation means another transaction has committed the
+                // key.
+                // Mark our transaction for rollback to prevent persisting the duplicate
+                // invoice reference.
+                try {
+                    TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                } catch (NoTransactionException ex) {
+                    // No active transaction (e.g., in unit tests) - rollback not needed
+                    log.debug("Rollback skipped: no active transaction");
+                }
+
+                // Retrieve the existing invoice that won the race
+                // Note: The DataIntegrityViolationException indicates the other transaction has
+                // committed, so the invoice should be visible with READ_COMMITTED isolation.
+                Optional<UUID> existingInvoiceId = idempotencyService.getExistingInvoiceId(idempotencyKey);
+                if (existingInvoiceId.isPresent()) {
+                    log.warn(
+                            "Race condition detected: idempotency key {} already registered for invoice {}, returning existing invoice",
+                            idempotencyKey, existingInvoiceId.get());
+                    // Return the existing invoice to maintain idempotency semantics
+                    // The transaction will be rolled back, preventing the duplicate workorder
+                    // invoice reference
+                    return buildExistingResponse(workorder, existingInvoiceId.get());
+                } else {
+                    // This should not happen - if DataIntegrityViolationException was thrown,
+                    // the key must exist. This indicates a serious data inconsistency.
+                    log.error("Race condition detected but no existing invoice found for idempotency key {}",
+                            idempotencyKey);
+                    throw new IllegalStateException(
+                            "Idempotency key collision but no existing invoice found: " + idempotencyKey, e);
+                }
+            }
+        }
+
+        // Persist the workorder invoice link after successful idempotency key registration
         workorder.setInvoiceId(response.getInvoiceId());
         workorderRepository.save(workorder);
-
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            idempotencyService.registerInvoiceKey(idempotencyKey, response.getInvoiceId());
-        }
 
         return response;
     }
@@ -149,9 +198,30 @@ public class WorkorderInvoiceService {
                                 service.getUnitPrice()))
                         .build()));
 
+        // CAP:007 - Load parts avoiding duplicates
+        // First, get all parts associated with workorder services
         List<WorkorderPart> parts = new ArrayList<>();
         parts.addAll(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId));
-        parts.addAll(workorderPartRepository.findByWorkorderId(workorderId));
+        
+        // Then, get standalone parts (those with direct workorder reference but no service)
+        // This query ensures we don't get duplicates when a part has both workorder and workOrderService set
+        parts.addAll(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId));
+
+        // Deduplicate by part ID as a safety measure (in case parts have both references)
+        // This protects against over-billing if the same part appears in both queries
+        // Use explicit ID-based deduplication to ensure correctness regardless of equals/hashCode implementation
+        var seenIds = new HashSet<UUID>();
+        parts = parts.stream()
+                .filter(part -> {
+                    UUID id = part.getId();
+                    if (id == null) {
+                        // If a part has a null ID, skip deduplication for it to avoid silently dropping items
+                        log.warn("WorkorderPart with null id encountered while building invoice line items for workorder {}", workorderId);
+                        return true;
+                    }
+                    return seenIds.add(id);
+                })
+                .toList();
 
         // Filter to only billable parts (exclude CANCELLED items)
         parts.stream()
