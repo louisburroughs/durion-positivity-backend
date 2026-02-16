@@ -5,6 +5,7 @@ import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import com.positivity.workorder.internal.client.InvoiceClient;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderItemStatus;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.exception.InvalidWorkorderStateException;
@@ -26,6 +27,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -41,6 +43,10 @@ public class WorkorderInvoiceService {
     private final WorkorderPartRepository workorderPartRepository;
     private final IdempotencyService idempotencyService;
     private final InvoiceClient invoiceClient;
+
+    // Statuses excluded from billable totals (aligned with WorkorderStateMachine)
+    private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES = Set.of(
+            WorkorderItemStatus.CANCELLED);
 
     @Transactional
     @NonNull
@@ -134,7 +140,9 @@ public class WorkorderInvoiceService {
     private List<InvoiceLineItem> buildLineItems(@NonNull UUID workorderId) {
         List<InvoiceLineItem> lineItems = new ArrayList<>();
 
-        workorderServiceRepository.findByWorkOrder_Id(workorderId)
+        // Filter to only billable services (exclude CANCELLED items)
+        workorderServiceRepository.findByWorkOrder_Id(workorderId).stream()
+                .filter(service -> !isExcludedFromBillableTotal(service.getStatus()))
                 .forEach(service -> lineItems.add(InvoiceLineItem.builder()
                         .description(service.getDescription() == null ? "Service item" : service.getDescription())
                         .quantity(service.getQuantity() == null ? BigDecimal.ONE : service.getQuantity())
@@ -149,15 +157,18 @@ public class WorkorderInvoiceService {
         parts.addAll(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId));
         parts.addAll(workorderPartRepository.findByWorkorderId(workorderId));
 
-        parts.forEach(part -> lineItems.add(InvoiceLineItem.builder()
-                .description(part.getDescription() == null ? "Part item" : part.getDescription())
-                .quantity(part.getQuantity() == null ? BigDecimal.ONE : part.getQuantity())
-                .unitPrice(part.getUnitPrice() == null ? BigDecimal.ZERO : part.getUnitPrice())
-                .amount(resolveLineAmount(
-                        part.getLineTotal(),
-                        part.getQuantity(),
-                        part.getUnitPrice()))
-                .build()));
+        // Filter to only billable parts (exclude CANCELLED items)
+        parts.stream()
+                .filter(part -> !isExcludedFromBillableTotal(part.getStatus()))
+                .forEach(part -> lineItems.add(InvoiceLineItem.builder()
+                        .description(part.getDescription() == null ? "Part item" : part.getDescription())
+                        .quantity(part.getQuantity() == null ? BigDecimal.ONE : part.getQuantity())
+                        .unitPrice(part.getUnitPrice() == null ? BigDecimal.ZERO : part.getUnitPrice())
+                        .amount(resolveLineAmount(
+                                part.getLineTotal(),
+                                part.getQuantity(),
+                                part.getUnitPrice()))
+                        .build()));
 
         return lineItems;
     }
@@ -195,5 +206,17 @@ public class WorkorderInvoiceService {
         }
 
         return Instant.now();
+    }
+
+    /**
+     * Check if an item status should be excluded from billable totals.
+     * Aligned with WorkorderStateMachine#isExcludedFromBillableTotal.
+     * 
+     * Note: null statuses are treated as billable since WorkorderService and WorkorderPart
+     * entities have @Builder.Default with status=OPEN, making null statuses rare edge cases
+     * that should not block invoice generation.
+     */
+    private boolean isExcludedFromBillableTotal(@Nullable WorkorderItemStatus status) {
+        return status != null && EXCLUDED_BILLABLE_TOTAL_STATUSES.contains(status);
     }
 }
