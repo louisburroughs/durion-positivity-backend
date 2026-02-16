@@ -145,9 +145,20 @@ public class WorkorderInvoiceService {
                                 service.getUnitPrice()))
                         .build()));
 
+        // CAP:007 - Load parts avoiding duplicates
+        // First, get all parts associated with workorder services
         List<WorkorderPart> parts = new ArrayList<>();
         parts.addAll(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId));
-        parts.addAll(workorderPartRepository.findByWorkorderId(workorderId));
+        
+        // Then, get standalone parts (those with direct workorder reference but no service)
+        // This query ensures we don't get duplicates when a part has both workorder and workOrderService set
+        parts.addAll(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId));
+
+        // Deduplicate by part ID as a safety measure (in case parts have both references)
+        // This protects against over-billing if the same part appears in both queries
+        parts = parts.stream()
+                .distinct() // Uses equals/hashCode on WorkorderPart entity (compares by id)
+                .toList();
 
         parts.forEach(part -> lineItems.add(InvoiceLineItem.builder()
                 .description(part.getDescription() == null ? "Part item" : part.getDescription())
