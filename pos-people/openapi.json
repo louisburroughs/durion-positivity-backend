@@ -317,6 +317,26 @@
                     "required": true
                 },
                 "responses": {
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Person or role not found",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
                     "201": {
                         "description": "Role assignment created successfully",
                         "content": {
@@ -326,12 +346,6 @@
                                 }
                             }
                         }
-                    },
-                    "404": {
-                        "description": "Person or role not found"
-                    },
-                    "400": {
-                        "description": "Invalid request"
                     }
                 }
             }
@@ -1332,7 +1346,7 @@
                     "person-access-controller"
                 ],
                 "summary": "Revoke role assignment",
-                "description": "Revoke a role assignment from a person with optional end date",
+                "description": "Revoke a role assignment from a person",
                 "operationId": "revokeAssignment",
                 "parameters": [
                     {
@@ -1363,8 +1377,25 @@
                     }
                 ],
                 "responses": {
+                    "400": {
+                        "description": "Invalid request for revoking role assignment",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
                     "404": {
-                        "description": "Assignment not found"
+                        "description": "Person or role assignment not found",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
                     },
                     "204": {
                         "description": "Role assignment revoked successfully"
@@ -1428,6 +1459,33 @@
                 "required": [
                     "roleCode"
                 ]
+            },
+            "ProblemDetail": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "instance": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "properties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
             },
             "UserRoleDto": {
                 "type": "object",
