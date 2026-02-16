@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
@@ -223,13 +222,10 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_INVOICE_GENERATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
     public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
-            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
-            @RequestBody(required = false) InvoiceGenerationRequest request) {
-        String idempotencyKey = request == null ? null : request.getIdempotencyKey();
-
-        if (request != null && request.getWorkorderId() != null && !request.getWorkorderId().equals(workorderId)) {
-            throw new IllegalArgumentException("Request workorderId must match path workorderId");
-        }
+            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000")
+            @PathVariable UUID workorderId,
+            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000")
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
         return ResponseEntity.ok(response);
