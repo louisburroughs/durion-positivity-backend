@@ -19,7 +19,4 @@ public class InvoiceGenerationRequest {
 
     @Nullable
     private UUID workorderId;
-
-    @Nullable
-    private String idempotencyKey;
 }

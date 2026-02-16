@@ -224,8 +224,8 @@ public class WorkorderController {
     @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
     public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
             @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
+            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) InvoiceGenerationRequest request) {
-        String idempotencyKey = request == null ? null : request.getIdempotencyKey();
 
         if (request != null && request.getWorkorderId() != null && !request.getWorkorderId().equals(workorderId)) {
             throw new IllegalArgumentException("Request workorderId must match path workorderId");
