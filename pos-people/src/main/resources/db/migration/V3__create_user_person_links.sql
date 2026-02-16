@@ -3,7 +3,7 @@ CREATE TABLE user_person_links (
     user_id VARCHAR(255) NOT NULL,
     person_id UUID NOT NULL,
     link_type VARCHAR(50) DEFAULT 'PRIMARY',
-    created_at TIMESTAMP NOT NULL,
+    created_at timestamptz NOT NULL,
     created_by VARCHAR(255),
     notes VARCHAR(1000),
     CONSTRAINT uk_user_person UNIQUE (user_id, person_id),
