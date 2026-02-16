@@ -67,8 +67,8 @@ public class PersonAccessController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Role assignment created successfully", 
                     content = @Content(schema = @Schema(implementation = UserRoleDto.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request"),
-            @ApiResponse(responseCode = "404", description = "Person or role not found")
+            @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Person or role not found", content = @Content)
     })
     public ResponseEntity<UserRoleDto> createAssignment(
             @PathVariable UUID personUuid,
@@ -87,7 +87,7 @@ public class PersonAccessController {
     @Operation(summary = "Revoke role assignment", description = "Revoke a role assignment from a person with optional end date")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "Role assignment revoked successfully"),
-            @ApiResponse(responseCode = "404", description = "Assignment not found")
+            @ApiResponse(responseCode = "404", description = "Assignment not found", content = @Content)
     })
     public ResponseEntity<Void> revokeAssignment(
             @PathVariable UUID personUuid,
