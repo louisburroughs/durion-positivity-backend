@@ -1,9 +1,9 @@
 {
     "openapi": "3.1.0",
     "info": {
-        "title": "POS Tax Service API",
-        "description": "Tax calculation service with external API passthrough and test mode support",
-        "version": "1.0"
+        "title": "POS Workorder Service API",
+        "description": "Workorder service for managing workorders and tasks",
+        "version": "v1"
     },
     "servers": [
         {
@@ -27,10 +27,6 @@
         {
             "name": "Workorder Part Adjustments",
             "description": "Part substitutions, returns, and corrections"
-        },
-        {
-            "name": "Tax",
-            "description": "Tax calculation API"
         },
         {
             "name": "Technician Assignment API",
@@ -124,7 +120,8 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "tech-reassign-550e8400-e29b-41d4-a716-446655440001"
                     },
                     {
                         "name": "X-User-Id",
@@ -133,14 +130,27 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440100"
                     }
                 ],
                 "requestBody": {
+                    "description": "Reassign technician request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ReassignTechnicianRequest"
+                            },
+                            "examples": {
+                                "reassignTechnician": {
+                                    "description": "reassignTechnician",
+                                    "value": {
+                                        "newTechnicianId": "550e8400-e29b-41d4-a716-446655440121",
+                                        "reassignedByUserId": "550e8400-e29b-41d4-a716-446655440100",
+                                        "reason": "Scheduling conflict",
+                                        "notes": "Reassigned due to availability"
+                                    }
+                                }
                             }
                         }
                     },
@@ -215,7 +225,8 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "tech-assign-550e8400-e29b-41d4-a716-446655440001"
                     },
                     {
                         "name": "X-User-Id",
@@ -224,14 +235,26 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440100"
                     }
                 ],
                 "requestBody": {
+                    "description": "Assign technician request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/AssignTechnicianRequest"
+                            },
+                            "examples": {
+                                "assignTechnician": {
+                                    "description": "assignTechnician",
+                                    "value": {
+                                        "technicianId": "550e8400-e29b-41d4-a716-446655440120",
+                                        "assignedByUserId": "550e8400-e29b-41d4-a716-446655440100",
+                                        "notes": "Primary technician assigned"
+                                    }
+                                }
                             }
                         }
                     },
@@ -319,14 +342,25 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "labor-adjust-550e8400-e29b-41d4-a716-446655440100"
                     }
                 ],
                 "requestBody": {
+                    "description": "Adjust labor request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/AdjustLaborRequest"
+                            },
+                            "examples": {
+                                "adjustLabor": {
+                                    "description": "adjustLabor",
+                                    "value": {
+                                        "hoursWorked": 2.5,
+                                        "adjustmentReason": "Corrected after timesheet review"
+                                    }
+                                }
                             }
                         }
                     },
@@ -441,10 +475,20 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Updated configuration object",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ApprovalConfigurationRequest"
+                            },
+                            "examples": {
+                                "updateApprovalConfig": {
+                                    "description": "updateApprovalConfig",
+                                    "value": {
+                                        "approvalThreshold": 750.0,
+                                        "requiresManagerApproval": true
+                                    }
+                                }
                             }
                         }
                     },
@@ -542,14 +586,25 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "workorder-create-550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "requestBody": {
+                    "description": "Work order creation request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/CreateWorkorderRequest"
+                            },
+                            "examples": {
+                                "createWorkorder": {
+                                    "description": "createWorkorder",
+                                    "value": {
+                                        "estimateId": "550e8400-e29b-41d4-a716-446655440001",
+                                        "customerId": "550e8400-e29b-41d4-a716-446655440010"
+                                    }
+                                }
                             }
                         }
                     },
@@ -587,14 +642,24 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "requestBody": {
+                    "description": "Start workorder request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/StartWorkorderRequest"
+                            },
+                            "examples": {
+                                "startWorkorder": {
+                                    "description": "startWorkorder",
+                                    "value": {
+                                        "userId": "550e8400-e29b-41d4-a716-446655440100",
+                                        "reason": "Technician started work"
+                                    }
+                                }
                             }
                         }
                     },
@@ -672,7 +737,8 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "labor-start-550e8400-e29b-41d4-a716-446655440001"
                     },
                     {
                         "name": "X-User-Id",
@@ -681,14 +747,25 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440100"
                     }
                 ],
                 "requestBody": {
+                    "description": "Start labor request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/StartLaborRequest"
+                            },
+                            "examples": {
+                                "startLabor": {
+                                    "description": "startLabor",
+                                    "value": {
+                                        "technicianId": "550e8400-e29b-41d4-a716-446655440120",
+                                        "notes": "Starting diagnostic work"
+                                    }
+                                }
                             }
                         }
                     },
@@ -770,10 +847,20 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Reopen workorder request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ReopenWorkorderRequest"
+                            },
+                            "examples": {
+                                "reopenWorkorder": {
+                                    "description": "reopenWorkorder",
+                                    "value": {
+                                        "userId": "550e8400-e29b-41d4-a716-446655440100",
+                                        "reopenReason": "Customer requested additional work"
+                                    }
+                                }
                             }
                         }
                     },
@@ -850,10 +937,22 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Substitute part request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/SubstitutePartRequest"
+                            },
+                            "examples": {
+                                "substitutePart": {
+                                    "description": "substitutePart",
+                                    "value": {
+                                        "originalPartId": "550e8400-e29b-41d4-a716-446655440050",
+                                        "substitutePartId": "550e8400-e29b-41d4-a716-446655440051",
+                                        "reason": "Supplier substitution",
+                                        "notes": "Equivalent OEM part"
+                                    }
+                                }
                             }
                         }
                     },
@@ -940,10 +1039,20 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Return part request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ReturnPartRequest"
+                            },
+                            "examples": {
+                                "returnParts": {
+                                    "description": "returnParts",
+                                    "value": {
+                                        "workorderPartId": "550e8400-e29b-41d4-a716-446655440050",
+                                        "quantity": 1
+                                    }
+                                }
                             }
                         }
                     },
@@ -1020,10 +1129,22 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Return unused quantity request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ReturnPartQuantityRequest"
+                            },
+                            "examples": {
+                                "returnUnused": {
+                                    "description": "returnUnused",
+                                    "value": {
+                                        "workorderPartId": "550e8400-e29b-41d4-a716-446655440050",
+                                        "quantity": 1,
+                                        "reason": "Unused after repair",
+                                        "notes": "Returned to stock"
+                                    }
+                                }
                             }
                         }
                     },
@@ -1100,10 +1221,20 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Issue part request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/IssuePartRequest"
+                            },
+                            "examples": {
+                                "issueParts": {
+                                    "description": "issueParts",
+                                    "value": {
+                                        "workorderPartId": "550e8400-e29b-41d4-a716-446655440050",
+                                        "quantity": 2
+                                    }
+                                }
                             }
                         }
                     },
@@ -1190,18 +1321,30 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Correct part quantity request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/CorrectPartQuantityRequest"
+                            },
+                            "examples": {
+                                "correctPartQuantity": {
+                                    "description": "correctPartQuantity",
+                                    "value": {
+                                        "workorderPartId": "550e8400-e29b-41d4-a716-446655440050",
+                                        "newQuantity": 3,
+                                        "reason": "Data correction",
+                                        "notes": "Corrected after inventory count"
+                                    }
+                                }
                             }
                         }
                     },
                     "required": true
                 },
                 "responses": {
-                    "404": {
-                        "description": "Workorder or part not found",
+                    "201": {
+                        "description": "Part quantity corrected successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1210,8 +1353,8 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Part quantity corrected successfully",
+                    "404": {
+                        "description": "Workorder or part not found",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1270,10 +1413,20 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Consume part request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ConsumePartRequest"
+                            },
+                            "examples": {
+                                "consumeParts": {
+                                    "description": "consumeParts",
+                                    "value": {
+                                        "workorderPartId": "550e8400-e29b-41d4-a716-446655440050",
+                                        "quantity": 1
+                                    }
+                                }
                             }
                         }
                     },
@@ -1351,7 +1504,8 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "labor-stop-550e8400-e29b-41d4-a716-446655440100"
                     }
                 ],
                 "responses": {
@@ -1416,14 +1570,24 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "requestBody": {
+                    "description": "Complete workorder request",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/CompleteWorkorderRequest"
+                            },
+                            "examples": {
+                                "completeWorkorder": {
+                                    "description": "completeWorkorder",
+                                    "value": {
+                                        "userId": "550e8400-e29b-41d4-a716-446655440100",
+                                        "completionNotes": "Completed and verified"
+                                    }
+                                }
                             }
                         }
                     },
@@ -1526,14 +1690,25 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "change-request-create-550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "requestBody": {
+                    "description": "Change request details including items",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/CreateChangeRequestDTO"
+                            },
+                            "examples": {
+                                "createChangeRequest": {
+                                    "description": "createChangeRequest",
+                                    "value": {
+                                        "description": "Customer requested additional diagnostics",
+                                        "approvalGated": true
+                                    }
+                                }
                             }
                         }
                     },
@@ -1591,14 +1766,27 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "requestBody": {
+                    "description": "Approval request with customer ID and signature capture",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ApproveWorkorderRequest"
+                            },
+                            "examples": {
+                                "approveWorkorder": {
+                                    "description": "approveWorkorder",
+                                    "value": {
+                                        "customerId": "550e8400-e29b-41d4-a716-446655440010",
+                                        "signatureData": "base64-signature",
+                                        "signatureMimeType": "image/png",
+                                        "signerName": "Jane Customer",
+                                        "notes": "Approved by customer"
+                                    }
+                                }
                             }
                         }
                     },
@@ -1670,10 +1858,21 @@
                 "description": "Create a new estimate in DRAFT status for a customer and vehicle. Requires ESTIMATE_CREATE permission. System will generate a unique estimate number and apply default values for location, currency, and tax region if not provided.",
                 "operationId": "createEstimate",
                 "requestBody": {
+                    "description": "Estimate creation request with customer and vehicle IDs",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/CreateEstimateRequest"
+                            },
+                            "examples": {
+                                "createEstimate": {
+                                    "description": "createEstimate",
+                                    "value": {
+                                        "customerId": "550e8400-e29b-41d4-a716-446655440010",
+                                        "vehicleId": "550e8400-e29b-41d4-a716-446655440011",
+                                        "locationId": "550e8400-e29b-41d4-a716-446655440020"
+                                    }
+                                }
                             }
                         }
                     },
@@ -1805,7 +2004,8 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "Snapshot captured before approval"
                     }
                 ],
                 "responses": {
@@ -1924,7 +2124,8 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "estimate-promote-550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "responses": {
@@ -1993,10 +2194,23 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Line item details",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/AddEstimateItemRequest"
+                            },
+                            "examples": {
+                                "addEstimateItem": {
+                                    "description": "addEstimateItem",
+                                    "value": {
+                                        "itemType": "LABOR",
+                                        "description": "Brake inspection",
+                                        "quantity": 1,
+                                        "unitPrice": 129.99,
+                                        "taxCode": "LABOR_STANDARD"
+                                    }
+                                }
                             }
                         }
                     },
@@ -2073,7 +2287,8 @@
                         "required": false,
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "Customer declined additional work"
                     }
                 ],
                 "responses": {
@@ -2190,10 +2405,24 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Approval request with customer ID, signature capture, and optional selective line item approvals",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ApproveEstimateRequest"
+                            },
+                            "examples": {
+                                "approveEstimate": {
+                                    "description": "approveEstimate",
+                                    "value": {
+                                        "customerId": "550e8400-e29b-41d4-a716-446655440010",
+                                        "signatureData": "base64-signature",
+                                        "signatureMimeType": "image/png",
+                                        "signerName": "Jane Customer",
+                                        "notes": "Approved estimate",
+                                        "purchaseOrderNumber": "PO-12345"
+                                    }
+                                }
                             }
                         }
                     },
@@ -2255,10 +2484,20 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Emergency override details including manager ID and reason",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/EmergencyOverrideDTO"
+                            },
+                            "examples": {
+                                "emergencyOverride": {
+                                    "description": "emergencyOverride",
+                                    "value": {
+                                        "managerId": "550e8400-e29b-41d4-a716-446655440110",
+                                        "exceptionReason": "Safety-critical repair authorized"
+                                    }
+                                }
                             }
                         }
                     },
@@ -2330,10 +2569,19 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Decline details including note",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/DeclineChangeRequestDTO"
+                            },
+                            "examples": {
+                                "declineChangeRequest": {
+                                    "description": "declineChangeRequest",
+                                    "value": {
+                                        "approvalNote": "Declined by customer"
+                                    }
+                                }
                             }
                         }
                     },
@@ -2395,10 +2643,20 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Approval details including user ID and note",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ApproveChangeRequestDTO"
+                            },
+                            "examples": {
+                                "approveChangeRequest": {
+                                    "description": "approveChangeRequest",
+                                    "value": {
+                                        "approvedBy": "550e8400-e29b-41d4-a716-446655440100",
+                                        "approvalNote": "Approved after customer confirmation"
+                                    }
+                                }
                             }
                         }
                     },
@@ -2481,10 +2739,22 @@
                 "description": "Add a new approval configuration.",
                 "operationId": "createConfiguration",
                 "requestBody": {
+                    "description": "Configuration object to be created",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/ApprovalConfigurationRequest"
+                            },
+                            "examples": {
+                                "createApprovalConfig": {
+                                    "description": "createApprovalConfig",
+                                    "value": {
+                                        "locationId": "550e8400-e29b-41d4-a716-446655440020",
+                                        "customerId": "550e8400-e29b-41d4-a716-446655440010",
+                                        "approvalThreshold": 500.0,
+                                        "requiresManagerApproval": true
+                                    }
+                                }
                             }
                         }
                     },
@@ -2497,38 +2767,6 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApprovalConfigurationResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/tax/calculate": {
-            "post": {
-                "tags": [
-                    "Tax"
-                ],
-                "summary": "Calculate tax",
-                "description": "Calculate tax for line items based on location. Routes to external service in production or test calculator in test mode.",
-                "operationId": "calculateTax",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/TaxCalculationRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaxCalculationResponse"
                                 }
                             }
                         }
@@ -2612,10 +2850,22 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Updated item fields",
                     "content": {
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/UpdateEstimateItemRequest"
+                            },
+                            "examples": {
+                                "updateEstimateItem": {
+                                    "description": "updateEstimateItem",
+                                    "value": {
+                                        "description": "Brake inspection and adjustment",
+                                        "quantity": 1,
+                                        "unitPrice": 149.99,
+                                        "taxCode": "LABOR_STANDARD"
+                                    }
+                                }
                             }
                         }
                     },
@@ -2683,7 +2933,7 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "responses": {
@@ -2726,7 +2976,7 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "responses": {
@@ -2757,7 +3007,7 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "responses": {
@@ -2795,7 +3045,7 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     }
                 ],
                 "responses": {
@@ -2841,7 +3091,8 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440050"
                     }
                 ],
                 "responses": {
@@ -2897,20 +3148,11 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440050"
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Adjustment history retrieved successfully (newest first)",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-                                }
-                            }
-                        }
-                    },
                     "404": {
                         "description": "Workorder or part not found",
                         "content": {
@@ -2920,6 +3162,16 @@
                                     "items": {
                                         "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                                     }
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Adjustment history retrieved successfully (newest first)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                                 }
                             }
                         }
@@ -2995,7 +3247,8 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
                     },
                     {
                         "name": "X-Authorities",
@@ -3249,7 +3502,7 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440020"
                     }
                 ],
                 "responses": {
@@ -3287,7 +3540,7 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440020"
                     }
                 ],
                 "responses": {
@@ -3325,7 +3578,7 @@
                             "type": "string",
                             "format": "uuid"
                         },
-                        "example": 1
+                        "example": "550e8400-e29b-41d4-a716-446655440010"
                     }
                 ],
                 "responses": {
@@ -3432,7 +3685,8 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440020"
                     },
                     {
                         "name": "customerId",
@@ -3442,7 +3696,8 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
-                        }
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440010"
                     }
                 ],
                 "responses": {
@@ -3462,28 +3717,6 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApprovalConfigurationResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/tax/mode": {
-            "get": {
-                "tags": [
-                    "Tax"
-                ],
-                "summary": "Get tax service mode",
-                "description": "Check if the tax service is currently in test mode or production mode",
-                "operationId": "getMode",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ModeResponse"
                                 }
                             }
                         }
@@ -3761,7 +3994,7 @@
             },
             "ApprovalConfigurationRequest": {
                 "type": "object",
-                "description": "Configuration object to be created",
+                "description": "Request DTO for approval configuration creation and updates",
                 "properties": {
                     "locationId": {
                         "type": "string",
@@ -3852,7 +4085,7 @@
             },
             "CreateWorkorderRequest": {
                 "type": "object",
-                "description": "Work order creation request",
+                "description": "Request DTO for workorder creation",
                 "properties": {
                     "estimateId": {
                         "type": "string",
@@ -4307,7 +4540,6 @@
             },
             "CreateChangeRequestDTO": {
                 "type": "object",
-                "description": "Change request details including items",
                 "properties": {
                     "workorderId": {
                         "type": "string",
@@ -4444,7 +4676,7 @@
             },
             "ApproveWorkorderRequest": {
                 "type": "object",
-                "description": "Approval request with customer ID and signature capture",
+                "description": "Request to approve a work order with customer signature",
                 "properties": {
                     "customerId": {
                         "type": "string",
@@ -4517,7 +4749,6 @@
             },
             "CreateEstimateRequest": {
                 "type": "object",
-                "description": "Estimate creation request with customer and vehicle IDs",
                 "properties": {
                     "customerId": {
                         "type": "string",
@@ -4711,7 +4942,6 @@
             },
             "AddEstimateItemRequest": {
                 "type": "object",
-                "description": "Line item details",
                 "properties": {
                     "itemType": {
                         "type": "string",
@@ -4802,7 +5032,7 @@
             },
             "ApproveEstimateRequest": {
                 "type": "object",
-                "description": "Approval request with customer ID, signature capture, and optional selective line item approvals",
+                "description": "Request to approve an estimate with customer signature",
                 "properties": {
                     "customerId": {
                         "type": "string",
@@ -4849,7 +5079,6 @@
             },
             "EmergencyOverrideDTO": {
                 "type": "object",
-                "description": "Emergency override details including manager ID and reason",
                 "properties": {
                     "managerId": {
                         "type": "string",
@@ -4862,7 +5091,6 @@
             },
             "DeclineChangeRequestDTO": {
                 "type": "object",
-                "description": "Decline details including note",
                 "properties": {
                     "approvalNote": {
                         "type": "string"
@@ -4871,7 +5099,6 @@
             },
             "ApproveChangeRequestDTO": {
                 "type": "object",
-                "description": "Approval details including user ID and note",
                 "properties": {
                     "approvedBy": {
                         "type": "string",
@@ -4882,162 +5109,8 @@
                     }
                 }
             },
-            "TaxCalculationRequest": {
-                "type": "object",
-                "properties": {
-                    "lineItems": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/TaxLineItem"
-                        }
-                    },
-                    "postalCode": {
-                        "type": "string"
-                    },
-                    "countryCode": {
-                        "type": "string"
-                    },
-                    "stateCode": {
-                        "type": "string"
-                    },
-                    "city": {
-                        "type": "string"
-                    },
-                    "address": {
-                        "type": "string"
-                    },
-                    "customerId": {
-                        "type": "string"
-                    },
-                    "transactionDate": {
-                        "type": "string"
-                    },
-                    "referenceId": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "lineItems",
-                    "postalCode"
-                ]
-            },
-            "TaxLineItem": {
-                "type": "object",
-                "properties": {
-                    "lineItemId": {
-                        "type": "string"
-                    },
-                    "description": {
-                        "type": "string"
-                    },
-                    "quantity": {
-                        "type": "number"
-                    },
-                    "unitPrice": {
-                        "type": "number"
-                    },
-                    "subtotal": {
-                        "type": "number"
-                    },
-                    "taxCategory": {
-                        "type": "string"
-                    },
-                    "taxExempt": {
-                        "type": "boolean"
-                    }
-                },
-                "required": [
-                    "description",
-                    "lineItemId",
-                    "quantity",
-                    "unitPrice"
-                ]
-            },
-            "LineItemTax": {
-                "type": "object",
-                "properties": {
-                    "lineItemId": {
-                        "type": "string"
-                    },
-                    "subtotal": {
-                        "type": "number"
-                    },
-                    "taxAmount": {
-                        "type": "number"
-                    },
-                    "total": {
-                        "type": "number"
-                    },
-                    "taxExempt": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "TaxCalculationResponse": {
-                "type": "object",
-                "properties": {
-                    "subtotal": {
-                        "type": "number"
-                    },
-                    "totalTax": {
-                        "type": "number"
-                    },
-                    "total": {
-                        "type": "number"
-                    },
-                    "effectiveTaxRate": {
-                        "type": "number"
-                    },
-                    "jurisdictions": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/TaxJurisdiction"
-                        }
-                    },
-                    "lineItemTaxes": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/LineItemTax"
-                        }
-                    },
-                    "testMode": {
-                        "type": "boolean"
-                    },
-                    "calculatedAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "referenceId": {
-                        "type": "string"
-                    },
-                    "externalTransactionId": {
-                        "type": "string"
-                    }
-                }
-            },
-            "TaxJurisdiction": {
-                "type": "object",
-                "properties": {
-                    "jurisdictionCode": {
-                        "type": "string"
-                    },
-                    "jurisdictionName": {
-                        "type": "string"
-                    },
-                    "taxRate": {
-                        "type": "number"
-                    },
-                    "jurisdictionType": {
-                        "type": "string"
-                    },
-                    "taxAmount": {
-                        "type": "number"
-                    }
-                }
-            },
             "UpdateEstimateItemRequest": {
                 "type": "object",
-                "description": "Updated item fields",
                 "properties": {
                     "description": {
                         "type": "string"
@@ -5574,17 +5647,6 @@
                     },
                     "currencyUomId": {
                         "type": "string"
-                    }
-                }
-            },
-            "ModeResponse": {
-                "type": "object",
-                "properties": {
-                    "mode": {
-                        "type": "string"
-                    },
-                    "testMode": {
-                        "type": "boolean"
                     }
                 }
             }

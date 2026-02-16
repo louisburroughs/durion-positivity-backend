@@ -5,20 +5,44 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.Contact;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springdoc.core.customizers.OpenApiCustomizer;
 
 @Configuration
 public class OpenApiConfig {
+
+        private static final String WORKORDER_API_TITLE = "POS Workorder Service API";
+        private static final String WORKORDER_API_DESCRIPTION = "Workorder service for managing workorders and tasks";
+        private static final String WORKORDER_API_VERSION = "v1";
 
         @Bean
         public OpenAPI customOpenAPI() {
                 return new OpenAPI()
                                 .info(new Info()
-                                                .title("POS Workorder Service API")
-                                                .description(
-                                                                "Workorder service for managing workorders and tasks")
-                                                .version("v1")
+                                                .title(WORKORDER_API_TITLE)
+                                                .description(WORKORDER_API_DESCRIPTION)
+                                                .version(WORKORDER_API_VERSION)
                                                 .contact(new Contact()
                                                                 .email("louis.burroughs@gmail.com")
                                                                 .name("Durion Team")));
+        }
+
+        @Bean
+        public OpenApiCustomizer enforceWorkorderOpenApiInfo() {
+                return openApi -> {
+                        if (openApi == null) {
+                                return;
+                        }
+                        var info = openApi.getInfo();
+                        if (info == null) {
+                                info = new Info();
+                                openApi.setInfo(info);
+                        }
+                        info.title(WORKORDER_API_TITLE)
+                                        .description(WORKORDER_API_DESCRIPTION)
+                                        .version(WORKORDER_API_VERSION)
+                                        .contact(new Contact()
+                                                        .email("louis.burroughs@gmail.com")
+                                                        .name("Durion Team"));
+                };
         }
 }
