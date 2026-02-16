@@ -7,6 +7,7 @@ import com.positivity.workorder.service.WorkorderLaborService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,6 +51,7 @@ public class WorkorderLaborController {
             @ApiResponse(responseCode = "403", description = "Permission denied"),
             @ApiResponse(responseCode = "404", description = "Workorder or service not found")
     })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Start labor request", required = true, content = @Content(schema = @Schema(implementation = StartLaborRequest.class), examples = @ExampleObject(name = "startLabor", value = "{\"technicianId\":\"550e8400-e29b-41d4-a716-446655440120\",\"notes\":\"Starting diagnostic work\"}")))
     @PostMapping("/{workorderId}/services/{serviceId}/labor/start")
     @EmitEvent(id = "WORKORDER_LABOR_START", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")
@@ -160,6 +162,7 @@ public class WorkorderLaborController {
             @ApiResponse(responseCode = "403", description = "Permission denied"),
             @ApiResponse(responseCode = "404", description = "Labor entry not found")
     })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Adjust labor request", required = true, content = @Content(schema = @Schema(implementation = AdjustLaborRequest.class), examples = @ExampleObject(name = "adjustLabor", value = "{\"hoursWorked\":2.5,\"adjustmentReason\":\"Corrected after timesheet review\"}")))
     @PutMapping("/{workorderId}/labor/{entryId}/adjust")
     @EmitEvent(id = "WORKORDER_LABOR_ADJUST", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:labor:add')")

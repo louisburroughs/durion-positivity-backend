@@ -20,6 +20,9 @@ import com.positivity.workorder.service.WorkorderService;
 import com.positivity.workorder.service.WorkorderStateMachine;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -65,6 +68,7 @@ public class WorkorderController {
 
     @Operation(summary = "Create a new work order", description = "Add a new work order to the system. Supports idempotent creation via Idempotency-Key header to prevent duplicate workorders.")
     @ApiResponse(responseCode = "200", description = "Work order created successfully, or existing work order returned if idempotency key was previously processed.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Work order creation request", required = true, content = @Content(schema = @Schema(implementation = CreateWorkorderRequest.class), examples = @ExampleObject(name = "createWorkorder", value = "{\"estimateId\":\"550e8400-e29b-41d4-a716-446655440001\",\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\"}")))
     @PostMapping
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
     public ResponseEntity<WorkorderResponse> createWorkorder(
@@ -93,6 +97,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Work order started successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid state transition or pending change requests.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Start workorder request", required = true, content = @Content(schema = @Schema(implementation = StartWorkorderRequest.class), examples = @ExampleObject(name = "startWorkorder", value = "{\"userId\":\"550e8400-e29b-41d4-a716-446655440100\",\"reason\":\"Technician started work\"}")))
     @PostMapping("/{workorderId}/start")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:start')")
@@ -148,6 +153,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Work order approved successfully with signature captured.")
     @ApiResponse(responseCode = "400", description = "Work order cannot be approved in current state or customer ID mismatch.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Approval request with customer ID and signature capture", required = true, content = @Content(schema = @Schema(implementation = ApproveWorkorderRequest.class), examples = @ExampleObject(name = "approveWorkorder", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"signatureData\":\"base64-signature\",\"signatureMimeType\":\"image/png\",\"signerName\":\"Jane Customer\",\"notes\":\"Approved by customer\"}")))
     @PostMapping("/{workorderId}/approval")
     @EmitEvent(id = "WORKORDER_APPROVE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:approve')")
@@ -172,6 +178,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Work order completed successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid state transition or work order already completed.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Complete workorder request", required = true, content = @Content(schema = @Schema(implementation = CompleteWorkorderRequest.class), examples = @ExampleObject(name = "completeWorkorder", value = "{\"userId\":\"550e8400-e29b-41d4-a716-446655440100\",\"completionNotes\":\"Completed and verified\"}")))
     @PostMapping("/{workorderId}/complete")
     @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:complete')")
@@ -238,6 +245,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Workorder reopened successfully.")
     @ApiResponse(responseCode = "400", description = "Workorder cannot be reopened or reason missing.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Reopen workorder request", required = true, content = @Content(schema = @Schema(implementation = ReopenWorkorderRequest.class), examples = @ExampleObject(name = "reopenWorkorder", value = "{\"userId\":\"550e8400-e29b-41d4-a716-446655440100\",\"reopenReason\":\"Customer requested additional work\"}")))
     @PostMapping("/{workorderId}/reopen")
     @EmitEvent(id = "WORKORDER_REOPEN", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:reopen_completed')")

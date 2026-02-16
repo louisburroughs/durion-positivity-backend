@@ -6,6 +6,7 @@ import com.positivity.workorder.service.WorkorderPartAdjustmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,6 +56,7 @@ public class WorkorderPartAdjustmentController {
     @ApiResponse(responseCode = "400", description = "Invalid request (part already consumed, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(responseCode = "409", description = "Idempotency conflict")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Substitute part request", required = true, content = @Content(schema = @Schema(implementation = SubstitutePartRequest.class), examples = @ExampleObject(name = "substitutePart", value = "{\"originalPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"substitutePartId\":\"550e8400-e29b-41d4-a716-446655440051\",\"reason\":\"Supplier substitution\",\"notes\":\"Equivalent OEM part\"}")))
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> substitutePart(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull SubstitutePartRequest request,
@@ -89,6 +91,7 @@ public class WorkorderPartAdjustmentController {
     @ApiResponse(responseCode = "201", description = "Unused quantity returned successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Return unused quantity request", required = true, content = @Content(schema = @Schema(implementation = ReturnPartQuantityRequest.class), examples = @ExampleObject(name = "returnUnused", value = "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"quantity\":1,\"reason\":\"Unused after repair\",\"notes\":\"Returned to stock\"}")))
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> returnUnusedQuantity(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull ReturnPartQuantityRequest request,
@@ -123,6 +126,7 @@ public class WorkorderPartAdjustmentController {
     @ApiResponse(responseCode = "201", description = "Part quantity corrected successfully", content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Correct part quantity request", required = true, content = @Content(schema = @Schema(implementation = CorrectPartQuantityRequest.class), examples = @ExampleObject(name = "correctPartQuantity", value = "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"newQuantity\":3,\"reason\":\"Data correction\",\"notes\":\"Corrected after inventory count\"}")))
     public ResponseEntity<WorkorderPartAdjustmentEventResponse> correctPartQuantity(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull CorrectPartQuantityRequest request,

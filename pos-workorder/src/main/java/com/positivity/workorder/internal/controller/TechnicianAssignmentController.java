@@ -9,6 +9,7 @@ import com.positivity.workorder.service.TechnicianAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,6 +55,7 @@ public class TechnicianAssignmentController {
             @ApiResponse(responseCode = "403", description = "Permission denied"),
             @ApiResponse(responseCode = "404", description = "Workorder or technician not found")
     })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Assign technician request", required = true, content = @Content(schema = @Schema(implementation = AssignTechnicianRequest.class), examples = @ExampleObject(name = "assignTechnician", value = "{\"technicianId\":\"550e8400-e29b-41d4-a716-446655440120\",\"assignedByUserId\":\"550e8400-e29b-41d4-a716-446655440100\",\"notes\":\"Primary technician assigned\"}")))
     @PostMapping("/{workorderId}/technician")
     @EmitEvent(id = "WORKORDER_TECHNICIAN_ASSIGN", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")
@@ -107,6 +109,7 @@ public class TechnicianAssignmentController {
             @ApiResponse(responseCode = "403", description = "Permission denied"),
             @ApiResponse(responseCode = "404", description = "Workorder not found")
     })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Reassign technician request", required = true, content = @Content(schema = @Schema(implementation = ReassignTechnicianRequest.class), examples = @ExampleObject(name = "reassignTechnician", value = "{\"newTechnicianId\":\"550e8400-e29b-41d4-a716-446655440121\",\"reassignedByUserId\":\"550e8400-e29b-41d4-a716-446655440100\",\"reason\":\"Scheduling conflict\",\"notes\":\"Reassigned due to availability\"}")))
     @PutMapping("/{workorderId}/technician")
     @EmitEvent(id = "WORKORDER_TECHNICIAN_REASSIGN", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")

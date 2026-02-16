@@ -6,8 +6,8 @@ import com.positivity.workorder.internal.dto.*;
 import com.positivity.workorder.service.WorkorderPartUsageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * REST controller for workorder parts usage tracking.
@@ -53,6 +52,7 @@ public class WorkorderPartsUsageController {
     @ApiResponse(responseCode = "400", description = "Invalid request (negative quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(responseCode = "409", description = "Idempotency conflict (duplicate key)")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Issue part request", required = true, content = @Content(schema = @Schema(implementation = IssuePartRequest.class), examples = @ExampleObject(name = "issueParts", value = "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"quantity\":2}")))
     public ResponseEntity<WorkorderPartUsageEventResponse> issueParts(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull IssuePartRequest request,
@@ -79,6 +79,7 @@ public class WorkorderPartsUsageController {
     @ApiResponse(responseCode = "201", description = "Parts consumption recorded successfully", content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds issued quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Consume part request", required = true, content = @Content(schema = @Schema(implementation = ConsumePartRequest.class), examples = @ExampleObject(name = "consumeParts", value = "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"quantity\":1}")))
     public ResponseEntity<WorkorderPartUsageEventResponse> consumeParts(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull ConsumePartRequest request,
@@ -109,6 +110,7 @@ public class WorkorderPartsUsageController {
     @ApiResponse(responseCode = "201", description = "Parts returned successfully", content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Return part request", required = true, content = @Content(schema = @Schema(implementation = ReturnPartRequest.class), examples = @ExampleObject(name = "returnParts", value = "{\"workorderPartId\":\"550e8400-e29b-41d4-a716-446655440050\",\"quantity\":1}")))
     public ResponseEntity<WorkorderPartUsageEventResponse> returnParts(
             @PathVariable @NonNull UUID workorderId,
             @RequestBody @Valid @NonNull ReturnPartRequest request,
