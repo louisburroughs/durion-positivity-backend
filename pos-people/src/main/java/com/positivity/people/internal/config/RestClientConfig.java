@@ -13,7 +13,7 @@ public class RestClientConfig {
     @Bean
     public RestClient securityServiceRestClient(
             RestClient.Builder builder,
-            @Value("${pos.security-service.base-url:http://localhost:8084}") String securityServiceBaseUrl,
+            @Value("${pos.security-service.base-url:http://pos-security-service:8086}") String securityServiceBaseUrl,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
