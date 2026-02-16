@@ -1,7 +1,7 @@
 package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.internal.model.Role;
-import com.positivity.securityservice.internal.model.User;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -43,7 +44,7 @@ public class UserService {
         return userRepository.findByUsername(username);
     }
 
-    public Optional<User> getUserById(Long id) {
+    public Optional<User> getUserById(UUID id) {
         return userRepository.findById(id);
     }
 
@@ -51,7 +52,7 @@ public class UserService {
         return userRepository.findAll();
     }
 
-    public void deleteUser(Long id) {
+    public void deleteUser(UUID id) {
         userRepository.deleteById(id);
     }
 
@@ -73,4 +74,3 @@ public class UserService {
         return userRepository.save(existingUser);
     }
 }
-

@@ -1,7 +1,7 @@
 package com.positivity.security_service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.securityservice.TokenRevocationManager;
+import com.positivity.securityservice.BaseIntegrationTest;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
@@ -22,13 +22,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -73,18 +68,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @since 1.0
  */
-@SpringBootTest(classes = com.positivity.securityservice.PosSecurityServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @DisplayName("Security Service Contract Behavior Integration Tests")
-class ContractBehaviorIT {
+class ContractBehaviorIT extends BaseIntegrationTest {
 
         private static final String TEST_SUBJECT = "john.doe";
         private static final Set<String> TEST_ROLES = Set.of("SHOP_MGR", "INVENTORY_MGR");
-
-        @Autowired
-        private WebApplicationContext context;
-
-        private MockMvc mockMvc;
 
         @Autowired
         private JwtService jwtService;
@@ -92,16 +80,11 @@ class ContractBehaviorIT {
         @Autowired
         private TokenRevocationManager tokenRevocationManager;
 
-        @Autowired
-        private ObjectMapper objectMapper;
-
         @Value("${security.jwt.secret}")
         private String jwtSecret;
 
         @BeforeEach
         void setup() {
-                // Initialize MockMvc from the WebApplicationContext
-                mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
                 // Clear all revoked tokens before each test
                 tokenRevocationManager.clearAllRevoked();
         }

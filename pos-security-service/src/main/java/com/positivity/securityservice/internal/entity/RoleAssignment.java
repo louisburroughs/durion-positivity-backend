@@ -1,15 +1,19 @@
-package com.positivity.securityservice.internal.model;
+package com.positivity.securityservice.internal.entity;
 
+import com.positivity.securityservice.internal.enums.ScopeType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 /**
- * Represents a user's assignment to a role with optional scope and effective dating.
+ * Represents a user's assignment to a role with optional scope and effective
+ * dating.
  * Supports scoped RBAC where roles can be limited to specific locations.
  */
 @Data
@@ -18,8 +22,8 @@ import java.util.Set;
 @Table(name = "role_assignments")
 public class RoleAssignment {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
@@ -37,11 +41,11 @@ public class RoleAssignment {
     private ScopeType scopeType = ScopeType.GLOBAL;
 
     /**
-     * Location IDs this role assignment applies to (only used when scopeType is LOCATION)
+     * Location IDs this role assignment applies to (only used when scopeType is
+     * LOCATION)
      */
     @ElementCollection
-    @CollectionTable(name = "role_assignment_scope_locations", 
-                     joinColumns = @JoinColumn(name = "role_assignment_id"))
+    @CollectionTable(name = "role_assignment_scope_locations", joinColumns = @JoinColumn(name = "role_assignment_id"))
     @Column(name = "location_id")
     private Set<String> scopeLocationIds = new HashSet<>();
 

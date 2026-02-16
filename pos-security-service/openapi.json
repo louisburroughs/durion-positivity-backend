@@ -116,10 +116,10 @@
                         "description": "ID of the user to retrieve",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
+                            "type": "string",
+                            "format": "uuid"
                         },
-                        "example": 1
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
                     }
                 ],
                 "responses": {
@@ -189,10 +189,10 @@
                         "description": "ID of the user to update",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
+                            "type": "string",
+                            "format": "uuid"
                         },
-                        "example": 1
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
                     }
                 ],
                 "requestBody": {
@@ -272,10 +272,10 @@
                         "description": "ID of the user to delete",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
+                            "type": "string",
+                            "format": "uuid"
                         },
-                        "example": 1
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
                     }
                 ],
                 "responses": {
@@ -1068,8 +1068,8 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
@@ -1135,8 +1135,8 @@
                         "in": "query",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     },
                     {
@@ -1206,17 +1206,30 @@
                     "Role Management"
                 ],
                 "summary": "Get user role assignments",
-                "description": "Returns all effective role assignments for a user",
+                "description": "Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked",
                 "operationId": "getUserRoleAssignments",
                 "parameters": [
                     {
                         "name": "userId",
                         "in": "path",
+                        "description": "User ID",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
-                        }
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
+                    },
+                    {
+                        "name": "includeHistory",
+                        "in": "query",
+                        "description": "Include historical assignments (expired/revoked)",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "example": false
                     }
                 ],
                 "responses": {
@@ -1251,7 +1264,20 @@
                         }
                     },
                     "200": {
-                        "description": "OK",
+                        "description": "Role assignments returned successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/RoleAssignment"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1810,22 +1836,35 @@
                     "Role Management"
                 ],
                 "summary": "Revoke role assignment",
-                "description": "Revokes a role assignment by setting its end date",
+                "description": "Revokes a role assignment by setting its end date. Defaults to today when endDate is omitted",
                 "operationId": "revokeRoleAssignment",
                 "parameters": [
                     {
                         "name": "assignmentId",
                         "in": "path",
+                        "description": "Role assignment ID",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
-                        }
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "description": "Effective end date for revocation. Defaults to current date",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2026-02-16"
                     }
                 ],
                 "responses": {
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid endDate",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1854,8 +1893,11 @@
                             }
                         }
                     },
-                    "200": {
-                        "description": "OK"
+                    "204": {
+                        "description": "Role assignment revoked"
+                    },
+                    "404": {
+                        "description": "Role assignment not found"
                     }
                 }
             }
@@ -1944,8 +1986,8 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "name": {
                         "type": "string"
@@ -1978,8 +2020,8 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "name": {
                         "type": "string"
@@ -2015,8 +2057,8 @@
                 "description": "Updated user object",
                 "properties": {
                     "id": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "username": {
                         "type": "string"
@@ -2037,8 +2079,8 @@
                 "type": "object",
                 "properties": {
                     "roleId": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "permissionNames": {
                         "type": "array",
@@ -2053,12 +2095,12 @@
                 "type": "object",
                 "properties": {
                     "userId": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "roleId": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "scopeType": {
                         "type": "string",
@@ -2088,8 +2130,8 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "integer",
-                        "format": "int64"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "user": {
                         "$ref": "#/components/schemas/User"

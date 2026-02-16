@@ -1,24 +1,26 @@
-package com.positivity.securityservice.internal.model;
+package com.positivity.securityservice.internal.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * JPA entity for storing JWT tokens in the database.
- * 
+ *
  * **Purpose:**
  * - Persistence record of issued tokens for validation
  * - Consistency check during token validation
  * - Revocation tracking (paired with Redis cache)
- * 
+ *
  * **Concurrency:**
  * - Uses @Version for optimistic locking
  * - Prevents concurrent updates during token revocation
  * - Throws ObjectOptimisticLockingFailureException on conflict
  * - JwtService handles retries with exponential backoff
- * 
+ *
  * **Storage:**
  * - token: Access token (unique, nullable if refresh-only)
  * - refreshToken: Refresh token (unique, nullable if access-only)
@@ -26,7 +28,7 @@ import java.time.Instant;
  * - issuedAt: Token creation timestamp
  * - expiresAt: Access token expiration
  * - refreshExpiresAt: Refresh token expiration
- * 
+ *
  * @since 1.0
  */
 @Data
@@ -34,8 +36,8 @@ import java.time.Instant;
 @Entity
 public class JwtToken {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, unique = true, length = 512)
     private String token;
@@ -57,13 +59,13 @@ public class JwtToken {
 
     /**
      * Version field for optimistic locking.
-     * 
+     *
      * **Concurrency Handling:**
      * - Incremented by JPA on each update
      * - Used to detect concurrent modifications
      * - Throws ObjectOptimisticLockingFailureException on version mismatch
      * - Example retry pattern: 3 attempts, 100ms base delay, 2x multiplier
-     * 
+     *
      * **Common Scenario:**
      * Thread A and Thread B both attempt to revoke the same token:
      * 1. Thread A loads JwtToken (version=1)

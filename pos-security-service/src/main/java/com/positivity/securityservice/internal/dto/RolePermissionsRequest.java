@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Request DTO for updating role permissions
@@ -13,6 +14,6 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RolePermissionsRequest {
-    private Long roleId;
+    private UUID roleId;
     private Set<String> permissionNames;
 }
