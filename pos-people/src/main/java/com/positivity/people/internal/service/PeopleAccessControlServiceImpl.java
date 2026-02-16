@@ -4,6 +4,8 @@ import com.positivity.people.internal.client.SecurityServiceClient;
 import com.positivity.people.internal.client.dto.RoleDto;
 import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.people.internal.client.dto.UserRoleDto;
+import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.service.PeopleAccessControlService;
 import com.positivity.people.service.UserPersonTranslationService;
 import jakarta.persistence.EntityNotFoundException;
@@ -25,18 +27,26 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
 
     private final UserPersonTranslationService userPersonTranslationService;
     private final SecurityServiceClient securityServiceClient;
+    private final PersonRepository personRepository;
 
     public PeopleAccessControlServiceImpl(
             @NonNull UserPersonTranslationService userPersonTranslationService,
-            @NonNull SecurityServiceClient securityServiceClient) {
+            @NonNull SecurityServiceClient securityServiceClient,
+            @NonNull PersonRepository personRepository) {
         this.userPersonTranslationService = userPersonTranslationService;
         this.securityServiceClient = securityServiceClient;
+        this.personRepository = personRepository;
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public List<RoleDto> getAvailableRolesForPeople() {
+    public List<RoleDto> getAvailableRolesForPerson(@NonNull UUID personUuid) {
+        // Validate that the person exists
+        if (!personRepository.existsById(personUuid)) {
+            throw new PersonNotFoundException(personUuid);
+        }
+        
         List<RoleDto> allRoles = new ArrayList<>();
         allRoles.addAll(securityServiceClient.getAvailableRoles(LOCATION_SCOPE));
         allRoles.addAll(securityServiceClient.getAvailableRoles(GLOBAL_SCOPE));
@@ -46,7 +56,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, Boolean includeHistory,
+    public List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, boolean includeHistory,
             LocalDateTime endDate) {
         String userId = resolveUserId(personUuid);
         return securityServiceClient.getUserRoleAssignments(userId, includeHistory, endDate);
