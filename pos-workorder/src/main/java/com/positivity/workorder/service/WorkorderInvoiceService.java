@@ -211,6 +211,10 @@ public class WorkorderInvoiceService {
     /**
      * Check if an item status should be excluded from billable totals.
      * Aligned with WorkorderStateMachine#isExcludedFromBillableTotal.
+     * 
+     * Note: null statuses are treated as billable since WorkorderService and WorkorderPart
+     * entities have @Builder.Default with status=OPEN, making null statuses rare edge cases
+     * that should not block invoice generation.
      */
     private boolean isExcludedFromBillableTotal(@Nullable WorkorderItemStatus status) {
         return status != null && EXCLUDED_BILLABLE_TOTAL_STATUSES.contains(status);
