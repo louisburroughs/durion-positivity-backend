@@ -212,9 +212,6 @@ class WorkorderInvoiceServiceTest {
                 .build();
 
         when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
 
@@ -408,7 +405,7 @@ class WorkorderInvoiceServiceTest {
                 .thenReturn(List.of(completedService, cancelledService));
         when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
                 .thenReturn(List.of(completedPart, cancelledPart));
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
         when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                 .thenReturn(InvoiceGenerationResponse.builder()
                         .invoiceId(UUID.randomUUID())
@@ -426,19 +423,12 @@ class WorkorderInvoiceServiceTest {
 
         List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
         
-        // Verify we have exactly 2 distinct parts (duplicate was filtered out)
+        // Only the completed items should be included
         assertThat(lineItems).hasSize(2);
-        
-        // Verify both parts are present (Oil Filter should appear once, not twice)
-        assertThat(lineItems)
-                .extracting(InvoiceLineItem::getDescription)
-                .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
-        
-        // Verify amounts are correct (no double-billing - Oil Filter $15 + Standalone Part $25 = $40)
-        BigDecimal totalAmount = lineItems.stream()
-                .map(InvoiceLineItem::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(totalAmount).isEqualByComparingTo("40.0000");
+        assertThat(lineItems).extracting(InvoiceLineItem::getDescription)
+                .containsExactlyInAnyOrder("Completed Service", "Completed Part");
+        assertThat(lineItems).extracting(InvoiceLineItem::getDescription)
+                .doesNotContain("Cancelled Service", "Cancelled Part");
     }
 
     @Test
