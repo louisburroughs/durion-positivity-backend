@@ -104,9 +104,7 @@ public class WorkorderInvoiceService {
             response.setApprovalId(workorder.getApprovalId());
         }
 
-        workorder.setInvoiceId(response.getInvoiceId());
-        workorderRepository.save(workorder);
-
+        // Register idempotency key first (if provided) to detect race conditions before persisting
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             try {
                 idempotencyService.registerInvoiceKey(idempotencyKey, response.getInvoiceId());
@@ -153,6 +151,10 @@ public class WorkorderInvoiceService {
                 }
             }
         }
+
+        // Persist the workorder invoice link after successful idempotency key registration
+        workorder.setInvoiceId(response.getInvoiceId());
+        workorderRepository.save(workorder);
 
         return response;
     }
