@@ -2,6 +2,8 @@ package com.positivity.workorder.service;
 
 import com.positivity.workorder.internal.entity.*;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
@@ -13,7 +15,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,6 +31,8 @@ public class WorkorderStateMachine {
     private final WorkorderRepository workorderRepository;
     private final WorkorderStateTransitionRepository transitionRepository;
     private final WorkorderSnapshotRepository snapshotRepository;
+    private final WorkorderServiceRepository workorderServiceRepository;
+    private final WorkorderPartRepository workorderPartRepository;
     private final ChangeRequestRepository changeRequestRepository;
     private final AuditEventRepository auditEventRepository;
     private final ObjectMapper objectMapper;
@@ -35,10 +44,31 @@ public class WorkorderStateMachine {
             WorkorderStatus.AWAITING_APPROVAL,
             WorkorderStatus.READY_FOR_PICKUP);
 
-    @Transactional
+    private static final Set<WorkorderItemStatus> TERMINAL_ITEM_STATUSES = Set.of(
+            WorkorderItemStatus.COMPLETED,
+            WorkorderItemStatus.CANCELLED);
+
+    private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES = Set.of(
+            WorkorderItemStatus.CANCELLED);
+
+    private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
+
+    public record CompletionPreconditions(
+            UUID workorderId,
+            String currentStatus,
+            boolean canComplete,
+            List<String> checklistItems,
+            List<String> blockingReasons,
+            int unresolvedApprovalGatedChangeRequests,
+            int nonTerminalServiceItems,
+            int nonTerminalPartItems,
+            boolean emergencyDenialAcknowledged,
+            boolean hasBillableItems) {
+    }
+
     public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, UUID userId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
         WorkorderStatus fromStatus = workorder.getStatus();
 
@@ -61,27 +91,88 @@ public class WorkorderStateMachine {
         log.info("Workorder {} transitioned from {} to {} by user {}", workorderId, fromStatus, toStatus, userId);
     }
 
-    /**
-     * Validate that work order meets all requirements for completion.
-     * Throws IllegalStateException if requirements are not met.
-     */
     private void validateCompletionRequirements(UUID workorderId) {
-        // Check for pending approval-gated change requests
-        if (changeRequestService.hasPendingApprovalGatedRequests(workorderId)) {
-            List<ChangeRequest> pendingRequests = changeRequestService.getPendingApprovalGatedRequests(workorderId);
-            throw new IllegalStateException(
-                    String.format(
-                            "Workorder %s cannot be completed. There are %s unresolved approval-gated change request(s) pending approval",
-                            workorderId, pendingRequests.size()));
+        CompletionPreconditions preconditions = evaluateCompletionPreconditions(workorderId);
+        if (!preconditions.canComplete()) {
+            String message = preconditions.blockingReasons().isEmpty()
+                    ? String.format("Workorder %s cannot be completed due to unmet preconditions", workorderId)
+                    : String.join("; ", preconditions.blockingReasons());
+            throw new IllegalStateException(message);
         }
+    }
 
-        // Check for declined emergency items requiring acknowledgment
-        if (!changeRequestService.canCloseWorkorder(workorderId)) {
-            throw new IllegalStateException(
-                    String.format(
-                            "Workorder %s cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
-                            workorderId));
+    public CompletionPreconditions evaluateCompletionPreconditions(UUID workorderId) {
+        Workorder workorder = workorderRepository.findById(workorderId)
+                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+
+        List<ChangeRequest> unresolvedApprovalGated = changeRequestRepository
+                .findByWorkorderIdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
+                .stream()
+                .filter(changeRequest -> Boolean.TRUE.equals(changeRequest.getIsApprovalGated()))
+                .toList();
+
+        List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
+                .findByWorkOrder_Id(workorderId);
+
+        List<WorkorderPart> parts = loadDeduplicatedWorkorderParts(workorderId);
+
+        long nonTerminalServiceItems = services.stream()
+                .filter(service -> service.getStatus() == null || !TERMINAL_ITEM_STATUSES.contains(service.getStatus()))
+                .count();
+
+        long nonTerminalPartItems = parts.stream()
+                .filter(part -> part.getStatus() == null || !TERMINAL_ITEM_STATUSES.contains(part.getStatus()))
+                .count();
+
+        boolean emergencyDenialAcknowledged = changeRequestService.canCloseWorkorder(workorderId);
+        boolean hasBillableItems = !services.isEmpty() || !parts.isEmpty();
+
+        List<String> blockingReasons = new ArrayList<>();
+        if (!unresolvedApprovalGated.isEmpty()) {
+            blockingReasons.add(String.format(
+                    "Workorder %s cannot be completed. There are %s unresolved approval-gated change request(s) pending approval",
+                    workorderId, unresolvedApprovalGated.size()));
         }
+        if (nonTerminalServiceItems > 0) {
+            blockingReasons.add(String.format(
+                    "Workorder %s cannot be completed. There are %s service item(s) not in COMPLETED/CANCELLED state",
+                    workorderId, nonTerminalServiceItems));
+        }
+        if (nonTerminalPartItems > 0) {
+            blockingReasons.add(String.format(
+                    "Workorder %s cannot be completed. There are %s part item(s) not in COMPLETED/CANCELLED state",
+                    workorderId, nonTerminalPartItems));
+        }
+        if (!emergencyDenialAcknowledged) {
+            blockingReasons.add(String.format(
+                    "Workorder %s cannot be completed. There are declined emergency/safety items that require customer denial acknowledgment",
+                    workorderId));
+        }
+        if (!hasBillableItems) {
+            blockingReasons.add(String.format(
+                    "Workorder %s cannot be completed. There are no billable service or part items for final snapshot",
+                    workorderId));
+        }
+        List<String> checklistItems = List.of(
+                "All workorder services are COMPLETED or CANCELLED",
+                "All workorder parts are COMPLETED or CANCELLED",
+                "No unresolved approval-gated change requests",
+                "All emergency/safety denial acknowledgments are captured",
+                "At least one billable service or part exists for final snapshot");
+
+        boolean canComplete = blockingReasons.isEmpty();
+
+        return new CompletionPreconditions(
+                workorderId,
+                workorder.getStatus().name(),
+                canComplete,
+                checklistItems,
+                blockingReasons,
+                unresolvedApprovalGated.size(),
+                (int) nonTerminalServiceItems,
+                (int) nonTerminalPartItems,
+                emergencyDenialAcknowledged,
+                hasBillableItems);
     }
 
     /**
@@ -94,7 +185,7 @@ public class WorkorderStateMachine {
     @Transactional
     public void startWorkorder(UUID workorderId, UUID userId, String reason) {
         Workorder workorder = workorderRepository.findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
         if (!WorkorderStatus.getStartEligibleStatuses().contains(workorder.getStatus())) {
             throw new IllegalStateException(
@@ -118,11 +209,9 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
-    // TODO: Consider updating this method to accept String username instead of UUID userId
-    // for consistency with the new user tracking pattern (see EstimateService changes)
     public void completeWorkorder(UUID workorderId, UUID userId, String completionNotes) {
         Workorder workorder = workorderRepository.findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
 
         WorkorderStatus currentStatus = workorder.getStatus();
 
@@ -143,14 +232,19 @@ public class WorkorderStateMachine {
                             workorderId, currentStatus, COMPLETION_ELIGIBLE_STATUSES));
         }
 
-        // Capture snapshot before completion
-        captureSnapshot(workorder, userId, "WORK_COMPLETION", "Capturing state before completion");
+        // Finalize immutable billable scope snapshot before completion transition
+        captureBillableScopeSnapshot(workorder, userId, completionNotes);
 
         // Set completion fields
         Instant completedAt = Instant.now();
         workorder.setCompletedAt(completedAt);
         workorder.setCompletedBy(userId);
         workorder.setCompletionNotes(completionNotes);
+        workorder.setIsReopened(false);
+        workorder.setReopenedAt(null);
+        workorder.setReopenedBy(null);
+        workorder.setReopenReason(null);
+        workorderRepository.save(workorder);
 
         // Transition to COMPLETED state
         transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, userId, "Work Order Completed");
@@ -163,6 +257,111 @@ public class WorkorderStateMachine {
     }
 
     @Transactional
+    public Workorder reopenCompletedWorkorder(UUID workorderId, UUID userId, String reopenReason) {
+        Workorder workorder = workorderRepository.findById(workorderId)
+                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+
+        if (reopenReason == null || reopenReason.isBlank()) {
+            throw new IllegalStateException("Reopen reason is required");
+        }
+
+        if (workorder.getStatus() != WorkorderStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    String.format("Workorder %s is not in COMPLETED status and cannot be reopened", workorderId));
+        }
+
+        captureSnapshot(workorder, userId, "BILLABLE_SCOPE_SUPERSEDED", reopenReason);
+
+        Instant reopenedAt = Instant.now();
+        workorder.setIsReopened(true);
+        workorder.setReopenedAt(reopenedAt);
+        workorder.setReopenedBy(userId);
+        workorder.setReopenReason(reopenReason);
+
+        Workorder saved = workorderRepository.save(workorder);
+
+        Map<String, Object> auditDetails = new LinkedHashMap<>();
+        auditDetails.put("state", "COMPLETED");
+        auditDetails.put("isReopened", true);
+        auditDetails.put("reopenReason", reopenReason);
+
+        String auditDetailsJson;
+        try {
+            auditDetailsJson = objectMapper.writeValueAsString(auditDetails);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize workorder reopen audit details", e);
+        }
+
+        createAuditEvent(
+                workorderId,
+                userId.toString(),
+                "WORKORDER_REOPENED",
+                auditDetailsJson);
+
+        log.info("Workorder {} reopened by user {} at {}", workorderId, userId, reopenedAt);
+        return saved;
+    }
+
+    public void captureBillableScopeSnapshot(Workorder workorder, UUID userId, String completionNotes) {
+        List<com.positivity.workorder.internal.entity.WorkorderService> services = workorderServiceRepository
+                .findByWorkOrder_Id(workorder.getId());
+
+        List<WorkorderPart> parts = loadDeduplicatedWorkorderParts(workorder.getId());
+
+        BigDecimal serviceTotal = services.stream()
+                .filter(service -> !isExcludedFromBillableTotal(service.getStatus()))
+                .map(com.positivity.workorder.internal.entity.WorkorderService::getLineTotal)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal partTotal = parts.stream()
+                .filter(part -> !isExcludedFromBillableTotal(part.getStatus()))
+                .map(WorkorderPart::getLineTotal)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("workorderId", workorder.getId());
+        payload.put("status", workorder.getStatus());
+        payload.put("serviceCount", services.size());
+        payload.put("partCount", parts.size());
+        payload.put("serviceTotal", serviceTotal);
+        payload.put("partTotal", partTotal);
+        payload.put("grandTotal", serviceTotal.add(partTotal));
+        payload.put("completionNotes", completionNotes);
+        payload.put("capturedAt", Instant.now());
+
+        captureStructuredSnapshot(workorder, userId, "BILLABLE_SCOPE_FINALIZED", payload,
+                "Final billable scope snapshot before completion");
+    }
+
+    public void captureStructuredSnapshot(
+            Workorder workorder,
+            UUID userId,
+            String snapshotType,
+            Map<String, Object> snapshotPayload,
+            String reason) {
+        try {
+            String snapshotData = objectMapper.writeValueAsString(snapshotPayload);
+
+            WorkorderSnapshot snapshot = WorkorderSnapshot.builder()
+                    .workorderId(workorder.getId())
+                    .status(workorder.getStatus())
+                    .capturedBy(userId)
+                    .snapshotType(snapshotType)
+                    .snapshotData(snapshotData)
+                    .reason(reason)
+                    .capturedAt(Instant.now())
+                    .build();
+
+            snapshotRepository.save(snapshot);
+            log.info("Captured structured snapshot {} for Workorder {}", snapshotType, workorder.getId());
+        } catch (Exception e) {
+            log.error("Failed to capture structured snapshot for Workorder {}", workorder.getId(), e);
+            throw new IllegalStateException("Failed to capture structured workorder snapshot", e);
+        }
+    }
+
     public void captureSnapshot(Workorder workorder, UUID userId, String snapshotType, String reason) {
         try {
             String snapshotData = objectMapper.writeValueAsString(workorder);
@@ -182,7 +381,7 @@ public class WorkorderStateMachine {
             log.info("Captured snapshot {} for Workorder {}", snapshotType, workorder.getId());
         } catch (Exception e) {
             log.error("Failed to capture snapshot for Workorder " + workorder.getId(), e);
-            throw new RuntimeException("Failed to capture work order snapshot", e);
+            throw new IllegalStateException("Failed to capture workorder snapshot", e);
         }
     }
 
@@ -198,6 +397,24 @@ public class WorkorderStateMachine {
                 .build();
 
         transitionRepository.save(transition);
+    }
+
+    private List<WorkorderPart> loadDeduplicatedWorkorderParts(UUID workorderId) {
+        Map<UUID, WorkorderPart> partsById = new LinkedHashMap<>();
+
+        for (WorkorderPart part : workorderPartRepository.findByWorkorderId(workorderId)) {
+            partsById.putIfAbsent(part.getId(), part);
+        }
+
+        for (WorkorderPart part : workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)) {
+            partsById.putIfAbsent(part.getId(), part);
+        }
+
+        return new ArrayList<>(partsById.values());
+    }
+
+    private boolean isExcludedFromBillableTotal(WorkorderItemStatus status) {
+        return status != null && EXCLUDED_BILLABLE_TOTAL_STATUSES.contains(status);
     }
 
     public List<WorkorderStateTransition> getTransitionHistory(UUID workorderId) {

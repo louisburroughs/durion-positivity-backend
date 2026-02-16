@@ -66,11 +66,22 @@ public class Workorder {
     @Column(columnDefinition = "TEXT")
     private String completionNotes;
 
+    // Controlled reopen fields (CAP:006)
+    @Builder.Default
+    private Boolean isReopened = false;
+
+    private Instant reopenedAt;
+    private UUID reopenedBy;
+
+    @Column(columnDefinition = "TEXT")
+    private String reopenReason;
+
     /**
      * Check if the work order is locked from modifications.
      * A work order is locked if it's in COMPLETED or CANCELLED status.
      */
     public boolean isLocked() {
-        return status == WorkorderStatus.COMPLETED || status == WorkorderStatus.CANCELLED;
+        return status == WorkorderStatus.CANCELLED
+                || (status == WorkorderStatus.COMPLETED && !Boolean.TRUE.equals(isReopened));
     }
 }
