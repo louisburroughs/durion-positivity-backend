@@ -75,6 +75,18 @@ class UserPersonTranslationServiceTest {
     }
 
     @Test
+    void getUserIdForPerson_returnsEmptyWhenOnlyInactiveLinkExists() {
+        UUID personUuid = UUID.randomUUID();
+        // Repository is queried for ACTIVE links only, so returns empty if only INACTIVE exists
+        when(userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE))
+            .thenReturn(Optional.empty());
+
+        Optional<String> result = userPersonTranslationService.getUserIdForPerson(personUuid);
+
+        assertEquals(Optional.empty(), result);
+    }
+
+    @Test
     void isUserLinkedToPerson_returnsTrueWhenLinkExists() {
         String userId = "user-123";
         UUID personUuid = UUID.randomUUID();
