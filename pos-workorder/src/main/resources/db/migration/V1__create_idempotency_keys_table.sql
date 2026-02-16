@@ -3,7 +3,7 @@
 
 CREATE TABLE idempotency_keys (
     id UUID PRIMARY KEY,
-    key_value VARCHAR(255) NOT NULL UNIQUE,
+    key_value VARCHAR2(255) NOT NULL UNIQUE,
     workorder_id UUID,
     change_request_id UUID,
     labor_entry_id UUID,

@@ -1,10 +1,7 @@
 package com.positivity.invoice.internal.service;
 
-import com.positivity.invoice.internal.client.TaxCalculationRequest;
-import com.positivity.invoice.internal.client.TaxCalculationResponse;
 import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
-import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.InvoiceItemResponse;
@@ -18,6 +15,7 @@ import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.service.InvoiceService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.InvoiceCreationRequest;
+import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import org.jspecify.annotations.NonNull;
@@ -52,6 +50,22 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @NonNull
+    public InvoiceGenerationResponse createInvoice(@NonNull InvoiceGenerationRequest request) {
+        if (request.getWorkorderId() == null) {
+            throw new IllegalArgumentException("workorderId is required");
+        }
+
+        InvoiceCreationRequest creationRequest = InvoiceCreationRequest.builder()
+                .workorderId(request.getWorkorderId())
+                .idempotencyKey(request.getIdempotencyKey())
+                .lineItems(List.of())
+                .build();
+
+        return createInvoice(creationRequest);
+    }
+
+    @Override
+    @NonNull
     public InvoiceGenerationResponse createInvoice(@NonNull InvoiceCreationRequest request) {
         if (request.getWorkorderId() == null) {
             throw new IllegalArgumentException("workorderId is required");
@@ -73,7 +87,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @NonNull
-    public InvoiceDetailsResponse addAdjustment(@NonNull UUID invoiceId, @NonNull AdjustmentRequest request) {
+    public InvoiceDetailsResponse applyAdjustment(@NonNull UUID invoiceId, @NonNull AdjustmentRequest request) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
 
@@ -95,11 +109,11 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @NonNull
-    public InvoiceDetailsResponse finalizeInvoice(@NonNull UUID invoiceId, @NonNull FinalizationRequest request) {
+    public InvoiceDetailsResponse finalizeInvoice(@NonNull UUID invoiceId) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
 
-        if (invoice.getStatus() == InvoiceStatus.ISSUED) {
+        if (invoice.getStatus() == InvoiceStatus.FINALIZED) {
             return toDetailsResponse(invoice);
         }
 
@@ -109,14 +123,9 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice.setInvoiceNumber(generateInvoiceNumber(invoice));
         }
 
-        invoice.setStatus(InvoiceStatus.ISSUED);
-        invoice.setFinalizedAt(request.getFinalizedAt() == null ? Instant.now() : request.getFinalizedAt());
-
-        String finalizedBy = request.getFinalizedBy();
-        if (finalizedBy == null || finalizedBy.isBlank()) {
-            finalizedBy = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
-        }
-        invoice.setFinalizedBy(finalizedBy);
+        invoice.setStatus(InvoiceStatus.FINALIZED);
+        invoice.setFinalizedAt(Instant.now());
+        invoice.setFinalizedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
 
         Invoice saved = invoiceRepository.save(invoice);
         return toDetailsResponse(saved);
@@ -129,6 +138,8 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setEstimateId(request.getEstimateId());
         invoice.setApprovalId(request.getApprovalId());
         invoice.setStatus(InvoiceStatus.DRAFT);
+        invoice.setAdjustments(BigDecimal.ZERO);
+        invoice.setAdjustmentsAmount(BigDecimal.ZERO);
 
         List<InvoiceLineItem> lineItems = request.getLineItems() == null ? List.of() : request.getLineItems();
         for (InvoiceLineItem sourceItem : lineItems) {
@@ -137,24 +148,19 @@ public class InvoiceServiceImpl implements InvoiceService {
             item.setDescription(
                     description.isBlank()
                             ? "Invoice line item"
-                            : description);
+                            : description.trim());
             item.setQuantity(safeMoney(sourceItem.getQuantity(), BigDecimal.ONE));
             item.setUnitPrice(safeMoney(sourceItem.getUnitPrice(), BigDecimal.ZERO));
-            item.setAmount(resolveLineAmount(sourceItem));
+            item.setLineTotal(resolveLineTotal(sourceItem));
             invoice.addItem(item);
         }
 
         BigDecimal subtotal = invoice.getItems().stream()
-                .map(InvoiceItem::getAmount)
+                .map(InvoiceItem::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(4, RoundingMode.HALF_UP);
 
-        TaxCalculationRequest taxRequest = new TaxCalculationRequest();
-        taxRequest.setSubtotal(subtotal);
-        TaxCalculationResponse taxResponse = taxServiceClient.calculateTax(taxRequest);
-
         invoice.setSubtotal(subtotal);
-        invoice.setTaxAmount(safeMoney(taxResponse.getTaxAmount(), BigDecimal.ZERO));
         recalculateTotals(invoice);
 
         Invoice saved = invoiceRepository.save(invoice);
@@ -186,16 +192,29 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     private void recalculateTotals(@NonNull Invoice invoice) {
-        BigDecimal adjustmentTotal = invoice.getAdjustments().stream()
+        BigDecimal adjustmentTotal = invoice.getAdjustmentEntries().stream()
                 .map(this::toSignedAdjustmentAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal total = invoice.getSubtotal()
-                .add(invoice.getTaxAmount())
-                .add(adjustmentTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(4, RoundingMode.HALF_UP);
 
-        invoice.setTotalAmount(total);
+        invoice.setAdjustments(adjustmentTotal);
+        invoice.setAdjustmentsAmount(adjustmentTotal);
+
+        BigDecimal taxableSubtotal = invoice.getSubtotal().add(adjustmentTotal);
+        if (taxableSubtotal.compareTo(BigDecimal.ZERO) < 0) {
+            taxableSubtotal = BigDecimal.ZERO;
+        }
+
+        BigDecimal tax = taxServiceClient
+                .calculateTax(taxableSubtotal, invoice.getPartyId())
+                .setScale(4, RoundingMode.HALF_UP);
+        invoice.setTax(tax);
+
+        BigDecimal total = invoice.getSubtotal()
+                .add(tax)
+                .add(adjustmentTotal)
+                .setScale(4, RoundingMode.HALF_UP);
+        invoice.setTotal(total);
     }
 
     @NonNull
@@ -209,7 +228,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @NonNull
-    private BigDecimal resolveLineAmount(@NonNull InvoiceLineItem sourceItem) {
+    private BigDecimal resolveLineTotal(@NonNull InvoiceLineItem sourceItem) {
         return sourceItem.getAmount().setScale(4, RoundingMode.HALF_UP);
     }
 
@@ -238,8 +257,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .estimateId(invoice.getEstimateId())
                 .approvalId(invoice.getApprovalId())
                 .subtotal(invoice.getSubtotal())
-                .taxAmount(invoice.getTaxAmount())
-                .totalAmount(invoice.getTotalAmount())
+                .taxAmount(invoice.getTax())
+                .totalAmount(invoice.getTotal())
                 .createdAt(invoice.getCreatedAt())
                 .build();
     }
@@ -252,26 +271,28 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setWorkorderId(invoice.getWorkorderId());
         response.setEstimateId(invoice.getEstimateId());
         response.setApprovalId(invoice.getApprovalId());
-        response.setCustomerId(invoice.getCustomerId());
+        response.setPartyId(invoice.getPartyId());
         response.setStatus(invoice.getStatus());
         response.setSubtotal(invoice.getSubtotal());
-        response.setTaxAmount(invoice.getTaxAmount());
-        response.setTotalAmount(invoice.getTotalAmount());
+        response.setTax(invoice.getTax());
+        response.setTotal(invoice.getTotal());
+        response.setAdjustments(invoice.getAdjustments());
         response.setCreatedAt(invoice.getCreatedAt());
+        response.setUpdatedAt(invoice.getUpdatedAt());
         response.setFinalizedAt(invoice.getFinalizedAt());
         response.setFinalizedBy(invoice.getFinalizedBy());
 
         List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
-                .sorted(Comparator.comparing(item -> item.getId().toString()))
+                .sorted(Comparator.comparing(item -> Objects.requireNonNullElse(item.getId(), UUID.randomUUID())))
                 .map(this::toItemResponse)
                 .toList();
         response.setItems(new ArrayList<>(itemResponses));
 
-        List<InvoiceAdjustmentResponse> adjustmentResponses = invoice.getAdjustments().stream()
-                .sorted(Comparator.comparing(adj -> adj.getCreatedAt().toEpochMilli()))
+        List<InvoiceAdjustmentResponse> adjustmentResponses = invoice.getAdjustmentEntries().stream()
+                .sorted(Comparator.comparing(InvoiceAdjustment::getCreatedAt))
                 .map(this::toAdjustmentResponse)
                 .toList();
-        response.setAdjustments(new ArrayList<>(adjustmentResponses));
+        response.setAdjustmentEntries(new ArrayList<>(adjustmentResponses));
 
         return response;
     }
@@ -283,7 +304,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         response.setDescription(item.getDescription());
         response.setQuantity(item.getQuantity());
         response.setUnitPrice(item.getUnitPrice());
-        response.setAmount(item.getAmount());
+        response.setAmount(item.getLineTotal());
         response.setWorkorderItemId(item.getWorkorderItemId());
         return response;
     }

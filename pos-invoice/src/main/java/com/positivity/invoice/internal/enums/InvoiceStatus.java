@@ -5,7 +5,5 @@ package com.positivity.invoice.internal.enums;
  */
 public enum InvoiceStatus {
     DRAFT,
-    ISSUED,
-    PAID,
-    CANCELLED
+    FINALIZED
 }

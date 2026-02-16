@@ -4,6 +4,8 @@ import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -28,7 +30,7 @@ public class AdjustmentRequest {
         return type;
     }
 
-    public void setType(@Nullable InvoiceAdjustmentType type) {
+    public void setType(@NonNull InvoiceAdjustmentType type) {
         this.type = type;
     }
 
@@ -37,7 +39,7 @@ public class AdjustmentRequest {
         return amount;
     }
 
-    public void setAmount(@Nullable BigDecimal amount) {
+    public void setAmount(@NonNull BigDecimal amount) {
         this.amount = amount;
     }
 
@@ -46,7 +48,7 @@ public class AdjustmentRequest {
         return reason;
     }
 
-    public void setReason(@Nullable String reason) {
+    public void setReason(@NonNull String reason) {
         this.reason = reason;
     }
 
@@ -55,7 +57,7 @@ public class AdjustmentRequest {
         return authorizedBy;
     }
 
-    public void setAuthorizedBy(@Nullable String authorizedBy) {
+    public void setAuthorizedBy(@NonNull String authorizedBy) {
         this.authorizedBy = authorizedBy;
     }
 }

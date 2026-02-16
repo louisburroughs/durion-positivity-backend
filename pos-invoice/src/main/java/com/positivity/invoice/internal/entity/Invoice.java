@@ -10,7 +10,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -42,7 +44,7 @@ public class Invoice {
     private UUID approvalId;
 
     @Column(name = "customer_id", length = 64)
-    private String customerId;
+    private String partyId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -52,13 +54,19 @@ public class Invoice {
     private BigDecimal subtotal = BigDecimal.ZERO;
 
     @Column(name = "tax_amount", nullable = false, precision = 19, scale = 4)
-    private BigDecimal taxAmount = BigDecimal.ZERO;
+    private BigDecimal tax = BigDecimal.ZERO;
 
     @Column(name = "total_amount", nullable = false, precision = 19, scale = 4)
-    private BigDecimal totalAmount = BigDecimal.ZERO;
+    private BigDecimal total = BigDecimal.ZERO;
+
+    @Column(name = "adjustments_amount", nullable = false, precision = 19, scale = 4)
+    private BigDecimal adjustmentsAmount = BigDecimal.ZERO;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     @Column(name = "finalized_at")
     private Instant finalizedAt;
@@ -74,7 +82,10 @@ public class Invoice {
     private List<InvoiceItem> items = new ArrayList<>();
 
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<InvoiceAdjustment> adjustments = new ArrayList<>();
+    private List<InvoiceAdjustment> adjustmentEntries = new ArrayList<>();
+
+    @Transient
+    private BigDecimal adjustments = BigDecimal.ZERO;
 
     @PrePersist
     public void prePersist() {
@@ -84,17 +95,41 @@ public class Invoice {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
         if (status == null) {
             status = InvoiceStatus.DRAFT;
         }
         if (subtotal == null) {
             subtotal = BigDecimal.ZERO;
         }
-        if (taxAmount == null) {
-            taxAmount = BigDecimal.ZERO;
+        if (tax == null) {
+            tax = BigDecimal.ZERO;
         }
-        if (totalAmount == null) {
-            totalAmount = BigDecimal.ZERO;
+        if (total == null) {
+            total = BigDecimal.ZERO;
+        }
+        if (adjustmentsAmount == null) {
+            adjustmentsAmount = BigDecimal.ZERO;
+        }
+        if (adjustments == null) {
+            adjustments = BigDecimal.ZERO;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = Instant.now();
+        if (adjustments == null) {
+            adjustments = BigDecimal.ZERO;
+        }
+        adjustmentsAmount = adjustments;
+        if (tax == null) {
+            tax = BigDecimal.ZERO;
+        }
+        if (total == null) {
+            total = BigDecimal.ZERO;
         }
     }
 
@@ -104,7 +139,7 @@ public class Invoice {
     }
 
     public void addAdjustment(@NonNull InvoiceAdjustment adjustment) {
-        adjustments.add(adjustment);
+        adjustmentEntries.add(adjustment);
         adjustment.setInvoice(this);
     }
 
@@ -154,12 +189,12 @@ public class Invoice {
     }
 
     @Nullable
-    public String getCustomerId() {
-        return customerId;
+    public String getPartyId() {
+        return partyId;
     }
 
-    public void setCustomerId(@Nullable String customerId) {
-        this.customerId = customerId;
+    public void setPartyId(@Nullable String partyId) {
+        this.partyId = partyId;
     }
 
     @NonNull
@@ -181,21 +216,30 @@ public class Invoice {
     }
 
     @NonNull
-    public BigDecimal getTaxAmount() {
-        return taxAmount;
+    public BigDecimal getTax() {
+        return tax;
     }
 
-    public void setTaxAmount(@NonNull BigDecimal taxAmount) {
-        this.taxAmount = taxAmount;
+    public void setTax(@NonNull BigDecimal tax) {
+        this.tax = tax;
     }
 
     @NonNull
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
+    public BigDecimal getTotal() {
+        return total;
     }
 
-    public void setTotalAmount(@NonNull BigDecimal totalAmount) {
-        this.totalAmount = totalAmount;
+    public void setTotal(@NonNull BigDecimal total) {
+        this.total = total;
+    }
+
+    @NonNull
+    public BigDecimal getAdjustmentsAmount() {
+        return adjustmentsAmount;
+    }
+
+    public void setAdjustmentsAmount(@NonNull BigDecimal adjustmentsAmount) {
+        this.adjustmentsAmount = adjustmentsAmount;
     }
 
     @NonNull
@@ -205,6 +249,15 @@ public class Invoice {
 
     public void setCreatedAt(@NonNull Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    @NonNull
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(@NonNull Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
     @Nullable
@@ -244,11 +297,20 @@ public class Invoice {
     }
 
     @NonNull
-    public List<InvoiceAdjustment> getAdjustments() {
+    public List<InvoiceAdjustment> getAdjustmentEntries() {
+        return adjustmentEntries;
+    }
+
+    public void setAdjustmentEntries(@NonNull List<InvoiceAdjustment> adjustments) {
+        this.adjustmentEntries = adjustments;
+    }
+
+    @NonNull
+    public BigDecimal getAdjustments() {
         return adjustments;
     }
 
-    public void setAdjustments(@NonNull List<InvoiceAdjustment> adjustments) {
+    public void setAdjustments(@NonNull BigDecimal adjustments) {
         this.adjustments = adjustments;
     }
 }

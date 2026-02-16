@@ -16,16 +16,18 @@ public class InvoiceDetailsResponse {
     private UUID workorderId;
     private UUID estimateId;
     private UUID approvalId;
-    private String customerId;
+    private String partyId;
     private InvoiceStatus status;
     private BigDecimal subtotal;
-    private BigDecimal taxAmount;
-    private BigDecimal totalAmount;
+    private BigDecimal tax;
+    private BigDecimal total;
+    private BigDecimal adjustments;
     private Instant createdAt;
+    private Instant updatedAt;
     private Instant finalizedAt;
     private String finalizedBy;
     private List<InvoiceItemResponse> items = new ArrayList<>();
-    private List<InvoiceAdjustmentResponse> adjustments = new ArrayList<>();
+    private List<InvoiceAdjustmentResponse> adjustmentEntries = new ArrayList<>();
 
     @Nullable
     public UUID getInvoiceId() {
@@ -73,12 +75,12 @@ public class InvoiceDetailsResponse {
     }
 
     @Nullable
-    public String getCustomerId() {
-        return customerId;
+    public String getPartyId() {
+        return partyId;
     }
 
-    public void setCustomerId(@Nullable String customerId) {
-        this.customerId = customerId;
+    public void setPartyId(@Nullable String partyId) {
+        this.partyId = partyId;
     }
 
     @Nullable
@@ -100,21 +102,30 @@ public class InvoiceDetailsResponse {
     }
 
     @Nullable
-    public BigDecimal getTaxAmount() {
-        return taxAmount;
+    public BigDecimal getTax() {
+        return tax;
     }
 
-    public void setTaxAmount(@Nullable BigDecimal taxAmount) {
-        this.taxAmount = taxAmount;
+    public void setTax(@Nullable BigDecimal tax) {
+        this.tax = tax;
     }
 
     @Nullable
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
+    public BigDecimal getTotal() {
+        return total;
     }
 
-    public void setTotalAmount(@Nullable BigDecimal totalAmount) {
-        this.totalAmount = totalAmount;
+    public void setTotal(@Nullable BigDecimal total) {
+        this.total = total;
+    }
+
+    @Nullable
+    public BigDecimal getAdjustments() {
+        return adjustments;
+    }
+
+    public void setAdjustments(@Nullable BigDecimal adjustments) {
+        this.adjustments = adjustments;
     }
 
     @Nullable
@@ -124,6 +135,15 @@ public class InvoiceDetailsResponse {
 
     public void setCreatedAt(@Nullable Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    @Nullable
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(@Nullable Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
     @Nullable
@@ -152,11 +172,12 @@ public class InvoiceDetailsResponse {
         this.items = items;
     }
 
-    public List<InvoiceAdjustmentResponse> getAdjustments() {
-        return adjustments;
+    public List<InvoiceAdjustmentResponse> getAdjustmentEntries() {
+        return adjustmentEntries;
     }
 
-    public void setAdjustments(List<InvoiceAdjustmentResponse> adjustments) {
-        this.adjustments = adjustments;
+    public void setAdjustmentEntries(List<InvoiceAdjustmentResponse> adjustments) {
+        this.adjustmentEntries = adjustments;
     }
+
 }
