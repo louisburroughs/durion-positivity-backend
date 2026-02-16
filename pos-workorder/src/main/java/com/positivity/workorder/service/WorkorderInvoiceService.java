@@ -156,8 +156,10 @@ public class WorkorderInvoiceService {
 
         // Deduplicate by part ID as a safety measure (in case parts have both references)
         // This protects against over-billing if the same part appears in both queries
+        // Use explicit ID-based deduplication to ensure correctness regardless of equals/hashCode implementation
+        var seenIds = new java.util.HashSet<UUID>();
         parts = parts.stream()
-                .distinct() // Uses equals/hashCode on WorkorderPart entity (compares by id)
+                .filter(part -> seenIds.add(part.getId()))
                 .toList();
 
         parts.forEach(part -> lineItems.add(InvoiceLineItem.builder()
