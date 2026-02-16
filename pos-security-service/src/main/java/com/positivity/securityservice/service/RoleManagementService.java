@@ -7,7 +7,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import org.jspecify.annotations.NonNull;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -56,7 +56,7 @@ public interface RoleManagementService {
     /**
      * Revoke a role assignment
      */
-    void revokeRoleAssignment(@NonNull UUID assignmentId, @NonNull LocalDate endDate);
+    void revokeRoleAssignment(@NonNull UUID assignmentId, @NonNull LocalDateTime endDate);
 
     /**
      * Get all roles
