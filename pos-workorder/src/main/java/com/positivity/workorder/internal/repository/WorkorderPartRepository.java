@@ -17,5 +17,12 @@ public interface WorkorderPartRepository extends JpaRepository<WorkorderPart, UU
      */
     List<WorkorderPart> findByWorkorderId(UUID workorderId);
 
+    /**
+     * Find only standalone parts (parts with direct workorder reference but no service).
+     * This avoids duplicates when parts have both workorder and workOrderService set.
+     * CAP:007 - Prevent duplicate parts in invoice line items.
+     */
+    List<WorkorderPart> findByWorkorderIdAndWorkOrderServiceIsNull(UUID workorderId);
+
     List<WorkorderPart> findByWorkOrderService_WorkOrder_Id(UUID workorderId);
 }
