@@ -70,6 +70,20 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
         }
 
         @Test
+        void getAssignments_defaultsToFalseWhenIncludeHistoryOmitted() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+                UserRoleDto assignment = UserRoleDto.builder().userId("user-1").roleCode("MANAGER").build();
+
+                // Should default to false when includeHistory is not provided
+                when(peopleAccessControlService.getPersonRoleAssignments(personUuid, false, null))
+                                .thenReturn(List.of(assignment));
+
+                mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/assignments", personUuid)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].roleCode").value("MANAGER"));
+        }
+
+        @Test
         void getAssignments_returns404WhenPersonLinkMissing() throws Exception {
                 UUID personUuid = UUID.randomUUID();
                 when(peopleAccessControlService.getPersonRoleAssignments(personUuid, true, null))
