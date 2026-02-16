@@ -182,4 +182,12 @@ public class WorkorderInvoiceService {
         BigDecimal safeUnitPrice = unitPrice == null ? BigDecimal.ZERO : unitPrice;
         return safeQuantity.multiply(safeUnitPrice);
     }
+
+    /**
+     * Determines if a workorder item status should be excluded from billable totals.
+     * Used to filter out items (like CANCELLED) that should not block invoice generation.
+     */
+    private boolean isExcludedFromBillableTotal(@Nullable WorkorderItemStatus status) {
+        return status != null && EXCLUDED_BILLABLE_TOTAL_STATUSES.contains(status);
+    }
 }
