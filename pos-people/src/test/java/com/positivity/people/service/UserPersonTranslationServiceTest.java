@@ -55,6 +55,7 @@ class UserPersonTranslationServiceTest {
         UserPersonLink link = new UserPersonLink();
         link.setPersonId(personUuid);
         link.setUserId("user-123");
+        link.setStatus(UserLinkStatus.ACTIVE);
         when(userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE))
             .thenReturn(Optional.of(link));
 
@@ -75,9 +76,9 @@ class UserPersonTranslationServiceTest {
     }
 
     @Test
-    void getUserIdForPerson_returnsEmptyWhenOnlyInactiveLinkExists() {
+    void getUserIdForPerson_returnsEmptyWhenNoActiveLinkExists() {
         UUID personUuid = UUID.randomUUID();
-        // Repository is queried for ACTIVE links only, so returns empty if only INACTIVE exists
+        // Repository is queried for ACTIVE links only, so returns empty if no ACTIVE link exists
         when(userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE))
             .thenReturn(Optional.empty());
 
