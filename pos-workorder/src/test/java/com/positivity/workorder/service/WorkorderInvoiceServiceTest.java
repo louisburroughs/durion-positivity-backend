@@ -5,6 +5,7 @@ import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
 import com.positivity.workorder.internal.client.InvoiceClient;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderItemStatus;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderService;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
@@ -245,13 +246,57 @@ class WorkorderInvoiceServiceTest {
         when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                 .thenReturn(List.of(standalonePart));
         
+    @DisplayName("generateInvoice excludes CANCELLED services and parts from invoice line items")
+    void generateInvoice_ExcludesCancelledItems() {
+        Workorder workorder = completedWorkorder();
+        
+        // Create billable items
+        WorkorderService completedService = WorkorderService.builder()
+                .description("Completed Service")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("100.0000"))
+                .lineTotal(new BigDecimal("100.0000"))
+                .status(WorkorderItemStatus.COMPLETED)
+                .build();
+        
+        WorkorderPart completedPart = WorkorderPart.builder()
+                .description("Completed Part")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("50.0000"))
+                .lineTotal(new BigDecimal("50.0000"))
+                .status(WorkorderItemStatus.COMPLETED)
+                .build();
+        
+        // Create non-billable (CANCELLED) items
+        WorkorderService cancelledService = WorkorderService.builder()
+                .description("Cancelled Service")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("200.0000"))
+                .lineTotal(new BigDecimal("200.0000"))
+                .status(WorkorderItemStatus.CANCELLED)
+                .build();
+        
+        WorkorderPart cancelledPart = WorkorderPart.builder()
+                .description("Cancelled Part")
+                .quantity(new BigDecimal("2.0000"))
+                .unitPrice(new BigDecimal("75.0000"))
+                .lineTotal(new BigDecimal("150.0000"))
+                .status(WorkorderItemStatus.CANCELLED)
+                .build();
+
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderServiceRepository.findByWorkOrder_Id(workorderId))
+                .thenReturn(List.of(completedService, cancelledService));
+        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                .thenReturn(List.of(completedPart, cancelledPart));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
         when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
                 .thenReturn(InvoiceGenerationResponse.builder()
                         .invoiceId(UUID.randomUUID())
                         .status("DRAFT")
-                        .subtotal(new BigDecimal("40.0000"))
+                        .subtotal(new BigDecimal("150.0000"))
                         .taxAmount(BigDecimal.ZERO)
-                        .totalAmount(new BigDecimal("40.0000"))
+                        .totalAmount(new BigDecimal("150.0000"))
                         .build());
         when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
