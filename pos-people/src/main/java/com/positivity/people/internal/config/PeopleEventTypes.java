@@ -60,9 +60,9 @@ public final class PeopleEventTypes {
                                                 "Waive an exception with a reason").build(),
 
                                 // UserPersonLinkController - 2 events
-                                EventTypeRegistration.write("USER_PERSON_LINK_CREATE",
+                                EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_CREATE",
                                                 "Link user to person").build(),
-                                EventTypeRegistration.write("USER_PERSON_LINK_DELETE",
+                                EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_DELETE",
                                                 "Unlink user from person").build());
         }
 }
