@@ -222,8 +222,10 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_INVOICE_GENERATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
     public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
-            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
-            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000")
+            @PathVariable UUID workorderId,
+            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000")
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
         return ResponseEntity.ok(response);
