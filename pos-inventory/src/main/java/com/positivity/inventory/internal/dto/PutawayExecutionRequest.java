@@ -1,105 +1,106 @@
-package com.positivity.inventory.internal.putaway;
+package com.positivity.inventory.internal.dto;
 
 import com.positivity.inventory.internal.domain.OverrideReasonCode;
 
 /**
  * Request DTO for executing a putaway move from staging to storage.
  * 
- * <p>Represents the clerk's scan data and optional override information.
+ * <p>
+ * Represents the clerk's scan data and optional override information.
  */
 public class PutawayExecutionRequest {
     private String skuId;
     private String sourceLocationId;
     private String destinationLocationId;
     private int quantity;
-    
+
     // Override fields (optional)
     private boolean overrideLocationCompatibility;
     private boolean overrideCapacity;
     private OverrideReasonCode overrideReasonCode;
     private String overrideJustification;
     private String approvedBy;
-    
+
     public PutawayExecutionRequest() {
     }
-    
-    public PutawayExecutionRequest(String skuId, String sourceLocationId, 
-                                   String destinationLocationId, int quantity) {
+
+    public PutawayExecutionRequest(String skuId, String sourceLocationId,
+            String destinationLocationId, int quantity) {
         this.skuId = skuId;
         this.sourceLocationId = sourceLocationId;
         this.destinationLocationId = destinationLocationId;
         this.quantity = quantity;
     }
-    
+
     // Getters and setters
     public String getSkuId() {
         return skuId;
     }
-    
+
     public void setSkuId(String skuId) {
         this.skuId = skuId;
     }
-    
+
     public String getSourceLocationId() {
         return sourceLocationId;
     }
-    
+
     public void setSourceLocationId(String sourceLocationId) {
         this.sourceLocationId = sourceLocationId;
     }
-    
+
     public String getDestinationLocationId() {
         return destinationLocationId;
     }
-    
+
     public void setDestinationLocationId(String destinationLocationId) {
         this.destinationLocationId = destinationLocationId;
     }
-    
+
     public int getQuantity() {
         return quantity;
     }
-    
+
     public void setQuantity(int quantity) {
         this.quantity = quantity;
     }
-    
+
     public boolean isOverrideLocationCompatibility() {
         return overrideLocationCompatibility;
     }
-    
+
     public void setOverrideLocationCompatibility(boolean overrideLocationCompatibility) {
         this.overrideLocationCompatibility = overrideLocationCompatibility;
     }
-    
+
     public boolean isOverrideCapacity() {
         return overrideCapacity;
     }
-    
+
     public void setOverrideCapacity(boolean overrideCapacity) {
         this.overrideCapacity = overrideCapacity;
     }
-    
+
     public OverrideReasonCode getOverrideReasonCode() {
         return overrideReasonCode;
     }
-    
+
     public void setOverrideReasonCode(OverrideReasonCode overrideReasonCode) {
         this.overrideReasonCode = overrideReasonCode;
     }
-    
+
     public String getOverrideJustification() {
         return overrideJustification;
     }
-    
+
     public void setOverrideJustification(String overrideJustification) {
         this.overrideJustification = overrideJustification;
     }
-    
+
     public String getApprovedBy() {
         return approvedBy;
     }
-    
+
     public void setApprovedBy(String approvedBy) {
         this.approvedBy = approvedBy;
     }

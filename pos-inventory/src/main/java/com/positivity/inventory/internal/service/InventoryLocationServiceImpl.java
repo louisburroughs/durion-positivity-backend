@@ -1,4 +1,4 @@
-package com.positivity.inventory.service.impl;
+package com.positivity.inventory.internal.service;
 
 import org.springframework.stereotype.Service;
 

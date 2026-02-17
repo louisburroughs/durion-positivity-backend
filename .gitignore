@@ -60,6 +60,8 @@ Durion-Processing.md
 **/Durion-Processing.md
 
 /logs/
+/logs/*.log
+
 
 ### guides that contain sensitive info ###
 /docs/SECRETS_UPDATE_SUMMARY.txt
