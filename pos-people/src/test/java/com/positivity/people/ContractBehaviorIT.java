@@ -1,19 +1,25 @@
 package com.positivity.people;
 
 import com.positivity.people.internal.client.SecurityServiceException;
+import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
+import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.client.dto.UserRoleDto;
 import com.positivity.people.service.PeopleAccessControlService;
+import com.positivity.people.service.PeopleReportsService;
+import com.positivity.people.service.TimeEntryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
@@ -28,6 +34,127 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
         @MockitoBean
         private PeopleAccessControlService peopleAccessControlService;
+
+                                @MockitoBean
+                                private TimeEntryService timeEntryService;
+
+                                @MockitoBean
+                                private PeopleReportsService peopleReportsService;
+
+                                @Test
+                                @DisplayName("happy path: attendance discrepancy report returns aggregated counts")
+                                void attendanceDiscrepancyReport_happyPath() throws Exception {
+                                                                when(peopleReportsService.getAttendanceDiscrepancyReport())
+                                                                                                                                .thenReturn(new AttendanceDiscrepancyReportResponse(
+                                                                                                                                                                                                Instant.parse("2026-02-17T10:00:00Z"),
+                                                                                                                                                                                                12,
+                                                                                                                                                                                                3,
+                                                                                                                                                                                                2));
+
+                                                                mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")))
+                                                                                                                                .andExpect(status().isOk())
+                                                                                                                                .andExpect(jsonPath("$.approvedCount").value(12))
+                                                                                                                                .andExpect(jsonPath("$.pendingApprovalCount").value(3))
+                                                                                                                                .andExpect(jsonPath("$.rejectedCount").value(2));
+                                }
+
+                                @Test
+                                @DisplayName("happy path: approve time entries returns decision results")
+                                void approveTimeEntries_happyPath() throws Exception {
+                                                                when(timeEntryService.approveEntries(anyList(), any(), any(), any()))
+                                                                                                                                .thenReturn(List.of(new TimeEntryDecisionResult(
+                                                                                                                                                                                                "11111111-1111-1111-1111-111111111111",
+                                                                                                                                                                                                true,
+                                                                                                                                                                                                null,
+                                                                                                                                                                                                null)));
+
+                                                                String payload = """
+                                                                                                                                {
+                                                                                                                                        "decisions": [
+                                                                                                                                                {
+                                                                                                                                                        "timeEntryId": "11111111-1111-1111-1111-111111111111"
+                                                                                                                                                }
+                                                                                                                                        ]
+                                                                                                                                }
+                                                                                                                                """;
+
+                                                                mockMvc.perform(withAuth(post("/v1/people/timeEntries/approve")
+                                                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                                                .content(payload)
+                                                                                                                                .header("X-User-Id", "approver-user")
+                                                                                                                                .header("X-Permissions", "people:timeEntry:approve")))
+                                                                                                                                .andExpect(status().isOk())
+                                                                                                                                .andExpect(jsonPath("$.results[0].timeEntryId")
+                                                                                                                                                                                                .value("11111111-1111-1111-1111-111111111111"))
+                                                                                                                                .andExpect(jsonPath("$.results[0].success").value(true));
+                                }
+
+                                @Test
+                                @DisplayName("validation: reject time entries requires non-empty decisions")
+                                void rejectTimeEntries_rejectsEmptyDecisions() throws Exception {
+                                                                String payload = """
+                                                                                                                                {
+                                                                                                                                        "decisions": []
+                                                                                                                                }
+                                                                                                                                """;
+
+                                                                mockMvc.perform(withAuth(post("/v1/people/timeEntries/reject")
+                                                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                                                .content(payload)))
+                                                                                                                                .andExpect(status().isBadRequest())
+                                                                                                                                .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+                                }
+
+                                @Test
+                                @DisplayName("validation: reject time entries requires rejectionReason for all decisions")
+                                void rejectTimeEntries_requiresReason() throws Exception {
+                                                                String payload = """
+                                                                                                                                {
+                                                                                                                                        "decisions": [
+                                                                                                                                                {
+                                                                                                                                                        "timeEntryId": "11111111-1111-1111-1111-111111111111"
+                                                                                                                                                }
+                                                                                                                                        ]
+                                                                                                                                }
+                                                                                                                                """;
+
+                                                                mockMvc.perform(withAuth(post("/v1/people/timeEntries/reject")
+                                                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                                                .content(payload)))
+                                                                                                                                .andExpect(status().isBadRequest())
+                                                                                                                                .andExpect(jsonPath("$.errorCode").value("REJECTION_REASON_REQUIRED"))
+                                                                                                                                .andExpect(jsonPath("$.message").value("rejectionReason is required for all decisions"));
+                                }
+
+                                @Test
+                                @DisplayName("happy path: reject time entries returns decision results")
+                                void rejectTimeEntries_happyPath() throws Exception {
+                                                                when(timeEntryService.rejectEntries(anyList(), any(), any(), any(), any()))
+                                                                                                                                .thenReturn(List.of(new TimeEntryDecisionResult(
+                                                                                                                                                                                                "11111111-1111-1111-1111-111111111111",
+                                                                                                                                                                                                true,
+                                                                                                                                                                                                null,
+                                                                                                                                                                                                null)));
+
+                                                                String payload = """
+                                                                                                                                {
+                                                                                                                                        "decisions": [
+                                                                                                                                                {
+                                                                                                                                                        "timeEntryId": "11111111-1111-1111-1111-111111111111",
+                                                                                                                                                        "rejectionReason": "Policy mismatch"
+                                                                                                                                                }
+                                                                                                                                        ]
+                                                                                                                                }
+                                                                                                                                """;
+
+                                                                mockMvc.perform(withAuth(post("/v1/people/timeEntries/reject")
+                                                                                                                                .contentType(MediaType.APPLICATION_JSON)
+                                                                                                                                .content(payload)
+                                                                                                                                .header("X-User-Id", "rejector-user")
+                                                                                                                                .header("X-Permissions", "people:timeEntry:reject")))
+                                                                                                                                .andExpect(status().isOk())
+                                                                                                                                .andExpect(jsonPath("$.results[0].success").value(true));
+                                }
 
         @Test
         @DisplayName("happy path: list assignments with includeHistory")
