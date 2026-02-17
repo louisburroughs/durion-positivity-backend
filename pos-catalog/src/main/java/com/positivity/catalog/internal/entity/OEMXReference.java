@@ -1,4 +1,4 @@
-package com.positivity.catalog.internal.model;
+package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
@@ -8,11 +8,11 @@ import lombok.Setter;
 
 import java.util.UUID;
 
+@Entity
 @Getter
 @Setter
 @Data
-@Entity
-public class Subcategory {
+public class OEMXReference {
 
     @Id
     @Column(columnDefinition = "UUID")
@@ -25,5 +25,8 @@ public class Subcategory {
         }
     }
 
-    private String name;
+    @ManyToOne
+    private ProductEntity part; // Reference to the product
+    @ManyToOne
+    private ProductEntity oemPart; // Reference to the OEM product that matches
 }

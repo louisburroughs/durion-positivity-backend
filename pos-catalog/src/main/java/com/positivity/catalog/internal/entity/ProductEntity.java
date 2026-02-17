@@ -1,4 +1,4 @@
-package com.positivity.catalog.internal.model;
+package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -111,5 +112,22 @@ public class ProductEntity implements CatalogItem {
     @Lob
     @Schema(description = "Detailed specifications of the product", example = "{\"weight\": \"5kg\", \"length\": \"30cm\"}")
     private String specifications;
+
+    @Enumerated(EnumType.STRING)
+    @Schema(description = "Lifecycle state of the product", implementation = ProductLifecycleState.class)
+    private ProductLifecycleState lifecycleState = ProductLifecycleState.ACTIVE;
+
+    @Schema(description = "UTC timestamp when lifecycle state takes effect")
+    private Instant lifecycleStateEffectiveAt;
+
+    @Column(columnDefinition = "UUID")
+    @Schema(description = "User ID that last changed the lifecycle state")
+    private UUID lastStateChangedBy;
+
+    @Schema(description = "UTC timestamp when lifecycle state was last changed")
+    private Instant lastStateChangedAt;
+
+    @Schema(description = "Reason when discontinued override permission is used")
+    private String lifecycleOverrideReason;
 
 }

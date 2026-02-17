@@ -1,7 +1,8 @@
-package com.positivity.catalog.internal.model;
+package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,9 +10,10 @@ import java.util.UUID;
 
 @Getter
 @Setter
+@Data
 @Entity
-@Table(name = "non_inventory_product")
-public class NonInventoryProductEntity implements CatalogItem {
+public class Subcategory {
+
     @Id
     @Column(columnDefinition = "UUID")
     private UUID id;
@@ -24,16 +26,4 @@ public class NonInventoryProductEntity implements CatalogItem {
     }
 
     private String name;
-    private String longDescription;
-    private String shortDescription;
-
-    @Override
-    public String getLongDescription() {
-        return this.longDescription;
-    }
-
-    @Override
-    public void setId(UUID id) {
-        this.id = id;
-    }
 }

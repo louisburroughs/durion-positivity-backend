@@ -25,6 +25,12 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.write("CATALOG_CATALOG_CREATE",
                         "Create a new catalog").build(),
                 EventTypeRegistration.write("CATALOG_CATALOG_UPDATE",
-                        "Update an existing catalog").build());
+                        "Update an existing catalog").build(),
+                EventTypeRegistration.fastRead("CATALOG_PRODUCT_LIFECYCLE_GET",
+                        "Get product lifecycle and replacement suggestions").build(),
+                EventTypeRegistration.write("CATALOG_PRODUCT_LIFECYCLE_UPDATE",
+                        "Set product lifecycle state with effective date").build(),
+                EventTypeRegistration.write("CATALOG_PRODUCT_REPLACEMENT_ADD",
+                        "Add replacement recommendation for a discontinued product").build());
     }
 }

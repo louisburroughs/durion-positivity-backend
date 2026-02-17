@@ -1,4 +1,4 @@
-package com.positivity.catalog.internal.model;
+package com.positivity.catalog.internal.entity;
 
 import java.util.UUID;
 
