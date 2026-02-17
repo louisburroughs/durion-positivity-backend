@@ -38,7 +38,7 @@ public class CatalogPermissionRegistration extends PermissionRegistrationSupport
                 PermissionDefinition.of("catalog:product:delete", "Delete products from catalog"),
                 PermissionDefinition.of("product:lifecycle:update", "Update product lifecycle state"),
                 PermissionDefinition.of("product:lifecycle:override_discontinued",
-                    "Override discontinued lifecycle restrictions"),
+                        "Override discontinued lifecycle restrictions"),
 
                 // Category Management
                 PermissionDefinition.of("catalog:category:view", "View product categories"),

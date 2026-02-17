@@ -60,7 +60,8 @@ public class TestSecurityConfig {
 
     private static class TestAutoAuthFilter extends OncePerRequestFilter {
         @Override
-        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                FilterChain filterChain)
                 throws ServletException, IOException {
             String headerAuthorities = request.getHeader("X-Authorities");
             List<SimpleGrantedAuthority> authorities = headerAuthorities == null || headerAuthorities.isBlank()

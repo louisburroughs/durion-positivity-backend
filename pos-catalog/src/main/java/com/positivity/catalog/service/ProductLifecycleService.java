@@ -75,7 +75,8 @@ public class ProductLifecycleService {
 
         if (overridePermissionUsed && isBlank(request.getOverrideReason())) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new IllegalArgumentException("overrideReason is required when discontinued override permission is used");
+            throw new IllegalArgumentException(
+                    "overrideReason is required when discontinued override permission is used");
         }
 
         Instant effectiveAt = resolveEffectiveAt(request.getEffectiveAt(), request.getEffectiveDate());
@@ -107,7 +108,8 @@ public class ProductLifecycleService {
     }
 
     @Transactional
-    public ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId, ProductReplacementRequest request) {
+    public ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId,
+            ProductReplacementRequest request) {
         if (request == null || request.getReplacementProductId() == null) {
             throw new IllegalArgumentException("replacementProductId is required");
         }
@@ -117,7 +119,8 @@ public class ProductLifecycleService {
 
         ProductEntity originalProduct = findProduct(productId);
         if (resolveCurrentState(originalProduct) != ProductLifecycleState.DISCONTINUED) {
-            throw new IllegalStateException("Replacement products can only be added when lifecycleState is DISCONTINUED");
+            throw new IllegalStateException(
+                    "Replacement products can only be added when lifecycleState is DISCONTINUED");
         }
 
         findProduct(request.getReplacementProductId());
