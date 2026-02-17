@@ -73,6 +73,7 @@ public class ArchitectureTest {
         @ArchTest
         static final ArchRule only_service_layer_should_be_public_api = classes()
                         .that().resideInAPackage("com.positivity.people.service..")
+                        .and().haveSimpleNameNotEndingWith("Test")
                         .should().bePublic()
                         .allowEmptyShould(true)
                         .because("service layer is the public API of this module");
