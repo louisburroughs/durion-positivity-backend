@@ -14,6 +14,8 @@ import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -29,20 +31,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductLifecycleService {
 
     private static final String DISCONTINUED_REACTIVATION_ERROR = "Discontinued products cannot be reactivated. Specify a replacement product instead.";
+    private static final Duration EFFECTIVE_AT_PAST_TOLERANCE = Duration.ofSeconds(2);
 
     private final ProductRepository productRepository;
     private final ProductReplacementRepository productReplacementRepository;
     private final Counter lifecycleUpdateSuccessCounter;
     private final Counter lifecycleUpdateDeniedCounter;
+    private final Clock clock;
 
     public ProductLifecycleService(
             ProductRepository productRepository,
             ProductReplacementRepository productReplacementRepository,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            Clock clock) {
         this.productRepository = productRepository;
         this.productReplacementRepository = productReplacementRepository;
         this.lifecycleUpdateSuccessCounter = meterRegistry.counter("product.lifecycle.state_change.success.count");
         this.lifecycleUpdateDeniedCounter = meterRegistry.counter("product.lifecycle.state_change.denied.count");
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -55,13 +61,34 @@ public class ProductLifecycleService {
 
     @Transactional
     public ProductLifecycleResponse updateLifecycle(UUID productId, ProductLifecycleUpdateRequest request) {
-        if (request == null || request.getLifecycleState() == null) {
+        if (request == null) {
+            lifecycleUpdateDeniedCounter.increment();
+            throw new CatalogValidationException("request is required");
+        }
+        if (request.getLifecycleState() == null) {
             lifecycleUpdateDeniedCounter.increment();
             throw new CatalogValidationException("lifecycleState is required");
+        }
+        if (request.getEffectiveAt() == null) {
+            lifecycleUpdateDeniedCounter.increment();
+            throw new CatalogValidationException("effectiveAt is required");
+        }
+        if (request.getEffectiveDate() == null) {
+            lifecycleUpdateDeniedCounter.increment();
+            throw new CatalogValidationException("effectiveDate is required");
+        }
+        if (request.getChangedBy() == null) {
+            lifecycleUpdateDeniedCounter.increment();
+            throw new CatalogValidationException("changedBy is required");
         }
         ProductEntity product = findProduct(productId);
         ProductLifecycleState currentState = resolveCurrentState(product);
         ProductLifecycleState nextState = request.getLifecycleState();
+
+        if (currentState == nextState) {
+            lifecycleUpdateDeniedCounter.increment();
+            throw new CatalogValidationException("lifecycleState is already set to " + currentState);
+        }
 
         if (currentState == ProductLifecycleState.DISCONTINUED
                 && nextState != ProductLifecycleState.DISCONTINUED) {
@@ -85,7 +112,7 @@ public class ProductLifecycleService {
         }
 
         Instant effectiveAt = resolveEffectiveAt(request.getEffectiveAt(), request.getEffectiveDate());
-        if (effectiveAt.isBefore(Instant.now())) {
+        if (effectiveAt.isBefore(currentInstant().minus(EFFECTIVE_AT_PAST_TOLERANCE))) {
             lifecycleUpdateDeniedCounter.increment();
             throw new CatalogValidationException("effectiveAt cannot be in the past");
         }
@@ -93,7 +120,7 @@ public class ProductLifecycleService {
         product.setLifecycleState(nextState);
         product.setLifecycleStateEffectiveAt(effectiveAt);
         product.setLastStateChangedBy(request.getChangedBy());
-        product.setLastStateChangedAt(Instant.now());
+        product.setLastStateChangedAt(currentInstant());
         product.setLifecycleOverrideReason(request.getOverrideReason());
         ProductEntity saved = productRepository.save(product);
 
@@ -118,6 +145,9 @@ public class ProductLifecycleService {
         if (request == null || request.getReplacementProductId() == null) {
             throw new CatalogValidationException("replacementProductId is required");
         }
+        if (productId.equals(request.getReplacementProductId())) {
+            throw new CatalogValidationException("replacementProductId cannot be identical to productId");
+        }
         if (request.getPriorityOrder() == null || request.getPriorityOrder() <= 0) {
             throw new CatalogValidationException("priorityOrder must be greater than zero");
         }
@@ -135,7 +165,7 @@ public class ProductLifecycleService {
         replacement.setReplacementProductId(request.getReplacementProductId());
         replacement.setPriorityOrder(request.getPriorityOrder());
         replacement.setNotes(request.getNotes());
-        replacement.setEffectiveAt(request.getEffectiveAt() != null ? request.getEffectiveAt() : Instant.now());
+        replacement.setEffectiveAt(request.getEffectiveAt() != null ? request.getEffectiveAt() : currentInstant());
 
         ProductReplacementEntity saved = productReplacementRepository.save(replacement);
 
@@ -164,7 +194,11 @@ public class ProductLifecycleService {
         if (effectiveDate != null) {
             return effectiveDate.atStartOfDay(ZoneOffset.UTC).toInstant();
         }
-        return Instant.now();
+        return currentInstant();
+    }
+
+    private Instant currentInstant() {
+        return clock.instant();
     }
 
     private boolean hasAuthority(String authority) {
