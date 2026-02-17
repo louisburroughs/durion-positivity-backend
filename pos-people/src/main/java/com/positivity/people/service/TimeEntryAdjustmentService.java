@@ -3,9 +3,11 @@ package com.positivity.people.service;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,37 +35,40 @@ public class TimeEntryAdjustmentService {
     @Transactional
     public TimeEntryAdjustmentResponse createAdjustment(TimeEntryAdjustmentRequest request) {
         if (request.getReasonCode() == null || request.getReasonCode().isBlank()) {
-            return new TimeEntryAdjustmentResponse(null, false, "reasonCode is required");
+            throw new IllegalArgumentException("reasonCode is required");
         }
 
         if (request.getTimeEntryId() == null || request.getTimeEntryId().isBlank()) {
-            return new TimeEntryAdjustmentResponse(null, false, "timeEntryId is required");
+            throw new IllegalArgumentException("timeEntryId is required");
         }
 
+        final UUID timeEntryUuid;
         try {
-            Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional = timeEntryRepository
-                    .findById(UUID.fromString(request.getTimeEntryId()));
-            if (entryOptional.isEmpty()) {
-                return new TimeEntryAdjustmentResponse(null, false, "Time entry not found");
-            }
-            com.positivity.people.internal.entity.TimeEntry entry = entryOptional.get();
-            if (entry.getStatus() != com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL) {
-                return new TimeEntryAdjustmentResponse(null, false,
-                        "Adjustments can only be created for entries in PENDING_APPROVAL status");
-            }
-        } catch (Exception invalidTimeEntryId) {
-            return new TimeEntryAdjustmentResponse(null, false, "Error validating time entry");
+            timeEntryUuid = UUID.fromString(request.getTimeEntryId());
+        } catch (IllegalArgumentException invalidTimeEntryId) {
+            throw new IllegalArgumentException("timeEntryId must be a valid UUID", invalidTimeEntryId);
+        }
+
+        Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional = timeEntryRepository
+                .findById(timeEntryUuid);
+        if (entryOptional.isEmpty()) {
+            throw new NotFoundException("Time entry not found");
+        }
+        com.positivity.people.internal.entity.TimeEntry entry = entryOptional.get();
+        if (entry.getStatus() != com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException(
+                    "Adjustments can only be created for entries in PENDING_APPROVAL status");
         }
 
         boolean hasProposedTimes = request.getProposedStartAt() != null || request.getProposedEndAt() != null;
         boolean hasMinutesDelta = request.getMinutesDelta() != null;
         if (!(hasProposedTimes ^ hasMinutesDelta)) {
-            return new TimeEntryAdjustmentResponse(null, false,
+            throw new IllegalArgumentException(
                     "Provide either both proposedStartAt and proposedEndAt, OR minutesDelta (exactly one)");
         }
 
         if (hasProposedTimes && (request.getProposedStartAt() == null || request.getProposedEndAt() == null)) {
-            return new TimeEntryAdjustmentResponse(null, false,
+            throw new IllegalArgumentException(
                     "Both proposedStartAt and proposedEndAt must be provided together");
         }
 
@@ -97,7 +102,7 @@ public class TimeEntryAdjustmentService {
         Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
                 .findById(adjustmentId);
         if (opt.isEmpty()) {
-            return false;
+            throw new NotFoundException("Adjustment not found: " + adjustmentId);
         }
         com.positivity.people.internal.entity.TimeEntryAdjustment adj = opt.get();
 
@@ -115,7 +120,7 @@ public class TimeEntryAdjustmentService {
             } catch (Exception ignore) {
                 // Audit logging failure should not prevent adjustment approval flow.
             }
-            return false;
+            throw new AccessDeniedException("Permission denied for adjustment approval");
         }
 
         adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED);
