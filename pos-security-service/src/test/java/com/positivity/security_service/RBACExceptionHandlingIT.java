@@ -29,6 +29,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("RBAC Exception Handling Integration Tests")
 class RBACExceptionHandlingIT extends BaseIntegrationTest {
 
+    private static final String TEST_CORRELATION_ID = "rbac-test-correlation-id";
+
     /**
      * Test: GET /v1/roles/{name} with non-existent role
      * 
@@ -41,6 +43,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         
         MvcResult result = mockMvc.perform(
                 withAuth(get("/v1/roles/" + nonExistentRoleName))
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -72,6 +75,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         
         MvcResult result = mockMvc.perform(
                 withAuth(get("/v1/roles/assignments/user/" + nonExistentUserId))
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -103,6 +107,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         
         MvcResult result = mockMvc.perform(
                 withAuth(get("/v1/roles/permissions/user/" + nonExistentUserId))
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -135,6 +140,7 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
                 withAuth(get("/v1/roles/check-permission")
                         .param("userId", nonExistentUserId.toString())
                         .param("permission", "some:permission")
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
