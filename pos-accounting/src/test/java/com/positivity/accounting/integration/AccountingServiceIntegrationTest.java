@@ -542,7 +542,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     mockMvc.perform(withAuth(post(BASE_URL + "/events"))
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
-        .andExpect(status().isAccepted())
+        .andExpect(status().isCreated())
         .andExpect(jsonPath("$.eventId", notNullValue()))
         .andExpect(jsonPath("$.status").value("RECEIVED"));
   }
@@ -564,7 +564,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     mockMvc.perform(withAuth(post(BASE_URL + "/events"))
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
-        .andExpect(status().isAccepted())
+        .andExpect(status().isCreated())
         .andReturn();
 
     // Submit duplicate
