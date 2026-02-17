@@ -1,4 +1,4 @@
-package com.positivity.catalog.internal.model;
+package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;

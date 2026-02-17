@@ -2,7 +2,7 @@ package com.positivity.catalog.service;
 
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDetailView.*;
-import com.positivity.catalog.internal.model.ProductEntity;
+import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.dao.CatalogDao;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

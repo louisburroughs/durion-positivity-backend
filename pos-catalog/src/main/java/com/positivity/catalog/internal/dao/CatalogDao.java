@@ -1,12 +1,13 @@
 package com.positivity.catalog.internal.dao;
 
-import com.positivity.catalog.internal.model.ProductEntity;
-import com.positivity.catalog.internal.model.ServiceEntity;
-import com.positivity.catalog.internal.model.NonInventoryProductEntity;
-import com.positivity.catalog.internal.model.CatalogEntity;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import com.positivity.catalog.internal.entity.CatalogEntity;
+import com.positivity.catalog.internal.entity.NonInventoryProductEntity;
+import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 
 public interface CatalogDao {
     // Product methods

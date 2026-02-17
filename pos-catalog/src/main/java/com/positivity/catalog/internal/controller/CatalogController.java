@@ -1,13 +1,17 @@
 package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dao.CatalogDao;
+import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
+import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
+import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ProductDetailView;
-import com.positivity.catalog.internal.model.ProductEntity;
-import com.positivity.catalog.internal.model.ServiceEntity;
-import com.positivity.catalog.internal.model.NonInventoryProductEntity;
-import com.positivity.catalog.internal.model.CatalogEntity;
-import com.positivity.catalog.internal.model.CatalogItem;
+import com.positivity.catalog.internal.entity.CatalogEntity;
+import com.positivity.catalog.internal.entity.CatalogItem;
+import com.positivity.catalog.internal.entity.NonInventoryProductEntity;
+import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.service.ProductDetailService;
+import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -44,6 +48,7 @@ public class CatalogController {
     public static final String NONINVENTORY = "noninventory";
     private final CatalogDao catalogDao;
     private final ProductDetailService productDetailService;
+    private final ProductLifecycleService productLifecycleService;
 
     /**
      * Retrieves a product by its ID.
@@ -63,6 +68,76 @@ public class CatalogController {
             @Parameter(description = "ID of the product to be obtained") @PathVariable UUID productId) {
         Optional<ProductEntity> product = catalogDao.findProductById(productId);
         return product.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('product:lifecycle:update')")
+    @GetMapping("/{productId}/lifecycle")
+    @Operation(summary = "Get product lifecycle state", description = "Retrieves lifecycle state and replacement suggestions for a product.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved lifecycle state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductLifecycleResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Product not found")
+    })
+    @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_GET", apiVersion = "1")
+    public ResponseEntity<ProductLifecycleResponse> getProductLifecycle(
+            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
+        try {
+            return ResponseEntity.ok(productLifecycleService.getLifecycle(productId));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
+    @PutMapping("/{productId}/lifecycle")
+    @Operation(summary = "Set product lifecycle state", description = "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Lifecycle state updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductLifecycleResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation error"),
+            @ApiResponse(responseCode = "403", description = "Missing override permission"),
+            @ApiResponse(responseCode = "404", description = "Product not found")
+    })
+    @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_UPDATE", apiVersion = "1")
+    public ResponseEntity<?> updateProductLifecycle(
+            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
+            @RequestBody ProductLifecycleUpdateRequest request) {
+        try {
+            ProductLifecycleResponse response = productLifecycleService.updateLifecycle(productId, request);
+            return ResponseEntity.ok(response);
+        } catch (SecurityException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            if (ex.getMessage() != null && ex.getMessage().startsWith("Product not found")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+            }
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        }
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
+    @PostMapping("/{productId}/replacements")
+    @Operation(summary = "Add replacement product", description = "Adds a replacement suggestion to a discontinued product.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Replacement added successfully"),
+            @ApiResponse(responseCode = "400", description = "Validation error"),
+            @ApiResponse(responseCode = "404", description = "Product not found")
+    })
+    @EmitEvent(id = "CATALOG_PRODUCT_REPLACEMENT_ADD", apiVersion = "1")
+    public ResponseEntity<?> addReplacementProduct(
+            @Parameter(description = "ID of discontinued product", required = true) @PathVariable UUID productId,
+            @RequestBody ProductReplacementRequest request) {
+        try {
+            ProductLifecycleResponse.ReplacementOption replacement = productLifecycleService.addReplacement(productId, request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(replacement);
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            if (ex.getMessage() != null && ex.getMessage().startsWith("Product not found")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+            }
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        }
     }
 
     /**

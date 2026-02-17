@@ -1,12 +1,12 @@
 package com.positivity.catalog.internal.dao;
 
-import com.positivity.catalog.internal.model.ProductEntity;
-import com.positivity.catalog.internal.model.ServiceEntity;
-import com.positivity.catalog.internal.model.NonInventoryProductEntity;
-import com.positivity.catalog.internal.model.CatalogEntity;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
 import com.positivity.catalog.internal.repository.NonInventoryProductRepository;
+import com.positivity.catalog.internal.entity.CatalogEntity;
+import com.positivity.catalog.internal.entity.NonInventoryProductEntity;
+import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.repository.CatalogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

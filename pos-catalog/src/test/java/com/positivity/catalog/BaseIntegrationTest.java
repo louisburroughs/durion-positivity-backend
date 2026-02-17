@@ -29,7 +29,9 @@ public abstract class BaseIntegrationTest {
             "ROLE_ADMIN",
             "ROLE_CATALOG_VIEW",
             "ROLE_CATALOG_EDIT",
-            "ROLE_CATALOG_DELETE");
+            "ROLE_CATALOG_DELETE",
+            "product:lifecycle:update",
+            "product:lifecycle:override_discontinued");
 
     @BeforeEach
     public void setUpMockMvc() {
