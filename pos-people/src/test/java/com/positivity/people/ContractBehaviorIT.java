@@ -174,4 +174,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                                 .param("endDate", "2026-12-31T23:59:59")))
                                 .andExpect(status().isNoContent());
         }
+
 }
+
+        

@@ -1,23 +1,32 @@
 package com.positivity.location.internal.controller;
 
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.positivity.events.EmitEvent;
+import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.ParentType;
-import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.service.LocationService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Tag(name = "Location API", description = "Operations related to locations and their relationships")
@@ -35,10 +44,8 @@ public class LocationController {
     }
 
     @Operation(summary = "Get location by ID", description = "Retrieve a location by its unique ID.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Location found and returned."),
-            @ApiResponse(responseCode = "404", description = "Location not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Location found and returned.")
+    @ApiResponse(responseCode = "404", description = "Location not found.")
     @GetMapping("/{locationId}")
     public ResponseEntity<Location> getLocationById(
             @Parameter(description = "ID of the location to retrieve", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
@@ -58,10 +65,10 @@ public class LocationController {
     }
 
     @Operation(summary = "Update an existing location", description = "Update the details of an existing location.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Location updated successfully."),
-            @ApiResponse(responseCode = "404", description = "Location not found.")
-    })
+
+    @ApiResponse(responseCode = "200", description = "Location updated successfully.")
+    @ApiResponse(responseCode = "404", description = "Location not found.")
+
     @EmitEvent(id = "LOCATION_LOCATION_UPDATE", apiVersion = "1")
     @PutMapping("/{locationId}")
     public ResponseEntity<Location> updateLocation(
@@ -76,10 +83,9 @@ public class LocationController {
     }
 
     @Operation(summary = "Delete a location", description = "Delete a location by its unique ID.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Location deleted successfully."),
-            @ApiResponse(responseCode = "404", description = "Location not found.")
-    })
+
+    @ApiResponse(responseCode = "204", description = "Location deleted successfully.")
+    @ApiResponse(responseCode = "404", description = "Location not found.")
     @DeleteMapping("/{locationId}")
     public ResponseEntity<Void> deleteLocation(
             @Parameter(description = "ID of the location to delete", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
@@ -109,11 +115,18 @@ public class LocationController {
         return locationService.getAllParents();
     }
 
+    @Operation(summary = "Get all children for a location", description = "Retrieve all child locations for a given parent location.")
+    @ApiResponse(responseCode = "200", description = "List of child locations returned successfully.")
+    @GetMapping("/{locationId}/children")
+    public List<Location> getAllChildren(
+            @Parameter(description = "ID of the parent location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId,
+            @Parameter(description = "Optional parent relationship type filter") @RequestParam(required = false) ParentType parentType) {
+        return locationService.getAllChildren(locationId, parentType);
+    }
+
     @Operation(summary = "Get responsible person for a location", description = "Retrieve the person responsible for a given location.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Responsible person found and returned."),
-            @ApiResponse(responseCode = "404", description = "Responsible person not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Responsible person found and returned.")
+    @ApiResponse(responseCode = "404", description = "Responsible person not found.")
     @GetMapping("/{locationId}/responsible-person")
     public ResponseEntity<PersonDTO> getResponsiblePerson(
             @Parameter(description = "ID of the location", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {

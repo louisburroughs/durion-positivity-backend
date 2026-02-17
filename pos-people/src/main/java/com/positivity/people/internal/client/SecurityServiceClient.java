@@ -1,13 +1,9 @@
 package com.positivity.people.internal.client;
 
-import com.positivity.people.internal.client.dto.Role;
-import com.positivity.people.internal.client.dto.RoleAssignment;
-import com.positivity.people.internal.client.dto.RoleAssignmentRequest;
-import com.positivity.people.internal.client.dto.RoleDto;
-import com.positivity.people.internal.client.dto.ScopeType;
-import com.positivity.people.internal.client.dto.User;
-import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
-import com.positivity.people.internal.client.dto.UserRoleDto;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +13,13 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import com.positivity.people.internal.client.dto.Role;
+import com.positivity.people.internal.client.dto.RoleAssignment;
+import com.positivity.people.internal.client.dto.RoleAssignmentRequest;
+import com.positivity.people.internal.client.dto.RoleDto;
+import com.positivity.people.internal.client.dto.ScopeType;
+import com.positivity.people.internal.client.dto.UserRoleAssignmentRequest;
+import com.positivity.people.internal.client.dto.UserRoleDto;
 
 @Component
 public class SecurityServiceClient {
@@ -106,7 +106,7 @@ public class SecurityServiceClient {
 
         @NonNull
         public List<UserRoleDto> getUserRoleAssignments(
-                        @NonNull String userId,
+                        @NonNull UUID userId,
                         Boolean includeHistory,
                         LocalDateTime endDate) {
                 log.debug("Fetching role assignments for userId: {}, includeHistory: {}, endDate: {}",
@@ -157,9 +157,9 @@ public class SecurityServiceClient {
                 Role role = getRoleByName(request.getRoleCode());
 
                 // Parse and validate userId
-                java.util.UUID userIdUuid;
+                UUID userIdUuid;
                 try {
-                        userIdUuid = java.util.UUID.fromString(request.getUserId());
+                        userIdUuid = request.getUserId();
                 } catch (IllegalArgumentException e) {
                         throw new IllegalArgumentException("Invalid userId format: " + request.getUserId(), e);
                 }
@@ -209,13 +209,15 @@ public class SecurityServiceClient {
                 return mapToUserRoleDto(assignment, request.getRoleCode());
         }
 
-        public void revokeRole(@NonNull String userId, @NonNull String roleCode, LocalDateTime endDate) {
+        public void revokeRole(@NonNull UUID userId, @NonNull String roleCode, LocalDateTime endDate) {
                 log.debug("Revoking role {} from userId: {} with endDate: {}", roleCode, userId, endDate);
 
                 // First, get the role by name to obtain its UUID
                 Role role = getRoleByName(roleCode);
 
                 // Get all current assignments for the user with full RoleAssignment objects
+
+                @SuppressWarnings("java:S125") // Not a code block, but a parameter name that looks like a code block
                 // TODO: Update pos-security-service to make /v1/roles/assignments/user/{userId}
                 // retrieve
                 // current AND future-dated roles when includeHistory=false, or add a new flag
@@ -296,12 +298,13 @@ public class SecurityServiceClient {
          * is mapped to UserRoleDto.locationId. The remaining IDs are ignored.
          */
         private UserRoleDto mapToUserRoleDto(RoleAssignment assignment, String roleCode) {
-                java.util.UUID locationId = null;
+                UUID locationId = null;
                 if (assignment.getScopeType() == ScopeType.LOCATION
                                 && assignment.getScopeLocationIds() != null
                                 && !assignment.getScopeLocationIds().isEmpty()) {
                         if (assignment.getScopeLocationIds().size() > 1) {
-                                // The API supports multiple scopeLocationIds, but UserRoleDto currently exposes
+                                // Note: The API supports multiple scopeLocationIds, but UserRoleDto currently
+                                // exposes
                                 // a single locationId.
                                 // Log to make this limitation visible when multi-location assignments are
                                 // encountered.
@@ -309,17 +312,11 @@ public class SecurityServiceClient {
                                 log.warn("RoleAssignment {} for user {} and role {} has multiple scopeLocationIds; only the first will be used.",
                                                 assignment.getId(), userId, roleCode);
                         }
-                        String firstLocationId = assignment.getScopeLocationIds().iterator().next();
-                        try {
-                                locationId = java.util.UUID.fromString(firstLocationId);
-                        } catch (IllegalArgumentException e) {
-                                log.error("Invalid UUID format in scopeLocationIds for assignment {}: {}",
-                                                assignment.getId(), firstLocationId, e);
-                                // 502 Bad Gateway - upstream service returned malformed data
-                                throw new SecurityServiceException(
-                                                "Invalid location ID format in role assignment: " + firstLocationId,
-                                                502, e);
-                        }
+
+                        locationId = assignment.getScopeLocationIds().stream().findFirst()
+                                        .orElseThrow(() -> new SecurityServiceException(
+                                                        "Empty location ID set in role assignment",
+                                                        502));
                 }
 
                 return UserRoleDto.builder()

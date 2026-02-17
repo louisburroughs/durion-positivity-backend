@@ -13,15 +13,15 @@ import java.util.UUID;
 @Repository
 public interface UserPersonLinkRepository extends JpaRepository<UserPersonLink, UUID> {
 
-    Optional<UserPersonLink> findByUserId(@NonNull String userId);
+    Optional<UserPersonLink> findByUserId(@NonNull UUID userId);
 
     List<UserPersonLink> findByPersonId(@NonNull UUID personId);
 
     Optional<UserPersonLink> findByPersonIdAndStatus(@NonNull UUID personId, @NonNull UserLinkStatus status);
 
-    boolean existsByUserId(@NonNull String userId);
+    boolean existsByUserId(@NonNull UUID userId);
 
-    boolean existsByUserIdAndPersonId(@NonNull String userId, @NonNull UUID personId);
+    boolean existsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId);
 
-    void deleteByUserId(@NonNull String userId);
+    void deleteByUserId(@NonNull UUID userId);
 }

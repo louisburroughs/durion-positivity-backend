@@ -33,15 +33,19 @@ public class Location {
     private String country;
     private String mailingAddress;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_type_id")
+    private LocationType type;
+
     // Reference to Person (responsible) by ID from pos-people
     private Long responsiblePersonId;
 
     @Builder.Default
     // Bi-directional parent-child relationship
-    @OneToMany(mappedBy = "child", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "child", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<LocationParent> parents = new HashSet<>();
 
     @Builder.Default
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<LocationParent> children = new HashSet<>();
 }

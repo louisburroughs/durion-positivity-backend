@@ -1,10 +1,11 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.people.internal.enums.ExceptionSeverity;
+import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
-import com.positivity.people.internal.model.ExceptionStatus;
-import com.positivity.people.internal.model.ExceptionSeverity;
+
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
 import java.time.LocalDate;

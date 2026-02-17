@@ -1,4 +1,4 @@
-package com.positivity.people.internal.controller;
+package com.positivity.people.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

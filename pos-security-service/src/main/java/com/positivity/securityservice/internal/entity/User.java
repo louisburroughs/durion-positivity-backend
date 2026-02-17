@@ -1,9 +1,11 @@
 package com.positivity.securityservice.internal.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -22,6 +24,8 @@ public class User {
     private String username;
 
     @Column(nullable = false)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
     private String password;
 
     @ManyToMany(fetch = FetchType.EAGER)

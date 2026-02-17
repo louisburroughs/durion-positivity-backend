@@ -24,7 +24,7 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
 
     @Override
     @NonNull
-    public UUID getPersonUuidForUser(@NonNull String userId) {
+    public UUID getPersonUuidForUser(@NonNull UUID userId) {
         return userPersonLinkRepository.findByUserId(userId)
                 .map(link -> link.getPersonId())
                 .orElseThrow(() -> new EntityNotFoundException("No person link found for userId: " + userId));
@@ -32,13 +32,13 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
 
     @Override
     @NonNull
-    public Optional<String> getUserIdForPerson(@NonNull UUID personUuid) {
+    public Optional<UUID> getUserIdForPerson(@NonNull UUID personUuid) {
         return userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE)
                 .map(UserPersonLink::getUserId);
     }
 
     @Override
-    public boolean isUserLinkedToPerson(@NonNull String userId, @NonNull UUID personUuid) {
+    public boolean isUserLinkedToPerson(@NonNull UUID userId, @NonNull UUID personUuid) {
         return userPersonLinkRepository.existsByUserIdAndPersonId(userId, personUuid);
     }
 }

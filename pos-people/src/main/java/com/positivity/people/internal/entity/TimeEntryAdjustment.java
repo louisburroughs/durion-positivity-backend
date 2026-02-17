@@ -1,9 +1,10 @@
 package com.positivity.people.internal.entity;
 
+import com.positivity.people.internal.enums.AdjustmentStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
-import com.positivity.people.internal.model.AdjustmentStatus;
+
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
 import java.util.UUID;

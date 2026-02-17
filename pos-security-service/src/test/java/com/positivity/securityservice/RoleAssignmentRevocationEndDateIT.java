@@ -1,4 +1,4 @@
-package com.positivity.security_service;
+package com.positivity.securityservice;
 
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -19,7 +19,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.securityservice.BaseIntegrationTest;
 import com.positivity.securityservice.PosSecurityServiceApplication;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
@@ -30,8 +29,10 @@ import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 
 /**
- * Integration tests for role assignment revocation endpoint with LocalDateTime endDate parameter.
- * Tests verify proper handling of ISO DATE_TIME format and default behavior when parameter is omitted.
+ * Integration tests for role assignment revocation endpoint with LocalDateTime
+ * endDate parameter.
+ * Tests verify proper handling of ISO DATE_TIME format and default behavior
+ * when parameter is omitted.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = PosSecurityServiceApplication.class)
 @ActiveProfiles("test")
@@ -90,8 +91,9 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
         // Then: Assignment should have effectiveEndDate set to approximately now
         RoleAssignment revoked = roleAssignmentRepository.findById(testAssignment.getId()).orElseThrow();
         LocalDateTime now = LocalDateTime.now();
-        
-        // Verify endDate is set and is within last minute (allowing for test execution time)
+
+        // Verify endDate is set and is within last minute (allowing for test execution
+        // time)
         assert revoked.getEffectiveEndDate() != null;
         assert revoked.getEffectiveEndDate().isAfter(now.minusMinutes(1));
         assert revoked.getEffectiveEndDate().isBefore(now.plusMinutes(1));

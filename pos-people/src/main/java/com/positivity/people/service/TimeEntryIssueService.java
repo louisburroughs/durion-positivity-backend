@@ -24,7 +24,8 @@ public class TimeEntryIssueService {
     }
 
     @Transactional
-    public boolean actionException(java.util.UUID issueId, com.positivity.people.internal.model.ExceptionStatus targetStatus,
+    public boolean actionException(java.util.UUID issueId,
+            com.positivity.people.internal.enums.ExceptionStatus targetStatus,
             String actionUserId, String actionNotes, String correlationId) {
         Optional<TimeEntryIssue> opt = issueRepository.findById(issueId);
         if (opt.isEmpty()) {
@@ -33,8 +34,8 @@ public class TimeEntryIssueService {
         TimeEntryIssue ex = opt.get();
 
         // Validate transition is allowed
-        if (ex.getStatus() == com.positivity.people.internal.model.ExceptionStatus.RESOLVED ||
-                ex.getStatus() == com.positivity.people.internal.model.ExceptionStatus.WAIVED) {
+        if (ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.RESOLVED ||
+                ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.WAIVED) {
             // Cannot transition from RESOLVED or WAIVED states
             return false;
         }
@@ -90,12 +91,12 @@ public class TimeEntryIssueService {
 
         try {
             if (resolutionAction != null) {
-                ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.valueOf(resolutionAction));
+                ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.valueOf(resolutionAction));
             } else {
-                ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.RESOLVED);
+                ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED);
             }
         } catch (IllegalArgumentException iae) {
-            ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.RESOLVED);
+            ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED);
         }
         ex.setResolvedBy(resolverUserId);
         ex.setResolvedAt(Instant.now());

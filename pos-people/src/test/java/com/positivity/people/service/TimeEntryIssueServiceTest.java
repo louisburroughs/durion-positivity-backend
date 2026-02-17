@@ -34,7 +34,7 @@ public class TimeEntryIssueServiceTest {
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
         ex.setTimeEntryId("TE-3");
-        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.OPEN);
+        ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.OPEN);
 
         when(issueRepository.findById(id)).thenReturn(Optional.of(ex));
         when(issueRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -46,7 +46,7 @@ public class TimeEntryIssueServiceTest {
         ArgumentCaptor<TimeEntryIssue> captor = ArgumentCaptor.forClass(TimeEntryIssue.class);
         verify(issueRepository).save(captor.capture());
         TimeEntryIssue saved = captor.getValue();
-        assertEquals(com.positivity.people.internal.model.ExceptionStatus.RESOLVED, saved.getStatus());
+        assertEquals(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED, saved.getStatus());
         assertEquals("resolver1", saved.getResolvedBy());
 
         verify(auditRepository).save(any(TimeEntryAudit.class));
@@ -58,7 +58,7 @@ public class TimeEntryIssueServiceTest {
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
         ex.setTimeEntryId("TE-4");
-        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.OPEN);
+        ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.OPEN);
 
         when(issueRepository.findById(id)).thenReturn(Optional.of(ex));
 
@@ -75,19 +75,19 @@ public class TimeEntryIssueServiceTest {
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
         ex.setTimeEntryId("TE-5");
-        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.OPEN);
+        ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.OPEN);
 
         when(issueRepository.findById(id)).thenReturn(Optional.of(ex));
         when(issueRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED,
+        boolean ok = service.actionException(id, com.positivity.people.internal.enums.ExceptionStatus.ACKNOWLEDGED,
                 "user1",
                 null, "cid-5");
         assertTrue(ok);
 
         ArgumentCaptor<TimeEntryIssue> captor = ArgumentCaptor.forClass(TimeEntryIssue.class);
         verify(issueRepository).save(captor.capture());
-        assertEquals(com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED, captor.getValue().getStatus());
+        assertEquals(com.positivity.people.internal.enums.ExceptionStatus.ACKNOWLEDGED, captor.getValue().getStatus());
     }
 
     @Test
@@ -96,18 +96,18 @@ public class TimeEntryIssueServiceTest {
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
         ex.setTimeEntryId("TE-6");
-        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED);
+        ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.ACKNOWLEDGED);
 
         when(issueRepository.findById(id)).thenReturn(Optional.of(ex));
         when(issueRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.WAIVED, "user2",
+        boolean ok = service.actionException(id, com.positivity.people.internal.enums.ExceptionStatus.WAIVED, "user2",
                 "not applicable", "cid-6");
         assertTrue(ok);
 
         ArgumentCaptor<TimeEntryIssue> captor = ArgumentCaptor.forClass(TimeEntryIssue.class);
         verify(issueRepository).save(captor.capture());
-        assertEquals(com.positivity.people.internal.model.ExceptionStatus.WAIVED, captor.getValue().getStatus());
+        assertEquals(com.positivity.people.internal.enums.ExceptionStatus.WAIVED, captor.getValue().getStatus());
         assertEquals("not applicable", captor.getValue().getResolutionNotes());
     }
 
@@ -116,11 +116,11 @@ public class TimeEntryIssueServiceTest {
         UUID id = UUID.randomUUID();
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
-        ex.setStatus(com.positivity.people.internal.model.ExceptionStatus.RESOLVED);
+        ex.setStatus(com.positivity.people.internal.enums.ExceptionStatus.RESOLVED);
 
         when(issueRepository.findById(id)).thenReturn(Optional.of(ex));
 
-        boolean ok = service.actionException(id, com.positivity.people.internal.model.ExceptionStatus.WAIVED, "user3",
+        boolean ok = service.actionException(id, com.positivity.people.internal.enums.ExceptionStatus.WAIVED, "user3",
                 null,
                 "cid-7");
         assertFalse(ok);

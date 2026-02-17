@@ -58,7 +58,7 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     }
 
     @Override
-    public void unlinkUserFromPerson(@NonNull String userId) {
+    public void unlinkUserFromPerson(@NonNull UUID userId) {
         if (!linkRepository.existsByUserId(userId)) {
             throw new UserPersonLinkNotFoundException(userId);
         }
@@ -68,7 +68,7 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Override
     @Transactional(readOnly = true)
     @NonNull
-    public PersonResponse findPersonByUserId(@NonNull String userId) {
+    public PersonResponse findPersonByUserId(@NonNull UUID userId) {
         UserPersonLink link = linkRepository.findByUserId(userId)
                 .orElseThrow(() -> new UserPersonLinkNotFoundException(userId));
 
@@ -81,7 +81,7 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     @Override
     @Transactional(readOnly = true)
     @NonNull
-    public List<String> findUserIdsByPersonId(@NonNull UUID personId) {
+    public List<UUID> findUserIdsByPersonId(@NonNull UUID personId) {
         personRepository.findById(personId)
                 .orElseThrow(() -> new PersonNotFoundException(personId));
 

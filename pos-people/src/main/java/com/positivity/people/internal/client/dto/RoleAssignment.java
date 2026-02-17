@@ -19,7 +19,7 @@ public class RoleAssignment {
     private User user;
     private Role role;
     private ScopeType scopeType;
-    private Set<String> scopeLocationIds;
+    private Set<UUID> scopeLocationIds;
     private LocalDate effectiveStartDate;
     private LocalDate effectiveEndDate;
     private Instant createdAt;

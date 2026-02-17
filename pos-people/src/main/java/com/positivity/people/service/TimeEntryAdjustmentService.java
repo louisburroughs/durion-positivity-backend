@@ -48,7 +48,7 @@ public class TimeEntryAdjustmentService {
             return false;
         }
 
-        adj.setStatus(com.positivity.people.internal.model.AdjustmentStatus.APPROVED);
+        adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED);
         adj.setDecidedBy(approverUserId);
         adj.setDecidedAt(Instant.now());
         adjustmentRepository.save(adj);

@@ -1,10 +1,8 @@
-package com.positivity.securityservice.internal.service;
+package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.TokenRevocationManager;
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
-import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.RoleAuthorityService;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;

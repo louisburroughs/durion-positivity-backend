@@ -3,6 +3,7 @@ package com.positivity.people;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
@@ -16,14 +17,12 @@ import com.tngtech.archunit.lang.ArchRule;
  * - Controller -> Service -> Repository layering
  * - No circular dependencies
  */
-@AnalyzeClasses(packages = "com.positivity.people")
+@AnalyzeClasses(packages = "com.positivity.people", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
         @ArchTest
         static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
                         .that().resideInAPackage("..internal.controller..")
-                        .and().haveSimpleNameNotContaining("TimeEntryAdjustmentController")
-                        .and().haveSimpleNameNotContaining("TimeEntryIssueController")
                         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
                         .allowEmptyShould(true)
                         .because("controllers must go through service layer");
@@ -31,9 +30,6 @@ public class ArchitectureTest {
         @ArchTest
         static final ArchRule controllers_should_not_access_entities_directly = noClasses()
                         .that().resideInAPackage("..internal.controller..")
-                        .and().haveSimpleNameNotContaining("PersonController")
-                        .and().haveSimpleNameNotContaining("TimeEntryAdjustmentController")
-                        .and().haveSimpleNameNotContaining("TimeEntryIssueController")
                         .should().dependOnClassesThat().resideInAPackage("..internal.entity..")
                         .allowEmptyShould(true)
                         .because("controllers should work with DTOs, not entities");
@@ -55,9 +51,7 @@ public class ArchitectureTest {
         @ArchTest
         static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
                         .that()
-                        .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..",
-                                        "..internal.controller..", "..controller..")
-                        .and().haveSimpleNameNotContaining("Test")
+                        .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
                         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
                         .allowEmptyShould(true)
                         .because("repositories should only be accessed from service layer");
@@ -73,7 +67,8 @@ public class ArchitectureTest {
         @ArchTest
         static final ArchRule only_service_layer_should_be_public_api = classes()
                         .that().resideInAPackage("com.positivity.people.service..")
-                        .and().haveSimpleNameNotEndingWith("Test")
+                        .and().areNotAnonymousClasses()
+                        .and().areNotInnerClasses()
                         .should().bePublic()
                         .allowEmptyShould(true)
                         .because("service layer is the public API of this module");

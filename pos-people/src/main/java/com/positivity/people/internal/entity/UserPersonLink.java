@@ -11,8 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_person_links", 
-       uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "person_id" }))
+@Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "person_id" }))
 @Getter
 @Setter
 public class UserPersonLink {
@@ -23,7 +22,7 @@ public class UserPersonLink {
 
     @Column(name = "user_id", nullable = false)
     @NonNull
-    private String userId;
+    private UUID userId;
 
     @Column(name = "person_id", nullable = false)
     @NonNull

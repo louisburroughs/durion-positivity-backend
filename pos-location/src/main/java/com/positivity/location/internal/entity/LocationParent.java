@@ -11,7 +11,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Table(uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "parent_id", "child_id", "parentType" })
+        @UniqueConstraint(columnNames = { "child_id", "parent_type" })
 })
 public class LocationParent {
     @Id
@@ -34,5 +34,6 @@ public class LocationParent {
     private Location child;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "parent_type", nullable = false)
     private ParentType parentType;
 }

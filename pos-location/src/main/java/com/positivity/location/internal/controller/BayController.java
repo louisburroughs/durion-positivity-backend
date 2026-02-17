@@ -53,10 +53,8 @@ public class BayController {
     }
 
     @Operation(summary = "Delete bay", description = "Delete a specific bay by locationId and bayId.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Bay deleted successfully."),
-            @ApiResponse(responseCode = "404", description = "Bay not found.")
-    })
+    @ApiResponse(responseCode = "204", description = "Bay deleted successfully.")
+    @ApiResponse(responseCode = "404", description = "Bay not found.")
     @DeleteMapping("/{locationId}/bays/{bayId}")
     public ResponseEntity<Void> deleteBay(
             @Parameter(description = "Location ID", example = "1") @PathVariable Long locationId,

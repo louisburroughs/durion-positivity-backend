@@ -58,7 +58,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     @Transactional(readOnly = true)
     public List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, boolean includeHistory,
             LocalDateTime endDate) {
-        String userId = resolveUserId(personUuid);
+        UUID userId = resolveUserId(personUuid);
         return securityServiceClient.getUserRoleAssignments(userId, includeHistory, endDate);
     }
 
@@ -71,7 +71,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
             LocalDateTime startDate,
             LocalDateTime endDate) {
         validateDateWindow(startDate, endDate);
-        String userId = resolveUserId(personUuid);
+        UUID userId = resolveUserId(personUuid);
         UserRoleAssignmentRequest request = UserRoleAssignmentRequest.builder()
                 .userId(userId)
                 .roleCode(roleCode)
@@ -84,12 +84,12 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
 
     @Override
     public void revokeRoleFromPerson(@NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime endDate) {
-        String userId = resolveUserId(personUuid);
+        UUID userId = resolveUserId(personUuid);
         securityServiceClient.revokeRole(userId, roleCode, endDate);
     }
 
     @NonNull
-    private String resolveUserId(@NonNull UUID personUuid) {
+    private UUID resolveUserId(@NonNull UUID personUuid) {
         return userPersonTranslationService.getUserIdForPerson(personUuid)
                 .orElseThrow(() -> new EntityNotFoundException("No user link found for personUuid: " + personUuid));
     }
