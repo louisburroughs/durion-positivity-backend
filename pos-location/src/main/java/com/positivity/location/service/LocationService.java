@@ -12,12 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayDeque;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Queue;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -125,24 +121,6 @@ public class LocationService {
     }
 
     private boolean isDescendant(UUID ancestorId, UUID targetDescendantId) {
-        Set<UUID> visited = new HashSet<>();
-        Queue<UUID> queue = new ArrayDeque<>();
-        queue.add(ancestorId);
-
-        while (!queue.isEmpty()) {
-            UUID current = queue.poll();
-            if (!visited.add(current)) {
-                continue;
-            }
-            List<LocationParent> children = locationParentRepository.findByParent_Id(current);
-            for (LocationParent relation : children) {
-                UUID childId = relation.getChild().getId();
-                if (targetDescendantId.equals(childId)) {
-                    return true;
-                }
-                queue.add(childId);
-            }
-        }
-        return false;
+        return locationParentRepository.isDescendant(ancestorId, targetDescendantId);
     }
 }
