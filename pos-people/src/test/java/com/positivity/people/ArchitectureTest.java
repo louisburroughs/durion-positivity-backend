@@ -23,7 +23,7 @@ public class ArchitectureTest {
         static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
                         .that().resideInAPackage("..internal.controller..")
                         .and().haveSimpleNameNotContaining("TimeEntryAdjustmentController")
-                        .and().haveSimpleNameNotContaining("TimeEntryExceptionController")
+                        .and().haveSimpleNameNotContaining("TimeEntryIssueController")
                         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
                         .allowEmptyShould(true)
                         .because("controllers must go through service layer");
@@ -33,7 +33,7 @@ public class ArchitectureTest {
                         .that().resideInAPackage("..internal.controller..")
                         .and().haveSimpleNameNotContaining("PersonController")
                         .and().haveSimpleNameNotContaining("TimeEntryAdjustmentController")
-                        .and().haveSimpleNameNotContaining("TimeEntryExceptionController")
+                        .and().haveSimpleNameNotContaining("TimeEntryIssueController")
                         .should().dependOnClassesThat().resideInAPackage("..internal.entity..")
                         .allowEmptyShould(true)
                         .because("controllers should work with DTOs, not entities");

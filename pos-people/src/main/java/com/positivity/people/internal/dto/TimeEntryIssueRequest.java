@@ -2,9 +2,9 @@ package com.positivity.people.internal.dto;
 
 import java.time.OffsetDateTime;
 
-public class TimeEntryExceptionRequest {
+public class TimeEntryIssueRequest {
     private String employeeId;
-    private String exceptionCode;
+    private String issueCode;
     private String severity;
     private String timeEntryId;
     private String resolutionNotes;
@@ -18,12 +18,12 @@ public class TimeEntryExceptionRequest {
         this.employeeId = employeeId;
     }
 
-    public String getExceptionCode() {
-        return exceptionCode;
+    public String getIssueCode() {
+        return issueCode;
     }
 
-    public void setExceptionCode(String exceptionCode) {
-        this.exceptionCode = exceptionCode;
+    public void setIssueCode(String issueCode) {
+        this.issueCode = issueCode;
     }
 
     public String getSeverity() {

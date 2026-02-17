@@ -12,11 +12,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "time_entry_exception")
-public class TimeEntryException {
+public class TimeEntryIssue {
 
     @Id
     @Column(name = "exception_id", columnDefinition = "UUID", updatable = false, nullable = false)
-    private UUID exceptionId;
+    private UUID issueId;
 
     @Column(name = "employee_id", nullable = false)
     private String employeeId;
@@ -25,7 +25,7 @@ public class TimeEntryException {
     private LocalDate workDate;
 
     @Column(name = "exception_code", length = 200)
-    private String exceptionCode;
+    private String issueCode;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "severity", length = 50)
@@ -52,8 +52,8 @@ public class TimeEntryException {
 
     @PrePersist
     public void generateIdAndTimestamp() {
-        if (exceptionId == null) {
-            exceptionId = UUIDv7Generator.generate();
+        if (issueId == null) {
+            issueId = UUIDv7Generator.generate();
         }
         if (detectedAt == null) {
             detectedAt = Instant.now();
@@ -61,12 +61,12 @@ public class TimeEntryException {
     }
 
     // Getters and setters
-    public UUID getExceptionId() {
-        return exceptionId;
+    public UUID getIssueId() {
+        return issueId;
     }
 
-    public void setExceptionId(UUID exceptionId) {
-        this.exceptionId = exceptionId;
+    public void setIssueId(UUID issueId) {
+        this.issueId = issueId;
     }
 
     public String getEmployeeId() {
@@ -85,12 +85,12 @@ public class TimeEntryException {
         this.workDate = workDate;
     }
 
-    public String getExceptionCode() {
-        return exceptionCode;
+    public String getIssueCode() {
+        return issueCode;
     }
 
-    public void setExceptionCode(String exceptionCode) {
-        this.exceptionCode = exceptionCode;
+    public void setIssueCode(String issueCode) {
+        this.issueCode = issueCode;
     }
 
     public ExceptionSeverity getSeverity() {
