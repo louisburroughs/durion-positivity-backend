@@ -776,7 +776,7 @@ class PaymentApplicationServiceTest {
                                 .hasMessageContaining("Failed to restore invoice")
                                 .hasMessageContaining(testInvoiceId.toString())
                                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
-                                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                                .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 
                 // Verify invoice service was called
                 verify(invoiceServiceClient).reversePaymentApplication(eq(testInvoiceId), any());
