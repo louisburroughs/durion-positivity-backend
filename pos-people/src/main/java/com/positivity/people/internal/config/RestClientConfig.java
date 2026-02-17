@@ -29,7 +29,7 @@ public class RestClientConfig {
     @Bean
     public RestClient workexecRestClient(
             RestClient.Builder builder,
-            @Value("${pos.workexec.base-url:http://pos-workexec:8087}") String workexecBaseUrl,
+            @Value("${pos.workexec.base-url:http://workorder:8087}") String workexecBaseUrl,
             @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();

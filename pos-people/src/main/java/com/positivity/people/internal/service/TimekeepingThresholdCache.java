@@ -161,24 +161,26 @@ public class TimekeepingThresholdCache {
                     .map(TimekeepingThresholdCache.this::sanitizeThreshold)
                     .orElse(DEFAULT_THRESHOLD_MINUTES);
         }
-    }
 
-    private Optional<TimekeepingPolicy> selectEffectivePolicy(List<TimekeepingPolicy> candidates, Instant evaluationTime) {
-        return candidates.stream()
-                .filter(policy -> isEffective(policy, evaluationTime))
-                .sorted(Comparator
-                        .comparing(TimekeepingPolicy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(TimekeepingPolicy::getEffectiveStartAt,
-                                Comparator.nullsLast(Comparator.reverseOrder())))
-                .findFirst();
-    }
+        private Optional<TimekeepingPolicy> selectEffectivePolicy(List<TimekeepingPolicy> candidates,
+                Instant evaluationTime) {
+            return candidates.stream()
+                    .filter(policy -> isEffective(policy, evaluationTime))
+                    .sorted(Comparator
+                            .comparing(TimekeepingPolicy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                            .thenComparing(TimekeepingPolicy::getEffectiveStartAt,
+                                    Comparator.nullsLast(Comparator.reverseOrder())))
+                    .findFirst();
+        }
 
-    private boolean isEffective(TimekeepingPolicy policy, Instant evaluationTime) {
-        boolean startsBeforeOrAt = policy.getEffectiveStartAt() == null
-                || !policy.getEffectiveStartAt().isAfter(evaluationTime);
-        boolean endsAfterOrAt = policy.getEffectiveEndAt() == null
-                || !policy.getEffectiveEndAt().isBefore(evaluationTime);
-        return startsBeforeOrAt && endsAfterOrAt;
+        private boolean isEffective(TimekeepingPolicy policy, Instant evaluationTime) {
+            boolean startsBeforeOrAt = policy.getEffectiveStartAt() == null
+                    || !policy.getEffectiveStartAt().isAfter(evaluationTime);
+            boolean endsAfterOrAt = policy.getEffectiveEndAt() == null
+                    || !policy.getEffectiveEndAt().isBefore(evaluationTime);
+            return startsBeforeOrAt && endsAfterOrAt;
+        }
+
     }
 
     private int sanitizeThreshold(Integer threshold) {
