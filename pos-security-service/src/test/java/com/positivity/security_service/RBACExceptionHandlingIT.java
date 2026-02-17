@@ -141,7 +141,6 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
                         .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .param("userId", nonExistentUserId.toString())
                         .param("permission", "some:permission")
-                        .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
