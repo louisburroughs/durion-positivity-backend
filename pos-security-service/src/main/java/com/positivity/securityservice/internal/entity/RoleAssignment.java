@@ -5,6 +5,8 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.AccessLevel;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -60,6 +62,15 @@ public class RoleAssignment {
      * End date when this assignment expires (null = no expiration)
      */
     private LocalDateTime effectiveEndDate;
+
+    /**
+     * Timestamp when this assignment's revocation was last set or updated.
+     * Updated automatically whenever effectiveEndDate is set.
+     * Always set to current timestamp (cannot be backdated or future-dated).
+     * Null if the assignment has never been revoked.
+     */
+    @Setter(AccessLevel.PRIVATE)
+    private Instant revokedAt;
 
     /**
      * When this assignment was created
@@ -120,5 +131,20 @@ public class RoleAssignment {
             return true;
         }
         return scopeLocationIds.contains(locationId);
+    }
+
+    /**
+     * Custom setter for effectiveEndDate that automatically updates revokedAt.
+     * When the effective end date is set (revocation), the revokedAt timestamp
+     * is automatically set to the current time to track when the revocation occurred.
+     * 
+     * @param effectiveEndDate the new effective end date
+     */
+    public void setEffectiveEndDate(LocalDateTime effectiveEndDate) {
+        this.effectiveEndDate = effectiveEndDate;
+        // Automatically update revokedAt when effectiveEndDate is set
+        if (effectiveEndDate != null) {
+            this.revokedAt = Instant.now();
+        }
     }
 }
