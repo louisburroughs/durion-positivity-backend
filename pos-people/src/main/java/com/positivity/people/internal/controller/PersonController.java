@@ -1,20 +1,28 @@
 package com.positivity.people.internal.controller;
 
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.Person;
 import com.positivity.people.service.PersonService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Tag(name = "People API", description = "Operations related to people records")
@@ -32,10 +40,8 @@ public class PersonController {
     }
 
     @Operation(summary = "Get person by ID", description = "Retrieve a person by their unique ID.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Person found and returned."),
-            @ApiResponse(responseCode = "404", description = "Person not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Person found and returned.")
+    @ApiResponse(responseCode = "404", description = "Person not found.")
     @GetMapping("/{personId}")
     public ResponseEntity<Person> getPersonById(
             @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
@@ -55,10 +61,8 @@ public class PersonController {
     }
 
     @Operation(summary = "Update an existing person", description = "Update the details of an existing person.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Person updated successfully."),
-            @ApiResponse(responseCode = "404", description = "Person not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Person updated successfully.")
+    @ApiResponse(responseCode = "404", description = "Person not found.")
     @EmitEvent(id = "PEOPLE_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
     public ResponseEntity<Person> updatePerson(
@@ -73,10 +77,8 @@ public class PersonController {
     }
 
     @Operation(summary = "Delete a person", description = "Delete a person by their unique ID.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Person deleted successfully."),
-            @ApiResponse(responseCode = "404", description = "Person not found.")
-    })
+    @ApiResponse(responseCode = "204", description = "Person deleted successfully.")
+    @ApiResponse(responseCode = "404", description = "Person not found.")
     @DeleteMapping("/{personId}")
     public ResponseEntity<Void> deletePerson(
             @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {

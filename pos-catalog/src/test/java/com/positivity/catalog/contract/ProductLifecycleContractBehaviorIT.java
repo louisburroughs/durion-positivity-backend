@@ -7,8 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.catalog.BaseIntegrationTest;
-import com.positivity.catalog.internal.dao.CatalogDao;
-import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
+import com.positivity.catalog.service.CatalogService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
@@ -22,7 +22,7 @@ import org.springframework.http.MediaType;
 class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
 
     @Autowired
-    private CatalogDao catalogDao;
+    private CatalogService catalogService;
 
     @Test
     @DisplayName("LC-001: Set product lifecycle to INACTIVE with effective date")
@@ -119,11 +119,11 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
     }
 
     private UUID createProductAndReturnId(String name) {
-        ProductEntity product = new ProductEntity();
-        product.setName(name);
-        product.setShortDescription("Short " + name);
-        product.setLongDescription("Long " + name);
-        product.setType("PHYSICAL");
-        return catalogDao.saveProduct(product).getId();
+        CatalogItemRequestDto request = new CatalogItemRequestDto();
+        request.setName(name);
+        request.setShortDescription("Short " + name);
+        request.setLongDescription("Long " + name);
+        request.setType("PHYSICAL");
+        return catalogService.addCatalogItem("product", request).getId();
     }
 }

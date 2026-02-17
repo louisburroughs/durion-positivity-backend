@@ -6,6 +6,10 @@ import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ProductLifecycleState;
 import com.positivity.catalog.internal.entity.ProductReplacementEntity;
+import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
+import com.positivity.catalog.internal.exception.CatalogForbiddenOperationException;
+import com.positivity.catalog.internal.exception.CatalogNotFoundException;
+import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import io.micrometer.core.instrument.Counter;
@@ -53,7 +57,7 @@ public class ProductLifecycleService {
     public ProductLifecycleResponse updateLifecycle(UUID productId, ProductLifecycleUpdateRequest request) {
         if (request == null || request.getLifecycleState() == null) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new IllegalArgumentException("lifecycleState is required");
+            throw new CatalogValidationException("lifecycleState is required");
         }
         ProductEntity product = findProduct(productId);
         ProductLifecycleState currentState = resolveCurrentState(product);
@@ -62,7 +66,7 @@ public class ProductLifecycleService {
         if (currentState == ProductLifecycleState.DISCONTINUED
                 && nextState != ProductLifecycleState.DISCONTINUED) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new IllegalStateException(DISCONTINUED_REACTIVATION_ERROR);
+            throw new CatalogBusinessRuleException(DISCONTINUED_REACTIVATION_ERROR);
         }
 
         boolean overridePermissionUsed = nextState == ProductLifecycleState.DISCONTINUED
@@ -70,19 +74,20 @@ public class ProductLifecycleService {
 
         if (overridePermissionUsed && !hasAuthority("product:lifecycle:override_discontinued")) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new SecurityException("Missing required permission: product:lifecycle:override_discontinued");
+            throw new CatalogForbiddenOperationException(
+                    "Missing required permission: product:lifecycle:override_discontinued");
         }
 
         if (overridePermissionUsed && isBlank(request.getOverrideReason())) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new IllegalArgumentException(
+            throw new CatalogValidationException(
                     "overrideReason is required when discontinued override permission is used");
         }
 
         Instant effectiveAt = resolveEffectiveAt(request.getEffectiveAt(), request.getEffectiveDate());
         if (effectiveAt.isBefore(Instant.now())) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new IllegalArgumentException("effectiveAt cannot be in the past");
+            throw new CatalogValidationException("effectiveAt cannot be in the past");
         }
 
         product.setLifecycleState(nextState);
@@ -111,15 +116,15 @@ public class ProductLifecycleService {
     public ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId,
             ProductReplacementRequest request) {
         if (request == null || request.getReplacementProductId() == null) {
-            throw new IllegalArgumentException("replacementProductId is required");
+            throw new CatalogValidationException("replacementProductId is required");
         }
         if (request.getPriorityOrder() == null || request.getPriorityOrder() <= 0) {
-            throw new IllegalArgumentException("priorityOrder must be greater than zero");
+            throw new CatalogValidationException("priorityOrder must be greater than zero");
         }
 
         ProductEntity originalProduct = findProduct(productId);
         if (resolveCurrentState(originalProduct) != ProductLifecycleState.DISCONTINUED) {
-            throw new IllegalStateException(
+            throw new CatalogBusinessRuleException(
                     "Replacement products can only be added when lifecycleState is DISCONTINUED");
         }
 
@@ -145,7 +150,7 @@ public class ProductLifecycleService {
 
     private ProductEntity findProduct(UUID productId) {
         return productRepository.findById(productId)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + productId));
+                .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + productId));
     }
 
     private ProductLifecycleState resolveCurrentState(ProductEntity product) {
