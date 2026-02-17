@@ -94,7 +94,7 @@ public class PeopleExceptionHandler {
 
     private HttpStatus determineHttpStatus(SecurityServiceException ex) {
         int statusCode = ex.getHttpStatus();
-        
+
         return switch (statusCode) {
             case 400 -> HttpStatus.BAD_REQUEST;
             case 401 -> HttpStatus.UNAUTHORIZED;

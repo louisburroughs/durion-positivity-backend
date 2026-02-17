@@ -46,7 +46,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
         if (!personRepository.existsById(personUuid)) {
             throw new PersonNotFoundException(personUuid);
         }
-        
+
         List<RoleDto> allRoles = new ArrayList<>();
         allRoles.addAll(securityServiceClient.getAvailableRoles(LOCATION_SCOPE));
         allRoles.addAll(securityServiceClient.getAvailableRoles(GLOBAL_SCOPE));

@@ -317,12 +317,12 @@
                     "required": true
                 },
                 "responses": {
-                    "400": {
-                        "description": "Invalid request",
+                    "201": {
+                        "description": "Role assignment created successfully",
                         "content": {
-                            "application/problem+json": {
+                            "*/*": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ProblemDetail"
+                                    "$ref": "#/components/schemas/UserRoleDto"
                                 }
                             }
                         }
@@ -337,12 +337,12 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Role assignment created successfully",
+                    "400": {
+                        "description": "Invalid request",
                         "content": {
-                            "*/*": {
+                            "application/problem+json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRoleDto"
+                                    "$ref": "#/components/schemas/ProblemDetail"
                                 }
                             }
                         }
@@ -538,8 +538,8 @@
                     "required": true
                 },
                 "responses": {
-                    "409": {
-                        "description": "User already linked",
+                    "201": {
+                        "description": "Link created successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -548,8 +548,8 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Link created successfully",
+                    "409": {
+                        "description": "User already linked",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1377,8 +1377,8 @@
                     }
                 ],
                 "responses": {
-                    "400": {
-                        "description": "Invalid request for revoking role assignment",
+                    "404": {
+                        "description": "Person or role assignment not found",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -1387,8 +1387,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Person or role assignment not found",
+                    "400": {
+                        "description": "Invalid request for revoking role assignment",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -1460,6 +1460,32 @@
                     "roleCode"
                 ]
             },
+            "UserRoleDto": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string"
+                    },
+                    "roleCode": {
+                        "type": "string"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "startDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "active": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "ProblemDetail": {
                 "type": "object",
                 "properties": {
@@ -1484,32 +1510,6 @@
                     "properties": {
                         "type": "object",
                         "additionalProperties": {}
-                    }
-                }
-            },
-            "UserRoleDto": {
-                "type": "object",
-                "properties": {
-                    "userId": {
-                        "type": "string"
-                    },
-                    "roleCode": {
-                        "type": "string"
-                    },
-                    "locationId": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "startDate": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "endDate": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "active": {
-                        "type": "boolean"
                     }
                 }
             },
