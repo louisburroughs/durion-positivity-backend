@@ -137,7 +137,7 @@ public class TimeEntryAdjustmentController {
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE", apiVersion = "1")
     @PostMapping(value = "/adjustments/{adjustmentId}/approve", produces = "application/json")
-    public ResponseEntity<?> approveAdjustment(@PathVariable java.util.UUID adjustmentId,
+    public ResponseEntity<Object> approveAdjustment(@PathVariable java.util.UUID adjustmentId,
             @RequestHeader(value = "X-Permissions", required = false) String permissionsHeader,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {

@@ -1,35 +1,42 @@
 package com.positivity.people.service;
 
-import com.positivity.people.internal.entity.TimeEntryIssue;
-import com.positivity.people.internal.entity.TimeEntryAudit;
-import com.positivity.people.internal.repository.TimeEntryIssueRepository;
-import com.positivity.people.internal.repository.TimeEntryAuditRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
-public class TimeEntryIssueServiceTest {
+import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.entity.TimeEntryIssue;
+import com.positivity.people.internal.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.repository.TimeEntryIssueRepository;
+
+class TimeEntryIssueServiceTest {
 
     private TimeEntryIssueRepository issueRepository;
     private TimeEntryAuditRepository auditRepository;
     private TimeEntryIssueService service;
 
     @BeforeEach
-    public void setup() {
+    void setup() {
         issueRepository = mock(TimeEntryIssueRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
         service = new TimeEntryIssueService(issueRepository, auditRepository);
     }
 
     @Test
-    public void resolveException_withPermission_succeeds() {
+    void resolveException_withPermission_succeeds() {
         UUID id = UUID.randomUUID();
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
@@ -53,7 +60,7 @@ public class TimeEntryIssueServiceTest {
     }
 
     @Test
-    public void resolveException_withoutPermission_fails() {
+    void resolveException_withoutPermission_fails() {
         UUID id = UUID.randomUUID();
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
@@ -70,7 +77,7 @@ public class TimeEntryIssueServiceTest {
     }
 
     @Test
-    public void actionException_acknowledge_succeeds() {
+    void actionException_acknowledge_succeeds() {
         UUID id = UUID.randomUUID();
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
@@ -91,7 +98,7 @@ public class TimeEntryIssueServiceTest {
     }
 
     @Test
-    public void actionException_waive_withReason_succeeds() {
+    void actionException_waive_withReason_succeeds() {
         UUID id = UUID.randomUUID();
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);
@@ -112,7 +119,7 @@ public class TimeEntryIssueServiceTest {
     }
 
     @Test
-    public void actionException_fromResolvedStatus_fails() {
+    void actionException_fromResolvedStatus_fails() {
         UUID id = UUID.randomUUID();
         TimeEntryIssue ex = new TimeEntryIssue();
         ex.setIssueId(id);

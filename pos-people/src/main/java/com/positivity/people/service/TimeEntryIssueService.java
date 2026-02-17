@@ -59,6 +59,7 @@ public class TimeEntryIssueService {
                     + (actionNotes != null ? actionNotes : ""));
             auditRepository.save(audit);
         } catch (Exception ignore) {
+            // Audit logging failure should not prevent exception action from succeeding
         }
 
         return true;
@@ -85,6 +86,7 @@ public class TimeEntryIssueService {
                 audit.setDetails("Permission denied for exception resolve");
                 auditRepository.save(audit);
             } catch (Exception ignore) {
+                // Audit logging failure should not prevent exception action from succeeding
             }
             return false;
         }
@@ -114,6 +116,7 @@ public class TimeEntryIssueService {
             audit.setDetails("Exception resolved: " + (resolutionNotes != null ? resolutionNotes : ""));
             auditRepository.save(audit);
         } catch (Exception ignore) {
+            // Audit logging failure should not prevent exception action from succeeding
         }
 
         return true;
