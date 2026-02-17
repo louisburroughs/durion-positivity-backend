@@ -5,9 +5,11 @@ import com.positivity.people.internal.dto.TimeEntryAdjustment;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.service.TimeEntryAdjustmentService;
+import com.positivity.people.internal.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
 import java.util.UUID;
@@ -53,25 +55,43 @@ class TimeEntryAdjustmentControllerTest {
         when(service.createAdjustment(req)).thenReturn(created);
 
         ResponseEntity<TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
-        assertEquals(200, resp.getStatusCode().value());
+        assertEquals(201, resp.getStatusCode().value());
         assertNotNull(resp.getBody());
         assertTrue(resp.getBody().isSuccess());
         assertNotNull(resp.getBody().getAdjustmentId());
     }
 
     @Test
-    void createAdjustment_failure_returnsBadRequest() {
+    void createAdjustment_failure_throwsExceptionForHandler() {
         UUID timeEntryId = UUID.randomUUID();
         TimeEntryAdjustmentRequest req = new TimeEntryAdjustmentRequest();
         req.setTimeEntryId(timeEntryId.toString());
         req.setReasonCode(" ");
 
-        TimeEntryAdjustmentResponse invalid = new TimeEntryAdjustmentResponse(null, false, "reasonCode is required");
-        when(service.createAdjustment(req)).thenReturn(invalid);
+        when(service.createAdjustment(req)).thenThrow(new IllegalArgumentException("reasonCode is required"));
 
-        ResponseEntity<TimeEntryAdjustmentResponse> resp = controller.createAdjustment(req);
-        assertEquals(400, resp.getStatusCode().value());
-        assertNotNull(resp.getBody());
-        assertFalse(resp.getBody().isSuccess());
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> controller.createAdjustment(req));
+        assertEquals("reasonCode is required", ex.getMessage());
+    }
+
+    @Test
+    void approveAdjustment_notFound_throwsExceptionForHandler() {
+        UUID adjustmentId = UUID.randomUUID();
+        doThrow(new NotFoundException("Adjustment not found")).when(service)
+                .approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+
+        assertThrows(NotFoundException.class,
+                () -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
+    }
+
+    @Test
+    void approveAdjustment_forbidden_throwsExceptionForHandler() {
+        UUID adjustmentId = UUID.randomUUID();
+        doThrow(new AccessDeniedException("Permission denied")).when(service)
+                .approveAdjustment(eq(adjustmentId), anyString(), any(), any());
+
+        assertThrows(AccessDeniedException.class,
+                () -> controller.approveAdjustment(adjustmentId, null, "user-1", "cid-1"));
     }
 }

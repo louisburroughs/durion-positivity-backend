@@ -5,6 +5,7 @@ import com.positivity.people.internal.dto.TimeEntryAdjustment;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.service.TimeEntryAdjustmentService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,17 +30,16 @@ public class TimeEntryAdjustmentController {
 
     @Operation(summary = "Create a time entry adjustment", description = "Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Adjustment created"),
-            @ApiResponse(responseCode = "400", description = "Invalid request")
+            @ApiResponse(responseCode = "201", description = "Adjustment created"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "404", description = "Time entry not found"),
+            @ApiResponse(responseCode = "409", description = "Invalid time entry state for adjustment")
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_CREATE", apiVersion = "1")
     @PostMapping(value = "/adjustments", consumes = "application/json", produces = "application/json")
     public ResponseEntity<TimeEntryAdjustmentResponse> createAdjustment(@RequestBody TimeEntryAdjustmentRequest req) {
         TimeEntryAdjustmentResponse resp = adjustmentService.createAdjustment(req);
-        if (!resp.isSuccess()) {
-            return ResponseEntity.badRequest().body(resp);
-        }
-        return ResponseEntity.ok(resp);
+        return ResponseEntity.status(HttpStatus.CREATED).body(resp);
     }
 
     @Operation(summary = "List adjustments for a time entry", description = "Retrieve all adjustments associated with a specific time entry.")
@@ -70,12 +70,7 @@ public class TimeEntryAdjustmentController {
                     .collect(Collectors.toSet());
         }
         String actor = userId != null ? userId : "system";
-        boolean ok = adjustmentService.approveAdjustment(adjustmentId, actor, perms, correlationId);
-        if (ok)
-            return ResponseEntity.ok().build();
-        com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
-                "FORBIDDEN",
-                "forbidden or not found", correlationId);
-        return ResponseEntity.status(403).body(err);
+        adjustmentService.approveAdjustment(adjustmentId, actor, perms, correlationId);
+        return ResponseEntity.ok().build();
     }
 }
