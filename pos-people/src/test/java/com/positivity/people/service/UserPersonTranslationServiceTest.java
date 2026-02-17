@@ -57,7 +57,7 @@ class UserPersonTranslationServiceTest {
         link.setUserId("user-123");
         link.setStatus(UserLinkStatus.ACTIVE);
         when(userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE))
-            .thenReturn(Optional.of(link));
+                .thenReturn(Optional.of(link));
 
         Optional<String> result = userPersonTranslationService.getUserIdForPerson(personUuid);
 
@@ -68,7 +68,7 @@ class UserPersonTranslationServiceTest {
     void getUserIdForPerson_returnsEmptyWhenNoLinkExists() {
         UUID personUuid = UUID.randomUUID();
         when(userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE))
-            .thenReturn(Optional.empty());
+                .thenReturn(Optional.empty());
 
         Optional<String> result = userPersonTranslationService.getUserIdForPerson(personUuid);
 

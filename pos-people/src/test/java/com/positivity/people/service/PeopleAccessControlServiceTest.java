@@ -43,7 +43,7 @@ class PeopleAccessControlServiceTest {
         UUID personUuid = UUID.randomUUID();
         RoleDto locationRole = RoleDto.builder().code("MANAGER").scopeType("LOCATION").build();
         RoleDto globalRole = RoleDto.builder().code("ADMIN").scopeType("GLOBAL").build();
-        
+
         when(personRepository.existsById(personUuid)).thenReturn(true);
         when(securityServiceClient.getAvailableRoles("LOCATION")).thenReturn(List.of(locationRole));
         when(securityServiceClient.getAvailableRoles("GLOBAL")).thenReturn(List.of(globalRole));
@@ -53,7 +53,7 @@ class PeopleAccessControlServiceTest {
         assertEquals(2, result.size());
         verify(personRepository).existsById(personUuid);
     }
-    
+
     @Test
     void getAvailableRolesForPerson_throwsWhenPersonNotFound() {
         UUID personUuid = UUID.randomUUID();
