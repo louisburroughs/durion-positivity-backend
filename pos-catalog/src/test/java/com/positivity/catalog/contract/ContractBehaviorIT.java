@@ -80,6 +80,72 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 .andExpect(status().isNotImplemented());
     }
 
+    @Test
+    @DisplayName("CP-006: Create supplier-item cost tiers with valid contiguous ranges")
+    void testCreateSupplierItemCost_HappyPath() throws Exception {
+        UUID supplierId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+
+        mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validSupplierItemCostPayload(supplierId, itemId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath("$.itemId").value(itemId.toString()))
+                .andExpect(jsonPath("$.currencyCode").value("USD"))
+                .andExpect(jsonPath("$.tiers[0].minQuantity").value(1))
+                .andExpect(jsonPath("$.tiers[0].maxQuantity").value(10))
+                .andExpect(jsonPath("$.tiers[0].unitCost").value(5.00))
+                .andExpect(jsonPath("$.tiers[2].minQuantity").value(51))
+                .andExpect(jsonPath("$.tiers[2].maxQuantity").doesNotExist())
+                .andExpect(jsonPath("$.tiers[2].unitCost").value(4.00));
+    }
+
+    @Test
+    @DisplayName("CP-007: Retrieve supplier-item cost tiers by supplier and item")
+    void testGetSupplierItemCost_HappyPath() throws Exception {
+        UUID supplierId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        createSupplierItemCost(supplierId, itemId);
+
+        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath("$.itemId").value(itemId.toString()))
+                .andExpect(jsonPath("$.tiers.length()").value(3));
+    }
+
+    @Test
+    @DisplayName("CP-008: Update supplier-item cost tiers")
+    void testUpdateSupplierItemCost_HappyPath() throws Exception {
+        UUID supplierId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        createSupplierItemCost(supplierId, itemId);
+
+        mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updatedSupplierItemCostPayload()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currencyCode").value("USD"))
+                .andExpect(jsonPath("$.baseCost").value(6.50))
+                .andExpect(jsonPath("$.tiers[0].minQuantity").value(1))
+                .andExpect(jsonPath("$.tiers[1].minQuantity").value(26));
+    }
+
+    @Test
+    @DisplayName("CP-009: Delete supplier-item cost tiers")
+    void testDeleteSupplierItemCost_HappyPath() throws Exception {
+        UUID supplierId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        createSupplierItemCost(supplierId, itemId);
+
+        mockMvc.perform(withAuth(delete("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+                .andExpect(status().isNotFound());
+    }
+
     // ===============================================
     // VALIDATION ERROR SCENARIOS
     // ===============================================
@@ -114,6 +180,64 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+        @Test
+        @DisplayName("VE-005: Reject overlapping supplier-item cost tiers")
+        void testCreateSupplierItemCost_OverlappingTiers() throws Exception {
+                UUID supplierId = UUID.randomUUID();
+                UUID itemId = UUID.randomUUID();
+
+                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(overlappingTierPayload(supplierId, itemId)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("INVALID_TIER_STRUCTURE")));
+        }
+
+        @Test
+        @DisplayName("VE-006: Reject supplier-item cost tiers with quantity gap")
+        void testCreateSupplierItemCost_GapTiers() throws Exception {
+                UUID supplierId = UUID.randomUUID();
+                UUID itemId = UUID.randomUUID();
+
+                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(gapTierPayload(supplierId, itemId)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("INVALID_TIER_STRUCTURE")));
+        }
+
+        @Test
+        @DisplayName("VE-007: Reject supplier-item cost tiers with non-positive unit cost")
+        void testCreateSupplierItemCost_InvalidUnitCost() throws Exception {
+                UUID supplierId = UUID.randomUUID();
+                UUID itemId = UUID.randomUUID();
+
+                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(invalidUnitCostPayload(supplierId, itemId)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("INVALID_DATA")));
+        }
+
+        @Test
+        @DisplayName("VE-008: Missing supplier-item cost returns 404")
+        void testGetSupplierItemCost_NotFound() throws Exception {
+                mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", UUID.randomUUID(), UUID.randomUUID())))
+                                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("VE-009: Create supplier-item cost forbidden without edit role")
+        void testCreateSupplierItemCost_Forbidden() throws Exception {
+                UUID supplierId = UUID.randomUUID();
+                UUID itemId = UUID.randomUUID();
+
+                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"), "ROLE_CATALOG_VIEW")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(validSupplierItemCostPayload(supplierId, itemId)))
+                                .andExpect(status().isForbidden());
+        }
+
     // ===============================================
     // IDEMPOTENCY SCENARIOS
     // ===============================================
@@ -144,6 +268,24 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
         mockMvc.perform(withAuth(delete("/v1/products/catalog/{catalogId}", catalogId)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("ID-003: Repeated GET for supplier-item cost returns stable response")
+    void testGetSupplierItemCost_IdempotentRead() throws Exception {
+        UUID supplierId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        createSupplierItemCost(supplierId, itemId);
+
+        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath("$.itemId").value(itemId.toString()));
+
+        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath("$.itemId").value(itemId.toString()));
     }
 
     // ===============================================
@@ -180,6 +322,28 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         assertNotEquals(firstId, secondId);
     }
 
+        @Test
+        @DisplayName("CC-003: Sequential supplier-item cost updates preserve supplier-item identity")
+        void testSupplierItemCostSequentialUpdates_PreserveIdentity() throws Exception {
+                UUID supplierId = UUID.randomUUID();
+                UUID itemId = UUID.randomUUID();
+                createSupplierItemCost(supplierId, itemId);
+
+                mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(updatedSupplierItemCostPayload()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                                .andExpect(jsonPath("$.itemId").value(itemId.toString()));
+
+                mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(validUpdatePayloadWithDifferentValues()))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                                .andExpect(jsonPath("$.itemId").value(itemId.toString()));
+        }
+
     private UUID createCatalogAndReturnId(String name, String description) throws Exception {
         MvcResult result = mockMvc.perform(withAuth(post("/v1/products/catalog"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -196,5 +360,74 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         return objectMapper.writeValueAsString(Map.of(
                 "name", name,
                 "description", description));
+    }
+
+    private void createSupplierItemCost(UUID supplierId, UUID itemId) throws Exception {
+        mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validSupplierItemCostPayload(supplierId, itemId)))
+                .andExpect(status().isCreated());
+    }
+
+    private String validSupplierItemCostPayload(UUID supplierId, UUID itemId) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "supplierId", supplierId,
+                "itemId", itemId,
+                "currencyCode", "USD",
+                "baseCost", 6.25,
+                "tiers", java.util.List.of(
+                        Map.of("minQuantity", 1, "maxQuantity", 10, "unitCost", 5.00),
+                        Map.of("minQuantity", 11, "maxQuantity", 50, "unitCost", 4.50),
+                        Map.of("minQuantity", 51, "unitCost", 4.00))));
+    }
+
+    private String updatedSupplierItemCostPayload() throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "currencyCode", "USD",
+                "baseCost", 6.50,
+                "tiers", java.util.List.of(
+                        Map.of("minQuantity", 1, "maxQuantity", 25, "unitCost", 5.25),
+                        Map.of("minQuantity", 26, "unitCost", 4.75))));
+    }
+
+    private String overlappingTierPayload(UUID supplierId, UUID itemId) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "supplierId", supplierId,
+                "itemId", itemId,
+                "currencyCode", "USD",
+                "tiers", java.util.List.of(
+                        Map.of("minQuantity", 1, "maxQuantity", 10, "unitCost", 5.00),
+                        Map.of("minQuantity", 5, "maxQuantity", 15, "unitCost", 4.75),
+                        Map.of("minQuantity", 16, "unitCost", 4.50))));
+    }
+
+    private String gapTierPayload(UUID supplierId, UUID itemId) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "supplierId", supplierId,
+                "itemId", itemId,
+                "currencyCode", "USD",
+                "tiers", java.util.List.of(
+                        Map.of("minQuantity", 1, "maxQuantity", 10, "unitCost", 5.00),
+                        Map.of("minQuantity", 12, "maxQuantity", 20, "unitCost", 4.60),
+                        Map.of("minQuantity", 21, "unitCost", 4.20))));
+    }
+
+    private String invalidUnitCostPayload(UUID supplierId, UUID itemId) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "supplierId", supplierId,
+                "itemId", itemId,
+                "currencyCode", "USD",
+                "tiers", java.util.List.of(
+                        Map.of("minQuantity", 1, "maxQuantity", 10, "unitCost", 0.00),
+                        Map.of("minQuantity", 11, "unitCost", 4.10))));
+    }
+
+    private String validUpdatePayloadWithDifferentValues() throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "currencyCode", "USD",
+                "baseCost", 6.80,
+                "tiers", java.util.List.of(
+                        Map.of("minQuantity", 1, "maxQuantity", 30, "unitCost", 5.10),
+                        Map.of("minQuantity", 31, "unitCost", 4.55))));
     }
 }
