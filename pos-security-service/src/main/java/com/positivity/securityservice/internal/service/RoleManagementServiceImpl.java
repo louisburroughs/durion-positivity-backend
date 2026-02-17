@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -117,10 +117,10 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
 
-        LocalDate requestStart = request.getEffectiveStartDate() != null
+        LocalDateTime requestStart = request.getEffectiveStartDate() != null
                 ? request.getEffectiveStartDate()
-                : LocalDate.now();
-        LocalDate requestEnd = request.getEffectiveEndDate();
+                : LocalDateTime.now();
+        LocalDateTime requestEnd = request.getEffectiveEndDate();
 
         validateNoOverlappingAssignment(user.getId(), role.getId(), request, requestStart, requestEnd);
 
@@ -146,8 +146,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             UUID userId,
             UUID roleId,
             RoleAssignmentRequest request,
-            LocalDate requestStart,
-            LocalDate requestEnd) {
+            LocalDateTime requestStart,
+            LocalDateTime requestEnd) {
 
         List<RoleAssignment> existingAssignments =
                 roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId, roleId, request.getScopeType());
@@ -170,9 +170,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         }
     }
 
-    private boolean hasDateOverlap(RoleAssignment existing, LocalDate requestStart, LocalDate requestEnd) {
-        LocalDate existingStart = existing.getEffectiveStartDate();
-        LocalDate existingEnd = existing.getEffectiveEndDate();
+    private boolean hasDateOverlap(RoleAssignment existing, LocalDateTime requestStart, LocalDateTime requestEnd) {
+        LocalDateTime existingStart = existing.getEffectiveStartDate();
+        LocalDateTime existingEnd = existing.getEffectiveEndDate();
 
         return (existingEnd == null || !requestStart.isAfter(existingEnd))
                 && (requestEnd == null || !existingStart.isAfter(requestEnd));

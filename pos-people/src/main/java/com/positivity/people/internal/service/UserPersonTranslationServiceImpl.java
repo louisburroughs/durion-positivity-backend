@@ -1,5 +1,7 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.entity.UserPersonLink;
+import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonTranslationService;
 import jakarta.persistence.EntityNotFoundException;
@@ -31,10 +33,8 @@ public class UserPersonTranslationServiceImpl implements UserPersonTranslationSe
     @Override
     @NonNull
     public Optional<String> getUserIdForPerson(@NonNull UUID personUuid) {
-        return userPersonLinkRepository.findByPersonId(personUuid)
-                .stream()
-                .findFirst()
-                .map(link -> link.getUserId());
+        return userPersonLinkRepository.findByPersonIdAndStatus(personUuid, UserLinkStatus.ACTIVE)
+                .map(UserPersonLink::getUserId);
     }
 
     @Override

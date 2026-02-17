@@ -1,11 +1,11 @@
 CREATE TABLE user_person_links (
     id UUID PRIMARY KEY,
-    user_id VARCHAR22(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
     person_id UUID NOT NULL,
-    link_type VARCHAR2(50) DEFAULT 'PRIMARY',
+    link_type VARCHAR(50) DEFAULT 'PRIMARY',
     created_at timestamptz NOT NULL,
-    created_by VARCHAR2(255),
-    notes VARCHAR2(1000),
+    created_by VARCHAR(255),
+    notes VARCHAR(1000),
     CONSTRAINT uk_user_person UNIQUE (user_id, person_id),
     CONSTRAINT fk_person FOREIGN KEY (person_id) REFERENCES person(id) ON DELETE CASCADE
 );
