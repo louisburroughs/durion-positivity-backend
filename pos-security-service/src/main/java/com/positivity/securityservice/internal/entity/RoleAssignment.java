@@ -62,8 +62,9 @@ public class RoleAssignment {
     private LocalDate effectiveEndDate;
 
     /**
-     * Timestamp when this assignment was revoked.
-     * Once set during revocation, this value should not be modified (write-once).
+     * Timestamp when this assignment's revocation was last set or updated.
+     * Updated whenever effectiveEndDate is changed via revocation.
+     * Always set to current timestamp (cannot be backdated or future-dated).
      * Null if the assignment has never been revoked.
      */
     private Instant revokedAt;
