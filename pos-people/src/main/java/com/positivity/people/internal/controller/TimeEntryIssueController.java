@@ -1,11 +1,11 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
-import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
-import com.positivity.people.internal.entity.TimeEntryException;
-import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
-import com.positivity.people.service.TimeEntryExceptionService;
+import com.positivity.people.internal.dto.TimeEntryIssueRequest;
+import com.positivity.people.internal.dto.TimeEntryIssueResponse;
+import com.positivity.people.internal.entity.TimeEntryIssue;
+import com.positivity.people.internal.repository.TimeEntryIssueRepository;
+import com.positivity.people.service.TimeEntryIssueService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,15 +19,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 @RestController
 @RequestMapping("/v1/people/exceptions")
 @Tag(name = "People - Exceptions", description = "Time entry exception APIs")
-public class TimeEntryExceptionController {
+public class TimeEntryIssueController {
 
-    private final TimeEntryExceptionRepository exceptionRepository;
-    private final TimeEntryExceptionService exceptionService;
+    private final TimeEntryIssueRepository issueRepository;
+    private final TimeEntryIssueService issueService;
 
-    public TimeEntryExceptionController(TimeEntryExceptionRepository exceptionRepository,
-            TimeEntryExceptionService exceptionService) {
-        this.exceptionRepository = exceptionRepository;
-        this.exceptionService = exceptionService;
+    public TimeEntryIssueController(TimeEntryIssueRepository issueRepository,
+            TimeEntryIssueService issueService) {
+        this.issueRepository = issueRepository;
+        this.issueService = issueService;
     }
 
     @Operation(summary = "Create a time entry exception", description = "Create a new time entry exception record with validation of required fields.")
@@ -37,10 +37,10 @@ public class TimeEntryExceptionController {
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_CREATE", apiVersion = "1")
     @PostMapping(consumes = "application/json", produces = "application/json")
-    public ResponseEntity<TimeEntryExceptionResponse> createException(@RequestBody TimeEntryExceptionRequest req) {
-        TimeEntryException e = new TimeEntryException();
+    public ResponseEntity<TimeEntryIssueResponse> createException(@RequestBody TimeEntryIssueRequest req) {
+        TimeEntryIssue e = new TimeEntryIssue();
         e.setEmployeeId(req.getEmployeeId());
-        e.setExceptionCode(req.getExceptionCode());
+        e.setIssueCode(req.getIssueCode());
         if (req.getSeverity() != null) {
             try {
                 e.setSeverity(com.positivity.people.internal.model.ExceptionSeverity.valueOf(req.getSeverity()));
@@ -57,8 +57,8 @@ public class TimeEntryExceptionController {
         }
         e.setStatus(com.positivity.people.internal.model.ExceptionStatus.OPEN);
 
-        TimeEntryException saved = exceptionRepository.save(e);
-        TimeEntryExceptionResponse resp = new TimeEntryExceptionResponse(saved.getExceptionId(), true, "created");
+        TimeEntryIssue saved = issueRepository.save(e);
+        TimeEntryIssueResponse resp = new TimeEntryIssueResponse(saved.getIssueId(), true, "created");
         return ResponseEntity.ok(resp);
     }
 
@@ -67,24 +67,24 @@ public class TimeEntryExceptionController {
             @ApiResponse(responseCode = "200", description = "List returned")
     })
     @GetMapping(produces = "application/json")
-    public ResponseEntity<List<TimeEntryException>> listByEmployee(@RequestParam(required = false) String employeeId) {
-        List<TimeEntryException> list;
+    public ResponseEntity<List<TimeEntryIssue>> listByEmployee(@RequestParam(required = false) String employeeId) {
+        List<TimeEntryIssue> list;
         if (employeeId == null) {
-            list = exceptionRepository.findAll();
+            list = issueRepository.findAll();
         } else {
-            list = exceptionRepository.findByEmployeeId(employeeId);
+            list = issueRepository.findByEmployeeId(employeeId);
         }
         return ResponseEntity.ok(list);
     }
 
     @Operation(summary = "Acknowledge an exception", description = "Mark an exception as acknowledged by the specified actor.")
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE", apiVersion = "1")
-    @PostMapping(value = "/{exceptionId}/acknowledge", produces = "application/json")
-    public ResponseEntity<?> acknowledgeException(@PathVariable java.util.UUID exceptionId,
+    @PostMapping(value = "/{issueId}/acknowledge", produces = "application/json")
+    public ResponseEntity<?> acknowledgeException(@PathVariable java.util.UUID issueId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         String actor = userId != null ? userId : "system";
-        boolean ok = exceptionService.actionException(exceptionId,
+        boolean ok = issueService.actionException(issueId,
                 com.positivity.people.internal.model.ExceptionStatus.ACKNOWLEDGED, actor, null, correlationId);
         if (ok)
             return ResponseEntity.ok().build();
@@ -100,8 +100,8 @@ public class TimeEntryExceptionController {
             @ApiResponse(responseCode = "404", description = "Exception not found")
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE", apiVersion = "1")
-    @PostMapping(value = "/{exceptionId}/resolve", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<?> resolveException(@PathVariable java.util.UUID exceptionId,
+    @PostMapping(value = "/{issueId}/resolve", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> resolveException(@PathVariable java.util.UUID issueId,
             @RequestBody(required = false) java.util.Map<String, String> body,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
@@ -110,7 +110,7 @@ public class TimeEntryExceptionController {
         if (body != null && body.containsKey("resolutionNotes"))
             notes = body.get("resolutionNotes");
 
-        boolean ok = exceptionService.actionException(exceptionId,
+        boolean ok = issueService.actionException(issueId,
                 com.positivity.people.internal.model.ExceptionStatus.RESOLVED,
                 actor, notes, correlationId);
         if (ok)
@@ -128,8 +128,8 @@ public class TimeEntryExceptionController {
             @ApiResponse(responseCode = "404", description = "Exception not found")
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE", apiVersion = "1")
-    @PostMapping(value = "/{exceptionId}/waive", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<?> waiveException(@PathVariable java.util.UUID exceptionId,
+    @PostMapping(value = "/{issueId}/waive", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> waiveException(@PathVariable java.util.UUID issueId,
             @RequestBody java.util.Map<String, String> body,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
@@ -144,7 +144,7 @@ public class TimeEntryExceptionController {
         String actor = userId != null ? userId : "system";
         String waiveReason = body.get("waiveReason");
 
-        boolean ok = exceptionService.actionException(exceptionId,
+        boolean ok = issueService.actionException(issueId,
                 com.positivity.people.internal.model.ExceptionStatus.WAIVED,
                 actor, waiveReason, correlationId);
         if (ok)

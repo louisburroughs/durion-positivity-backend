@@ -1,8 +1,8 @@
 package com.positivity.people.service;
 
-import com.positivity.people.internal.entity.TimeEntryException;
+import com.positivity.people.internal.entity.TimeEntryIssue;
 import com.positivity.people.internal.entity.TimeEntryAudit;
-import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
+import com.positivity.people.internal.repository.TimeEntryIssueRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,25 +12,25 @@ import java.util.Optional;
 import java.util.Set;
 
 @Service
-public class TimeEntryExceptionService {
+public class TimeEntryIssueService {
 
-    private final TimeEntryExceptionRepository exceptionRepository;
+    private final TimeEntryIssueRepository issueRepository;
     private final TimeEntryAuditRepository auditRepository;
 
-    public TimeEntryExceptionService(TimeEntryExceptionRepository exceptionRepository,
+    public TimeEntryIssueService(TimeEntryIssueRepository issueRepository,
             TimeEntryAuditRepository auditRepository) {
-        this.exceptionRepository = exceptionRepository;
+        this.issueRepository = issueRepository;
         this.auditRepository = auditRepository;
     }
 
     @Transactional
-    public boolean actionException(java.util.UUID exceptionId, com.positivity.people.internal.model.ExceptionStatus targetStatus,
+    public boolean actionException(java.util.UUID issueId, com.positivity.people.internal.model.ExceptionStatus targetStatus,
             String actionUserId, String actionNotes, String correlationId) {
-        Optional<TimeEntryException> opt = exceptionRepository.findById(exceptionId);
+        Optional<TimeEntryIssue> opt = issueRepository.findById(issueId);
         if (opt.isEmpty()) {
             return false;
         }
-        TimeEntryException ex = opt.get();
+        TimeEntryIssue ex = opt.get();
 
         // Validate transition is allowed
         if (ex.getStatus() == com.positivity.people.internal.model.ExceptionStatus.RESOLVED ||
@@ -46,7 +46,7 @@ public class TimeEntryExceptionService {
         if (actionNotes != null) {
             ex.setResolutionNotes(actionNotes);
         }
-        exceptionRepository.save(ex);
+        issueRepository.save(ex);
 
         try {
             TimeEntryAudit audit = new TimeEntryAudit();
@@ -64,13 +64,13 @@ public class TimeEntryExceptionService {
     }
 
     @Transactional
-    public boolean resolveException(java.util.UUID exceptionId, String resolverUserId, Set<String> permissions,
+    public boolean resolveException(java.util.UUID issueId, String resolverUserId, Set<String> permissions,
             String resolutionNotes, String resolutionAction, String correlationId) {
-        Optional<TimeEntryException> opt = exceptionRepository.findById(exceptionId);
+        Optional<TimeEntryIssue> opt = issueRepository.findById(issueId);
         if (opt.isEmpty()) {
             return false;
         }
-        TimeEntryException ex = opt.get();
+        TimeEntryIssue ex = opt.get();
 
         boolean allowed = permissions != null && (permissions.contains("people:timeException:resolve")
                 || permissions.contains("admin"));
@@ -102,7 +102,7 @@ public class TimeEntryExceptionService {
         if (resolutionNotes != null) {
             ex.setResolutionNotes(resolutionNotes);
         }
-        exceptionRepository.save(ex);
+        issueRepository.save(ex);
 
         try {
             TimeEntryAudit audit = new TimeEntryAudit();
