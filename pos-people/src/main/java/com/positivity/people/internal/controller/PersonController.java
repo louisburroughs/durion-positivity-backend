@@ -1,7 +1,7 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.dto.Person;
 import com.positivity.people.service.PersonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

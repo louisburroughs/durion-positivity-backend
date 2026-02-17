@@ -49,7 +49,7 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.approval("PEOPLE_TIME_ENTRY_REJECT",
                                                 "Batch reject time entries").build(),
 
-                                // TimeEntryIssueController - 4 events
+                                // TimeEntryExceptionController - 4 events
                                 EventTypeRegistration.write("PEOPLE_TIME_ENTRY_EXCEPTION_CREATE",
                                                 "Create a time entry exception record").build(),
                                 EventTypeRegistration.write("PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE",

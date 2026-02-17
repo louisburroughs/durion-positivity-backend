@@ -2,26 +2,26 @@ package com.positivity.people.internal.dto;
 
 import java.util.UUID;
 
-public class TimeEntryIssueResponse {
-    private UUID issueId;
+public class TimeEntryExceptionResponse {
+    private UUID exceptionId;
     private boolean success;
     private String message;
 
-    public TimeEntryIssueResponse() {
+    public TimeEntryExceptionResponse() {
     }
 
-    public TimeEntryIssueResponse(UUID issueId, boolean success, String message) {
-        this.issueId = issueId;
+    public TimeEntryExceptionResponse(UUID exceptionId, boolean success, String message) {
+        this.exceptionId = exceptionId;
         this.success = success;
         this.message = message;
     }
 
-    public UUID getIssueId() {
-        return issueId;
+    public UUID getExceptionId() {
+        return exceptionId;
     }
 
-    public void setIssueId(UUID issueId) {
-        this.issueId = issueId;
+    public void setExceptionId(UUID exceptionId) {
+        this.exceptionId = exceptionId;
     }
 
     public boolean isSuccess() {

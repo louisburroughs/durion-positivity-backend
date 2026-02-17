@@ -1,6 +1,6 @@
 package com.positivity.people.service;
 
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.dto.Person;
 import com.positivity.people.internal.repository.PersonRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,11 +17,11 @@ public class PersonService {
     private final PersonRepository personRepository;
 
     public List<Person> getAllPeople() {
-        return personRepository.findAll();
+        return personRepository.findAll().stream().map(this::toDto).toList();
     }
 
     public Optional<Person> getPersonById(UUID id) {
-        return personRepository.findById(id);
+        return personRepository.findById(id).map(this::toDto);
     }
 
     @Transactional
@@ -31,7 +31,8 @@ public class PersonService {
             throw new IllegalArgumentException("Username is not valid or does not exist in security service");
         }
 
-        return personRepository.save(person);
+        com.positivity.people.internal.entity.Person saved = personRepository.save(toEntity(person));
+        return toDto(saved);
     }
 
     public void deletePerson(UUID id) {
@@ -43,5 +44,29 @@ public class PersonService {
         // TODO: Integrate with pos-security-service
         // For now, accept any username not already in use
         return !personRepository.existsByUsername(username);
+    }
+
+    private Person toDto(com.positivity.people.internal.entity.Person entity) {
+        Person dto = new Person();
+        dto.setId(entity.getId());
+        dto.setFirstName(entity.getFirstName());
+        dto.setLastName(entity.getLastName());
+        dto.setPrimaryEmail(entity.getPrimaryEmail());
+        dto.setSecondaryEmail(entity.getSecondaryEmail());
+        dto.setPhoneNumbers(entity.getPhoneNumbers());
+        dto.setUsername(entity.getUsername());
+        return dto;
+    }
+
+    private com.positivity.people.internal.entity.Person toEntity(Person dto) {
+        com.positivity.people.internal.entity.Person entity = new com.positivity.people.internal.entity.Person();
+        entity.setId(dto.getId());
+        entity.setFirstName(dto.getFirstName());
+        entity.setLastName(dto.getLastName());
+        entity.setPrimaryEmail(dto.getPrimaryEmail());
+        entity.setSecondaryEmail(dto.getSecondaryEmail());
+        entity.setPhoneNumbers(dto.getPhoneNumbers());
+        entity.setUsername(dto.getUsername());
+        return entity;
     }
 }

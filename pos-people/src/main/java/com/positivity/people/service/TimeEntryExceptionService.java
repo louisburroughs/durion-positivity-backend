@@ -1,37 +1,75 @@
 package com.positivity.people.service;
 
-import com.positivity.people.internal.entity.TimeEntryIssue;
+import com.positivity.people.internal.dto.TimeEntryException;
+import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
+import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
-import com.positivity.people.internal.repository.TimeEntryIssueRepository;
+import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 @Service
-public class TimeEntryIssueService {
+public class TimeEntryExceptionService {
 
-    private final TimeEntryIssueRepository issueRepository;
+    private final TimeEntryExceptionRepository exceptionRepository;
     private final TimeEntryAuditRepository auditRepository;
 
-    public TimeEntryIssueService(TimeEntryIssueRepository issueRepository,
+    public TimeEntryExceptionService(TimeEntryExceptionRepository exceptionRepository,
             TimeEntryAuditRepository auditRepository) {
-        this.issueRepository = issueRepository;
+        this.exceptionRepository = exceptionRepository;
         this.auditRepository = auditRepository;
     }
 
     @Transactional
-    public boolean actionException(java.util.UUID issueId,
+    public TimeEntryExceptionResponse createException(TimeEntryExceptionRequest request) {
+        com.positivity.people.internal.entity.TimeEntryException exception = new com.positivity.people.internal.entity.TimeEntryException();
+        exception.setEmployeeId(request.getEmployeeId());
+        exception.setExceptionCode(request.getExceptionCode());
+        if (request.getSeverity() != null) {
+            try {
+                exception.setSeverity(
+                        com.positivity.people.internal.enums.ExceptionSeverity.valueOf(request.getSeverity()));
+            } catch (IllegalArgumentException invalidSeverity) {
+                exception.setSeverity(com.positivity.people.internal.enums.ExceptionSeverity.WARNING);
+            }
+        }
+        exception.setTimeEntryId(request.getTimeEntryId());
+        exception.setResolutionNotes(request.getResolutionNotes());
+        if (request.getDetectedAt() != null) {
+            exception.setDetectedAt(request.getDetectedAt().toInstant());
+        } else {
+            exception.setDetectedAt(Instant.now());
+        }
+        exception.setStatus(com.positivity.people.internal.enums.ExceptionStatus.OPEN);
+
+        com.positivity.people.internal.entity.TimeEntryException saved = exceptionRepository.save(exception);
+        return new TimeEntryExceptionResponse(saved.getExceptionId(), true, "created");
+    }
+
+    @Transactional(readOnly = true)
+    public List<TimeEntryException> listByEmployee(String employeeId) {
+        List<com.positivity.people.internal.entity.TimeEntryException> exceptions = employeeId == null
+                ? exceptionRepository.findAll()
+                : exceptionRepository.findByEmployeeId(employeeId);
+        return exceptions.stream().map(this::toDto).toList();
+    }
+
+    @Transactional
+    public boolean actionException(java.util.UUID exceptionId,
             com.positivity.people.internal.enums.ExceptionStatus targetStatus,
             String actionUserId, String actionNotes, String correlationId) {
-        Optional<TimeEntryIssue> opt = issueRepository.findById(issueId);
+        Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
+                .findById(exceptionId);
         if (opt.isEmpty()) {
             return false;
         }
-        TimeEntryIssue ex = opt.get();
+        com.positivity.people.internal.entity.TimeEntryException ex = opt.get();
 
         // Validate transition is allowed
         if (ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.RESOLVED ||
@@ -47,7 +85,7 @@ public class TimeEntryIssueService {
         if (actionNotes != null) {
             ex.setResolutionNotes(actionNotes);
         }
-        issueRepository.save(ex);
+        exceptionRepository.save(ex);
 
         try {
             TimeEntryAudit audit = new TimeEntryAudit();
@@ -66,13 +104,14 @@ public class TimeEntryIssueService {
     }
 
     @Transactional
-    public boolean resolveException(java.util.UUID issueId, String resolverUserId, Set<String> permissions,
+    public boolean resolveException(java.util.UUID exceptionId, String resolverUserId, Set<String> permissions,
             String resolutionNotes, String resolutionAction, String correlationId) {
-        Optional<TimeEntryIssue> opt = issueRepository.findById(issueId);
+        Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
+                .findById(exceptionId);
         if (opt.isEmpty()) {
             return false;
         }
-        TimeEntryIssue ex = opt.get();
+        com.positivity.people.internal.entity.TimeEntryException ex = opt.get();
 
         boolean allowed = permissions != null && (permissions.contains("people:timeException:resolve")
                 || permissions.contains("admin"));
@@ -105,7 +144,7 @@ public class TimeEntryIssueService {
         if (resolutionNotes != null) {
             ex.setResolutionNotes(resolutionNotes);
         }
-        issueRepository.save(ex);
+        exceptionRepository.save(ex);
 
         try {
             TimeEntryAudit audit = new TimeEntryAudit();
@@ -120,5 +159,21 @@ public class TimeEntryIssueService {
         }
 
         return true;
+    }
+
+    private TimeEntryException toDto(com.positivity.people.internal.entity.TimeEntryException exception) {
+        TimeEntryException dto = new TimeEntryException();
+        dto.setExceptionId(exception.getExceptionId());
+        dto.setEmployeeId(exception.getEmployeeId());
+        dto.setWorkDate(exception.getWorkDate());
+        dto.setExceptionCode(exception.getExceptionCode());
+        dto.setSeverity(exception.getSeverity());
+        dto.setStatus(exception.getStatus());
+        dto.setTimeEntryId(exception.getTimeEntryId());
+        dto.setResolutionNotes(exception.getResolutionNotes());
+        dto.setDetectedAt(exception.getDetectedAt());
+        dto.setResolvedBy(exception.getResolvedBy());
+        dto.setResolvedAt(exception.getResolvedAt());
+        return dto;
     }
 }
