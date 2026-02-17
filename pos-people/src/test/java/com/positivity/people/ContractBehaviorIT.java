@@ -139,12 +139,12 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
                 String payload = """
                                 {
-                                        "decisions": [
-                                                {
-                                                        "timeEntryId": "11111111-1111-1111-1111-111111111111",
-                                                        "rejectionReason": "Policy mismatch"
-                                                }
-                                        ]
+                                "decisions": [
+                                        {
+                                        "timeEntryId": "11111111-1111-1111-1111-111111111111",
+                                        "rejectionReason": "Policy mismatch"
+                                        }
+                                    ]
                                 }
                                 """;
 

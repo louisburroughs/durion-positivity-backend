@@ -21,8 +21,8 @@ public class PeopleReportsController {
 
     private final PeopleReportsService peopleReportsService;
 
-    @Operation(summary = "Get attendance and job time discrepancy report", description = "Reporting endpoint for attendance vs. job time discrepancies.")
-    @ApiResponse(responseCode = "200", description = "Report generated successfully.")
+    @Operation(summary = "Get attendance and job time discrepancy report", description = "Generates a summary report of time entry approval statuses, aggregating counts of approved, pending, and rejected time entries. This report helps identify discrepancies between recorded attendance and job time data.")
+    @ApiResponse(responseCode = "200", description = "Report generated successfully. Returns aggregated counts of time entries by approval status.")
     @GetMapping("/attendanceJobtimeDiscrepancy")
     public ResponseEntity<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport() {
         log.info("Fetching attendance job time discrepancy report");
