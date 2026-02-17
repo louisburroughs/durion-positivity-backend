@@ -101,9 +101,6 @@ public class PeopleExceptionHandler {
             case 403 -> HttpStatus.FORBIDDEN;
             case 404 -> HttpStatus.NOT_FOUND;
             case 409 -> HttpStatus.CONFLICT;
-            case 502 -> HttpStatus.BAD_GATEWAY;
-            case 503 -> HttpStatus.SERVICE_UNAVAILABLE;
-            case 504 -> HttpStatus.GATEWAY_TIMEOUT;
             default -> {
                 if (statusCode >= 500 && statusCode < 600) {
                     yield HttpStatus.INTERNAL_SERVER_ERROR;
