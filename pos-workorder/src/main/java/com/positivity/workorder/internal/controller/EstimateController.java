@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.controller;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -247,77 +248,29 @@ public class EstimateController {
         try {
             log.info("Promoting estimate {} to workorder (idempotencyKey={})", estimateId, idempotencyKey);
 
-            // Check idempotency key if provided
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
-                if (existingWorkorderId.isPresent()) {
-                    log.info("Idempotency key {} already processed - returning existing workorder {}",
-                            idempotencyKey, existingWorkorderId.get());
-                    return workorderService.getWorkorderById(existingWorkorderId.get())
-                            .map(WorkorderResponse::fromEntity)
-                            .map(ResponseEntity::ok)
-                            .orElseGet(() -> {
-                                log.error("Existing workorder {} not found for idempotency key {} - data inconsistency",
-                                        existingWorkorderId.get(), idempotencyKey);
-                                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                            });
-                }
+            ResponseEntity<WorkorderResponse> idempotentResponse = getIdempotentResponseIfPresent(idempotencyKey);
+            if (idempotentResponse != null) {
+                return idempotentResponse;
             }
 
-            // The WorkorderService.createWorkorder method already validates promotion
-            // preconditions
-            // and throws PromotionValidationException if validation fails
             Workorder workorder = workorderService.createWorkorder(estimateId, null);
-
-            // Convert to DTO
             WorkorderResponse response = WorkorderResponse.fromEntity(workorder);
 
-            // Register idempotency key if provided
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                try {
-                    idempotencyService.registerKey(idempotencyKey, response.getId());
-                } catch (DataIntegrityViolationException e) {
-                    // Race condition: another request already registered this key
-                    // Check if it points to the same workorder or a different one
-                    var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
-                    if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(response.getId())) {
-                        log.warn(
-                                "Race condition detected: idempotency key {} already registered for different workorder {}",
-                                idempotencyKey, existingWorkorderId.get());
-                        // Return the existing workorder to maintain idempotency semantics
-                        return workorderService.getWorkorderById(existingWorkorderId.get())
-                                .map(WorkorderResponse::fromEntity)
-                                .map(ResponseEntity::ok)
-                                .orElse(ResponseEntity.ok(response)); // Fallback to current if not found
-                    }
-                    // If it points to the same workorder, we can proceed normally
-                    log.debug("Idempotency key {} already registered for current workorder {}",
-                            idempotencyKey, response.getId());
-                }
+            ResponseEntity<WorkorderResponse> raceConditionResponse = registerIdempotencyKeyAndHandleRaceCondition(
+                    idempotencyKey, response);
+            if (raceConditionResponse != null) {
+                return raceConditionResponse;
             }
 
             log.info("Successfully promoted estimate {} to workorder {}", estimateId, response.getId());
             return ResponseEntity.ok(response);
 
         } catch (PromotionValidationException e) {
-            // Handle idempotency - if estimate already promoted, return existing workorder
-            if (e.getErrorCode() == PromotionValidationException.PromotionErrorCode.ALREADY_PROMOTED
-                    && e.getExistingWorkorderId() != null) {
-                log.info("Estimate {} already promoted to workorder {} (idempotent retry)",
-                        estimateId, e.getExistingWorkorderId());
-
-                // Fetch the existing workorder and return it
-                return workorderService.getWorkorderById(e.getExistingWorkorderId())
-                        .map(WorkorderResponse::fromEntity)
-                        .map(ResponseEntity::ok)
-                        .orElseGet(() -> {
-                            log.error("Existing workorder {} not found after ALREADY_PROMOTED validation",
-                                    e.getExistingWorkorderId());
-                            return ResponseEntity.status(HttpStatus.CONFLICT).build();
-                        });
+            ResponseEntity<WorkorderResponse> alreadyPromotedResponse = handleAlreadyPromoted(estimateId, e);
+            if (alreadyPromotedResponse != null) {
+                return alreadyPromotedResponse;
             }
 
-            // Other validation errors - return 409 Conflict
             log.warn("Promotion validation failed for estimate {}: {} - {}",
                     estimateId, e.getErrorCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -334,6 +287,86 @@ public class EstimateController {
             log.error("Unexpected error promoting estimate {}", estimateId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    private @Nullable ResponseEntity<WorkorderResponse> getIdempotentResponseIfPresent(String idempotencyKey) {
+        if (!hasIdempotencyKey(idempotencyKey)) {
+            return null;
+        }
+
+        var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+        if (existingWorkorderId.isEmpty()) {
+            return null;
+        }
+
+        UUID workorderId = existingWorkorderId.get();
+        log.info("Idempotency key {} already processed - returning existing workorder {}",
+                idempotencyKey, workorderId);
+        return loadWorkorderResponse(
+                workorderId,
+                () -> {
+                    log.error("Existing workorder {} not found for idempotency key {} - data inconsistency",
+                            workorderId, idempotencyKey);
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                });
+    }
+
+    private @Nullable ResponseEntity<WorkorderResponse> registerIdempotencyKeyAndHandleRaceCondition(
+            String idempotencyKey,
+            WorkorderResponse currentResponse) {
+        if (!hasIdempotencyKey(idempotencyKey)) {
+            return null;
+        }
+
+        try {
+            idempotencyService.registerKey(idempotencyKey, currentResponse.getId());
+            return null;
+        } catch (DataIntegrityViolationException e) {
+            var existingWorkorderId = idempotencyService.getExistingWorkorderId(idempotencyKey);
+            if (existingWorkorderId.isPresent() && !existingWorkorderId.get().equals(currentResponse.getId())) {
+                UUID workorderId = existingWorkorderId.get();
+                log.warn("Race condition detected: idempotency key {} already registered for different workorder {}",
+                        idempotencyKey, workorderId);
+                return loadWorkorderResponse(workorderId,
+                        () -> ResponseEntity.status(HttpStatus.OK).body(currentResponse));
+            }
+            log.debug("Idempotency key {} already registered for current workorder {}",
+                    idempotencyKey, currentResponse.getId());
+            return null;
+        }
+    }
+
+    private @Nullable ResponseEntity<WorkorderResponse> handleAlreadyPromoted(
+            UUID estimateId,
+            PromotionValidationException exception) {
+        if (exception.getErrorCode() != PromotionValidationException.PromotionErrorCode.ALREADY_PROMOTED
+                || exception.getExistingWorkorderId() == null) {
+            return null;
+        }
+
+        UUID existingWorkorderId = exception.getExistingWorkorderId();
+        log.info("Estimate {} already promoted to workorder {} (idempotent retry)",
+                estimateId, existingWorkorderId);
+        return loadWorkorderResponse(
+                existingWorkorderId,
+                () -> {
+                    log.error("Existing workorder {} not found after ALREADY_PROMOTED validation",
+                            existingWorkorderId);
+                    return ResponseEntity.status(HttpStatus.CONFLICT).build();
+                });
+    }
+
+    private ResponseEntity<WorkorderResponse> loadWorkorderResponse(
+            UUID workorderId,
+            Supplier<ResponseEntity<WorkorderResponse>> fallback) {
+        return workorderService.getWorkorderById(workorderId)
+                .map(WorkorderResponse::fromEntity)
+                .map(ResponseEntity::ok)
+                .orElseGet(fallback);
+    }
+
+    private boolean hasIdempotencyKey(String idempotencyKey) {
+        return idempotencyKey != null && !idempotencyKey.isBlank();
     }
 
     @Operation(summary = "Submit estimate for customer approval", description = "Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. "

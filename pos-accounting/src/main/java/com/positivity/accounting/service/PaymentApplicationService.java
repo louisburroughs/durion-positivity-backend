@@ -486,15 +486,17 @@ public class PaymentApplicationService {
                 try {
                         for (PaymentApplicationRequest.InvoiceApplication invoiceApp : request.getApplications()) {
                                 applySingleInvoiceApplication(
-                                                paymentId,
-                                                request.getApplicationRequestId(),
-                                                payment,
-                                                cappedAmounts.get(invoiceApp.getInvoiceId()),
-                                                invoiceApp.getInvoiceId(),
-                                                currentUser,
-                                                applicationTimestamp,
-                                                successfulApplications,
-                                                applicationDetails);
+                                                new InvoiceApplicationExecutionContext(
+                                                                paymentId,
+                                                                request.getApplicationRequestId(),
+                                                                payment,
+                                                                currentUser,
+                                                                applicationTimestamp,
+                                                                successfulApplications,
+                                                                applicationDetails),
+                                                new SingleInvoiceApplicationInput(
+                                                                invoiceApp.getInvoiceId(),
+                                                                cappedAmounts.get(invoiceApp.getInvoiceId())));
                         }
                         return applicationDetails;
                 } catch (InvoiceServiceException e) {
@@ -515,15 +517,10 @@ public class PaymentApplicationService {
         }
 
         private void applySingleInvoiceApplication(
-                        UUID paymentId,
-                        String applicationRequestId,
-                        ReceivablePayment payment,
-                        BigDecimal amountToApply,
-                        UUID invoiceId,
-                        String currentUser,
-                        Instant applicationTimestamp,
-                        List<PaymentApplication> successfulApplications,
-                        List<PaymentApplicationResponse.ApplicationDetail> applicationDetails) {
+                        InvoiceApplicationExecutionContext context,
+                        SingleInvoiceApplicationInput input) {
+                BigDecimal amountToApply = input.amountToApply();
+                UUID invoiceId = input.invoiceId();
 
                 if (amountToApply.compareTo(BigDecimal.ZERO) == 0) {
                         log.info("Skipping invoice {} - capped amount is 0 (already paid in full)", invoiceId);
@@ -534,10 +531,10 @@ public class PaymentApplicationService {
                 ApplyPaymentToInvoiceRequest invoiceRequest = ApplyPaymentToInvoiceRequest.builder()
                                 .paymentApplicationId(applicationId)
                                 .amountApplied(amountToApply)
-                                .appliedAt(applicationTimestamp)
-                                .currency(payment.getCurrency())
-                                .paymentId(paymentId)
-                                .appliedBy(currentUser)
+                                .appliedAt(context.applicationTimestamp())
+                                .currency(context.payment().getCurrency())
+                                .paymentId(context.paymentId())
+                                .appliedBy(context.currentUser())
                                 .build();
 
                 ApplyPaymentToInvoiceResponse invoiceResponse = invoiceServiceClient.applyPaymentToInvoice(
@@ -550,47 +547,39 @@ public class PaymentApplicationService {
 
                 PaymentApplication saved = paymentApplicationRepository.save(
                                 buildPaymentApplicationEntity(
-                                                applicationId,
-                                                paymentId,
-                                                applicationRequestId,
-                                                payment,
-                                                amountToApply,
-                                                invoiceId,
-                                                applicationTimestamp,
-                                                currentUser,
-                                                invoiceResponse));
+                                                new PaymentApplicationEntityInput(
+                                                                applicationId,
+                                                                context.paymentId(),
+                                                                context.applicationRequestId(),
+                                                                context.payment(),
+                                                                amountToApply,
+                                                                invoiceId,
+                                                                context.applicationTimestamp(),
+                                                                context.currentUser(),
+                                                                invoiceResponse)));
 
-                successfulApplications.add(saved);
-                applicationDetails.add(buildApplicationDetail(saved, invoiceId, invoiceResponse));
+                context.successfulApplications().add(saved);
+                context.applicationDetails().add(buildApplicationDetail(saved, invoiceId, invoiceResponse));
 
                 log.info("Created PaymentApplication {} for payment {} to invoice {} amount {}",
-                                saved.getPaymentApplicationId(), paymentId, invoiceId, amountToApply);
+                                saved.getPaymentApplicationId(), context.paymentId(), invoiceId, amountToApply);
         }
 
-        private PaymentApplication buildPaymentApplicationEntity(
-                        UUID applicationId,
-                        UUID paymentId,
-                        String applicationRequestId,
-                        ReceivablePayment payment,
-                        BigDecimal amountToApply,
-                        UUID invoiceId,
-                        Instant applicationTimestamp,
-                        String currentUser,
-                        ApplyPaymentToInvoiceResponse invoiceResponse) {
+        private PaymentApplication buildPaymentApplicationEntity(PaymentApplicationEntityInput input) {
                 PaymentApplication application = new PaymentApplication();
-                application.setPaymentApplicationId(applicationId);
-                application.setPaymentId(paymentId);
-                application.setInvoiceId(invoiceId);
-                application.setCustomerId(payment.getCustomerId());
-                application.setCurrency(payment.getCurrency());
-                application.setAppliedAmount(amountToApply);
-                application.setInvoiceBalanceBefore(invoiceResponse.getBalanceBefore());
-                application.setInvoiceBalanceAfter(invoiceResponse.getBalanceAfter());
-                application.setInvoiceStatus(invoiceResponse.getStatus());
-                application.setApplicationTimestamp(applicationTimestamp);
-                application.setApplicationRequestId(applicationRequestId);
-                application.setCreatedAt(applicationTimestamp);
-                application.setCreatedBy(currentUser);
+                application.setPaymentApplicationId(input.applicationId());
+                application.setPaymentId(input.paymentId());
+                application.setInvoiceId(input.invoiceId());
+                application.setCustomerId(input.payment().getCustomerId());
+                application.setCurrency(input.payment().getCurrency());
+                application.setAppliedAmount(input.amountToApply());
+                application.setInvoiceBalanceBefore(input.invoiceResponse().getBalanceBefore());
+                application.setInvoiceBalanceAfter(input.invoiceResponse().getBalanceAfter());
+                application.setInvoiceStatus(input.invoiceResponse().getStatus());
+                application.setApplicationTimestamp(input.applicationTimestamp());
+                application.setApplicationRequestId(input.applicationRequestId());
+                application.setCreatedAt(input.applicationTimestamp());
+                application.setCreatedBy(input.currentUser());
                 return application;
         }
 
@@ -605,10 +594,37 @@ public class PaymentApplicationService {
                                 e);
         }
 
-        private record InvoiceApplicationValidation(
+        public record InvoiceApplicationValidation(
                         BigDecimal actualTotalApplicationAmount,
                         BigDecimal overpaymentAmount,
                         Map<UUID, BigDecimal> cappedAmounts) {
+        }
+
+        public record InvoiceApplicationExecutionContext(
+                        UUID paymentId,
+                        String applicationRequestId,
+                        ReceivablePayment payment,
+                        String currentUser,
+                        Instant applicationTimestamp,
+                        List<PaymentApplication> successfulApplications,
+                        List<PaymentApplicationResponse.ApplicationDetail> applicationDetails) {
+        }
+
+        public record SingleInvoiceApplicationInput(
+                        UUID invoiceId,
+                        BigDecimal amountToApply) {
+        }
+
+        public record PaymentApplicationEntityInput(
+                        UUID applicationId,
+                        UUID paymentId,
+                        String applicationRequestId,
+                        ReceivablePayment payment,
+                        BigDecimal amountToApply,
+                        UUID invoiceId,
+                        Instant applicationTimestamp,
+                        String currentUser,
+                        ApplyPaymentToInvoiceResponse invoiceResponse) {
         }
 
         private PaymentApplicationResponse.ApplicationDetail buildApplicationDetail(

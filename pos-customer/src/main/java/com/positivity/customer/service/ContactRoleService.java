@@ -64,21 +64,19 @@ public class ContactRoleService {
     /**
      * Get all contacts with their role assignments for a party.
      * 
-     * @param partyId the party ID as a string (Long)
+     * @param partyId the party ID
      * @return response containing contacts with their roles
      * @throws IllegalArgumentException if party not found or invalid ID
      */
     @NonNull
     @Transactional(readOnly = true)
-    public GetContactsWithRolesResponse getContactsWithRoles(@NonNull String partyId) {
-        UUID partyUuid = parseUuid(partyId, "partyId");
-
+    public GetContactsWithRolesResponse getContactsWithRoles(@NonNull UUID partyId) {
         // Verify party exists
-        CommercialParty party = partyRepository.findById(partyUuid)
+        CommercialParty party = partyRepository.findById(partyId)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
 
-        // Get all role assignments for this party (using partyUuid as the account ID)
-        List<ContactRoleAssignment> assignments = roleAssignmentRepository.findByCustomerAccountId(partyUuid);
+        // Get all role assignments for this party
+        List<ContactRoleAssignment> assignments = roleAssignmentRepository.findByCustomerAccountId(partyId);
 
         // Group assignments by contact
         var contactMap = assignments.stream()
@@ -124,7 +122,7 @@ public class ContactRoleService {
         }
 
         return GetContactsWithRolesResponse.builder()
-                .partyId(partyId)
+                .partyId(partyId.toString())
                 .contacts(contacts)
                 .build();
     }
@@ -137,8 +135,8 @@ public class ContactRoleService {
      * any existing primary for that role is automatically demoted.
      * </p>
      * 
-     * @param partyId   the party ID as a string (Long)
-     * @param contactId the contact (person) UUID as a string
+     * @param partyId   the party ID
+     * @param contactId the contact (person) ID
      * @param request   the role assignment request
      * @return response with update status
      * @throws IllegalArgumentException if party/contact not found or invalid data
@@ -146,23 +144,20 @@ public class ContactRoleService {
     @NonNull
     @Transactional
     public UpdateContactRolesResponse updateContactRoles(
-            @NonNull String partyId,
-            @NonNull String contactId,
+            @NonNull UUID partyId,
+            @NonNull UUID contactId,
             @NonNull UpdateContactRolesRequest request) {
 
-        UUID partyUuid = parseUuid(partyId, "partyId");
-        UUID contactUuid = parseUuid(contactId, "contactId");
-
         // Verify party exists
-        partyRepository.findById(partyUuid)
+        partyRepository.findById(partyId)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
 
         // Verify contact (person) exists
-        personRepository.findById(contactUuid)
+        personRepository.findById(contactId)
                 .orElseThrow(() -> new IllegalArgumentException("Contact not found: " + contactId));
 
         // Delete existing role assignments for this contact/party
-        roleAssignmentRepository.deleteByContactIdAndCustomerAccountId(contactUuid, partyUuid);
+        roleAssignmentRepository.deleteByContactIdAndCustomerAccountId(contactId, partyId);
         roleAssignmentRepository.flush();
 
         // Create new assignments
@@ -175,12 +170,12 @@ public class ContactRoleService {
 
                 // If marking as primary, demote existing primary for this role
                 if (isPrimary) {
-                    demoteExistingPrimary(partyUuid, role);
+                    demoteExistingPrimary(partyId, role);
                 }
 
                 ContactRoleAssignment assignment = ContactRoleAssignment.builder()
-                        .contactId(contactUuid)
-                        .customerAccountId(partyUuid)
+                        .contactId(contactId)
+                        .customerAccountId(partyId)
                         .roleName(role)
                         .primary(isPrimary)
                         .build();
@@ -195,8 +190,8 @@ public class ContactRoleService {
                 partyId, contactId, newAssignments.size());
 
         return UpdateContactRolesResponse.builder()
-                .partyId(partyId)
-                .contactId(contactId)
+                .partyId(partyId.toString())
+                .contactId(contactId.toString())
                 .status("SUCCESS")
                 .build();
     }
@@ -217,38 +212,4 @@ public class ContactRoleService {
                 });
     }
 
-    /**
-     * Parse a Long string with helpful error messages.
-     * 
-     * @param longStr   the Long string
-     * @param fieldName the field name for error messages
-     * @return parsed Long
-     * @throws IllegalArgumentException if Long is invalid
-     */
-    @Deprecated
-    @NonNull
-    private Long parseLong(@NonNull String longStr, @NonNull String fieldName) {
-        try {
-            return Long.parseLong(longStr);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid " + fieldName + " format: " + longStr, e);
-        }
-    }
-
-    /**
-     * Parse a UUID string with helpful error messages.
-     * 
-     * @param uuidStr   the UUID string
-     * @param fieldName the field name for error messages
-     * @return parsed UUID
-     * @throws IllegalArgumentException if UUID is invalid
-     */
-    @NonNull
-    private UUID parseUuid(@NonNull String uuidStr, @NonNull String fieldName) {
-        try {
-            return UUID.fromString(uuidStr);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid " + fieldName + " format: " + uuidStr, e);
-        }
-    }
 }

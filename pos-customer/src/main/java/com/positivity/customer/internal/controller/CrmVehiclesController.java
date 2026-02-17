@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.util.UUID;
 
 /**
  * Controller implementing CRM vehicle endpoints from the API catalog.
@@ -47,7 +48,7 @@ public class CrmVehiclesController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_CREATE + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_CREATE_LEGACY", apiVersion = "1")
         public ResponseEntity<VehicleResponse> createVehicles(
-                        @Parameter(description = "Customer ID", required = true) @PathVariable String customerId,
+                        @Parameter(description = "Customer ID", required = true) @PathVariable UUID customerId,
                         @Parameter(description = "Vehicle creation request", required = true) @RequestBody CreateVehicleForPartyRequest body) {
                 log.info("Creating vehicle for customer: {}", customerId);
                 VehicleResponse response = crmVehicleService.createVehicle(customerId, body);
@@ -65,8 +66,8 @@ public class CrmVehiclesController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_UPDATE", apiVersion = "1")
         public ResponseEntity<VehicleResponse> updateVehicles(
-                        @Parameter(description = "Customer ID", required = true) @PathVariable String customerId,
-                        @Parameter(description = "Vehicle ID", required = true) @PathVariable String vehicleId,
+                        @Parameter(description = "Customer ID", required = true) @PathVariable UUID customerId,
+                        @Parameter(description = "Vehicle ID", required = true) @PathVariable UUID vehicleId,
                         @Parameter(description = "Vehicle update request", required = true) @RequestBody CreateVehicleForPartyRequest body) {
                 log.info("Updating vehicle {} for customer: {}", vehicleId, customerId);
                 VehicleResponse response = crmVehicleService.updateVehicle(customerId, body, vehicleId);
@@ -82,8 +83,8 @@ public class CrmVehiclesController {
         @DeleteMapping("/{customerId}/vehicles/{vehicleId}")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_DEACTIVATE + "')")
         public ResponseEntity<Void> deleteVehicle(
-                        @Parameter(description = "Customer ID", required = true) @PathVariable String customerId,
-                        @Parameter(description = "Vehicle ID", required = true) @PathVariable String vehicleId) {
+                        @Parameter(description = "Customer ID", required = true) @PathVariable UUID customerId,
+                        @Parameter(description = "Vehicle ID", required = true) @PathVariable UUID vehicleId) {
                 log.info("Deleting vehicle {} for customer: {}", vehicleId, customerId);
                 crmVehicleService.deleteVehicle(customerId, vehicleId);
                 return ResponseEntity.noContent().build();
@@ -100,8 +101,8 @@ public class CrmVehiclesController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_PARTY_ASSOC_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_TRANSFER", apiVersion = "1")
         public ResponseEntity<VehicleResponse> transferVehicles(
-                        @Parameter(description = "Source customer ID", required = true) @PathVariable String customerId,
-                        @Parameter(description = "Vehicle ID to transfer", required = true) @PathVariable String vehicleId,
+                        @Parameter(description = "Source customer ID", required = true) @PathVariable UUID customerId,
+                        @Parameter(description = "Vehicle ID to transfer", required = true) @PathVariable UUID vehicleId,
                         @Parameter(description = "Transfer request with target customer", required = true) @RequestBody VehicleTransferRequest body) {
                 log.info("Transferring vehicle {} from customer {} to customer {}", vehicleId, customerId,
                                 body.getTargetCustomerId());
@@ -118,8 +119,8 @@ public class CrmVehiclesController {
         @GetMapping("/{customerId}/vehicles/{vehicleId}")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_VIEW + "')")
         public ResponseEntity<VehicleResponse> getVehiclesForCustomer(
-                        @Parameter(description = "Customer ID", required = true) @PathVariable String customerId,
-                        @Parameter(description = "Vehicle ID", required = true) @PathVariable String vehicleId) {
+                        @Parameter(description = "Customer ID", required = true) @PathVariable UUID customerId,
+                        @Parameter(description = "Vehicle ID", required = true) @PathVariable UUID vehicleId) {
                 log.info("Fetching vehicle {} for customer: {}", vehicleId, customerId);
                 return crmVehicleService.getVehicleForCustomer(customerId, vehicleId)
                                 .map(ResponseEntity::ok)
