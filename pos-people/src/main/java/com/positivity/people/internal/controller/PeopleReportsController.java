@@ -5,6 +5,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
+import com.positivity.people.service.PeopleReportsService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,12 +19,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PeopleReportsController {
 
+    private final PeopleReportsService peopleReportsService;
+
     @Operation(summary = "Get attendance and job time discrepancy report", description = "Reporting endpoint for attendance vs. job time discrepancies.")
     @ApiResponse(responseCode = "200", description = "Report generated successfully.")
     @GetMapping("/attendanceJobtimeDiscrepancy")
-    public ResponseEntity<Object> getAttendanceDiscrepancyReport() {
+    public ResponseEntity<AttendanceDiscrepancyReportResponse> getAttendanceDiscrepancyReport() {
         log.info("Fetching attendance job time discrepancy report");
-        // TODO: Implement attendance discrepancy report logic
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(peopleReportsService.getAttendanceDiscrepancyReport());
     }
 }

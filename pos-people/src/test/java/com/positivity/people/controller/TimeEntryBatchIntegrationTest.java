@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 import java.util.Arrays;
-import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,8 +45,7 @@ class TimeEntryBatchIntegrationTest {
         entry2.setTimeEntryId(entryId2);
         entry2.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);
 
-        when(entryRepository.findById(entryId1)).thenReturn(Optional.of(entry1));
-        when(entryRepository.findById(entryId2)).thenReturn(Optional.of(entry2));
+        when(entryRepository.findByTimeEntryIdIn(List.of(entryId1, entryId2))).thenReturn(List.of(entry1, entry2));
         when(entryRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         TimeEntryDecisionBatchRequest request = new TimeEntryDecisionBatchRequest();
@@ -56,7 +55,7 @@ class TimeEntryBatchIntegrationTest {
         d2.setTimeEntryId(entryId2.toString());
         request.setDecisions(Arrays.asList(d1, d2));
 
-        ResponseEntity<?> response = controller.approveTimeEntries(request, "approver1", null, "cid-001");
+        ResponseEntity<?> response = controller.approveTimeEntries(request, "approver1", "people:timeEntry:approve", "cid-001");
         assertEquals(200, response.getStatusCode().value());
     }
 
@@ -79,7 +78,7 @@ class TimeEntryBatchIntegrationTest {
         entry.setTimeEntryId(entryId);
         entry.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);
 
-        when(entryRepository.findById(entryId)).thenReturn(Optional.of(entry));
+        when(entryRepository.findByTimeEntryIdIn(List.of(entryId))).thenReturn(List.of(entry));
         when(entryRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         TimeEntryDecisionBatchRequest request = new TimeEntryDecisionBatchRequest();
@@ -88,7 +87,7 @@ class TimeEntryBatchIntegrationTest {
         d1.setRejectionReason("Time discrepancy");
         request.setDecisions(Arrays.asList(d1));
 
-        ResponseEntity<?> response = controller.rejectTimeEntries(request, "approver1", null, "cid-003");
+        ResponseEntity<?> response = controller.rejectTimeEntries(request, "approver1", "people:timeEntry:reject", "cid-003");
         assertEquals(200, response.getStatusCode().value());
     }
 }
