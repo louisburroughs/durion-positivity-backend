@@ -1,18 +1,5 @@
 package com.positivity.people.service;
 
-import com.positivity.people.internal.client.WorkexecJobTimeClient;
-import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
-import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
-import com.positivity.people.internal.dto.AttendanceReportKey;
-import com.positivity.people.internal.entity.TimeEntry;
-import com.positivity.people.internal.entity.TimekeepingPolicy;
-import com.positivity.people.internal.enums.TimekeepingPolicyScopeType;
-import com.positivity.people.internal.repository.PersonRepository;
-import com.positivity.people.internal.repository.TimeEntryRepository;
-import com.positivity.people.internal.repository.TimekeepingPolicyRepository;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -26,27 +13,36 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+
+import com.positivity.people.internal.client.WorkexecJobTimeClient;
+import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
+import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
+import com.positivity.people.internal.dto.AttendanceReportKey;
+import com.positivity.people.internal.entity.TimeEntry;
+import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.service.TimekeepingThresholdCache;
 
 @Service
 public class PeopleReportsService {
 
-    private static final int DEFAULT_THRESHOLD_MINUTES = 30;
-
     private final TimeEntryRepository timeEntryRepository;
-    private final TimekeepingPolicyRepository timekeepingPolicyRepository;
+    private final TimekeepingThresholdCache timekeepingThresholdCache;
     private final WorkexecJobTimeClient workexecJobTimeClient;
     private final PersonRepository personRepository;
 
     public PeopleReportsService(
             TimeEntryRepository timeEntryRepository,
-            TimekeepingPolicyRepository timekeepingPolicyRepository,
+            TimekeepingThresholdCache timekeepingThresholdCache,
             WorkexecJobTimeClient workexecJobTimeClient,
             PersonRepository personRepository) {
         this.timeEntryRepository = timeEntryRepository;
-        this.timekeepingPolicyRepository = timekeepingPolicyRepository;
+        this.timekeepingThresholdCache = timekeepingThresholdCache;
         this.workexecJobTimeClient = workexecJobTimeClient;
         this.personRepository = personRepository;
     }
@@ -106,6 +102,9 @@ public class PeopleReportsService {
         addRequestedTechnicianRowsWithoutData(allKeys, technicianIds, locationId, startDate, endDate);
 
         Map<String, String> technicianNameCache = new HashMap<>();
+        TimekeepingThresholdCache.ThresholdResolverContext thresholdResolver = timekeepingThresholdCache.createContext(
+                allKeys,
+                zoneId);
         List<AttendanceDiscrepancyReportResponse> rows = new ArrayList<>();
 
         for (AttendanceReportKey key : allKeys) {
@@ -113,7 +112,7 @@ public class PeopleReportsService {
             int totalJobMinutes = jobMinutesByKey.getOrDefault(key, 0);
             boolean skipEmptyNoise = attendanceMinutes == 0 && totalJobMinutes == 0 && technicianIds.isEmpty();
             if (!skipEmptyNoise) {
-                int threshold = resolveThresholdMinutes(key.locationId(), key.reportDate(), zoneId);
+                int threshold = thresholdResolver.resolveThresholdMinutes(key.locationId(), key.reportDate());
                 int discrepancyMinutes = attendanceMinutes - totalJobMinutes;
                 boolean isFlagged = Math.abs(discrepancyMinutes) > threshold;
                 boolean includeRow = !flaggedOnly || isFlagged;
@@ -238,59 +237,6 @@ public class PeopleReportsService {
 
             cursor = segmentBoundary;
         }
-    }
-
-    private int resolveThresholdMinutes(String locationId, LocalDate reportDate, ZoneId zoneId) {
-        Instant evaluationTime = reportDate.atStartOfDay(zoneId).toInstant();
-
-        try {
-            UUID locationUuid = UUID.fromString(locationId);
-            Optional<TimekeepingPolicy> locationPolicy = selectEffectivePolicy(
-                    timekeepingPolicyRepository.findByScopeTypeAndScopeId(TimekeepingPolicyScopeType.LOCATION,
-                            locationUuid),
-                    evaluationTime);
-            if (locationPolicy.isPresent()) {
-                return sanitizeThreshold(locationPolicy.get().getJobTimeDiscrepancyThresholdMinutes());
-            }
-        } catch (IllegalArgumentException ignored) {
-            // Non-UUID location IDs cannot have location-scoped threshold overrides.
-            // Fall back to global/default policy threshold.
-        }
-
-        Optional<TimekeepingPolicy> globalPolicy = selectEffectivePolicy(
-                timekeepingPolicyRepository.findByScopeType(TimekeepingPolicyScopeType.GLOBAL),
-                evaluationTime);
-
-        return globalPolicy
-                .map(TimekeepingPolicy::getJobTimeDiscrepancyThresholdMinutes)
-                .map(this::sanitizeThreshold)
-                .orElse(DEFAULT_THRESHOLD_MINUTES);
-    }
-
-    private Optional<TimekeepingPolicy> selectEffectivePolicy(List<TimekeepingPolicy> candidates,
-            Instant evaluationTime) {
-        return candidates.stream()
-                .filter(policy -> isEffective(policy, evaluationTime))
-                .sorted(Comparator
-                        .comparing(TimekeepingPolicy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(TimekeepingPolicy::getEffectiveStartAt,
-                                Comparator.nullsLast(Comparator.reverseOrder())))
-                .findFirst();
-    }
-
-    private boolean isEffective(TimekeepingPolicy policy, Instant evaluationTime) {
-        boolean startsBeforeOrAt = policy.getEffectiveStartAt() == null
-                || !policy.getEffectiveStartAt().isAfter(evaluationTime);
-        boolean endsAfterOrAt = policy.getEffectiveEndAt() == null
-                || !policy.getEffectiveEndAt().isBefore(evaluationTime);
-        return startsBeforeOrAt && endsAfterOrAt;
-    }
-
-    private int sanitizeThreshold(Integer threshold) {
-        if (threshold == null || threshold < 0) {
-            return DEFAULT_THRESHOLD_MINUTES;
-        }
-        return threshold;
     }
 
     private String resolveTechnicianName(String technicianId) {
