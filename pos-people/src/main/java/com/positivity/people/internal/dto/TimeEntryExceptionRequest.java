@@ -1,10 +1,12 @@
 package com.positivity.people.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import java.time.OffsetDateTime;
 
-public class TimeEntryIssueRequest {
+public class TimeEntryExceptionRequest {
     private String employeeId;
-    private String issueCode;
+    @JsonAlias("issueCode")
+    private String exceptionCode;
     private String severity;
     private String timeEntryId;
     private String resolutionNotes;
@@ -18,12 +20,12 @@ public class TimeEntryIssueRequest {
         this.employeeId = employeeId;
     }
 
-    public String getIssueCode() {
-        return issueCode;
+    public String getExceptionCode() {
+        return exceptionCode;
     }
 
-    public void setIssueCode(String issueCode) {
-        this.issueCode = issueCode;
+    public void setExceptionCode(String exceptionCode) {
+        this.exceptionCode = exceptionCode;
     }
 
     public String getSeverity() {

@@ -4,6 +4,7 @@ import com.positivity.people.internal.entity.TimeEntryAdjustment;
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.repository.TimeEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -15,21 +16,23 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-public class TimeEntryAdjustmentServiceTest {
+class TimeEntryAdjustmentServiceTest {
 
     private TimeEntryAdjustmentRepository adjustmentRepository;
     private TimeEntryAuditRepository auditRepository;
+    private TimeEntryRepository timeEntryRepository;
     private TimeEntryAdjustmentService service;
 
     @BeforeEach
-    public void setup() {
+    void setup() {
         adjustmentRepository = mock(TimeEntryAdjustmentRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
-        service = new TimeEntryAdjustmentService(adjustmentRepository, auditRepository);
+        timeEntryRepository = mock(TimeEntryRepository.class);
+        service = new TimeEntryAdjustmentService(adjustmentRepository, auditRepository, timeEntryRepository);
     }
 
     @Test
-    public void approveAdjustment_withPermission_succeeds() {
+    void approveAdjustment_withPermission_succeeds() {
         UUID id = UUID.randomUUID();
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
@@ -52,7 +55,7 @@ public class TimeEntryAdjustmentServiceTest {
     }
 
     @Test
-    public void approveAdjustment_withoutPermission_fails() {
+    void approveAdjustment_withoutPermission_fails() {
         UUID id = UUID.randomUUID();
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
