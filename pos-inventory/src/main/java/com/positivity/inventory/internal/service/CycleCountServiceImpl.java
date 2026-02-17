@@ -5,7 +5,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
+import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import com.positivity.inventory.internal.entity.CountEntry;
@@ -63,7 +65,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         validateQuantity(request.getActualQuantity());
 
         // Load task
-        CycleCountTask task = getTask(request.getTaskId());
+        CycleCountTask task = getTaskEntity(request.getTaskId());
 
         // Verify task is in ASSIGNED status
         if (task.getStatus() != TaskStatus.ASSIGNED) {
@@ -107,7 +109,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         validateQuantity(request.getActualQuantity());
 
         // Load task
-        CycleCountTask task = getTask(request.getTaskId());
+        CycleCountTask task = getTaskEntity(request.getTaskId());
 
         // Check recount limit
         if (task.getCountEntriesCount() >= MAX_TOTAL_COUNTS) {
@@ -171,22 +173,32 @@ public class CycleCountServiceImpl implements CycleCountService {
 
     @Override
     @Transactional(readOnly = true)
-    public CycleCountTask getTask(UUID taskId) {
-        return taskRepository.findById(taskId)
-                .orElseThrow(() -> new TaskNotFoundException(taskId));
+        public CycleCountTaskResponse getTask(UUID taskId) {
+                return toTaskResponse(getTaskEntity(taskId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<CountEntry> getCountHistory(UUID taskId) {
-        return countEntryRepository.findByCycleCountTaskIdOrderByRecountSequenceNumberAsc(taskId);
+        public List<CountEntryResponse> getCountHistory(UUID taskId) {
+                return countEntryRepository.findByCycleCountTaskIdOrderByRecountSequenceNumberAsc(taskId)
+                                .stream()
+                                .map(this::toCountEntryResponse)
+                                .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<CycleCountTask> getTasksByAuditor(String auditorId) {
-        return taskRepository.findByAuditorId(auditorId);
+        public List<CycleCountTaskResponse> getTasksByAuditor(String auditorId) {
+                return taskRepository.findByAuditorId(auditorId)
+                                .stream()
+                                .map(this::toTaskResponse)
+                                .toList();
     }
+
+        private CycleCountTask getTaskEntity(UUID taskId) {
+                return taskRepository.findById(taskId)
+                                .orElseThrow(() -> new TaskNotFoundException(taskId));
+        }
 
     /**
      * Validates that a count quantity is non-negative.
@@ -251,4 +263,35 @@ public class CycleCountServiceImpl implements CycleCountService {
                 .message(message)
                 .build();
     }
+
+        private CycleCountTaskResponse toTaskResponse(CycleCountTask task) {
+                return CycleCountTaskResponse.builder()
+                                .taskId(task.getTaskId())
+                                .binLocation(task.getBinLocation())
+                                .itemSku(task.getItemSku())
+                                .itemDescription(task.getItemDescription())
+                                .expectedQuantity(task.getExpectedQuantity())
+                                .auditorId(task.getAuditorId())
+                                .status(task.getStatus())
+                                .latestCountEntryId(task.getLatestCountEntryId())
+                                .countEntriesCount(task.getCountEntriesCount())
+                                .createdAt(task.getCreatedAt())
+                                .updatedAt(task.getUpdatedAt())
+                                .build();
+        }
+
+        private CountEntryResponse toCountEntryResponse(CountEntry countEntry) {
+                return CountEntryResponse.builder()
+                                .countEntryId(countEntry.getCountEntryId())
+                                .cycleCountTaskId(countEntry.getCycleCountTaskId())
+                                .auditorId(countEntry.getAuditorId())
+                                .actualQuantity(countEntry.getActualQuantity())
+                                .expectedQuantity(countEntry.getExpectedQuantity())
+                                .variance(countEntry.getVariance())
+                                .recountSequenceNumber(countEntry.getRecountSequenceNumber())
+                                .recountOfCountEntryId(countEntry.getRecountOfCountEntryId())
+                                .countedAt(countEntry.getCountedAt())
+                                .recount(countEntry.isRecount())
+                                .build();
+        }
 }

@@ -16,10 +16,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
+import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
+import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
-import com.positivity.inventory.internal.entity.CountEntry;
-import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
@@ -48,6 +48,7 @@ import java.util.UUID;
 @Tag(name = "Cycle Count API", description = "API for cycle count operations and variance tracking")
 public class CycleCountController {
 
+        private static final String ERROR = "error";
         private final CycleCountService cycleCountService;
 
         /**
@@ -101,14 +102,14 @@ public class CycleCountController {
         @Tag(name = "Cycle Count Query")
         @Operation(summary = "Get cycle count task details", description = "Retrieves details of a specific cycle count task.")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Task retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountTask.class))),
+                        @ApiResponse(responseCode = "200", description = "Task retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountTaskResponse.class))),
                         @ApiResponse(responseCode = "404", description = "Task not found")
         })
-        public ResponseEntity<CycleCountTask> getTask(
+        public ResponseEntity<CycleCountTaskResponse> getTask(
                         @Parameter(description = "Task ID") @PathVariable UUID taskId) {
                 log.info("GET /api/inventory/cycle-count/task/{}", taskId);
 
-                CycleCountTask task = cycleCountService.getTask(taskId);
+                CycleCountTaskResponse task = cycleCountService.getTask(taskId);
                 return ResponseEntity.ok(task);
         }
 
@@ -119,13 +120,13 @@ public class CycleCountController {
         @Tag(name = "Cycle Count Query")
         @Operation(summary = "Get count history for a task", description = "Retrieves all count entries (original + recounts) for a task, ordered by sequence.")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "History retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CountEntry.class)))
+                        @ApiResponse(responseCode = "200", description = "History retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CountEntryResponse.class)))
         })
-        public ResponseEntity<List<CountEntry>> getCountHistory(
+        public ResponseEntity<List<CountEntryResponse>> getCountHistory(
                         @Parameter(description = "Task ID") @PathVariable UUID taskId) {
                 log.info("GET /api/inventory/cycle-count/task/{}/history", taskId);
 
-                List<CountEntry> history = cycleCountService.getCountHistory(taskId);
+                List<CountEntryResponse> history = cycleCountService.getCountHistory(taskId);
                 return ResponseEntity.ok(history);
         }
 
@@ -136,13 +137,13 @@ public class CycleCountController {
         @Tag(name = "Cycle Count Query")
         @Operation(summary = "Get tasks assigned to an auditor", description = "Retrieves all cycle count tasks assigned to a specific auditor.")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Tasks retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountTask.class)))
+                        @ApiResponse(responseCode = "200", description = "Tasks retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CycleCountTaskResponse.class)))
         })
-        public ResponseEntity<List<CycleCountTask>> getAuditorTasks(
+        public ResponseEntity<List<CycleCountTaskResponse>> getAuditorTasks(
                         @Parameter(description = "Auditor ID") @PathVariable String auditorId) {
                 log.info("GET /api/inventory/cycle-count/auditor/{}/tasks", auditorId);
 
-                List<CycleCountTask> tasks = cycleCountService.getTasksByAuditor(auditorId);
+                List<CycleCountTaskResponse> tasks = cycleCountService.getTasksByAuditor(auditorId);
                 return ResponseEntity.ok(tasks);
         }
 
@@ -153,7 +154,7 @@ public class CycleCountController {
                 log.error("Task not found: {}", ex.getMessage());
                 return ResponseEntity
                                 .status(HttpStatus.NOT_FOUND)
-                                .body(Map.of("error", ex.getMessage()));
+                                .body(Map.of(ERROR, ex.getMessage()));
         }
 
         @ExceptionHandler(InvalidCountQuantityException.class)
@@ -161,7 +162,7 @@ public class CycleCountController {
                 log.error("Invalid quantity: {}", ex.getMessage());
                 return ResponseEntity
                                 .status(HttpStatus.BAD_REQUEST)
-                                .body(Map.of("error", ex.getMessage()));
+                                .body(Map.of(ERROR, ex.getMessage()));
         }
 
         @ExceptionHandler(RecountLimitExceededException.class)
@@ -170,7 +171,7 @@ public class CycleCountController {
                 return ResponseEntity
                                 .status(HttpStatus.BAD_REQUEST)
                                 .body(Map.of(
-                                                "error", ex.getMessage(),
+                                                ERROR, ex.getMessage(),
                                                 "taskId", ex.getTaskId().toString(),
                                                 "currentCount", ex.getCurrentCount(),
                                                 "maxAllowed", ex.getMaxAllowed()));
@@ -181,7 +182,7 @@ public class CycleCountController {
                 log.error("Insufficient permission: {}", ex.getMessage());
                 return ResponseEntity
                                 .status(HttpStatus.FORBIDDEN)
-                                .body(Map.of("error", ex.getMessage()));
+                                .body(Map.of(ERROR, ex.getMessage()));
         }
 
         @ExceptionHandler(IllegalStateException.class)
@@ -189,6 +190,6 @@ public class CycleCountController {
                 log.error("Illegal state: {}", ex.getMessage());
                 return ResponseEntity
                                 .status(HttpStatus.BAD_REQUEST)
-                                .body(Map.of("error", ex.getMessage()));
+                                .body(Map.of(ERROR, ex.getMessage()));
         }
 }

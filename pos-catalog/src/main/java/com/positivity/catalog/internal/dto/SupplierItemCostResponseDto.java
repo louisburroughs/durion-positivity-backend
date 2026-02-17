@@ -25,7 +25,7 @@ public class SupplierItemCostResponseDto {
     @Schema(description = "Optional fallback base cost")
     private BigDecimal baseCost;
 
-    @Schema(description = "Optimistic-locking version")
+    @Schema(description = "Entity version for optimistic locking")
     private Long version;
 
     @Schema(description = "Ordered quantity-based cost tiers")

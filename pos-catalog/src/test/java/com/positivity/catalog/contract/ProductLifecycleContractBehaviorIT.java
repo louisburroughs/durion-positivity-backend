@@ -18,9 +18,26 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
+/**
+ * Contract behavioral tests for product lifecycle management.
+ * These tests validate the business rules and constraints around product
+ * lifecycle state transitions, effective dating, and replacement product
+ * management.
+ * Test cases include:
+ * - Setting lifecycle to INACTIVE with an effective date
+ * - Requiring override permission for DISCONTINUED state transitions
+ * - Preventing reactivation of DISCONTINUED products
+ * - Adding replacement products to DISCONTINUED products
+ * - Rejecting updates that do not change the lifecycle state
+ * 
+ * Note: These tests focus on contract behavior and do not cover all edge cases
+ * or validation scenarios. Additional tests may be needed for comprehensive
+ * coverage.
+ */
 @DisplayName("Product Lifecycle Contract Behavioral Tests")
 class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
 
+        private static final String LIFECYCLE_STATE = "lifecycleState";
         @Autowired
         private CatalogService catalogService;
 
@@ -32,7 +49,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                 mockMvc.perform(withAuth(put("/v1/products/{productId}/lifecycle", productId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
-                                                "lifecycleState", "INACTIVE",
+                                                LIFECYCLE_STATE, "INACTIVE",
                                                 "effectiveDate", LocalDate.now().plusDays(1),
                                                 "changedBy", UUID.randomUUID()))))
                                 .andExpect(status().isOk())
@@ -50,7 +67,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                                 "ROLE_ADMIN,ROLE_CATALOG_EDIT,product:lifecycle:update")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
-                                                "lifecycleState", "DISCONTINUED",
+                                                LIFECYCLE_STATE, "DISCONTINUED",
                                                 "effectiveAt", Instant.now().plusSeconds(3600),
                                                 "overrideReason", "End of life",
                                                 "changedBy", UUID.randomUUID()))))
@@ -65,7 +82,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                 mockMvc.perform(withAuth(put("/v1/products/{productId}/lifecycle", productId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
-                                                "lifecycleState", "DISCONTINUED",
+                                                LIFECYCLE_STATE, "DISCONTINUED",
                                                 "effectiveAt", Instant.now().plusSeconds(3600),
                                                 "overrideReason", "End of life",
                                                 "changedBy", UUID.randomUUID()))))
@@ -75,7 +92,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                 mockMvc.perform(withAuth(put("/v1/products/{productId}/lifecycle", productId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
-                                                "lifecycleState", "ACTIVE",
+                                                LIFECYCLE_STATE, "ACTIVE",
                                                 "effectiveAt", Instant.now().plusSeconds(7200),
                                                 "changedBy", UUID.randomUUID()))))
                                 .andExpect(status().isBadRequest())
@@ -94,7 +111,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                 mockMvc.perform(withAuth(put("/v1/products/{productId}/lifecycle", originalProductId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
-                                                "lifecycleState", "DISCONTINUED",
+                                                LIFECYCLE_STATE, "DISCONTINUED",
                                                 "effectiveAt", Instant.now().plusSeconds(3600),
                                                 "overrideReason", "End of life",
                                                 "changedBy", UUID.randomUUID()))))
@@ -126,7 +143,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                 mockMvc.perform(withAuth(put("/v1/products/{productId}/lifecycle", productId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(Map.of(
-                                                "lifecycleState", "ACTIVE",
+                                                LIFECYCLE_STATE, "ACTIVE",
                                                 "effectiveAt", Instant.now().plusSeconds(3600),
                                                 "changedBy", UUID.randomUUID()))))
                                 .andExpect(status().isBadRequest())

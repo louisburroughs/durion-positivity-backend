@@ -15,6 +15,7 @@ import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.TimekeepingPolicyRepository;
 import com.positivity.people.service.PeopleAccessControlService;
 import com.positivity.people.service.TimeEntryService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,12 +61,19 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @Autowired
         private PersonRepository personRepository;
 
+        private UUID technicianId;
+        private UUID locationId;
+
+        @BeforeEach
+        void beforeTest() {
+                technicianId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+                locationId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        }
+
         @Test
         @DisplayName("happy path: discrepancy above threshold is flagged")
         void attendanceDiscrepancyReport_happyPath() throws Exception {
                 resetReportData();
-                UUID technicianId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-                UUID locationId = UUID.fromString("22222222-2222-2222-2222-222222222222");
                 LocalDate reportDate = LocalDate.parse("2026-02-16");
 
                 seedTechnician(technicianId, "Jane", "Doe");
@@ -98,27 +106,27 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("concurrency invariant: strict threshold comparison uses greater-than")
         void attendanceDiscrepancyReport_strictThresholdInvariant() throws Exception {
                 resetReportData();
-                UUID technicianId = UUID.fromString("33333333-3333-3333-3333-333333333333");
-                UUID locationId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+                UUID strictTechnicianId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+                UUID strictLocationId = UUID.fromString("44444444-4444-4444-4444-444444444444");
                 LocalDate reportDate = LocalDate.parse("2026-02-17");
 
-                seedTechnician(technicianId, "Alex", "Kim");
-                seedAttendance(technicianId, locationId,
+                seedTechnician(strictTechnicianId, "Alex", "Kim");
+                seedAttendance(strictTechnicianId, strictLocationId,
                                 Instant.parse("2026-02-17T08:00:00Z"),
                                 Instant.parse("2026-02-17T16:00:00Z"));
                 seedGlobalThreshold(30);
-                seedLocationThreshold(locationId, 60);
+                seedLocationThreshold(strictLocationId, 60);
 
                 when(workexecJobTimeClient.getJobTimeTotals(
-                                reportDate, reportDate, "UTC", locationId, List.of(technicianId)))
-                                .thenReturn(List.of(jobTime(technicianId, locationId, reportDate, 435)));
+                                reportDate, reportDate, "UTC", strictLocationId, List.of(strictTechnicianId)))
+                                .thenReturn(List.of(jobTime(strictTechnicianId, strictLocationId, reportDate, 435)));
 
                 mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
                                 .param("startDate", "2026-02-17")
                                 .param("endDate", "2026-02-17")
                                 .param("timezone", "UTC")
-                                .param("locationId", locationId.toString())
-                                .param("technicianIds", technicianId.toString())))
+                                .param("locationId", strictLocationId.toString())
+                                .param("technicianIds", strictTechnicianId.toString())))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$[0].thresholdApplied").value(60))
                                 .andExpect(jsonPath("$[0].discrepancyHours").value(0.75))

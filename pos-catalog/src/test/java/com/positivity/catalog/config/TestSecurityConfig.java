@@ -50,6 +50,7 @@ public class TestSecurityConfig {
 
     @Bean
     @Primary
+    @SuppressWarnings("java:S1874") // Using deprecated User.withUsername for simplicity in tests
     public UserDetailsService testUserDetailsService() {
         var user = User.withUsername("testuser")
                 .password("{noop}test")

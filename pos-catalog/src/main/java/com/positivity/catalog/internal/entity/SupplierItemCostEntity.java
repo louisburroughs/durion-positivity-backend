@@ -56,7 +56,7 @@ public class SupplierItemCostEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @OneToMany(mappedBy = "supplierItemCost", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "supplierItemCost", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("minQuantity ASC")
     private List<CostTierEntity> costTiers = new ArrayList<>();
 
