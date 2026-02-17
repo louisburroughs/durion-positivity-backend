@@ -138,9 +138,9 @@ class RBACExceptionHandlingIT extends BaseIntegrationTest {
         
         MvcResult result = mockMvc.perform(
                 withAuth(get("/v1/roles/check-permission")
+                        .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .param("userId", nonExistentUserId.toString())
                         .param("permission", "some:permission")
-                        .header("X-Correlation-Id", TEST_CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
