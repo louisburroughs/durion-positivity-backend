@@ -223,7 +223,7 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
+                    "201": {
                         "description": "Person created successfully.",
                         "content": {
                             "*/*": {
@@ -327,8 +327,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Person or role not found",
+                    "400": {
+                        "description": "Invalid request",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -337,8 +337,8 @@
                             }
                         }
                     },
-                    "400": {
-                        "description": "Invalid request",
+                    "404": {
+                        "description": "Person or role not found",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -523,7 +523,8 @@
                         "description": "User ID from authentication system",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
@@ -538,16 +539,6 @@
                     "required": true
                 },
                 "responses": {
-                    "201": {
-                        "description": "Link created successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
-                                }
-                            }
-                        }
-                    },
                     "409": {
                         "description": "User already linked",
                         "content": {
@@ -560,6 +551,16 @@
                     },
                     "404": {
                         "description": "Person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Link created successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -594,7 +595,8 @@
                         "description": "User ID",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
@@ -755,8 +757,28 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
+                    "409": {
+                        "description": "Invalid time entry state for adjustment",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TimeEntryAdjustmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
                         "description": "Adjustment created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TimeEntryAdjustmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Time entry not found",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1178,7 +1200,8 @@
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "format": "uuid"
                                     }
                                 }
                             }
@@ -1191,7 +1214,8 @@
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "format": "uuid"
                                     }
                                 }
                             }
@@ -1215,7 +1239,8 @@
                         "description": "User ID",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     }
                 ],
@@ -1284,14 +1309,16 @@
                     "People Reports API"
                 ],
                 "summary": "Get attendance and job time discrepancy report",
-                "description": "Reporting endpoint for attendance vs. job time discrepancies.",
+                "description": "Generates a summary report of time entry approval statuses, aggregating counts of approved, pending, and rejected time entries. This report helps identify discrepancies between recorded attendance and job time data.",
                 "operationId": "getAttendanceDiscrepancyReport",
                 "responses": {
                     "200": {
-                        "description": "Report generated successfully.",
+                        "description": "Report generated successfully. Returns aggregated counts of time entries by approval status.",
                         "content": {
                             "*/*": {
-                                "schema": {}
+                                "schema": {
+                                    "$ref": "#/components/schemas/AttendanceDiscrepancyReportResponse"
+                                }
                             }
                         }
                     }
@@ -1479,8 +1506,7 @@
                     },
                     "endDate": {
                         "type": "string",
-                        "format": "date",
-                        "nullable": true
+                        "format": "date"
                     },
                     "active": {
                         "type": "boolean"
@@ -1518,7 +1544,8 @@
                 "type": "object",
                 "properties": {
                     "userId": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "personId": {
                         "type": "string",
@@ -1544,7 +1571,8 @@
                         "format": "uuid"
                     },
                     "userId": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "personId": {
                         "type": "string",
@@ -1589,86 +1617,148 @@
             },
             "TimeEntryAdjustmentRequest": {
                 "type": "object",
+                "description": "Request to create a time entry adjustment",
                 "properties": {
                     "timeEntryId": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Time entry identifier to adjust",
+                        "example": "te-12345"
                     },
                     "reasonCode": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Reason code for the adjustment",
+                        "example": "MISSED_BREAK"
                     },
                     "notes": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Additional notes explaining the adjustment",
+                        "example": "Employee forgot to log lunch break"
                     },
                     "proposedStartAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Proposed new start timestamp",
+                        "example": "2026-02-17T08:00:00-05:00"
                     },
                     "proposedEndAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Proposed new end timestamp",
+                        "example": "2026-02-17T17:00:00-05:00"
                     },
                     "minutesDelta": {
                         "type": "integer",
-                        "format": "int32"
+                        "format": "int32",
+                        "description": "Adjustment in minutes (positive to add time, negative to subtract)",
+                        "example": -30
                     },
                     "createdBy": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "User creating the adjustment request",
+                        "example": "employee-456"
                     }
-                }
+                },
+                "required": [
+                    "reasonCode",
+                    "timeEntryId"
+                ]
             },
             "TimeEntryAdjustmentResponse": {
                 "type": "object",
+                "description": "Response from creating or updating a time entry adjustment",
                 "properties": {
                     "adjustmentId": {
                         "type": "string",
-                        "format": "uuid"
+                        "format": "uuid",
+                        "description": "Unique identifier of the created or updated adjustment",
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
                     },
                     "success": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "Indicates whether the operation was successful",
+                        "example": true
                     },
                     "message": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Human-readable message describing the outcome",
+                        "example": "Adjustment created and pending approval"
                     }
-                }
+                },
+                "required": [
+                    "success"
+                ]
             },
             "TimeEntryExceptionRequest": {
                 "type": "object",
+                "description": "Request to create a time entry exception",
                 "properties": {
                     "employeeId": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Employee identifier associated with the exception",
+                        "example": "EMP-001"
                     },
                     "exceptionCode": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Exception code identifying the type of exception",
+                        "example": "MISSED_CLOCK_OUT"
                     },
                     "severity": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Severity level of the exception",
+                        "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH",
+                            "CRITICAL"
+                        ],
+                        "example": "HIGH"
                     },
                     "timeEntryId": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Time entry identifier associated with the exception",
+                        "example": "te-12345"
                     },
                     "resolutionNotes": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Notes describing the exception or initial resolution steps",
+                        "example": "Employee forgot to clock out at end of shift"
                     },
                     "detectedAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Timestamp when the exception was detected",
+                        "example": "2026-02-17T08:30:00-05:00"
                     }
-                }
+                },
+                "required": [
+                    "employeeId",
+                    "exceptionCode"
+                ]
             },
             "TimeEntryExceptionResponse": {
                 "type": "object",
+                "description": "Response from creating or updating a time entry exception",
                 "properties": {
                     "exceptionId": {
                         "type": "string",
-                        "format": "uuid"
+                        "format": "uuid",
+                        "description": "Unique identifier of the created or updated exception",
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
                     },
                     "success": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "description": "Indicates whether the operation was successful",
+                        "example": true
                     },
                     "message": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Human-readable message describing the outcome",
+                        "example": "Exception created successfully"
                     }
-                }
+                },
+                "required": [
+                    "success"
+                ]
             },
             "RoleDto": {
                 "type": "object",
@@ -1722,108 +1812,206 @@
             },
             "TimeEntryAdjustment": {
                 "type": "object",
+                "description": "Time entry adjustment representing a proposed or approved change to a time entry",
                 "properties": {
                     "adjustmentId": {
                         "type": "string",
-                        "format": "uuid"
+                        "format": "uuid",
+                        "description": "Unique identifier for the adjustment",
+                        "example": "123e4567-e89b-12d3-a456-426614174000",
+                        "readOnly": true
                     },
                     "timeEntryId": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Time entry identifier being adjusted",
+                        "example": "te-12345"
                     },
                     "reasonCode": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Reason code for the adjustment",
+                        "example": "MISSED_BREAK"
                     },
                     "notes": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Additional notes explaining the adjustment",
+                        "example": "Employee forgot to log lunch break"
                     },
                     "proposedStartAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Proposed new start timestamp",
+                        "example": "2026-02-17T08:00:00Z"
                     },
                     "proposedEndAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Proposed new end timestamp",
+                        "example": "2026-02-17T17:00:00Z"
                     },
                     "minutesDelta": {
                         "type": "integer",
-                        "format": "int32"
+                        "format": "int32",
+                        "description": "Adjustment in minutes (positive to add time, negative to subtract)",
+                        "example": -30
                     },
                     "status": {
                         "type": "string",
+                        "description": "Current status of the adjustment",
                         "enum": [
                             "PROPOSED",
                             "PENDING",
                             "APPROVED",
                             "REJECTED"
-                        ]
+                        ],
+                        "example": "PENDING"
                     },
                     "createdBy": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "User who created the adjustment request",
+                        "example": "employee-456"
                     },
                     "createdAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Timestamp when the adjustment was created",
+                        "example": "2026-02-17T08:30:00Z"
                     },
                     "decidedBy": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "User who approved or rejected the adjustment",
+                        "example": "manager-123"
                     },
                     "decidedAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Timestamp when the adjustment was approved or rejected",
+                        "example": "2026-02-17T09:15:00Z"
                     }
-                }
+                },
+                "required": [
+                    "reasonCode",
+                    "status",
+                    "timeEntryId"
+                ]
+            },
+            "AttendanceDiscrepancyReportResponse": {
+                "type": "object",
+                "description": "Attendance discrepancy report aggregating time entry approval statuses",
+                "properties": {
+                    "generatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Timestamp when the report was generated",
+                        "example": "2026-02-17T10:30:00Z"
+                    },
+                    "approvedCount": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Count of approved time entries",
+                        "example": 42
+                    },
+                    "pendingApprovalCount": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Count of time entries pending approval",
+                        "example": 7
+                    },
+                    "rejectedCount": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Count of rejected time entries",
+                        "example": 3
+                    }
+                },
+                "required": [
+                    "approvedCount",
+                    "generatedAt",
+                    "pendingApprovalCount",
+                    "rejectedCount"
+                ]
             },
             "TimeEntryException": {
                 "type": "object",
+                "description": "Time entry exception representing a discrepancy or issue with time tracking",
                 "properties": {
                     "exceptionId": {
                         "type": "string",
-                        "format": "uuid"
+                        "format": "uuid",
+                        "description": "Unique identifier for the exception",
+                        "example": "123e4567-e89b-12d3-a456-426614174000",
+                        "readOnly": true
                     },
                     "employeeId": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Employee identifier associated with the exception",
+                        "example": "EMP-001"
                     },
                     "workDate": {
                         "type": "string",
-                        "format": "date"
+                        "format": "date",
+                        "description": "Work date when the exception occurred",
+                        "example": "2026-02-17"
                     },
                     "exceptionCode": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Exception code identifying the type of exception",
+                        "example": "MISSED_CLOCK_OUT"
                     },
                     "severity": {
                         "type": "string",
+                        "description": "Severity level of the exception",
                         "enum": [
                             "WARNING",
                             "BLOCKING"
-                        ]
+                        ],
+                        "example": "HIGH"
                     },
                     "status": {
                         "type": "string",
+                        "description": "Current status of the exception",
                         "enum": [
                             "OPEN",
                             "ACKNOWLEDGED",
                             "RESOLVED",
                             "WAIVED"
-                        ]
+                        ],
+                        "example": "PENDING"
                     },
                     "timeEntryId": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Associated time entry identifier",
+                        "example": "te-12345"
                     },
                     "resolutionNotes": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Notes describing resolution or actions taken",
+                        "example": "Manager manually adjusted time entry"
                     },
                     "detectedAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Timestamp when the exception was detected",
+                        "example": "2026-02-17T08:30:00Z"
                     },
                     "resolvedBy": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "User who resolved the exception",
+                        "example": "manager-123"
                     },
                     "resolvedAt": {
                         "type": "string",
-                        "format": "date-time"
+                        "format": "date-time",
+                        "description": "Timestamp when the exception was resolved",
+                        "example": "2026-02-17T09:15:00Z"
                     }
-                }
+                },
+                "required": [
+                    "employeeId",
+                    "exceptionCode",
+                    "severity",
+                    "status",
+                    "workDate"
+                ]
             }
         }
     }
