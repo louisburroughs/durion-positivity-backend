@@ -78,6 +78,12 @@ spring:
                 - Path=/people/**
               filters:
                 - StripPrefix=1
+            - id: security-service
+              uri: lb://SECURITY-SERVICE
+              predicates:
+                - Path=/security-service/**
+              filters:
+                - StripPrefix=1
             - id: price
               uri: lb://PRICE
               predicates:
@@ -100,12 +106,6 @@ spring:
               uri: lb://IMAGE
               predicates:
                 - Path=/image/**
-              filters:
-                - StripPrefix=1
-            - id: security-service
-              uri: lb://SECURITY-SERVICE
-              predicates:
-                - Path=/security-service/**
               filters:
                 - StripPrefix=1
             - id: event-receiver

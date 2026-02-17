@@ -1,23 +1,26 @@
-package com.positivity.securityservice.internal.model;
+package com.positivity.securityservice.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.Instant;
+import java.util.UUID;
 
 /**
- * Represents a permission in the system following the domain:resource:action naming convention.
+ * Represents a permission in the system following the domain:resource:action
+ * naming convention.
  * Examples: pricing:price_book:edit, inventory:adjustment:approve
  */
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "permissions", 
-       uniqueConstraints = @UniqueConstraint(columnNames = "name"))
+@Table(name = "permissions", uniqueConstraints = @UniqueConstraint(columnNames = "name"))
 public class Permission {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
 
     /**
      * Permission name following format: domain:resource:action
@@ -70,6 +73,9 @@ public class Permission {
 
     @PrePersist
     protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
         if (registeredAt == null) {
             registeredAt = Instant.now();
         }
@@ -82,13 +88,13 @@ public class Permission {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("Permission name cannot be null or empty");
         }
-        
+
         String[] parts = name.split(":");
         if (parts.length != 3) {
             throw new IllegalArgumentException(
-                "Permission name must follow format domain:resource:action, got: " + name);
+                    "Permission name must follow format domain:resource:action, got: " + name);
         }
-        
+
         this.domain = parts[0].toLowerCase().trim();
         this.resource = parts[1].toLowerCase().trim();
         this.action = parts[2].toLowerCase().trim();

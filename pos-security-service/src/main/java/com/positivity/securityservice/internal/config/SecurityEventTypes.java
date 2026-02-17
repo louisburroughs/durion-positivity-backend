@@ -38,7 +38,7 @@ public final class SecurityEventTypes {
                                 // RoleController - 4 events
                                 EventTypeRegistration.write("SECURITY_ROLE_CREATE",
                                                 "Create a new role").build(),
-                                EventTypeRegistration.write("SECURITY_ROLE_UPDATE_PERMISSIONS",
+                                EventTypeRegistration.write("SECURITY_ROLE_PERMISSIONS_UPDATE",
                                                 "Update permissions assigned to a role").build(),
                                 EventTypeRegistration.write("SECURITY_ROLE_ASSIGNMENT_CREATE",
                                                 "Create a role assignment for a user").build(),

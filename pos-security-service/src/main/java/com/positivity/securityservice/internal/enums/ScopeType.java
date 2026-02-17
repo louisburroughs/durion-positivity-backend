@@ -1,4 +1,4 @@
-package com.positivity.securityservice.internal.model;
+package com.positivity.securityservice.internal.enums;
 
 /**
  * Defines the scope type for role assignments.

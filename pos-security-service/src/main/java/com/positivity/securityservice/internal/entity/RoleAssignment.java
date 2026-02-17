@@ -1,15 +1,22 @@
-package com.positivity.securityservice.internal.model;
+package com.positivity.securityservice.internal.entity;
 
+import com.positivity.securityservice.internal.enums.ScopeType;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.AccessLevel;
+
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 /**
- * Represents a user's assignment to a role with optional scope and effective dating.
+ * Represents a user's assignment to a role with optional scope and effective
+ * dating.
  * Supports scoped RBAC where roles can be limited to specific locations.
  */
 @Data
@@ -18,8 +25,8 @@ import java.util.Set;
 @Table(name = "role_assignments")
 public class RoleAssignment {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(columnDefinition = "UUID")
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
@@ -37,11 +44,11 @@ public class RoleAssignment {
     private ScopeType scopeType = ScopeType.GLOBAL;
 
     /**
-     * Location IDs this role assignment applies to (only used when scopeType is LOCATION)
+     * Location IDs this role assignment applies to (only used when scopeType is
+     * LOCATION)
      */
     @ElementCollection
-    @CollectionTable(name = "role_assignment_scope_locations", 
-                     joinColumns = @JoinColumn(name = "role_assignment_id"))
+    @CollectionTable(name = "role_assignment_scope_locations", joinColumns = @JoinColumn(name = "role_assignment_id"))
     @Column(name = "location_id")
     private Set<String> scopeLocationIds = new HashSet<>();
 
@@ -49,12 +56,21 @@ public class RoleAssignment {
      * Start date when this assignment becomes effective
      */
     @Column(nullable = false)
-    private LocalDate effectiveStartDate;
+    private LocalDateTime effectiveStartDate;
 
     /**
      * End date when this assignment expires (null = no expiration)
      */
-    private LocalDate effectiveEndDate;
+    private LocalDateTime effectiveEndDate;
+
+    /**
+     * Timestamp when this assignment's revocation was last set or updated.
+     * Updated automatically whenever effectiveEndDate is set.
+     * Always set to current timestamp (cannot be backdated or future-dated).
+     * Null if the assignment has never been revoked.
+     */
+    @Setter(AccessLevel.PRIVATE)
+    private Instant revokedAt;
 
     /**
      * When this assignment was created
@@ -81,11 +97,14 @@ public class RoleAssignment {
 
     @PrePersist
     protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
         if (createdAt == null) {
             createdAt = Instant.now();
         }
         if (effectiveStartDate == null) {
-            effectiveStartDate = LocalDate.now();
+            effectiveStartDate = LocalDateTime.now();
         }
     }
 
@@ -98,7 +117,7 @@ public class RoleAssignment {
      * Check if this assignment is currently effective based on effective dates
      */
     public boolean isEffective() {
-        LocalDate now = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
         boolean afterStart = !now.isBefore(effectiveStartDate);
         boolean beforeEnd = effectiveEndDate == null || !now.isAfter(effectiveEndDate);
         return afterStart && beforeEnd;
@@ -112,5 +131,20 @@ public class RoleAssignment {
             return true;
         }
         return scopeLocationIds.contains(locationId);
+    }
+
+    /**
+     * Custom setter for effectiveEndDate that automatically updates revokedAt.
+     * When the effective end date is set (revocation), the revokedAt timestamp
+     * is automatically set to the current time to track when the revocation occurred.
+     * 
+     * @param effectiveEndDate the new effective end date
+     */
+    public void setEffectiveEndDate(LocalDateTime effectiveEndDate) {
+        this.effectiveEndDate = effectiveEndDate;
+        // Automatically update revokedAt when effectiveEndDate is set
+        if (effectiveEndDate != null) {
+            this.revokedAt = Instant.now();
+        }
     }
 }
