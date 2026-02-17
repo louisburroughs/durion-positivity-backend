@@ -54,12 +54,12 @@ public class MergeAudit {
     @NotNull
     @Column(name = "survivor_party_id", nullable = false)
     @Schema(description = "ID of the party that survived the merge (kept)")
-    private Long survivorPartyId;
+    private UUID survivorPartyId;
 
     @NotNull
     @Column(name = "source_party_id", nullable = false)
     @Schema(description = "ID of the party that was merged (absorbed)")
-    private Long sourcePartyId;
+    private UUID sourcePartyId;
 
     @NotNull
     @Column(name = "merged_by_user_id", nullable = false)
@@ -97,7 +97,7 @@ public class MergeAudit {
      * @param mergeReason     the reason for the merge
      * @return a new MergeAudit instance
      */
-    public static MergeAudit create(Long survivorPartyId, Long sourcePartyId, UUID mergedByUserId, String mergeReason) {
+    public static MergeAudit create(UUID survivorPartyId, UUID sourcePartyId, UUID mergedByUserId, String mergeReason) {
         MergeAudit audit = new MergeAudit();
         audit.setSurvivorPartyId(survivorPartyId);
         audit.setSourcePartyId(sourcePartyId);

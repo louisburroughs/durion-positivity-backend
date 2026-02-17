@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -46,4 +47,12 @@ public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLa
      */
     @NonNull
     Optional<WorkorderLaborEntry> findByWorkorderServiceIdAndEndTimeIsNull(@NonNull UUID workorderServiceId);
+
+    @NonNull
+    List<WorkorderLaborEntry> findByTechnicianIdAndEndTimeIsNullOrderByStartTimeDesc(@NonNull UUID technicianId);
+
+    @NonNull
+    List<WorkorderLaborEntry> findByEndTimeIsNotNullAndEndTimeBetween(
+            @NonNull LocalDateTime startInclusive,
+            @NonNull LocalDateTime endExclusive);
 }

@@ -129,11 +129,12 @@ class EstimateServiceTest {
                 CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
                                 .vehicleId(UUID.fromString("550e8400-e29b-41d4-a716-446655440012"))
                                 .build();
+                String userId = testUserId.toString();
 
                 // When & Then
                 IllegalArgumentException exception = assertThrows(
                                 IllegalArgumentException.class,
-                                () -> estimateService.createEstimate(invalidRequest, testUserId.toString()));
+                                () -> estimateService.createEstimate(invalidRequest, userId));
 
                 assertEquals("customerId is required", exception.getMessage());
                 verify(estimateRepository, never()).save(any(Estimate.class));
@@ -145,11 +146,12 @@ class EstimateServiceTest {
                 CreateEstimateRequest invalidRequest = CreateEstimateRequest.builder()
                                 .customerId(UUID.fromString("550e8400-e29b-41d4-a716-446655440011"))
                                 .build();
+                String userId = testUserId.toString();
 
                 // When & Then
                 IllegalArgumentException exception = assertThrows(
                                 IllegalArgumentException.class,
-                                () -> estimateService.createEstimate(invalidRequest, testUserId.toString()));
+                                () -> estimateService.createEstimate(invalidRequest, userId));
 
                 assertEquals("vehicleId is required", exception.getMessage());
                 verify(estimateRepository, never()).save(any(Estimate.class));
