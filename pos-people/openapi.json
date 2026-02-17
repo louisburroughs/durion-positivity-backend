@@ -1479,7 +1479,8 @@
                     },
                     "endDate": {
                         "type": "string",
-                        "format": "date"
+                        "format": "date",
+                        "nullable": true
                     },
                     "active": {
                         "type": "boolean"
