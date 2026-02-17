@@ -253,12 +253,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      */
     @Override
     @Transactional
-    public void revokeRoleAssignment(@NonNull UUID assignmentId, @NonNull LocalDate endDate) {
+    public void revokeRoleAssignment(@NonNull UUID assignmentId, @NonNull LocalDateTime endDate) {
         RoleAssignment assignment = roleAssignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new RoleAssignmentNotFoundException("Role assignment not found: " + assignmentId));
 
-        assignment.setEffectiveEndDate(endDate);
-        assignment.setRevokedAt(Instant.now());
+        assignment.setEffectiveEndDate(endDate); // This automatically sets revokedAt
         assignment.setLastModifiedBy(getCurrentUsername());
         assignment.setLastModifiedAt(Instant.now());
 

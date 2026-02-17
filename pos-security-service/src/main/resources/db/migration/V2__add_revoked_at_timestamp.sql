@@ -1,5 +1,5 @@
--- Add revoked_at timestamp to track when revocation was entered
--- This provides an immutable audit trail for when the revocation was set,
+-- Add revoked_at timestamp to track when revocation was entered or last modified
+-- This records the most recent time the revocation was set or updated,
 -- independent of the effective_end_date which may be in the past or future
 ALTER TABLE role_assignments ADD COLUMN revoked_at TIMESTAMP WITH TIME ZONE;
 
