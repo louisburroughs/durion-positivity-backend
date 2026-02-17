@@ -78,7 +78,7 @@ All 4 REST controllers are fully annotated and documented:
 
 ```bash
 cd pos-workorder
-./mvnw -Popenapi clean verify -DskipTests
+./mvnw -Plocal -am clean verify -pl pos-workorder
 # Spec generated at: target/openapi.json
 ```
 

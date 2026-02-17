@@ -3,6 +3,10 @@
     "info": {
         "title": "POS Workorder Service API",
         "description": "Workorder service for managing workorders and tasks",
+        "contact": {
+            "name": "Durion Team",
+            "email": "louis.burroughs@gmail.com"
+        },
         "version": "v1"
     },
     "servers": [
@@ -959,16 +963,6 @@
                     "required": true
                 },
                 "responses": {
-                    "201": {
-                        "description": "Part substituted successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-                                }
-                            }
-                        }
-                    },
                     "409": {
                         "description": "Idempotency conflict",
                         "content": {
@@ -981,6 +975,16 @@
                     },
                     "404": {
                         "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Part substituted successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1059,16 +1063,6 @@
                     "required": true
                 },
                 "responses": {
-                    "201": {
-                        "description": "Parts returned successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "description": "Invalid request (exceeds available quantity, etc.)",
                         "content": {
@@ -1081,6 +1075,16 @@
                     },
                     "404": {
                         "description": "Workorder or part not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Parts returned successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1161,8 +1165,8 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Unused quantity returned successfully",
+                    "404": {
+                        "description": "Workorder or part not found",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1171,8 +1175,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Workorder or part not found",
+                    "201": {
+                        "description": "Unused quantity returned successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1251,8 +1255,8 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Parts issued successfully",
+                    "404": {
+                        "description": "Workorder or part not found",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1261,8 +1265,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Workorder or part not found",
+                    "201": {
+                        "description": "Parts issued successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1343,8 +1347,8 @@
                     "required": true
                 },
                 "responses": {
-                    "201": {
-                        "description": "Part quantity corrected successfully",
+                    "404": {
+                        "description": "Workorder or part not found",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1353,8 +1357,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Workorder or part not found",
+                    "201": {
+                        "description": "Part quantity corrected successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1545,6 +1549,71 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/WorkorderLaborEntryResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/workorders/{workorderId}/generate-invoice": {
+            "post": {
+                "tags": [
+                    "Work Order API"
+                ],
+                "summary": "Generate invoice draft from completed workorder",
+                "description": "Generate an invoice draft from a completed workorder with optional idempotency key.",
+                "operationId": "generateInvoice",
+                "parameters": [
+                    {
+                        "name": "workorderId",
+                        "in": "path",
+                        "description": "ID of the completed work order",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "invoice-generate-550e8400-e29b-41d4-a716-446655440000"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Invoice generated successfully or existing invoice returned for idempotent replay.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvoiceGenerationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Work order is not in COMPLETED state.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvoiceGenerationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Work order not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InvoiceGenerationResponse"
                                 }
                             }
                         }
@@ -1889,18 +1958,8 @@
                             }
                         }
                     },
-                    "500": {
-                        "description": "Internal server error - estimate creation failed.",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EstimateResponse"
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Estimate created successfully.",
+                    "409": {
+                        "description": "Conflict - estimate could not be created due to state or integrity constraints.",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1911,6 +1970,26 @@
                     },
                     "403": {
                         "description": "Forbidden - user does not have ESTIMATE_CREATE permission.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Estimate created successfully.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EstimateResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error - unexpected estimate creation failure.",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -3096,6 +3175,16 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Usage history retrieved successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
+                                }
+                            }
+                        }
+                    },
                     "404": {
                         "description": "Workorder or part not found",
                         "content": {
@@ -3105,16 +3194,6 @@
                                     "items": {
                                         "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
                                     }
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Usage history retrieved successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/WorkorderPartUsageEventResponse"
                                 }
                             }
                         }
@@ -3153,6 +3232,16 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Adjustment history retrieved successfully (newest first)",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+                                }
+                            }
+                        }
+                    },
                     "404": {
                         "description": "Workorder or part not found",
                         "content": {
@@ -3162,16 +3251,6 @@
                                     "items": {
                                         "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                                     }
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "Adjustment history retrieved successfully (newest first)",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/WorkorderPartAdjustmentEventResponse"
                                 }
                             }
                         }
@@ -4503,6 +4582,43 @@
                     "quantity",
                     "workorderPartId"
                 ]
+            },
+            "InvoiceGenerationResponse": {
+                "type": "object",
+                "properties": {
+                    "invoiceId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "workorderId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "estimateId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "approvalId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "subtotal": {
+                        "type": "number"
+                    },
+                    "taxAmount": {
+                        "type": "number"
+                    },
+                    "totalAmount": {
+                        "type": "number"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
             },
             "CompleteWorkorderRequest": {
                 "type": "object",
