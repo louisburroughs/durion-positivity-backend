@@ -71,6 +71,7 @@ class WorkorderInvoiceServiceTest {
 
         @Test
         @DisplayName("generateInvoice creates invoice from completed workorder and persists invoice link")
+        @SupressWarnings("java:S100")
         void generateInvoice_FromCompletedWorkorder_CreatesInvoiceAndPersistsLink() {
                 Workorder workorder = completedWorkorder();
                 when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
