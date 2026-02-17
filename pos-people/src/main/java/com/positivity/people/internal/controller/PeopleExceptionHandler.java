@@ -1,5 +1,6 @@
 package com.positivity.people.internal.controller;
 
+import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
@@ -69,5 +70,37 @@ public class PeopleExceptionHandler {
                 ex.getMessage());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problem;
+    }
+
+    @ExceptionHandler(SecurityServiceException.class)
+    public ProblemDetail handleSecurityServiceException(SecurityServiceException ex) {
+        HttpStatus status = determineHttpStatus(ex);
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                status,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    private HttpStatus determineHttpStatus(SecurityServiceException ex) {
+        int statusCode = ex.getHttpStatus();
+        
+        // Preserve the actual status code from the security service
+        if (statusCode == 502) {
+            return HttpStatus.BAD_GATEWAY;
+        } else if (statusCode == 503) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
+        } else if (statusCode == 504) {
+            return HttpStatus.GATEWAY_TIMEOUT;
+        } else if (statusCode == 404) {
+            return HttpStatus.NOT_FOUND;
+        } else if (statusCode >= 400 && statusCode < 500) {
+            return HttpStatus.BAD_REQUEST;
+        } else if (statusCode >= 500 && statusCode < 600) {
+            // Preserve other 5xx codes as INTERNAL_SERVER_ERROR
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        } else {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
     }
 }
