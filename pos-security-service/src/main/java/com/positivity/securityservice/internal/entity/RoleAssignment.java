@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -54,12 +54,12 @@ public class RoleAssignment {
      * Start date when this assignment becomes effective
      */
     @Column(nullable = false)
-    private LocalDate effectiveStartDate;
+    private LocalDateTime effectiveStartDate;
 
     /**
      * End date when this assignment expires (null = no expiration)
      */
-    private LocalDate effectiveEndDate;
+    private LocalDateTime effectiveEndDate;
 
     /**
      * Timestamp when this assignment's revocation was last set or updated.
@@ -101,7 +101,7 @@ public class RoleAssignment {
             createdAt = Instant.now();
         }
         if (effectiveStartDate == null) {
-            effectiveStartDate = LocalDate.now();
+            effectiveStartDate = LocalDateTime.now();
         }
     }
 
@@ -114,7 +114,7 @@ public class RoleAssignment {
      * Check if this assignment is currently effective based on effective dates
      */
     public boolean isEffective() {
-        LocalDate now = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
         boolean afterStart = !now.isBefore(effectiveStartDate);
         boolean beforeEnd = effectiveEndDate == null || !now.isAfter(effectiveEndDate);
         return afterStart && beforeEnd;

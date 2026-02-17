@@ -16,8 +16,8 @@ import java.util.UUID;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RoleAssignment {
     private UUID id;
-    private UUID userId;
-    private UUID roleId;
+    private User user;
+    private Role role;
     private ScopeType scopeType;
     private Set<String> scopeLocationIds;
     private LocalDate effectiveStartDate;
