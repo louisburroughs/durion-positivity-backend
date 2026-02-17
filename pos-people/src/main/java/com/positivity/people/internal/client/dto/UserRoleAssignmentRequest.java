@@ -13,7 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserRoleAssignmentRequest {
-    private String userId;
+    private UUID userId;
     private String roleCode;
     private UUID locationId;
     private LocalDateTime startDate;

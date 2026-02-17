@@ -39,7 +39,7 @@ public class UserPersonLinkController {
     @ApiResponse(responseCode = "404", description = "Person not found")
     @ApiResponse(responseCode = "409", description = "User already linked")
     public ResponseEntity<UserPersonLinkResponse> linkUserToPerson(
-            @Parameter(description = "User ID from authentication system", required = true) @PathVariable String userId,
+            @Parameter(description = "User ID from authentication system", required = true) @PathVariable UUID userId,
             @Valid @RequestBody LinkUserToPersonRequest request) {
 
         request.setUserId(userId);
@@ -54,7 +54,7 @@ public class UserPersonLinkController {
     @ApiResponse(responseCode = "204", description = "Link deleted successfully")
     @ApiResponse(responseCode = "404", description = "Link not found")
     public ResponseEntity<Void> unlinkUserFromPerson(
-            @Parameter(description = "User ID", required = true) @PathVariable String userId) {
+            @Parameter(description = "User ID", required = true) @PathVariable UUID userId) {
 
         linkService.unlinkUserFromPerson(userId);
         return ResponseEntity.noContent().build();
@@ -65,7 +65,7 @@ public class UserPersonLinkController {
     @ApiResponse(responseCode = "200", description = "Person found", content = @Content(schema = @Schema(implementation = PersonResponse.class)))
     @ApiResponse(responseCode = "404", description = "Link or person not found")
     public ResponseEntity<PersonResponse> getPersonByUserId(
-            @Parameter(description = "User ID", required = true) @PathVariable String userId) {
+            @Parameter(description = "User ID", required = true) @PathVariable UUID userId) {
 
         PersonResponse person = linkService.findPersonByUserId(userId);
         return ResponseEntity.ok(person);
@@ -75,10 +75,10 @@ public class UserPersonLinkController {
     @Operation(summary = "Get users linked to person", description = "Retrieve all user IDs linked to a person record")
     @ApiResponse(responseCode = "200", description = "User IDs returned")
     @ApiResponse(responseCode = "404", description = "Person not found")
-    public ResponseEntity<List<String>> getUserIdsByPersonId(
+    public ResponseEntity<List<UUID>> getUserIdsByPersonId(
             @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
 
-        List<String> userIds = linkService.findUserIdsByPersonId(personId);
+        List<UUID> userIds = linkService.findUserIdsByPersonId(personId);
         return ResponseEntity.ok(userIds);
     }
 }

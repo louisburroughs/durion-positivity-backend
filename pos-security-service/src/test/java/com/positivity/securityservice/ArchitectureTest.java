@@ -1,4 +1,4 @@
-package com.positivity.security_service;
+package com.positivity.securityservice;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;

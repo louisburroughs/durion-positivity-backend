@@ -68,7 +68,7 @@ public class TimeEntryAdjustmentController {
                 return ResponseEntity.status(404).body(new TimeEntryAdjustmentResponse(null, false, err.getMessage()));
             }
             com.positivity.people.internal.entity.TimeEntry entry = entryOpt.get();
-            if (entry.getStatus() != com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL) {
+            if (entry.getStatus() != com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL) {
                 com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
                         "INVALID_STATE",
                         "Adjustments can only be created for entries in PENDING_APPROVAL status", null);
@@ -110,7 +110,7 @@ public class TimeEntryAdjustmentController {
             a.setProposedEndAt(req.getProposedEndAt().toInstant());
         }
         a.setMinutesDelta(req.getMinutesDelta());
-        a.setStatus(com.positivity.people.internal.model.AdjustmentStatus.PENDING);
+        a.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
         a.setCreatedBy(req.getCreatedBy());
         a.setCreatedAt(java.time.Instant.now());
 

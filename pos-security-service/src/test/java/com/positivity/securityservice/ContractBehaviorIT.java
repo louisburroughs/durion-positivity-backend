@@ -1,22 +1,24 @@
-package com.positivity.security_service;
+package com.positivity.securityservice;
 
-import com.positivity.securityservice.TokenRevocationManager;
-import com.positivity.securityservice.BaseIntegrationTest;
-import com.positivity.securityservice.internal.dto.LoginRequest;
-import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
-import com.positivity.securityservice.internal.dto.TokenPairRequest;
-import com.positivity.securityservice.internal.dto.TokenPairResponse;
-import com.positivity.securityservice.internal.dto.TokenResponse;
-import com.positivity.securityservice.service.JwtService;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.crypto.spec.SecretKeySpec;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,10 +29,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
+import com.positivity.securityservice.internal.dto.TokenPairRequest;
+import com.positivity.securityservice.internal.dto.TokenPairResponse;
+import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.service.JwtService;
+import com.positivity.securityservice.service.TokenRevocationManager;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 
 /**
  * Consolidated Contract Behavior Integration Tests for Security Service.
@@ -122,8 +130,8 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 TokenResponse.class);
 
                 assertThat(response.token())
-                                .isNotBlank()
-                                .as("Token should not be blank");
+                                .as("Token should not be blank")
+                                .isNotBlank();
 
                 // Verify token structure
                 SecretKeySpec key = new SecretKeySpec(
@@ -139,10 +147,12 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 .getPayload();
 
                 assertThat(claims.getSubject()).isEqualTo(TEST_SUBJECT);
-                assertThat(claims.getId()).isNotBlank().as("JTI should be present for revocation");
+                assertThat(claims.getId())
+                                .as("JTI should be present for revocation")
+                                .isNotBlank();
                 assertThat(claims.getExpiration().toInstant())
-                                .isAfter(Instant.now())
-                                .as("Token expiration should be in the future");
+                                .as("Token expiration should be in the future")
+                                .isAfter(Instant.now());
         }
 
         /**
@@ -192,10 +202,17 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 assertThat(accessClaims.getId()).isNotEqualTo(refreshClaims.getId());
 
                 // Verify access token has roles
-                assertThat(accessClaims.get("roles")).isNotNull();
+                assertThat(accessClaims).containsKey("roles");
+                @SuppressWarnings("unchecked")
+                Collection<String> roles = (Collection<String>) accessClaims.get("roles");
+                assertThat(roles)
+                                .as("Access token roles should be present and not empty")
+                                .isNotNull()
+                                .isNotEmpty()
+                                .containsAll(TEST_ROLES);
 
                 // Verify refresh token type claim
-                assertThat(refreshClaims.get("type")).isEqualTo("refresh");
+                assertThat(refreshClaims).containsEntry("type", "refresh");
         }
 
         /**
@@ -457,7 +474,6 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("T14: Access token has 1-hour lifetime")
         void testAccessTokenLifetime() throws Exception {
                 // Arrange
-                Instant beforeCreation = Instant.now();
                 String token = jwtService.generateToken(TEST_SUBJECT, TEST_ROLES);
                 Instant afterCreation = Instant.now();
 
@@ -479,8 +495,8 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
                 // Assert: Within 1 second of 1 hour (3600 seconds)
                 assertThat(secondsUntilExpiry)
-                                .isBetween(3599L, 3601L)
-                                .as("Access token should expire in approximately 1 hour");
+                                .as("Access token should expire in approximately 1 hour")
+                                .isBetween(3599L, 3601L);
         }
 
         /**
@@ -886,7 +902,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
                 // Verify timestamp is ISO 8601 format
                 String timestamp = objectMapper.readTree(result.getResponse().getContentAsString())
-                                .get("timestamp").asText();
+                                .get("timestamp").asString();
                 assertThat(timestamp).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*");
         }
 }

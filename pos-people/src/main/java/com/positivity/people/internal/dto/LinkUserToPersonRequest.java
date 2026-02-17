@@ -14,7 +14,7 @@ public class LinkUserToPersonRequest {
 
         @NotBlank(message = "userId is required")
         @NonNull
-        private String userId;
+        private UUID userId;
 
         @NotNull(message = "personId is required")
         @NonNull

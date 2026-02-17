@@ -1,4 +1,4 @@
-package com.positivity.securityservice;
+package com.positivity.securityservice.service;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -87,10 +87,13 @@ public class TokenRevocationManager {
         String revocationKey = REVOCATION_KEY_PREFIX + jti;
 
         // Apply retry decorator with exponential backoff
-        var decoratedOperation = Retry.decorateSupplier(jwtRevocationRetry, () -> {
-            redisTemplate.opsForValue().set(revocationKey, true, expirationSeconds, TimeUnit.SECONDS);
-            return true;
-        });
+        // Cast is required for proper type resolution with Resilience4j Retry decorator
+        @SuppressWarnings({ "java:S1905", "java:S4276", "RedundantCast" })
+        var decoratedOperation = Retry.decorateSupplier(jwtRevocationRetry,
+                (java.util.function.Supplier<Boolean>) () -> {
+                    redisTemplate.opsForValue().set(revocationKey, true, expirationSeconds, TimeUnit.SECONDS);
+                    return true;
+                });
 
         Try<Boolean> result = Try.of(decoratedOperation::get);
 

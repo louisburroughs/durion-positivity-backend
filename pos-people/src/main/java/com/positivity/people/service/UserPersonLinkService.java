@@ -13,11 +13,11 @@ public interface UserPersonLinkService {
     @NonNull
     UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request);
 
-    void unlinkUserFromPerson(@NonNull String userId);
+    void unlinkUserFromPerson(@NonNull UUID userId);
 
     @NonNull
-    PersonResponse findPersonByUserId(@NonNull String userId);
+    PersonResponse findPersonByUserId(@NonNull UUID userId);
 
     @NonNull
-    List<String> findUserIdsByPersonId(@NonNull UUID personId);
+    List<UUID> findUserIdsByPersonId(@NonNull UUID personId);
 }

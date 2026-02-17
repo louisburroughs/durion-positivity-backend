@@ -1,4 +1,4 @@
-package com.positivity.securityservice.internal.service;
+package com.positivity.securityservice.service;
 
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
@@ -15,7 +15,7 @@ import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.RoleManagementService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -149,8 +149,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             LocalDateTime requestStart,
             LocalDateTime requestEnd) {
 
-        List<RoleAssignment> existingAssignments =
-                roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId, roleId, request.getScopeType());
+        List<RoleAssignment> existingAssignments = roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId,
+                roleId, request.getScopeType());
 
         for (RoleAssignment existing : existingAssignments) {
             boolean sameRoleAndScope = existing.getRole().getId().equals(roleId)

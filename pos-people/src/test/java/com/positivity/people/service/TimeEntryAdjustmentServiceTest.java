@@ -34,7 +34,7 @@ public class TimeEntryAdjustmentServiceTest {
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
         adj.setTimeEntryId("TE-1");
-        adj.setStatus(com.positivity.people.internal.model.AdjustmentStatus.PENDING);
+        adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
 
         when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
         when(adjustmentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -45,7 +45,7 @@ public class TimeEntryAdjustmentServiceTest {
         ArgumentCaptor<TimeEntryAdjustment> captor = ArgumentCaptor.forClass(TimeEntryAdjustment.class);
         verify(adjustmentRepository).save(captor.capture());
         TimeEntryAdjustment saved = captor.getValue();
-        assertEquals(com.positivity.people.internal.model.AdjustmentStatus.APPROVED, saved.getStatus());
+        assertEquals(com.positivity.people.internal.enums.AdjustmentStatus.APPROVED, saved.getStatus());
         assertEquals("manager1", saved.getDecidedBy());
 
         verify(auditRepository).save(any(TimeEntryAudit.class));
@@ -57,7 +57,7 @@ public class TimeEntryAdjustmentServiceTest {
         TimeEntryAdjustment adj = new TimeEntryAdjustment();
         adj.setAdjustmentId(id);
         adj.setTimeEntryId("TE-2");
-        adj.setStatus(com.positivity.people.internal.model.AdjustmentStatus.PENDING);
+        adj.setStatus(com.positivity.people.internal.enums.AdjustmentStatus.PENDING);
 
         when(adjustmentRepository.findById(id)).thenReturn(Optional.of(adj));
 

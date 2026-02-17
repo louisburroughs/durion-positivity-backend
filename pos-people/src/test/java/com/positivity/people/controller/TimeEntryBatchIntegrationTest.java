@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-public class TimeEntryBatchIntegrationTest {
+class TimeEntryBatchIntegrationTest {
 
     private TimeEntryRepository entryRepository;
     private TimeEntryAuditRepository auditRepository;
@@ -25,7 +25,7 @@ public class TimeEntryBatchIntegrationTest {
     private TimeEntryApprovalController controller;
 
     @BeforeEach
-    public void setup() {
+    void setup() {
         entryRepository = mock(TimeEntryRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
         timeEntryService = new TimeEntryService(entryRepository, auditRepository);
@@ -33,17 +33,17 @@ public class TimeEntryBatchIntegrationTest {
     }
 
     @Test
-    public void approveTimeEntries_withValidEntries_succeeds() {
+    void approveTimeEntries_withValidEntries_succeeds() {
         java.util.UUID entryId1 = java.util.UUID.randomUUID();
         java.util.UUID entryId2 = java.util.UUID.randomUUID();
 
         TimeEntry entry1 = new TimeEntry();
         entry1.setTimeEntryId(entryId1);
-        entry1.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
+        entry1.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);
 
         TimeEntry entry2 = new TimeEntry();
         entry2.setTimeEntryId(entryId2);
-        entry2.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
+        entry2.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);
 
         when(entryRepository.findById(entryId1)).thenReturn(Optional.of(entry1));
         when(entryRepository.findById(entryId2)).thenReturn(Optional.of(entry2));
@@ -61,7 +61,7 @@ public class TimeEntryBatchIntegrationTest {
     }
 
     @Test
-    public void rejectTimeEntries_withoutReasonForEntry_returnsBadRequest() {
+    void rejectTimeEntries_withoutReasonForEntry_returnsBadRequest() {
         TimeEntryDecisionBatchRequest request = new TimeEntryDecisionBatchRequest();
         TimeEntryDecisionBatchRequest.Decision d1 = new TimeEntryDecisionBatchRequest.Decision();
         d1.setTimeEntryId(java.util.UUID.randomUUID().toString());
@@ -73,11 +73,11 @@ public class TimeEntryBatchIntegrationTest {
     }
 
     @Test
-    public void rejectTimeEntries_withValidReasons_succeeds() {
+    void rejectTimeEntries_withValidReasons_succeeds() {
         java.util.UUID entryId = java.util.UUID.randomUUID();
         TimeEntry entry = new TimeEntry();
         entry.setTimeEntryId(entryId);
-        entry.setStatus(com.positivity.people.internal.model.TimeEntryStatus.PENDING_APPROVAL);
+        entry.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.PENDING_APPROVAL);
 
         when(entryRepository.findById(entryId)).thenReturn(Optional.of(entry));
         when(entryRepository.save(any())).thenAnswer(i -> i.getArgument(0));

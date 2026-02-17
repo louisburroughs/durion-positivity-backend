@@ -32,5 +32,6 @@ public class Person {
     @ElementCollection
     private List<String> phoneNumbers;
 
-    private String username; // Optional, validated externally
+    /** Optional, validated externally - stick with username not userName */
+    private String username;
 }

@@ -1,4 +1,4 @@
-package com.positivity.people.internal.controller;
+package com.positivity.people.controller;
 
 import com.positivity.people.BaseIntegrationTest;
 import com.positivity.people.internal.client.dto.RoleDto;

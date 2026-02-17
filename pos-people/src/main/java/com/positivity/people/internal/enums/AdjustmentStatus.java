@@ -1,4 +1,4 @@
-package com.positivity.people.internal.model;
+package com.positivity.people.internal.enums;
 
 public enum AdjustmentStatus {
     PROPOSED,
