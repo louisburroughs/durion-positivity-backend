@@ -17,7 +17,7 @@ public final class PeopleEventTypes {
 
         /**
          * All event type registrations for the people module.
-         * Total: 17 event types.
+         * Total: 21 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -63,6 +63,16 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_CREATE",
                                                 "Link user to person").build(),
                                 EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_DELETE",
-                                                "Unlink user from person").build());
+                                                "Unlink user from person").build(),
+
+                                // PersonAccessController - 4 events
+                                EventTypeRegistration.fastRead("PEOPLE_ACCESS_ROLES_LIST",
+                                                "List available access roles for people").build(),
+                                EventTypeRegistration.fastRead("PEOPLE_ACCESS_ASSIGNMENTS_LIST",
+                                                "List role assignments for a person").build(),
+                                EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_CREATE",
+                                                "Create role assignment for a person").build(),
+                                EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_REVOKE",
+                                                "Revoke role assignment for a person").build());
         }
 }

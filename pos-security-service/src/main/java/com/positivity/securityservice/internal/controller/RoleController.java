@@ -1,24 +1,32 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
-import com.positivity.securityservice.internal.model.Permission;
-import com.positivity.securityservice.internal.model.Role;
-import com.positivity.securityservice.internal.model.RoleAssignment;
+import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.service.RoleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * REST controller for role management and role assignments.
@@ -46,33 +54,24 @@ public class RoleController {
         String description = request.get("description");
 
         if (name == null || name.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            throw new IllegalArgumentException("Role name is required and cannot be blank");
         }
 
-        try {
-            Role role = roleManagementService.createRole(name, description);
-            return ResponseEntity.status(HttpStatus.CREATED).body(role);
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to create role: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        Role role = roleManagementService.createRole(name, description);
+        return ResponseEntity.status(HttpStatus.CREATED).body(role);
     }
 
     /**
      * Update permissions for a role
      */
-    @EmitEvent(id = "SECURITY_ROLE_UPDATE_PERMISSIONS", apiVersion = "1")
+    @EmitEvent(id = "SECURITY_ROLE_PERMISSIONS_UPDATE", apiVersion = "1")
     @PutMapping("/permissions")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update role permissions", description = "Assigns a set of permissions to a role")
+    @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Role> updateRolePermissions(@RequestBody RolePermissionsRequest request) {
-        try {
-            Role role = roleManagementService.updateRolePermissions(request);
-            return ResponseEntity.ok(role);
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to update role permissions: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        Role role = roleManagementService.updateRolePermissions(request);
+        return ResponseEntity.ok(role);
     }
 
     /**
@@ -82,14 +81,10 @@ public class RoleController {
     @PostMapping("/assignments")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Create role assignment", description = "Assigns a role to a user with optional scope and effective dates")
+    @ApiResponse(responseCode = "404", description = "User or role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<RoleAssignment> createRoleAssignment(@RequestBody RoleAssignmentRequest request) {
-        try {
-            RoleAssignment assignment = roleManagementService.createRoleAssignment(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(assignment);
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to create role assignment: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        RoleAssignment assignment = roleManagementService.createRoleAssignment(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(assignment);
     }
 
     /**
@@ -97,15 +92,14 @@ public class RoleController {
      */
     @GetMapping("/assignments/user/{userId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Get user role assignments", description = "Returns all effective role assignments for a user")
-    public ResponseEntity<List<RoleAssignment>> getUserRoleAssignments(@PathVariable Long userId) {
-        try {
-            List<RoleAssignment> assignments = roleManagementService.getEffectiveRoleAssignments(userId);
-            return ResponseEntity.ok(assignments);
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to get role assignments: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+    @Operation(summary = "Get user role assignments", description = "Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked")
+    @ApiResponse(responseCode = "200", description = "Role assignments returned successfully")
+    @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<List<RoleAssignment>> getUserRoleAssignments(
+            @Parameter(description = "User ID", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID userId,
+            @Parameter(description = "Include historical assignments (expired/revoked)", example = "false") @RequestParam(defaultValue = "false") boolean includeHistory) {
+        List<RoleAssignment> assignments = roleManagementService.getAssignmentsForUser(userId, includeHistory);
+        return ResponseEntity.ok(assignments);
     }
 
     /**
@@ -114,14 +108,10 @@ public class RoleController {
     @GetMapping("/permissions/user/{userId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get user permissions", description = "Returns all permissions for a user from their role assignments")
-    public ResponseEntity<Set<Permission>> getUserPermissions(@PathVariable Long userId) {
-        try {
-            Set<Permission> permissions = roleManagementService.getUserPermissions(userId);
-            return ResponseEntity.ok(permissions);
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to get user permissions: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+    @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Set<Permission>> getUserPermissions(@PathVariable UUID userId) {
+        Set<Permission> permissions = roleManagementService.getUserPermissions(userId);
+        return ResponseEntity.ok(permissions);
     }
 
     /**
@@ -129,19 +119,15 @@ public class RoleController {
      */
     @GetMapping("/check-permission")
     @Operation(summary = "Check user permission", description = "Checks if a user has a specific permission for a location")
+    @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Boolean> checkUserPermission(
-            @RequestParam Long userId,
+            @RequestParam UUID userId,
             @RequestParam String permission,
             @RequestParam(required = false) String locationId) {
 
-        try {
-            boolean hasPermission = roleManagementService.userHasPermission(
-                    userId, permission, locationId != null ? locationId : "GLOBAL");
-            return ResponseEntity.ok(hasPermission);
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to check permission: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+        boolean hasPermission = roleManagementService.userHasPermission(
+                userId, permission, locationId != null ? locationId : "GLOBAL");
+        return ResponseEntity.ok(hasPermission);
     }
 
     /**
@@ -150,15 +136,16 @@ public class RoleController {
     @EmitEvent(id = "SECURITY_ROLE_ASSIGNMENT_REVOKE", apiVersion = "1")
     @DeleteMapping("/assignments/{assignmentId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
-    @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date")
-    public ResponseEntity<Void> revokeRoleAssignment(@PathVariable Long assignmentId) {
-        try {
-            roleManagementService.revokeRoleAssignment(assignmentId);
-            return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to revoke role assignment: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+    @Operation(summary = "Revoke role assignment", description = "Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted")
+    @ApiResponse(responseCode = "204", description = "Role assignment revoked")
+    @ApiResponse(responseCode = "400", description = "Invalid endDate")
+    @ApiResponse(responseCode = "404", description = "Role assignment not found")
+    public ResponseEntity<Void> revokeRoleAssignment(
+            @Parameter(description = "Role assignment ID", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID assignmentId,
+            @Parameter(description = "Effective end date and time for revocation. Defaults to current date and time", example = "2026-02-16T10:30:00") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+        LocalDateTime effectiveEndDate = endDate != null ? endDate : LocalDateTime.now();
+        roleManagementService.revokeRoleAssignment(assignmentId, effectiveEndDate);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -177,13 +164,9 @@ public class RoleController {
     @GetMapping("/{name}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
+    @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Role> getRoleByName(@PathVariable String name) {
-        try {
-            Role role = roleManagementService.getRoleByName(name);
-            return ResponseEntity.ok(role);
-        } catch (IllegalArgumentException e) {
-            log.error("Failed to get role: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+        Role role = roleManagementService.getRoleByName(name);
+        return ResponseEntity.ok(role);
     }
 }

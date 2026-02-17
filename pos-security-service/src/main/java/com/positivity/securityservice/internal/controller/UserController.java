@@ -1,8 +1,8 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.securityservice.internal.model.Role;
-import com.positivity.securityservice.internal.model.User;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -79,7 +80,7 @@ public class UserController {
     @ApiResponse(responseCode = "404", description = "User not found.")
     @GetMapping("/{id}")
     public ResponseEntity<User> getUserById(
-            @Parameter(description = "ID of the user to retrieve", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID of the user to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
         Optional<User> user = userService.getUserById(id);
         return user.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -90,7 +91,7 @@ public class UserController {
     @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
     public ResponseEntity<User> updateUser(
-            @Parameter(description = "ID of the user to update", example = "1") @PathVariable Long id,
+            @Parameter(description = "ID of the user to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id,
             @Parameter(description = "Updated user object") @RequestBody User user) {
         Optional<User> existingUserOpt = userService.getUserById(id);
         if (existingUserOpt.isEmpty()) {
@@ -110,7 +111,7 @@ public class UserController {
     @EmitEvent(id = "SECURITY_USER_DELETE", apiVersion = "1")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(
-            @Parameter(description = "ID of the user to delete", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID of the user to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }

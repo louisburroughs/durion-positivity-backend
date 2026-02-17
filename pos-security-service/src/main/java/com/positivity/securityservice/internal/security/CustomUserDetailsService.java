@@ -1,6 +1,6 @@
 package com.positivity.securityservice.internal.security;
 
-import com.positivity.securityservice.internal.model.User;
+import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
