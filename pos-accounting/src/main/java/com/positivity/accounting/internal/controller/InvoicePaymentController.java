@@ -2,6 +2,8 @@ package com.positivity.accounting.internal.controller;
 
 import java.util.UUID;
 
+import jakarta.persistence.EntityNotFoundException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -61,9 +63,13 @@ public class InvoicePaymentController {
             InvoiceStatusResponse response = paymentStatusService.getInvoiceStatus(invoiceId);
             return ResponseEntity.ok(response);
 
-        } catch (RuntimeException e) {
+        } catch (EntityNotFoundException e) {
             log.error("Invoice not found: {}", invoiceId);
             return ResponseEntity.notFound().build();
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid request for invoice status {}: {}", invoiceId, e.getMessage());
+            return ResponseEntity.badRequest().build();
 
         } catch (Exception e) {
             log.error("Error retrieving status for invoice {}: {}",
@@ -75,8 +81,7 @@ public class InvoicePaymentController {
     @PostMapping("/v1/accounting/invoice/invoices")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Regenerate invoice from workorder", description = "Regenerate an invoice from a workorder.")
-    @ApiResponse(responseCode = "202", description = "Invoice regeneration accepted")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(responseCode = "501", description = "Not implemented")
     @EmitEvent(id = "ACCOUNTING_INVOICE_REGENERATE", apiVersion = "1")
     public ResponseEntity<Void> regenerateInvoiceFromWorkorder(@RequestBody(required = false) Object body) {
         log.info("Stub regenerateInvoiceFromWorkorder");
@@ -86,8 +91,7 @@ public class InvoicePaymentController {
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(summary = "Get billing rules", description = "Retrieve billing rules for a customer.")
-    @ApiResponse(responseCode = "200", description = "Billing rules returned")
-    @ApiResponse(responseCode = "404", description = "Customer not found")
+    @ApiResponse(responseCode = "501", description = "Not implemented")
     public ResponseEntity<Void> getBillingRules(
             @Parameter(description = "Customer identifier") @PathVariable UUID customerId) {
         log.info("Stub getBillingRules customerId={}", customerId);

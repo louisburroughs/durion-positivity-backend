@@ -90,7 +90,7 @@ public class CreditMemoService {
             log.error("Failed to fetch invoice details for {}: {}", request.getOriginalInvoiceId(), e.getMessage());
             HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
             if (status == null) {
-                status = HttpStatus.BAD_GATEWAY;
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
             }
             throw new ResponseStatusException(
                     status,

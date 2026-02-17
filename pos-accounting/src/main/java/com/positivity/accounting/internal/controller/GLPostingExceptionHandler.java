@@ -29,6 +29,6 @@ public class GLPostingExceptionHandler {
                 .timestamp(Instant.now().toEpochMilli())
                 .build();
 
-        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 }
