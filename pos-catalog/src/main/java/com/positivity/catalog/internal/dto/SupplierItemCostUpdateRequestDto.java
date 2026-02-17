@@ -15,6 +15,9 @@ public class SupplierItemCostUpdateRequestDto {
     @Schema(description = "Optional fallback base cost when no tiers apply", example = "6.25")
     private BigDecimal baseCost;
 
+    @Schema(description = "Entity version for optimistic locking")
+    private Long version;
+
     @Schema(description = "Ordered quantity-based cost tiers")
     private List<CostTierDto> tiers;
 }

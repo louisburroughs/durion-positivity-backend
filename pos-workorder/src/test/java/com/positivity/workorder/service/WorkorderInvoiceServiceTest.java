@@ -40,6 +40,8 @@ import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
 
+        private static final String INV_KEY_1 = "inv-key-1";
+
         @Mock
         private WorkorderRepository workorderRepository;
 
@@ -80,7 +82,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of(partLine()));
                 when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                                 .thenReturn(List.of());
-                when(idempotencyService.getExistingInvoiceId("inv-key-1")).thenReturn(Optional.empty());
+                when(idempotencyService.getExistingInvoiceId(INV_KEY_1)).thenReturn(Optional.empty());
 
                 UUID invoiceId = UUID.randomUUID();
                 InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
@@ -99,12 +101,12 @@ class WorkorderInvoiceServiceTest {
                 when(workorderRepository.save(any(Workorder.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "inv-key-1");
+                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, INV_KEY_1);
 
                 assertThat(response.getInvoiceId()).isEqualTo(invoiceId);
                 assertThat(workorder.getInvoiceId()).isEqualTo(invoiceId);
                 verify(workorderRepository).save(workorder);
-                verify(idempotencyService).registerInvoiceKey("inv-key-1", invoiceId);
+                verify(idempotencyService).registerInvoiceKey(INV_KEY_1, invoiceId);
         }
 
         @Test

@@ -24,6 +24,8 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     // HAPPY PATH SCENARIOS
     // ===============================================
 
+    private static final String SUPPLIER_ID = "$.supplierId";
+
     @Test
     @DisplayName("CP-001: Create catalog with valid payload")
     void testCreateCatalog_HappyPath() throws Exception {
@@ -90,14 +92,14 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validSupplierItemCostPayload(supplierId, itemId)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()))
                 .andExpect(jsonPath("$.currencyCode").value("USD"))
                 .andExpect(jsonPath("$.tiers[0].minQuantity").value(1))
                 .andExpect(jsonPath("$.tiers[0].maxQuantity").value(10))
                 .andExpect(jsonPath("$.tiers[0].unitCost").value(5.00))
                 .andExpect(jsonPath("$.tiers[2].minQuantity").value(51))
-                .andExpect(jsonPath("$.tiers[2].maxQuantity").doesNotExist())
+                .andExpect(jsonPath("$.tiers[2].maxQuantity").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.tiers[2].unitCost").value(4.00));
     }
 
@@ -110,7 +112,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
         mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()))
                 .andExpect(jsonPath("$.tiers.length()").value(3));
     }
@@ -121,10 +123,11 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         UUID supplierId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
         createSupplierItemCost(supplierId, itemId);
+        Long currentVersion = getSupplierItemCostVersion(supplierId, itemId);
 
         mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(updatedSupplierItemCostPayload()))
+                .content(updatedSupplierItemCostPayload(currentVersion)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currencyCode").value("USD"))
                 .andExpect(jsonPath("$.baseCost").value(6.50))
@@ -279,12 +282,12 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
         mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
 
         mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
     }
 
@@ -328,19 +331,22 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
                 createSupplierItemCost(supplierId, itemId);
+                Long versionAfterCreate = getSupplierItemCostVersion(supplierId, itemId);
 
                 mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(updatedSupplierItemCostPayload()))
+                                .content(updatedSupplierItemCostPayload(versionAfterCreate)))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                                .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
 
+                Long versionAfterFirstUpdate = getSupplierItemCostVersion(supplierId, itemId);
+
                 mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(validUpdatePayloadWithDifferentValues()))
+                                .content(validUpdatePayloadWithDifferentValues(versionAfterFirstUpdate)))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.supplierId").value(supplierId.toString()))
+                                .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
         }
 
@@ -381,8 +387,9 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                         Map.of("minQuantity", 51, "unitCost", 4.00))));
     }
 
-    private String updatedSupplierItemCostPayload() throws Exception {
+    private String updatedSupplierItemCostPayload(Long version) throws Exception {
         return objectMapper.writeValueAsString(Map.of(
+                "version", version,
                 "currencyCode", "USD",
                 "baseCost", 6.50,
                 "tiers", java.util.List.of(
@@ -422,12 +429,23 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                         Map.of("minQuantity", 11, "unitCost", 4.10))));
     }
 
-    private String validUpdatePayloadWithDifferentValues() throws Exception {
+    private String validUpdatePayloadWithDifferentValues(Long version) throws Exception {
         return objectMapper.writeValueAsString(Map.of(
+                "version", version,
                 "currencyCode", "USD",
                 "baseCost", 6.80,
                 "tiers", java.util.List.of(
                         Map.of("minQuantity", 1, "maxQuantity", 30, "unitCost", 5.10),
                         Map.of("minQuantity", 31, "unitCost", 4.55))));
+    }
+
+    private Long getSupplierItemCostVersion(UUID supplierId, UUID itemId) throws Exception {
+        MvcResult result = mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> response = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+        return ((Number) response.get("version")).longValue();
     }
 }
