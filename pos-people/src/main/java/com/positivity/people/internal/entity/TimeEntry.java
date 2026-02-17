@@ -5,6 +5,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -14,7 +15,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
 
 @Entity
-@Table(name = "time_entry")
+@Table(name = "time_entry", indexes = {
+        @Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
+        @Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
+        @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at")
+})
 public class TimeEntry {
 
     @Id
