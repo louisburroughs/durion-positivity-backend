@@ -1,11 +1,10 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.people.internal.dto.TimeEntryIssueRequest;
-import com.positivity.people.internal.dto.TimeEntryIssueResponse;
-import com.positivity.people.internal.entity.TimeEntryIssue;
-import com.positivity.people.internal.repository.TimeEntryIssueRepository;
-import com.positivity.people.service.TimeEntryIssueService;
+import com.positivity.people.internal.dto.TimeEntryException;
+import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
+import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
+import com.positivity.people.service.TimeEntryExceptionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,19 +18,16 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 @RestController
 @RequestMapping("/v1/people/exceptions")
 @Tag(name = "People - Exceptions", description = "Time entry exception APIs")
-public class TimeEntryIssueController {
+public class TimeEntryExceptionController {
 
     private static final String WAIVE_REASON = "waiveReason";
     private static final String EXCEPTION_NOT_FOUND = "exception not found";
     private static final String NOT_FOUND = "NOT_FOUND";
     private static final String SYSTEM = "system";
-    private final TimeEntryIssueRepository issueRepository;
-    private final TimeEntryIssueService issueService;
+    private final TimeEntryExceptionService exceptionService;
 
-    public TimeEntryIssueController(TimeEntryIssueRepository issueRepository,
-            TimeEntryIssueService issueService) {
-        this.issueRepository = issueRepository;
-        this.issueService = issueService;
+    public TimeEntryExceptionController(TimeEntryExceptionService exceptionService) {
+        this.exceptionService = exceptionService;
     }
 
     @Operation(summary = "Create a time entry exception", description = "Create a new time entry exception record with validation of required fields.")
@@ -41,28 +37,8 @@ public class TimeEntryIssueController {
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_CREATE", apiVersion = "1")
     @PostMapping(consumes = "application/json", produces = "application/json")
-    public ResponseEntity<TimeEntryIssueResponse> createException(@RequestBody TimeEntryIssueRequest req) {
-        TimeEntryIssue e = new TimeEntryIssue();
-        e.setEmployeeId(req.getEmployeeId());
-        e.setIssueCode(req.getIssueCode());
-        if (req.getSeverity() != null) {
-            try {
-                e.setSeverity(com.positivity.people.internal.enums.ExceptionSeverity.valueOf(req.getSeverity()));
-            } catch (IllegalArgumentException iae) {
-                e.setSeverity(com.positivity.people.internal.enums.ExceptionSeverity.WARNING);
-            }
-        }
-        e.setTimeEntryId(req.getTimeEntryId());
-        e.setResolutionNotes(req.getResolutionNotes());
-        if (req.getDetectedAt() != null) {
-            e.setDetectedAt(req.getDetectedAt().toInstant());
-        } else {
-            e.setDetectedAt(java.time.Instant.now());
-        }
-        e.setStatus(com.positivity.people.internal.enums.ExceptionStatus.OPEN);
-
-        TimeEntryIssue saved = issueRepository.save(e);
-        TimeEntryIssueResponse resp = new TimeEntryIssueResponse(saved.getIssueId(), true, "created");
+    public ResponseEntity<TimeEntryExceptionResponse> createException(@RequestBody TimeEntryExceptionRequest req) {
+        TimeEntryExceptionResponse resp = exceptionService.createException(req);
         return ResponseEntity.ok(resp);
     }
 
@@ -71,24 +47,19 @@ public class TimeEntryIssueController {
             @ApiResponse(responseCode = "200", description = "List returned")
     })
     @GetMapping(produces = "application/json")
-    public ResponseEntity<List<TimeEntryIssue>> listByEmployee(@RequestParam(required = false) String employeeId) {
-        List<TimeEntryIssue> list;
-        if (employeeId == null) {
-            list = issueRepository.findAll();
-        } else {
-            list = issueRepository.findByEmployeeId(employeeId);
-        }
+    public ResponseEntity<List<TimeEntryException>> listByEmployee(@RequestParam(required = false) String employeeId) {
+        List<TimeEntryException> list = exceptionService.listByEmployee(employeeId);
         return ResponseEntity.ok(list);
     }
 
     @Operation(summary = "Acknowledge an exception", description = "Mark an exception as acknowledged by the specified actor.")
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE", apiVersion = "1")
-    @PostMapping(value = "/{issueId}/acknowledge", produces = "application/json")
-    public ResponseEntity<Object> acknowledgeException(@PathVariable java.util.UUID issueId,
+    @PostMapping(value = "/{exceptionId}/acknowledge", produces = "application/json")
+    public ResponseEntity<Object> acknowledgeException(@PathVariable java.util.UUID exceptionId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         String actor = userId != null ? userId : SYSTEM;
-        boolean ok = issueService.actionException(issueId,
+        boolean ok = exceptionService.actionException(exceptionId,
                 com.positivity.people.internal.enums.ExceptionStatus.ACKNOWLEDGED, actor, null, correlationId);
         if (ok)
             return ResponseEntity.ok().build();
@@ -104,8 +75,8 @@ public class TimeEntryIssueController {
             @ApiResponse(responseCode = "404", description = "Exception not found")
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE", apiVersion = "1")
-    @PostMapping(value = "/{issueId}/resolve", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<Object> resolveException(@PathVariable java.util.UUID issueId,
+    @PostMapping(value = "/{exceptionId}/resolve", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<Object> resolveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody(required = false) java.util.Map<String, String> body,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
@@ -114,7 +85,7 @@ public class TimeEntryIssueController {
         if (body != null && body.containsKey("resolutionNotes"))
             notes = body.get("resolutionNotes");
 
-        boolean ok = issueService.actionException(issueId,
+        boolean ok = exceptionService.actionException(exceptionId,
                 com.positivity.people.internal.enums.ExceptionStatus.RESOLVED,
                 actor, notes, correlationId);
         if (ok)
@@ -132,8 +103,8 @@ public class TimeEntryIssueController {
             @ApiResponse(responseCode = "404", description = "Exception not found")
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE", apiVersion = "1")
-    @PostMapping(value = "/{issueId}/waive", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<Object> waiveException(@PathVariable java.util.UUID issueId,
+    @PostMapping(value = "/{exceptionId}/waive", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<Object> waiveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody java.util.Map<String, String> body,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
@@ -148,7 +119,7 @@ public class TimeEntryIssueController {
         String actor = userId != null ? userId : SYSTEM;
         String waiveReason = body.get(WAIVE_REASON);
 
-        boolean ok = issueService.actionException(issueId,
+        boolean ok = exceptionService.actionException(exceptionId,
                 com.positivity.people.internal.enums.ExceptionStatus.WAIVED,
                 actor, waiveReason, correlationId);
         if (ok)

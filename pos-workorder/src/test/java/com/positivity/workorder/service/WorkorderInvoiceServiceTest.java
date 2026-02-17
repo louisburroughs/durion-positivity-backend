@@ -40,503 +40,502 @@ import static org.mockito.Mockito.when;
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
 
-    @Mock
-    private WorkorderRepository workorderRepository;
+        @Mock
+        private WorkorderRepository workorderRepository;
 
-    @Mock
-    private WorkorderServiceRepository workorderServiceRepository;
+        @Mock
+        private WorkorderServiceRepository workorderServiceRepository;
 
-    @Mock
-    private WorkorderPartRepository workorderPartRepository;
+        @Mock
+        private WorkorderPartRepository workorderPartRepository;
 
-    @Mock
-    private IdempotencyService idempotencyService;
+        @Mock
+        private IdempotencyService idempotencyService;
 
-    @Mock
-    private InvoiceClient invoiceClient;
+        @Mock
+        private InvoiceClient invoiceClient;
 
-    @InjectMocks
-    private WorkorderInvoiceService workorderInvoiceService;
+        @InjectMocks
+        private WorkorderInvoiceService workorderInvoiceService;
 
-    private UUID workorderId;
-    private UUID estimateId;
-    private UUID approvalId;
+        private UUID workorderId;
+        private UUID estimateId;
+        private UUID approvalId;
 
-    @BeforeEach
-    void setUp() {
-        workorderId = UUID.randomUUID();
-        estimateId = UUID.randomUUID();
-        approvalId = UUID.randomUUID();
-    }
+        @BeforeEach
+        void setUp() {
+                workorderId = UUID.randomUUID();
+                estimateId = UUID.randomUUID();
+                approvalId = UUID.randomUUID();
+        }
 
-    @Test
-    @DisplayName("generateInvoice creates invoice from completed workorder and persists invoice link")
-    void generateInvoice_FromCompletedWorkorder_CreatesInvoiceAndPersistsLink() {
-        Workorder workorder = completedWorkorder();
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of(partLine()));
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
-        when(idempotencyService.getExistingInvoiceId("inv-key-1")).thenReturn(Optional.empty());
+        @Test
+        @DisplayName("generateInvoice creates invoice from completed workorder and persists invoice link")
+        void generateInvoice_FromCompletedWorkorder_CreatesInvoiceAndPersistsLink() {
+                Workorder workorder = completedWorkorder();
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                                .thenReturn(List.of(partLine()));
+                when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                                .thenReturn(List.of());
+                when(idempotencyService.getExistingInvoiceId("inv-key-1")).thenReturn(Optional.empty());
 
-        UUID invoiceId = UUID.randomUUID();
-        InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
-                .invoiceId(invoiceId)
-                .status("DRAFT")
-                .workorderId(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .subtotal(new BigDecimal("170.0000"))
-                .taxAmount(new BigDecimal("10.0000"))
-                .totalAmount(new BigDecimal("180.0000"))
-                .createdAt(Instant.now())
-                .build();
+                UUID invoiceId = UUID.randomUUID();
+                InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
+                                .invoiceId(invoiceId)
+                                .status("DRAFT")
+                                .workorderId(workorderId)
+                                .estimateId(estimateId)
+                                .approvalId(approvalId)
+                                .subtotal(new BigDecimal("170.0000"))
+                                .taxAmount(new BigDecimal("10.0000"))
+                                .totalAmount(new BigDecimal("180.0000"))
+                                .createdAt(Instant.now())
+                                .build();
 
-        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
+                when(workorderRepository.save(any(Workorder.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "inv-key-1");
+                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "inv-key-1");
 
-        assertThat(response.getInvoiceId()).isEqualTo(invoiceId);
-        assertThat(workorder.getInvoiceId()).isEqualTo(invoiceId);
-        verify(workorderRepository).save(workorder);
-        verify(idempotencyService).registerInvoiceKey("inv-key-1", invoiceId);
-    }
+                assertThat(response.getInvoiceId()).isEqualTo(invoiceId);
+                assertThat(workorder.getInvoiceId()).isEqualTo(invoiceId);
+                verify(workorderRepository).save(workorder);
+                verify(idempotencyService).registerInvoiceKey("inv-key-1", invoiceId);
+        }
 
-    @Test
-    @DisplayName("generateInvoice includes traceability links and backfills response links when invoice service omits them")
-    void generateInvoice_TraceabilityLinks_ArePropagated() {
-        Workorder workorder = completedWorkorder();
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
+        @Test
+        @DisplayName("generateInvoice includes traceability links and backfills response links when invoice service omits them")
+        void generateInvoice_TraceabilityLinks_ArePropagated() {
+                Workorder workorder = completedWorkorder();
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of());
+                when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                                .thenReturn(List.of());
 
-        UUID invoiceId = UUID.randomUUID();
-        InvoiceGenerationResponse upstreamResponse = InvoiceGenerationResponse.builder()
-                .invoiceId(invoiceId)
-                .status("DRAFT")
-                .subtotal(new BigDecimal("120.0000"))
-                .taxAmount(BigDecimal.ZERO)
-                .totalAmount(new BigDecimal("120.0000"))
-                .build();
-        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(upstreamResponse);
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                UUID invoiceId = UUID.randomUUID();
+                InvoiceGenerationResponse upstreamResponse = InvoiceGenerationResponse.builder()
+                                .invoiceId(invoiceId)
+                                .status("DRAFT")
+                                .subtotal(new BigDecimal("120.0000"))
+                                .taxAmount(BigDecimal.ZERO)
+                                .totalAmount(new BigDecimal("120.0000"))
+                                .build();
+                when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(upstreamResponse);
+                when(workorderRepository.save(any(Workorder.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
+                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
 
-        ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor.forClass(InvoiceCreationRequest.class);
-        verify(invoiceClient).createInvoice(requestCaptor.capture());
+                ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor
+                                .forClass(InvoiceCreationRequest.class);
+                verify(invoiceClient).createInvoice(requestCaptor.capture());
 
-        InvoiceCreationRequest sentRequest = requestCaptor.getValue();
-        assertThat(sentRequest.getWorkorderId()).isEqualTo(workorderId);
-        assertThat(sentRequest.getEstimateId()).isEqualTo(estimateId);
-        assertThat(sentRequest.getApprovalId()).isEqualTo(approvalId);
+                InvoiceCreationRequest sentRequest = requestCaptor.getValue();
+                assertThat(sentRequest.getWorkorderId()).isEqualTo(workorderId);
+                assertThat(sentRequest.getEstimateId()).isEqualTo(estimateId);
+                assertThat(sentRequest.getApprovalId()).isEqualTo(approvalId);
 
-        assertThat(response.getWorkorderId()).isEqualTo(workorderId);
-        assertThat(response.getEstimateId()).isEqualTo(estimateId);
-        assertThat(response.getApprovalId()).isEqualTo(approvalId);
-    }
+                assertThat(response.getWorkorderId()).isEqualTo(workorderId);
+                assertThat(response.getEstimateId()).isEqualTo(estimateId);
+                assertThat(response.getApprovalId()).isEqualTo(approvalId);
+        }
 
-    @Test
-    @DisplayName("generateInvoice converts workorder service and part items to invoice line items")
-    void generateInvoice_ConvertsWorkorderItemsToInvoiceLineItems() {
-        Workorder workorder = completedWorkorder();
-        WorkorderService labor = WorkorderService.builder()
-                .description("Labor - Diagnostics")
-                .quantity(new BigDecimal("2.0000"))
-                .unitPrice(new BigDecimal("75.0000"))
-                .lineTotal(null)
-                .build();
-        WorkorderPart part = WorkorderPart.builder()
-                .description("Brake Pad")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("60.0000"))
-                .lineTotal(new BigDecimal("60.0000"))
-                .build();
+        @Test
+        @DisplayName("generateInvoice converts workorder service and part items to invoice line items")
+        void generateInvoice_ConvertsWorkorderItemsToInvoiceLineItems() {
+                Workorder workorder = completedWorkorder();
+                WorkorderService labor = WorkorderService.builder()
+                                .description("Labor - Diagnostics")
+                                .quantity(new BigDecimal("2.0000"))
+                                .unitPrice(new BigDecimal("75.0000"))
+                                .lineTotal(null)
+                                .build();
+                WorkorderPart part = WorkorderPart.builder()
+                                .description("Brake Pad")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("60.0000"))
+                                .lineTotal(new BigDecimal("60.0000"))
+                                .build();
 
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(labor));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of(part));
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
-        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
-                .thenReturn(InvoiceGenerationResponse.builder()
-                        .invoiceId(UUID.randomUUID())
-                        .status("DRAFT")
-                        .subtotal(new BigDecimal("210.0000"))
-                        .taxAmount(BigDecimal.ZERO)
-                        .totalAmount(new BigDecimal("210.0000"))
-                        .build());
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(labor));
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                                .thenReturn(List.of(part));
+                when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                                .thenReturn(List.of());
+                when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
+                                .thenReturn(InvoiceGenerationResponse.builder()
+                                                .invoiceId(UUID.randomUUID())
+                                                .status("DRAFT")
+                                                .subtotal(new BigDecimal("210.0000"))
+                                                .taxAmount(BigDecimal.ZERO)
+                                                .totalAmount(new BigDecimal("210.0000"))
+                                                .build());
+                when(workorderRepository.save(any(Workorder.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        workorderInvoiceService.generateInvoice(workorderId, null);
+                workorderInvoiceService.generateInvoice(workorderId, null);
 
-        ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor.forClass(InvoiceCreationRequest.class);
-        verify(invoiceClient).createInvoice(requestCaptor.capture());
+                ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor
+                                .forClass(InvoiceCreationRequest.class);
+                verify(invoiceClient).createInvoice(requestCaptor.capture());
 
-        List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
-        assertThat(lineItems).hasSize(2);
+                List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
+                assertThat(lineItems).hasSize(2);
 
-        InvoiceLineItem laborLine = lineItems.get(0);
-        assertThat(laborLine.getDescription()).isEqualTo("Labor - Diagnostics");
-        assertThat(laborLine.getQuantity()).isEqualByComparingTo("2.0000");
-        assertThat(laborLine.getUnitPrice()).isEqualByComparingTo("75.0000");
-        assertThat(laborLine.getAmount()).isEqualByComparingTo("150.0000");
+                InvoiceLineItem laborLine = lineItems.get(0);
+                assertThat(laborLine.getDescription()).isEqualTo("Labor - Diagnostics");
+                assertThat(laborLine.getQuantity()).isEqualByComparingTo("2.0000");
+                assertThat(laborLine.getUnitPrice()).isEqualByComparingTo("75.0000");
+                assertThat(laborLine.getAmount()).isEqualByComparingTo("150.0000");
 
-        InvoiceLineItem partLine = lineItems.get(1);
-        assertThat(partLine.getDescription()).isEqualTo("Brake Pad");
-        assertThat(partLine.getQuantity()).isEqualByComparingTo("1.0000");
-        assertThat(partLine.getUnitPrice()).isEqualByComparingTo("60.0000");
-        assertThat(partLine.getAmount()).isEqualByComparingTo("60.0000");
-    }
+                InvoiceLineItem partLine = lineItems.get(1);
+                assertThat(partLine.getDescription()).isEqualTo("Brake Pad");
+                assertThat(partLine.getQuantity()).isEqualByComparingTo("1.0000");
+                assertThat(partLine.getUnitPrice()).isEqualByComparingTo("60.0000");
+                assertThat(partLine.getAmount()).isEqualByComparingTo("60.0000");
+        }
 
-    @Test
-    @DisplayName("generateInvoice returns existing invoice details when workorder already has invoice")
-    void generateInvoice_AlreadyGenerated_ReturnsExistingInvoice() {
-        UUID existingInvoiceId = UUID.randomUUID();
-        Workorder workorder = completedWorkorder();
-        workorder.setInvoiceId(existingInvoiceId);
+        @Test
+        @DisplayName("generateInvoice returns existing invoice details when workorder already has invoice")
+        void generateInvoice_AlreadyGenerated_ReturnsExistingInvoice() {
+                UUID existingInvoiceId = UUID.randomUUID();
+                Workorder workorder = completedWorkorder();
+                workorder.setInvoiceId(existingInvoiceId);
 
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
 
-        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
-                .invoiceId(existingInvoiceId)
-                .status("DRAFT")
-                .workorderId(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .subtotal(new BigDecimal("120.00"))
-                .taxAmount(new BigDecimal("10.00"))
-                .totalAmount(new BigDecimal("130.00"))
-                .createdAt(Instant.now())
-                .build();
+                InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                                .invoiceId(existingInvoiceId)
+                                .status("DRAFT")
+                                .workorderId(workorderId)
+                                .estimateId(estimateId)
+                                .approvalId(approvalId)
+                                .subtotal(new BigDecimal("120.00"))
+                                .taxAmount(new BigDecimal("10.00"))
+                                .totalAmount(new BigDecimal("130.00"))
+                                .createdAt(Instant.now())
+                                .build();
 
-        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
+                when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
 
-        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
+                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, null);
 
-        assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
-        assertThat(response.getStatus()).isEqualTo("DRAFT");
-        assertThat(response.getWorkorderId()).isEqualTo(workorderId);
-        assertThat(response.getEstimateId()).isEqualTo(estimateId);
-        assertThat(response.getApprovalId()).isEqualTo(approvalId);
-        assertThat(response.getSubtotal()).isEqualByComparingTo("120.00");
-        assertThat(response.getTaxAmount()).isEqualByComparingTo("10.00");
-        assertThat(response.getTotalAmount()).isEqualByComparingTo("130.00");
-        verify(invoiceClient, never()).createInvoice(any());
-        verify(invoiceClient).getInvoice(existingInvoiceId);
-    }
+                assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
+                assertThat(response.getStatus()).isEqualTo("DRAFT");
+                assertThat(response.getWorkorderId()).isEqualTo(workorderId);
+                assertThat(response.getEstimateId()).isEqualTo(estimateId);
+                assertThat(response.getApprovalId()).isEqualTo(approvalId);
+                assertThat(response.getSubtotal()).isEqualByComparingTo("120.00");
+                assertThat(response.getTaxAmount()).isEqualByComparingTo("10.00");
+                assertThat(response.getTotalAmount()).isEqualByComparingTo("130.00");
+                verify(invoiceClient, never()).createInvoice(any());
+                verify(invoiceClient).getInvoice(existingInvoiceId);
+        }
 
-    @Test
-    @DisplayName("generateInvoice deduplicates parts when same part has both workorder and workOrderService references")
-    void generateInvoice_DeduplicatesParts_WhenPartHasBothReferences() {
-        Workorder workorder = completedWorkorder();
-        
-        // Create a duplicate part that will be returned by both queries (same ID)
-        // This simulates a scenario where a part has both workorder and workOrderService references
-        UUID duplicatePartId = UUID.randomUUID();
-        WorkorderPart duplicatePart1 = WorkorderPart.builder()
-                .id(duplicatePartId)
-                .description("Oil Filter")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("15.0000"))
-                .lineTotal(new BigDecimal("15.0000"))
-                .build();
-        
-        WorkorderPart duplicatePart2 = WorkorderPart.builder()
-                .id(duplicatePartId)  // Same ID as duplicatePart1
-                .description("Oil Filter")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("15.0000"))
-                .lineTotal(new BigDecimal("15.0000"))
-                .build();
-        
-        // Create a standalone part with unique ID
-        WorkorderPart standalonePart = WorkorderPart.builder()
-                .id(UUID.randomUUID())
-                .description("Standalone Part")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("25.0000"))
-                .lineTotal(new BigDecimal("25.0000"))
-                .build();
+        @Test
+        @DisplayName("generateInvoice deduplicates parts when same part has both workorder and workOrderService references")
+        void generateInvoice_DeduplicatesParts_WhenPartHasBothReferences() {
+                Workorder workorder = completedWorkorder();
 
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of());
-        
-        // Simulate a scenario where the same part (by ID) is returned by both queries
-        // This tests the service-level deduplication safety measure
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
-                .thenReturn(List.of(duplicatePart1));
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
-                .thenReturn(List.of(duplicatePart2, standalonePart));
-        
-        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
-                .thenReturn(InvoiceGenerationResponse.builder()
-                        .invoiceId(UUID.randomUUID())
-                        .status("DRAFT")
-                        .subtotal(new BigDecimal("40.0000"))
-                        .taxAmount(BigDecimal.ZERO)
-                        .totalAmount(new BigDecimal("40.0000"))
-                        .build());
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                // Create a duplicate part that will be returned by both queries (same ID)
+                // This simulates a scenario where a part has both workorder and
+                // workOrderService references
+                UUID duplicatePartId = UUID.randomUUID();
+                WorkorderPart duplicatePart1 = WorkorderPart.builder()
+                                .id(duplicatePartId)
+                                .description("Oil Filter")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("15.0000"))
+                                .lineTotal(new BigDecimal("15.0000"))
+                                .build();
 
-        workorderInvoiceService.generateInvoice(workorderId, null);
+                WorkorderPart duplicatePart2 = WorkorderPart.builder()
+                                .id(duplicatePartId) // Same ID as duplicatePart1
+                                .description("Oil Filter")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("15.0000"))
+                                .lineTotal(new BigDecimal("15.0000"))
+                                .build();
 
-        ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor.forClass(InvoiceCreationRequest.class);
-        verify(invoiceClient).createInvoice(requestCaptor.capture());
+                // Create a standalone part with unique ID
+                WorkorderPart standalonePart = WorkorderPart.builder()
+                                .id(UUID.randomUUID())
+                                .description("Standalone Part")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("25.0000"))
+                                .lineTotal(new BigDecimal("25.0000"))
+                                .build();
 
-        List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
-        
-        // Verify we have exactly 2 distinct parts (duplicate was filtered out)
-        assertThat(lineItems).hasSize(2);
-        
-        // Verify both parts are present (Oil Filter should appear once, not twice)
-        assertThat(lineItems)
-                .extracting(InvoiceLineItem::getDescription)
-                .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
-        
-        // Verify amounts are correct (no double-billing - Oil Filter $15 + Standalone Part $25 = $40)
-        BigDecimal totalAmount = lineItems.stream()
-                .map(InvoiceLineItem::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(totalAmount).isEqualByComparingTo("40.0000");
-    }
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of());
 
-    @Test
-    @DisplayName("generateInvoice handles race condition when idempotency key already registered")
-    void generateInvoice_RaceCondition_ReturnsExistingInvoice() {
-        Workorder workorder = completedWorkorder();
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId)).thenReturn(List.of(partLine()));
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
+                // Simulate a scenario where the same part (by ID) is returned by both queries
+                // This tests the service-level deduplication safety measure
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                                .thenReturn(List.of(duplicatePart1));
+                when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                                .thenReturn(List.of(duplicatePart2, standalonePart));
 
-        UUID newInvoiceId = UUID.randomUUID();
-        UUID existingInvoiceId = UUID.randomUUID();
-        InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
-                .invoiceId(newInvoiceId)
-                .status("DRAFT")
-                .workorderId(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .subtotal(new BigDecimal("170.0000"))
-                .taxAmount(new BigDecimal("10.0000"))
-                .totalAmount(new BigDecimal("180.0000"))
-                .createdAt(Instant.now())
-                .build();
+                when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
+                                .thenReturn(InvoiceGenerationResponse.builder()
+                                                .invoiceId(UUID.randomUUID())
+                                                .status("DRAFT")
+                                                .subtotal(new BigDecimal("40.0000"))
+                                                .taxAmount(BigDecimal.ZERO)
+                                                .totalAmount(new BigDecimal("40.0000"))
+                                                .build());
+                when(workorderRepository.save(any(Workorder.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
-        
-        // Mock the existing invoice details that will be fetched when race condition is detected
-        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
-                .invoiceId(existingInvoiceId)
-                .status("DRAFT")
-                .workorderId(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .subtotal(new BigDecimal("120.00"))
-                .taxAmount(new BigDecimal("10.00"))
-                .totalAmount(new BigDecimal("130.00"))
-                .createdAt(Instant.now())
-                .build();
-        
-        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
-        
-        // First call to getExistingInvoiceId (early check) returns empty, second call (after collision) returns existing
-        when(idempotencyService.getExistingInvoiceId("inv-key-race"))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(existingInvoiceId));
-        
-        // Stub getInvoice to return details for the existing invoice (used in buildExistingResponse)
-        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
-                .invoiceId(existingInvoiceId)
-                .status("DRAFT")
-                .workorderId(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .subtotal(new BigDecimal("170.0000"))
-                .taxAmount(new BigDecimal("10.0000"))
-                .totalAmount(new BigDecimal("180.0000"))
-                .createdAt(Instant.now())
-                .build();
-        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
-        
-        // Simulate race condition: registerInvoiceKey throws DataIntegrityViolationException
-        doThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"))
-                .when(idempotencyService).registerInvoiceKey(eq("inv-key-race"), eq(newInvoiceId));
+                workorderInvoiceService.generateInvoice(workorderId, null);
 
-        // Mock the existing invoice that will be fetched when race condition is detected
-        InvoiceGenerationResponse existingInvoice = InvoiceGenerationResponse.builder()
-                .invoiceId(existingInvoiceId)
-                .status("DRAFT")
-                .workorderId(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .subtotal(new BigDecimal("170.0000"))
-                .taxAmount(new BigDecimal("10.0000"))
-                .totalAmount(new BigDecimal("180.0000"))
-                .createdAt(Instant.now())
-                .build();
-        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoice);
+                ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor
+                                .forClass(InvoiceCreationRequest.class);
+                verify(invoiceClient).createInvoice(requestCaptor.capture());
 
-        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "inv-key-race");
+                List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
 
-        // Should return the existing invoice, not the newly created one
-        assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
-        assertThat(response.getStatus()).isEqualTo("DRAFT");
-        
-        // Verify workorder invoiceId was NOT set to the new invoice (no save should happen in race condition)
-        verify(workorderRepository, never()).save(any(Workorder.class));
-        assertThat(workorder.getInvoiceId()).isNull(); // workorder should remain unchanged
-    }
+                // Verify we have exactly 2 distinct parts (duplicate was filtered out)
+                assertThat(lineItems).hasSize(2);
 
-    @Test
-    @DisplayName("generateInvoice excludes CANCELLED services and parts from invoice line items")
-    void generateInvoice_ExcludesCancelledItems() {
-        Workorder workorder = completedWorkorder();
-        
-        // Create billable items
-        WorkorderService completedService = WorkorderService.builder()
-                .description("Completed Service")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("100.0000"))
-                .lineTotal(new BigDecimal("100.0000"))
-                .status(WorkorderItemStatus.COMPLETED)
-                .build();
-        
-        WorkorderPart completedPart = WorkorderPart.builder()
-                .description("Completed Part")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("50.0000"))
-                .lineTotal(new BigDecimal("50.0000"))
-                .status(WorkorderItemStatus.COMPLETED)
-                .build();
-        
-        // Create non-billable (CANCELLED) items
-        WorkorderService cancelledService = WorkorderService.builder()
-                .description("Cancelled Service")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("200.0000"))
-                .lineTotal(new BigDecimal("200.0000"))
-                .status(WorkorderItemStatus.CANCELLED)
-                .build();
-        
-        WorkorderPart cancelledPart = WorkorderPart.builder()
-                .description("Cancelled Part")
-                .quantity(new BigDecimal("2.0000"))
-                .unitPrice(new BigDecimal("75.0000"))
-                .lineTotal(new BigDecimal("150.0000"))
-                .status(WorkorderItemStatus.CANCELLED)
-                .build();
+                // Verify both parts are present (Oil Filter should appear once, not twice)
+                assertThat(lineItems)
+                                .extracting(InvoiceLineItem::getDescription)
+                                .containsExactlyInAnyOrder("Oil Filter", "Standalone Part");
 
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId))
-                .thenReturn(List.of(completedService, cancelledService));
-        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
-                .thenReturn(List.of(completedPart, cancelledPart));
-        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId)).thenReturn(List.of());
-        when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
-                .thenReturn(InvoiceGenerationResponse.builder()
-                        .invoiceId(UUID.randomUUID())
-                        .status("DRAFT")
-                        .subtotal(new BigDecimal("150.0000"))
-                        .taxAmount(BigDecimal.ZERO)
-                        .totalAmount(new BigDecimal("150.0000"))
-                        .build());
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                // Verify amounts are correct (no double-billing - Oil Filter $15 + Standalone
+                // Part $25 = $40)
+                BigDecimal totalAmount = lineItems.stream()
+                                .map(InvoiceLineItem::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                assertThat(totalAmount).isEqualByComparingTo("40.0000");
+        }
 
-        workorderInvoiceService.generateInvoice(workorderId, null);
+        @Test
+        @DisplayName("generateInvoice handles race condition when idempotency key already registered")
+        void generateInvoice_RaceCondition_ReturnsExistingInvoice() {
+                Workorder workorder = completedWorkorder();
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(serviceLine()));
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                                .thenReturn(List.of(partLine()));
+                when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                                .thenReturn(List.of());
 
-        ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor.forClass(InvoiceCreationRequest.class);
-        verify(invoiceClient).createInvoice(requestCaptor.capture());
+                UUID newInvoiceId = UUID.randomUUID();
+                UUID existingInvoiceId = UUID.randomUUID();
+                InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
+                                .invoiceId(newInvoiceId)
+                                .status("DRAFT")
+                                .workorderId(workorderId)
+                                .estimateId(estimateId)
+                                .approvalId(approvalId)
+                                .subtotal(new BigDecimal("170.0000"))
+                                .taxAmount(new BigDecimal("10.0000"))
+                                .totalAmount(new BigDecimal("180.0000"))
+                                .createdAt(Instant.now())
+                                .build();
 
-        List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
-        
-         // Verify only billable items are included (CANCELLED items excluded)
-        assertThat(lineItems).hasSize(2);
-        List<String> descriptions = lineItems.stream()
-                .map(InvoiceLineItem::getDescription)
-                .toList();
-       // Verify only completed items are present (CANCELLED items should not appear)
-        assertThat(descriptions).containsExactlyInAnyOrder("Completed Service", "Completed Part");
-        assertThat(descriptions).doesNotContain("Cancelled Service", "Cancelled Part");
-        
-        // Verify amounts match only billable items (Completed Service $100 + Completed Part $50 = $150)
-        BigDecimal totalAmount = lineItems.stream()
-                .map(InvoiceLineItem::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(totalAmount).isEqualByComparingTo("150.0000");
-    }
+                when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class))).thenReturn(generated);
 
-    @Test
-    @DisplayName("generateInvoice with idempotency key replay fetches existing invoice and updates workorder")
-    void generateInvoice_IdempotencyKeyReplay_FetchesExistingInvoiceAndUpdatesWorkorder() {
-        UUID existingInvoiceId = UUID.randomUUID();
-        Workorder workorder = completedWorkorder();
-        // Workorder does not have invoice ID yet (simulating a retry scenario)
-        workorder.setInvoiceId(null);
+                // First call to getExistingInvoiceId (early check) returns empty, second call
+                // (after collision) returns existing
+                when(idempotencyService.getExistingInvoiceId("inv-key-race"))
+                                .thenReturn(Optional.empty())
+                                .thenReturn(Optional.of(existingInvoiceId));
 
-        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(idempotencyService.getExistingInvoiceId("retry-key-123")).thenReturn(Optional.of(existingInvoiceId));
+                // Simulate race condition: registerInvoiceKey throws
+                // DataIntegrityViolationException
+                doThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"))
+                                .when(idempotencyService).registerInvoiceKey(eq("inv-key-race"), eq(newInvoiceId));
 
-        InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
-                .invoiceId(existingInvoiceId)
-                .status("DRAFT")
-                .workorderId(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .subtotal(new BigDecimal("150.00"))
-                .taxAmount(new BigDecimal("12.00"))
-                .totalAmount(new BigDecimal("162.00"))
-                .createdAt(Instant.now())
-                .build();
+                // Mock the existing invoice that will be fetched when race condition is
+                // detected
+                InvoiceGenerationResponse existingInvoice = InvoiceGenerationResponse.builder()
+                                .invoiceId(existingInvoiceId)
+                                .status("DRAFT")
+                                .workorderId(workorderId)
+                                .estimateId(estimateId)
+                                .approvalId(approvalId)
+                                .subtotal(new BigDecimal("170.0000"))
+                                .taxAmount(new BigDecimal("10.0000"))
+                                .totalAmount(new BigDecimal("180.0000"))
+                                .createdAt(Instant.now())
+                                .build();
+                when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoice);
 
-        when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId,
+                                "inv-key-race");
 
-        InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "retry-key-123");
+                // Should return the existing invoice, not the newly created one
+                assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
+                assertThat(response.getStatus()).isEqualTo("DRAFT");
 
-        assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
-        assertThat(response.getStatus()).isEqualTo("DRAFT");
-        assertThat(response.getSubtotal()).isEqualByComparingTo("150.00");
-        assertThat(response.getTaxAmount()).isEqualByComparingTo("12.00");
-        assertThat(response.getTotalAmount()).isEqualByComparingTo("162.00");
-        
-        // Verify workorder was updated with invoice ID
-        assertThat(workorder.getInvoiceId()).isEqualTo(existingInvoiceId);
-        verify(workorderRepository).save(workorder);
-        
-        // Verify invoice was fetched from service (not created)
-        verify(invoiceClient).getInvoice(existingInvoiceId);
-        verify(invoiceClient, never()).createInvoice(any());
-    }
+                // Verify workorder invoiceId was NOT set to the new invoice (no save should
+                // happen in race condition)
+                verify(workorderRepository, never()).save(any(Workorder.class));
+                assertThat(workorder.getInvoiceId()).isNull(); // workorder should remain unchanged
+        }
 
-    private Workorder completedWorkorder() {
-        return Workorder.builder()
-                .id(workorderId)
-                .estimateId(estimateId)
-                .approvalId(approvalId)
-                .status(WorkorderStatus.COMPLETED)
-                .updatedAt(LocalDateTime.now())
-                .completedAt(Instant.now())
-                .build();
-    }
+        @Test
+        @DisplayName("generateInvoice excludes CANCELLED services and parts from invoice line items")
+        void generateInvoice_ExcludesCancelledItems() {
+                Workorder workorder = completedWorkorder();
 
-    private WorkorderService serviceLine() {
-        return WorkorderService.builder()
-                .description("Labor - Inspection")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("120.0000"))
-                .lineTotal(new BigDecimal("120.0000"))
-                .build();
-    }
+                // Create billable items
+                WorkorderService completedService = WorkorderService.builder()
+                                .description("Completed Service")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("100.0000"))
+                                .lineTotal(new BigDecimal("100.0000"))
+                                .status(WorkorderItemStatus.COMPLETED)
+                                .build();
 
-    private WorkorderPart partLine() {
-        return WorkorderPart.builder()
-                .description("Air Filter")
-                .quantity(new BigDecimal("1.0000"))
-                .unitPrice(new BigDecimal("50.0000"))
-                .lineTotal(new BigDecimal("50.0000"))
-                .build();
-    }
+                WorkorderPart completedPart = WorkorderPart.builder()
+                                .description("Completed Part")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("50.0000"))
+                                .lineTotal(new BigDecimal("50.0000"))
+                                .status(WorkorderItemStatus.COMPLETED)
+                                .build();
+
+                // Create non-billable (CANCELLED) items
+                WorkorderService cancelledService = WorkorderService.builder()
+                                .description("Cancelled Service")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("200.0000"))
+                                .lineTotal(new BigDecimal("200.0000"))
+                                .status(WorkorderItemStatus.CANCELLED)
+                                .build();
+
+                WorkorderPart cancelledPart = WorkorderPart.builder()
+                                .description("Cancelled Part")
+                                .quantity(new BigDecimal("2.0000"))
+                                .unitPrice(new BigDecimal("75.0000"))
+                                .lineTotal(new BigDecimal("150.0000"))
+                                .status(WorkorderItemStatus.CANCELLED)
+                                .build();
+
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(workorderServiceRepository.findByWorkOrder_Id(workorderId))
+                                .thenReturn(List.of(completedService, cancelledService));
+                when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                                .thenReturn(List.of(completedPart, cancelledPart));
+                when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                                .thenReturn(List.of());
+                when(invoiceClient.createInvoice(any(InvoiceCreationRequest.class)))
+                                .thenReturn(InvoiceGenerationResponse.builder()
+                                                .invoiceId(UUID.randomUUID())
+                                                .status("DRAFT")
+                                                .subtotal(new BigDecimal("150.0000"))
+                                                .taxAmount(BigDecimal.ZERO)
+                                                .totalAmount(new BigDecimal("150.0000"))
+                                                .build());
+                when(workorderRepository.save(any(Workorder.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                workorderInvoiceService.generateInvoice(workorderId, null);
+
+                ArgumentCaptor<InvoiceCreationRequest> requestCaptor = ArgumentCaptor
+                                .forClass(InvoiceCreationRequest.class);
+                verify(invoiceClient).createInvoice(requestCaptor.capture());
+
+                List<InvoiceLineItem> lineItems = requestCaptor.getValue().getLineItems();
+
+                // Verify only billable items are included (CANCELLED items excluded)
+                assertThat(lineItems).hasSize(2);
+                List<String> descriptions = lineItems.stream()
+                                .map(InvoiceLineItem::getDescription)
+                                .toList();
+                // Verify only completed items are present (CANCELLED items should not appear)
+                assertThat(descriptions).containsExactlyInAnyOrder("Completed Service", "Completed Part");
+                assertThat(descriptions).doesNotContain("Cancelled Service", "Cancelled Part");
+
+                // Verify amounts match only billable items (Completed Service $100 + Completed
+                // Part $50 = $150)
+                BigDecimal totalAmount = lineItems.stream()
+                                .map(InvoiceLineItem::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                assertThat(totalAmount).isEqualByComparingTo("150.0000");
+        }
+
+        @Test
+        @DisplayName("generateInvoice with idempotency key replay fetches existing invoice and updates workorder")
+        void generateInvoice_IdempotencyKeyReplay_FetchesExistingInvoiceAndUpdatesWorkorder() {
+                UUID existingInvoiceId = UUID.randomUUID();
+                Workorder workorder = completedWorkorder();
+                // Workorder does not have invoice ID yet (simulating a retry scenario)
+                workorder.setInvoiceId(null);
+
+                when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+                when(idempotencyService.getExistingInvoiceId("retry-key-123"))
+                                .thenReturn(Optional.of(existingInvoiceId));
+
+                InvoiceGenerationResponse existingInvoiceDetails = InvoiceGenerationResponse.builder()
+                                .invoiceId(existingInvoiceId)
+                                .status("DRAFT")
+                                .workorderId(workorderId)
+                                .estimateId(estimateId)
+                                .approvalId(approvalId)
+                                .subtotal(new BigDecimal("150.00"))
+                                .taxAmount(new BigDecimal("12.00"))
+                                .totalAmount(new BigDecimal("162.00"))
+                                .createdAt(Instant.now())
+                                .build();
+
+                when(invoiceClient.getInvoice(existingInvoiceId)).thenReturn(existingInvoiceDetails);
+                when(workorderRepository.save(any(Workorder.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
+
+                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId,
+                                "retry-key-123");
+
+                assertThat(response.getInvoiceId()).isEqualTo(existingInvoiceId);
+                assertThat(response.getStatus()).isEqualTo("DRAFT");
+                assertThat(response.getSubtotal()).isEqualByComparingTo("150.00");
+                assertThat(response.getTaxAmount()).isEqualByComparingTo("12.00");
+                assertThat(response.getTotalAmount()).isEqualByComparingTo("162.00");
+
+                // Verify workorder was updated with invoice ID
+                assertThat(workorder.getInvoiceId()).isEqualTo(existingInvoiceId);
+                verify(workorderRepository).save(workorder);
+
+                // Verify invoice was fetched from service (not created)
+                verify(invoiceClient).getInvoice(existingInvoiceId);
+                verify(invoiceClient, never()).createInvoice(any());
+        }
+
+        private Workorder completedWorkorder() {
+                return Workorder.builder()
+                                .id(workorderId)
+                                .estimateId(estimateId)
+                                .approvalId(approvalId)
+                                .status(WorkorderStatus.COMPLETED)
+                                .updatedAt(LocalDateTime.now())
+                                .completedAt(Instant.now())
+                                .build();
+        }
+
+        private WorkorderService serviceLine() {
+                return WorkorderService.builder()
+                                .description("Labor - Inspection")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("120.0000"))
+                                .lineTotal(new BigDecimal("120.0000"))
+                                .build();
+        }
+
+        private WorkorderPart partLine() {
+                return WorkorderPart.builder()
+                                .description("Air Filter")
+                                .quantity(new BigDecimal("1.0000"))
+                                .unitPrice(new BigDecimal("50.0000"))
+                                .lineTotal(new BigDecimal("50.0000"))
+                                .build();
+        }
 }

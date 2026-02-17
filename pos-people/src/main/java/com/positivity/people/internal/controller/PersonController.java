@@ -1,7 +1,7 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.dto.Person;
 import com.positivity.people.service.PersonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,13 +45,13 @@ public class PersonController {
     }
 
     @Operation(summary = "Create a new person", description = "Add a new person to the system.")
-    @ApiResponse(responseCode = "200", description = "Person created successfully.")
+    @ApiResponse(responseCode = "201", description = "Person created successfully.")
     @EmitEvent(id = "PEOPLE_PERSON_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<Person> createPerson(
             @Parameter(description = "Person object to be created") @RequestBody Person person) {
         Person saved = personService.savePerson(person);
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.status(201).body(saved);
     }
 
     @Operation(summary = "Update an existing person", description = "Update the details of an existing person.")

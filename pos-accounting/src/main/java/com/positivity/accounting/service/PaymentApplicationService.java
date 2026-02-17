@@ -307,7 +307,7 @@ public class PaymentApplicationService {
                         // unavailability.
                         HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
                         if (status == null || status.is5xxServerError()) {
-                                status = HttpStatus.SERVICE_UNAVAILABLE;
+                                status = HttpStatus.INTERNAL_SERVER_ERROR;
                         }
                         // Rethrow to trigger DB transaction rollback
                         // All PaymentApplication records will be rolled back along with other local
@@ -466,7 +466,7 @@ public class PaymentApplicationService {
 
                         HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
                         if (status == null || status.is5xxServerError()) {
-                                status = HttpStatus.SERVICE_UNAVAILABLE;
+                                status = HttpStatus.INTERNAL_SERVER_ERROR;
                         }
                         throw new ResponseStatusException(status,
                                         String.format("Failed to restore invoice %s balance during reversal of payment application %s. "
@@ -530,7 +530,7 @@ public class PaymentApplicationService {
                         // Translate service exception to appropriate HTTP status
                         HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
                         if (status == null || status.is5xxServerError()) {
-                                status = HttpStatus.SERVICE_UNAVAILABLE;
+                                status = HttpStatus.INTERNAL_SERVER_ERROR;
                         }
                         throw new ResponseStatusException(status,
                                         "Failed to validate invoice " + invoiceApp.getInvoiceId() + ": "

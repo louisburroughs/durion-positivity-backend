@@ -103,7 +103,7 @@ public class CatalogController {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved product details (may be partial if some services unavailable)", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDetailView.class))),
             @ApiResponse(responseCode = "400", description = "Invalid location ID"),
             @ApiResponse(responseCode = "404", description = "Product not found"),
-            @ApiResponse(responseCode = "503", description = "Required service unavailable (Product Catalog)")
+            @ApiResponse(responseCode = "500", description = "Unexpected server error while retrieving product details")
     })
     public ResponseEntity<ProductDetailView> getProductDetailView(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
