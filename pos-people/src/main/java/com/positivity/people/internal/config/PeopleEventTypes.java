@@ -73,6 +73,10 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_CREATE",
                                                 "Create role assignment for a person").build(),
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_REVOKE",
-                                                "Revoke role assignment for a person").build());
+                                                "Revoke role assignment for a person").build(),
+
+                                // PeopleReportsController - 1 event
+                                EventTypeRegistration.search("REPORT_ATTENDANCE_VS_JOBTIME_GENERATED",
+                                                "Generate attendance vs job-time discrepancy report").build());
         }
 }
