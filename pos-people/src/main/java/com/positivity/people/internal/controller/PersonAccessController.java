@@ -73,10 +73,6 @@ public class PersonAccessController {
         public ResponseEntity<UserRoleDto> createAssignment(
                         @PathVariable UUID personUuid,
                         @Valid @RequestBody PersonRoleAssignmentRequest request) {
-                if (request.getRoleCode() == null || request.getRoleCode().isBlank()) {
-                        throw new IllegalArgumentException("roleCode is required");
-                }
-
                 UserRoleDto created = peopleAccessControlService.assignRoleToPerson(
                                 personUuid,
                                 request.getRoleCode(),
