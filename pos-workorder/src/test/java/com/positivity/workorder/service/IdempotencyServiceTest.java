@@ -60,8 +60,7 @@ class IdempotencyServiceTest {
         Optional<UUID> result = service.getExistingWorkorderId(testKeyValue);
 
         // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get()).isEqualTo(testWorkorderId);
+        assertThat(result).isPresent().contains(testWorkorderId);
         verify(repository).findByKeyValue(testKeyValue);
     }
 

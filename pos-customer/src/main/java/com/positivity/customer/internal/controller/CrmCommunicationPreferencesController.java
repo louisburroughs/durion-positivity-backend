@@ -1,6 +1,6 @@
 package com.positivity.customer.internal.controller;
 
-import java.util.regex.Pattern;
+import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -46,10 +46,6 @@ public class CrmCommunicationPreferencesController {
 
     private static final Logger log = LoggerFactory.getLogger(CrmCommunicationPreferencesController.class);
 
-    // Pattern for valid UUID format to prevent injection attacks
-    private static final Pattern VALID_PARTY_ID_PATTERN = Pattern.compile(
-            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
-
     private final CommunicationPreferenceService preferenceService;
 
     public CrmCommunicationPreferencesController(CommunicationPreferenceService preferenceService) {
@@ -72,13 +68,7 @@ public class CrmCommunicationPreferencesController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
     @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_GET", apiVersion = "1")
     public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
-            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId) {
-
-        // Sanitize partyId - must be valid UUID format
-        if (!VALID_PARTY_ID_PATTERN.matcher(partyId).matches()) {
-            log.warn("Invalid partyId format: {}", partyId);
-            return ResponseEntity.badRequest().build();
-        }
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId) {
 
         try {
             GetCommunicationPreferencesResponse response = preferenceService.getCommunicationPreferences(partyId);
@@ -106,14 +96,8 @@ public class CrmCommunicationPreferencesController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
     @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_UPSERT", apiVersion = "1")
     public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
-            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId,
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
             @Parameter(description = "Communication preferences to set", required = true) @RequestBody @NonNull UpsertCommunicationPreferencesRequest request) {
-
-        // Sanitize partyId - must be valid UUID format
-        if (!VALID_PARTY_ID_PATTERN.matcher(partyId).matches()) {
-            log.warn("Invalid partyId format: {}", partyId);
-            return ResponseEntity.badRequest().build();
-        }
 
         try {
             UpsertCommunicationPreferencesResponse response = preferenceService.upsertCommunicationPreferences(partyId,

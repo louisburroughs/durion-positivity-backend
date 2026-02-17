@@ -75,7 +75,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
         @DisplayName("getCommunicationPreferences - Success: Returns default preferences when none exist")
         void getCommunicationPreferences_defaultPreferences() {
                 GetCommunicationPreferencesResponse response = preferenceService
-                                .getCommunicationPreferences(String.valueOf(testParty.getPartyId()));
+                                .getCommunicationPreferences(testParty.getPartyId());
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getEmailPreference()).isEqualTo("OPT_OUT");
@@ -100,7 +100,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                 preferenceRepository.save(preference);
 
                 GetCommunicationPreferencesResponse response = preferenceService
-                                .getCommunicationPreferences(String.valueOf(testParty.getPartyId()));
+                                .getCommunicationPreferences(testParty.getPartyId());
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getEmailPreference()).isEqualTo("OPT_IN");
@@ -114,7 +114,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
         @Test
         @DisplayName("getCommunicationPreferences - Not Found: Party does not exist")
         void getCommunicationPreferences_partyNotFound() {
-                assertThatThrownBy(() -> preferenceService.getCommunicationPreferences("999999"))
+                assertThatThrownBy(() -> preferenceService.getCommunicationPreferences(UUID.randomUUID()))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
         }
@@ -134,7 +134,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                                 .build();
 
                 UpsertCommunicationPreferencesResponse response = preferenceService
-                                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
+                                .upsertCommunicationPreferences(testParty.getPartyId(), request);
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getOperationType()).isEqualTo("CREATED");
@@ -170,7 +170,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                                 .build();
 
                 UpsertCommunicationPreferencesResponse response = preferenceService
-                                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
+                                .upsertCommunicationPreferences(testParty.getPartyId(), request);
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getOperationType()).isEqualTo("UPDATED");
@@ -190,7 +190,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                                 .build();
 
                 UpsertCommunicationPreferencesResponse response = preferenceService
-                                .upsertCommunicationPreferences(String.valueOf(testParty.getPartyId()), request);
+                                .upsertCommunicationPreferences(testParty.getPartyId(), request);
 
                 assertThat(response.getPartyId()).isEqualTo(testPartyUuid.toString());
                 assertThat(response.getOperationType()).isEqualTo("CREATED");
@@ -212,7 +212,7 @@ class CommunicationPreferenceServiceContractBehaviorIT {
                                 .emailPreference("OPT_IN")
                                 .build();
 
-                assertThatThrownBy(() -> preferenceService.upsertCommunicationPreferences("999999", request))
+                assertThatThrownBy(() -> preferenceService.upsertCommunicationPreferences(UUID.randomUUID(), request))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
         }

@@ -15,6 +15,8 @@ public interface LocationParentRepository extends JpaRepository<LocationParent, 
 
     Optional<LocationParent> findByChild_IdAndParentType(UUID childId, ParentType parentType);
 
+    boolean existsByChild_IdAndParent_Id(UUID childId, UUID parentId);
+
     List<LocationParent> findByParent_Id(UUID parentId);
 
     List<LocationParent> findByParent_IdAndParentType(UUID parentId, ParentType parentType);

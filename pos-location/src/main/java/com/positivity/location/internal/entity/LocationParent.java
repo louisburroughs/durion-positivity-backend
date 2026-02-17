@@ -11,7 +11,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Table(uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "child_id", "parent_type" })
+        @UniqueConstraint(columnNames = { "child_id", "parent_type" }),
+        @UniqueConstraint(columnNames = { "child_id", "parent_id" })
 })
 public class LocationParent {
     @Id

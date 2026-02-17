@@ -20,7 +20,7 @@ public interface MergeAuditRepository extends JpaRepository<MergeAudit, UUID> {
      * @param survivorPartyId the survivor party ID
      * @return list of merge audits
      */
-    List<MergeAudit> findBySurvivorPartyId(@NonNull Long survivorPartyId);
+    List<MergeAudit> findBySurvivorPartyId(@NonNull UUID survivorPartyId);
 
     /**
      * Find all merge audits where the given party was the source (merged).
@@ -28,7 +28,7 @@ public interface MergeAuditRepository extends JpaRepository<MergeAudit, UUID> {
      * @param sourcePartyId the source party ID
      * @return list of merge audits
      */
-    List<MergeAudit> findBySourcePartyId(@NonNull Long sourcePartyId);
+    List<MergeAudit> findBySourcePartyId(@NonNull UUID sourcePartyId);
 
     /**
      * Find all merges performed by a specific user.
