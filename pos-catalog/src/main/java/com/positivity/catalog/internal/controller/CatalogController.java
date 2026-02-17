@@ -128,7 +128,8 @@ public class CatalogController {
             @Parameter(description = "ID of discontinued product", required = true) @PathVariable UUID productId,
             @RequestBody ProductReplacementRequest request) {
         try {
-            ProductLifecycleResponse.ReplacementOption replacement = productLifecycleService.addReplacement(productId, request);
+            ProductLifecycleResponse.ReplacementOption replacement = productLifecycleService.addReplacement(productId,
+                    request);
             return ResponseEntity.status(HttpStatus.CREATED).body(replacement);
         } catch (IllegalStateException ex) {
             return ResponseEntity.badRequest().body(ex.getMessage());

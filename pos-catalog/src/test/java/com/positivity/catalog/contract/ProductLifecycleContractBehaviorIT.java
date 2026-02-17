@@ -21,8 +21,8 @@ import org.springframework.http.MediaType;
 @DisplayName("Product Lifecycle Contract Behavioral Tests")
 class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
 
-        @Autowired
-        private CatalogDao catalogDao;
+    @Autowired
+    private CatalogDao catalogDao;
 
     @Test
     @DisplayName("LC-001: Set product lifecycle to INACTIVE with effective date")
@@ -81,7 +81,8 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
                         result.getResponse().getContentAsString()
-                                .contains("Discontinued products cannot be reactivated. Specify a replacement product instead.")));
+                                .contains(
+                                        "Discontinued products cannot be reactivated. Specify a replacement product instead.")));
     }
 
     @Test
@@ -113,15 +114,16 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
         mockMvc.perform(withAuth(get("/v1/products/{productId}/lifecycle", originalProductId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lifecycleState").value("DISCONTINUED"))
-                .andExpect(jsonPath("$.replacementOptions[0].replacementProductId").value(replacementProductId.toString()));
+                .andExpect(jsonPath("$.replacementOptions[0].replacementProductId")
+                        .value(replacementProductId.toString()));
     }
 
-        private UUID createProductAndReturnId(String name) {
+    private UUID createProductAndReturnId(String name) {
         ProductEntity product = new ProductEntity();
         product.setName(name);
         product.setShortDescription("Short " + name);
         product.setLongDescription("Long " + name);
         product.setType("PHYSICAL");
-                return catalogDao.saveProduct(product).getId();
+        return catalogDao.saveProduct(product).getId();
     }
 }
