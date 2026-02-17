@@ -119,4 +119,22 @@ class PeopleAccessControlServiceTest {
         assertThrows(EntityNotFoundException.class,
                 () -> peopleAccessControlService.getPersonRoleAssignments(personUuid, false, null));
     }
+
+    @Test
+    void assignRoleToPerson_throwsWhenEndDateBeforeStartDate() {
+        UUID personUuid = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        LocalDateTime startDate = LocalDateTime.parse("2026-02-20T10:00:00");
+        LocalDateTime endDate = LocalDateTime.parse("2026-02-15T10:00:00"); // before startDate
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> peopleAccessControlService.assignRoleToPerson(
+                        personUuid,
+                        "MANAGER",
+                        locationId,
+                        startDate,
+                        endDate));
+
+        assertEquals("endDate must be greater than or equal to startDate", exception.getMessage());
+    }
 }
