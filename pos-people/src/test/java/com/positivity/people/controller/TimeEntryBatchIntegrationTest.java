@@ -55,7 +55,8 @@ class TimeEntryBatchIntegrationTest {
         d2.setTimeEntryId(entryId2.toString());
         request.setDecisions(Arrays.asList(d1, d2));
 
-        ResponseEntity<?> response = controller.approveTimeEntries(request, "approver1", "people:timeEntry:approve", "cid-001");
+        ResponseEntity<?> response = controller.approveTimeEntries(request, "approver1", "people:timeEntry:approve",
+                "cid-001");
         assertEquals(200, response.getStatusCode().value());
     }
 
@@ -87,7 +88,8 @@ class TimeEntryBatchIntegrationTest {
         d1.setRejectionReason("Time discrepancy");
         request.setDecisions(Arrays.asList(d1));
 
-        ResponseEntity<?> response = controller.rejectTimeEntries(request, "approver1", "people:timeEntry:reject", "cid-003");
+        ResponseEntity<?> response = controller.rejectTimeEntries(request, "approver1", "people:timeEntry:reject",
+                "cid-003");
         assertEquals(200, response.getStatusCode().value());
     }
 }
