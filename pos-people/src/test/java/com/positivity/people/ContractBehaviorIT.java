@@ -1,20 +1,30 @@
 package com.positivity.people;
 
 import com.positivity.people.internal.client.SecurityServiceException;
-import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
+import com.positivity.people.internal.client.WorkexecClientException;
+import com.positivity.people.internal.client.WorkexecJobTimeClient;
+import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.client.dto.UserRoleDto;
+import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.entity.TimeEntry;
+import com.positivity.people.internal.entity.TimekeepingPolicy;
+import com.positivity.people.internal.enums.TimekeepingPolicyScopeType;
+import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.repository.TimekeepingPolicyRepository;
 import com.positivity.people.service.PeopleAccessControlService;
-import com.positivity.people.service.PeopleReportsService;
 import com.positivity.people.service.TimeEntryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,23 +49,118 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         private TimeEntryService timeEntryService;
 
         @MockitoBean
-        private PeopleReportsService peopleReportsService;
+        private WorkexecJobTimeClient workexecJobTimeClient;
+
+        @Autowired
+        private TimeEntryRepository timeEntryRepository;
+
+        @Autowired
+        private TimekeepingPolicyRepository timekeepingPolicyRepository;
+
+        @Autowired
+        private PersonRepository personRepository;
 
         @Test
-        @DisplayName("happy path: attendance discrepancy report returns aggregated counts")
+        @DisplayName("happy path: discrepancy above threshold is flagged")
         void attendanceDiscrepancyReport_happyPath() throws Exception {
-                when(peopleReportsService.getAttendanceDiscrepancyReport())
-                                .thenReturn(new AttendanceDiscrepancyReportResponse(
-                                                Instant.parse("2026-02-17T10:00:00Z"),
-                                                12,
-                                                3,
-                                                2));
+                resetReportData();
+                UUID technicianId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+                UUID locationId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+                LocalDate reportDate = LocalDate.parse("2026-02-16");
 
-                mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")))
+                seedTechnician(technicianId, "Jane", "Doe");
+                seedAttendance(technicianId, locationId,
+                                Instant.parse("2026-02-16T08:00:00Z"),
+                                Instant.parse("2026-02-16T16:00:00Z"));
+                seedGlobalThreshold(60);
+
+                when(workexecJobTimeClient.getJobTimeTotals(
+                                reportDate, reportDate, "UTC", locationId, List.of(technicianId)))
+                                .thenReturn(List.of(jobTime(technicianId, locationId, reportDate, 360)));
+
+                mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
+                                .param("startDate", "2026-02-16")
+                                .param("endDate", "2026-02-16")
+                                .param("timezone", "UTC")
+                                .param("locationId", locationId.toString())
+                                .param("technicianIds", technicianId.toString())))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.approvedCount").value(12))
-                                .andExpect(jsonPath("$.pendingApprovalCount").value(3))
-                                .andExpect(jsonPath("$.rejectedCount").value(2));
+                                .andExpect(jsonPath("$[0].technicianId").value(technicianId.toString()))
+                                .andExpect(jsonPath("$[0].technicianName").value("Jane Doe"))
+                                .andExpect(jsonPath("$[0].totalAttendanceHours").value(8.0))
+                                .andExpect(jsonPath("$[0].totalJobHours").value(6.0))
+                                .andExpect(jsonPath("$[0].discrepancyHours").value(2.0))
+                                .andExpect(jsonPath("$[0].thresholdApplied").value(60))
+                                .andExpect(jsonPath("$[0].isFlagged").value(true));
+        }
+
+        @Test
+        @DisplayName("concurrency invariant: strict threshold comparison uses greater-than")
+        void attendanceDiscrepancyReport_strictThresholdInvariant() throws Exception {
+                resetReportData();
+                UUID technicianId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+                UUID locationId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+                LocalDate reportDate = LocalDate.parse("2026-02-17");
+
+                seedTechnician(technicianId, "Alex", "Kim");
+                seedAttendance(technicianId, locationId,
+                                Instant.parse("2026-02-17T08:00:00Z"),
+                                Instant.parse("2026-02-17T16:00:00Z"));
+                seedGlobalThreshold(30);
+                seedLocationThreshold(locationId, 60);
+
+                when(workexecJobTimeClient.getJobTimeTotals(
+                                reportDate, reportDate, "UTC", locationId, List.of(technicianId)))
+                                .thenReturn(List.of(jobTime(technicianId, locationId, reportDate, 435)));
+
+                mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
+                                .param("startDate", "2026-02-17")
+                                .param("endDate", "2026-02-17")
+                                .param("timezone", "UTC")
+                                .param("locationId", locationId.toString())
+                                .param("technicianIds", technicianId.toString())))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].thresholdApplied").value(60))
+                                .andExpect(jsonPath("$[0].discrepancyHours").value(0.75))
+                                .andExpect(jsonPath("$[0].isFlagged").value(false));
+        }
+
+        @Test
+        @DisplayName("validation: invalid timezone returns 400")
+        void attendanceDiscrepancyReport_rejectsInvalidTimezone() throws Exception {
+                mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
+                                .param("startDate", "2026-02-17")
+                                .param("endDate", "2026-02-17")
+                                .param("timezone", "Not/AZone")))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.detail").value("timezone must be a valid IANA timezone"));
+        }
+
+        @Test
+        @DisplayName("auth failure: unauthenticated report request is rejected")
+        void attendanceDiscrepancyReport_unauthenticatedRejected() throws Exception {
+                mockMvc.perform(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
+                                .param("startDate", "2026-02-17")
+                                .param("endDate", "2026-02-17")
+                                .param("timezone", "UTC"))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("dependency failure: workexec non-2xx fails request")
+        void attendanceDiscrepancyReport_workexecFailure() throws Exception {
+                when(workexecJobTimeClient.getJobTimeTotals(any(), any(), any(), any(), any()))
+                                .thenThrow(new WorkexecClientException(
+                                                "Work Execution request failed with status 503",
+                                                503,
+                                                "WORKEXEC_UNAVAILABLE"));
+
+                mockMvc.perform(withAuth(get("/v1/people/reports/attendanceJobtimeDiscrepancy")
+                                .param("startDate", "2026-02-17")
+                                .param("endDate", "2026-02-17")
+                                .param("timezone", "UTC")))
+                                .andExpect(status().isServiceUnavailable())
+                                .andExpect(jsonPath("$.errorCode").value("WORKEXEC_UNAVAILABLE"));
         }
 
         @Test
@@ -301,6 +406,61 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 delete("/v1/people/{personUuid}/access/assignments/{roleCode}", personUuid, roleCode)
                                                 .param("endDate", "2026-12-31T23:59:59")))
                                 .andExpect(status().isNoContent());
+        }
+
+        private void seedTechnician(UUID technicianId, String firstName, String lastName) {
+                Person person = Person.builder()
+                                .id(technicianId)
+                                .firstName(firstName)
+                                .lastName(lastName)
+                                .primaryEmail(firstName.toLowerCase() + "@example.com")
+                                .phoneNumbers(new ArrayList<>())
+                                .build();
+                personRepository.save(person);
+        }
+
+        private void seedAttendance(UUID technicianId, UUID locationId, Instant attendanceStartAt,
+                        Instant attendanceEndAt) {
+                TimeEntry entry = new TimeEntry();
+                entry.setPersonId(technicianId.toString());
+                entry.setLocationId(locationId);
+                entry.setAttendanceStartAt(attendanceStartAt);
+                entry.setAttendanceEndAt(attendanceEndAt);
+                timeEntryRepository.save(entry);
+        }
+
+        private void seedGlobalThreshold(int thresholdMinutes) {
+                TimekeepingPolicy policy = new TimekeepingPolicy();
+                policy.setScopeType(TimekeepingPolicyScopeType.GLOBAL);
+                policy.setJobTimeDiscrepancyThresholdMinutes(thresholdMinutes);
+                policy.setUpdatedBy("test");
+                policy.setUpdatedAt(Instant.parse("2026-01-01T00:00:00Z"));
+                timekeepingPolicyRepository.save(policy);
+        }
+
+        private void seedLocationThreshold(UUID locationId, int thresholdMinutes) {
+                TimekeepingPolicy policy = new TimekeepingPolicy();
+                policy.setScopeType(TimekeepingPolicyScopeType.LOCATION);
+                policy.setScopeId(locationId);
+                policy.setJobTimeDiscrepancyThresholdMinutes(thresholdMinutes);
+                policy.setUpdatedBy("test");
+                policy.setUpdatedAt(Instant.parse("2026-01-02T00:00:00Z"));
+                timekeepingPolicyRepository.save(policy);
+        }
+
+        private WorkexecJobTimeTotal jobTime(UUID technicianId, UUID locationId, LocalDate localDate, int minutes) {
+                WorkexecJobTimeTotal row = new WorkexecJobTimeTotal();
+                row.setTechnicianId(technicianId);
+                row.setLocationId(locationId);
+                row.setLocalDate(localDate);
+                row.setTotalJobMinutes(minutes);
+                return row;
+        }
+
+        private void resetReportData() {
+                timeEntryRepository.deleteAll();
+                timekeepingPolicyRepository.deleteAll();
+                personRepository.deleteAll();
         }
 
 }

@@ -34,6 +34,15 @@ public class TimeEntry {
     @Column(name = "timesheet_id")
     private String timesheetId;
 
+    @Column(name = "location_id")
+    private UUID locationId;
+
+    @Column(name = "attendance_start_at")
+    private Instant attendanceStartAt;
+
+    @Column(name = "attendance_end_at")
+    private Instant attendanceEndAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private TimeEntryStatus status;
@@ -75,6 +84,30 @@ public class TimeEntry {
 
     public void setTimesheetId(String timesheetId) {
         this.timesheetId = timesheetId;
+    }
+
+    public UUID getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(UUID locationId) {
+        this.locationId = locationId;
+    }
+
+    public Instant getAttendanceStartAt() {
+        return attendanceStartAt;
+    }
+
+    public void setAttendanceStartAt(Instant attendanceStartAt) {
+        this.attendanceStartAt = attendanceStartAt;
+    }
+
+    public Instant getAttendanceEndAt() {
+        return attendanceEndAt;
+    }
+
+    public void setAttendanceEndAt(Instant attendanceEndAt) {
+        this.attendanceEndAt = attendanceEndAt;
     }
 
     public TimeEntryStatus getStatus() {
