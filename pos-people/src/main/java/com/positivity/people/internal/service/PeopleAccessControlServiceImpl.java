@@ -46,7 +46,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
         if (!personRepository.existsById(personUuid)) {
             throw new PersonNotFoundException(personUuid);
         }
-        
+
         List<RoleDto> allRoles = new ArrayList<>();
         allRoles.addAll(securityServiceClient.getAvailableRoles(LOCATION_SCOPE));
         allRoles.addAll(securityServiceClient.getAvailableRoles(GLOBAL_SCOPE));
@@ -70,6 +70,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
             UUID locationId,
             LocalDateTime startDate,
             LocalDateTime endDate) {
+        validateDateWindow(startDate, endDate);
         String userId = resolveUserId(personUuid);
         UserRoleAssignmentRequest request = UserRoleAssignmentRequest.builder()
                 .userId(userId)
@@ -91,5 +92,11 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     private String resolveUserId(@NonNull UUID personUuid) {
         return userPersonTranslationService.getUserIdForPerson(personUuid)
                 .orElseThrow(() -> new EntityNotFoundException("No user link found for personUuid: " + personUuid));
+    }
+
+    private void validateDateWindow(LocalDateTime startDate, LocalDateTime endDate) {
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("endDate must be greater than or equal to startDate");
+        }
     }
 }

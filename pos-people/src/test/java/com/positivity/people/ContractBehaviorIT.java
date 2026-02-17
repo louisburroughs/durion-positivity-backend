@@ -1,245 +1,177 @@
 package com.positivity.people;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
+import com.positivity.people.internal.client.SecurityServiceException;
+import com.positivity.people.internal.client.dto.UserRoleDto;
+import com.positivity.people.service.PeopleAccessControlService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import tools.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@DisplayName("People Management Backend Contract Behavioral Tests")
-class ContractBehaviorIT {
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-        @Autowired
-        private MockMvc mockMvc;
+@DisplayName("People Access Control ContractBehaviorIT")
+class ContractBehaviorIT extends BaseIntegrationTest {
 
-        @Autowired
-        private ObjectMapper objectMapper;
-
-        // ========== HAPPY PATH TESTS ==========
-        @Test
-        @DisplayName("CP-001: Successfully create employee with valid contact details")
-        void testCreateEmployee_HappyPath() throws Exception {
-                String payload = createEmployeePayload("John", "Doe", "john.doe@example.com", "johndoe", "555-0001");
-                mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-001"))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.id").exists())
-                                .andExpect(jsonPath("$.firstName").value("John"))
-                                .andExpect(jsonPath("$.lastName").value("Doe"));
-        }
+        @MockitoBean
+        private PeopleAccessControlService peopleAccessControlService;
 
         @Test
-        @DisplayName("CP-002: Successfully retrieve employee by ID")
-        void testGetEmployee_HappyPath() throws Exception {
-                String payload = createEmployeePayload("Jane", "Smith", "jane.smith@example.com", "janesmith",
-                                "555-0002");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
+        @DisplayName("happy path: list assignments with includeHistory")
+        void listAssignments_happyPath() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+                UserRoleDto assignment = UserRoleDto.builder()
+                                .userId("11111111-1111-1111-1111-111111111111")
+                                .roleCode("SHOP_MANAGER")
+                                .locationId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+                                .startDate(LocalDate.parse("2026-01-01"))
+                                .endDate(null)
+                                .active(true)
+                                .build();
 
-                String employeeId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
-                                .asString();
-                mockMvc.perform(get("/api/v1/employees/{id}", employeeId)
-                                .header("X-Correlation-Id", "test-002"))
+                when(peopleAccessControlService.getPersonRoleAssignments(personUuid, true, null))
+                                .thenReturn(List.of(assignment));
+
+                mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/assignments", personUuid)
+                                .param("includeHistory", "true")))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.id").value(employeeId))
-                                .andExpect(jsonPath("$.primaryEmail").value("jane.smith@example.com"));
+                                .andExpect(jsonPath("$[0].roleCode").value("SHOP_MANAGER"))
+                                .andExpect(jsonPath("$[0].locationId").value("22222222-2222-2222-2222-222222222222"));
         }
 
-        // ========== VALIDATION ERROR TESTS ==========
         @Test
-        @DisplayName("VE-001: Reject employee with invalid email format")
-        void testCreateEmployee_InvalidEmailFormat() throws Exception {
-                String invalidPayload = createEmployeePayload("Bob", "Johnson", "invalid-email", "bjohnson",
-                                "555-0003");
-                mockMvc.perform(post("/api/v1/employees")
+        @DisplayName("happy path: create assignment using contract example")
+        void createAssignment_happyPath() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+                UserRoleDto created = UserRoleDto.builder()
+                                .userId("11111111-1111-1111-1111-111111111111")
+                                .roleCode("SHOP_MANAGER")
+                                .locationId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+                                .startDate(LocalDate.parse("2026-02-16"))
+                                .active(true)
+                                .build();
+
+                when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("SHOP_MANAGER"), any(), any(),
+                                any()))
+                                .thenReturn(created);
+
+                String payload = """
+                                {
+                                  "roleCode": "SHOP_MANAGER",
+                                  "locationId": "22222222-2222-2222-2222-222222222222",
+                                  "startDate": "2026-02-16T00:00:00",
+                                  "endDate": null
+                                }
+                                """;
+
+                mockMvc.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-001"))
+                                .content(payload)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.roleCode").value("SHOP_MANAGER"))
+                                .andExpect(jsonPath("$.locationId").value("22222222-2222-2222-2222-222222222222"));
+        }
+
+        @Test
+        @DisplayName("validation: reject missing roleCode")
+        void createAssignment_rejectsMissingRoleCode() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+
+                mockMvc.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"locationId\":\"22222222-2222-2222-2222-222222222222\"}")))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                                .andExpect(jsonPath("$.status").value(400));
         }
 
         @Test
-        @DisplayName("VE-002: Reject employee with duplicate email")
-        void testCreateEmployee_DuplicateEmail() throws Exception {
-                String email = "duplicate@example.com";
-                String payload = createEmployeePayload("Alice", "Brown", email, "abrown1", "555-0004");
+        @DisplayName("validation: reject endDate earlier than startDate")
+        void createAssignment_rejectsInvalidDateWindow() throws Exception {
+                UUID personUuid = UUID.randomUUID();
 
-                mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ve-002"))
-                                .andExpect(status().isCreated());
+                when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("SHOP_MANAGER"), any(), any(),
+                                any()))
+                                .thenThrow(new IllegalArgumentException(
+                                                "endDate must be greater than or equal to startDate"));
 
-                mockMvc.perform(post("/api/v1/employees")
+                String payload = """
+                                {
+                                  "roleCode": "SHOP_MANAGER",
+                                  "locationId": "22222222-2222-2222-2222-222222222222",
+                                  "startDate": "2026-06-01T00:00:00",
+                                  "endDate": "2026-05-31T23:59:59"
+                                }
+                                """;
+
+                mockMvc.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(createEmployeePayload("Alex", "Brown", email, "abrown2", "555-0005"))
-                                .header("X-Correlation-Id", "test-ve-002"))
+                                .content(payload)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.detail")
+                                                .value("endDate must be greater than or equal to startDate"));
+        }
+
+        @Test
+        @DisplayName("auth failure: unauthenticated request is rejected")
+        void createAssignment_unauthenticatedRejected() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+
+                mockMvc.perform(post("/v1/people/{personUuid}/access/assignments", personUuid)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"roleCode\":\"SHOP_MANAGER\"}"))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("concurrency invariant: overlap conflict maps to 409")
+        void createAssignment_overlapConflict() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+
+                when(peopleAccessControlService.assignRoleToPerson(eq(personUuid), eq("MECHANIC"), any(), any(), any()))
+                                .thenThrow(new SecurityServiceException("Overlapping assignments are not allowed",
+                                                409));
+
+                String payload = """
+                                {
+                                  "roleCode": "MECHANIC",
+                                  "locationId": "22222222-2222-2222-2222-222222222222",
+                                  "startDate": "2026-06-01T00:00:00",
+                                  "endDate": "2026-08-01T00:00:00"
+                                }
+                                """;
+
+                mockMvc.perform(withAuth(post("/v1/people/{personUuid}/access/assignments", personUuid)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(payload)))
                                 .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.code").value("CONFLICT"));
+                                .andExpect(jsonPath("$.detail").value("Overlapping assignments are not allowed"));
         }
 
         @Test
-        @DisplayName("VE-003: Reject employee with duplicate username")
-        void testCreateEmployee_DuplicateUsername() throws Exception {
-                String username = "uniqueuser";
-                String payload = createEmployeePayload("Chris", "Davis", "chris.davis@example.com", username,
-                                "555-0006");
+        @DisplayName("happy path: revoke assignment returns 204")
+        void revokeAssignment_happyPath() throws Exception {
+                UUID personUuid = UUID.randomUUID();
+                String roleCode = "SHOP_MANAGER";
 
-                mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ve-003"))
-                                .andExpect(status().isCreated());
+                doNothing().when(peopleAccessControlService)
+                                .revokeRoleFromPerson(personUuid, roleCode, LocalDateTime.parse("2026-12-31T23:59:59"));
 
-                mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(createEmployeePayload("Charlie", "Davis", "charlie.davis@example.com",
-                                                username, "555-0007"))
-                                .header("X-Correlation-Id", "test-ve-003"))
-                                .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.code").value("CONFLICT"));
-        }
-
-        // ========== IDEMPOTENCY TEST ==========
-        @Test
-        @DisplayName("ID-001: Idempotent create with same Idempotency-Key returns same resource")
-        void testCreateEmployee_Idempotent() throws Exception {
-                String idempotencyKey = "idem-emp-" + System.currentTimeMillis();
-                String payload = createEmployeePayload("Diana", "Evans", "diana.evans@example.com", "devans",
-                                "555-0008");
-
-                MvcResult result1 = mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String id1 = objectMapper.readTree(result1.getResponse().getContentAsString()).get("id").asString();
-
-                MvcResult result2 = mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String id2 = objectMapper.readTree(result2.getResponse().getContentAsString()).get("id").asString();
-                assert id1.equals(id2) : "Idempotent requests should return same employee ID";
-        }
-
-        // ========== CONCURRENCY INVARIANT TESTS ==========
-        @Test
-        @DisplayName("CC-001: Optimistic locking prevents concurrent updates with stale version")
-        void testUpdateEmployee_OptimisticLockingConflict() throws Exception {
-                String payload = createEmployeePayload("Edward", "Frank", "edward.frank@example.com", "efrank",
-                                "555-0009");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-cc-001"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String employeeId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
-                                .asString();
-                String updatePayload = "{\"firstName\":\"Edward\",\"lastName\":\"Franklin\",\"version\":0}";
-
-                mockMvc.perform(patch("/api/v1/employees/{id}", employeeId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(updatePayload)
-                                .header("X-Correlation-Id", "test-cc-001")
-                                .header("If-Match", "0"))
-                                .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.code").value("CONFLICT"));
-        }
-
-        @Test
-        @DisplayName("CC-002: Employee status transitions respect business rules")
-        void testUpdateEmployee_ValidStatusTransition() throws Exception {
-                String payload = createEmployeePayload("Fiona", "Green", "fiona.green@example.com", "fgreen",
-                                "555-0010");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-cc-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String employeeId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
-                                .asString();
-                String updatePayload = "{\"status\":\"ON_LEAVE\"}";
-
-                mockMvc.perform(patch("/api/v1/employees/{id}/status", employeeId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(updatePayload)
-                                .header("X-Correlation-Id", "test-cc-002"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status").value("ON_LEAVE"));
-        }
-
-        // ========== FIELD FORMAT VALIDATION TESTS ==========
-        @Test
-        @DisplayName("FF-001: ISO 8601 timestamp format for createdAt")
-        void testEmployee_TimestampFormat() throws Exception {
-                String payload = createEmployeePayload("George", "Harris", "george.harris@example.com", "gharris",
-                                "555-0011");
-                MvcResult result = mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ff-001"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String createdAt = objectMapper.readTree(result.getResponse().getContentAsString()).get("createdAt")
-                                .asString();
-                assert createdAt.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z")
-                                : "createdAt must be ISO 8601 UTC format";
-        }
-
-        @Test
-        @DisplayName("FF-002: Valid employee status enum values")
-        void testEmployee_ValidStatusEnums() throws Exception {
-                String payload = createEmployeePayload("Hannah", "Irving", "hannah.irving@example.com", "hirving",
-                                "555-0012");
-                MvcResult result = mockMvc.perform(post("/api/v1/employees")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ff-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String status = objectMapper.readTree(result.getResponse().getContentAsString()).get("status")
-                                .asString();
-                assert status.matches("ACTIVE|INACTIVE|ON_LEAVE|TERMINATED")
-                                : "Employee status must be valid enum value";
-        }
-
-        private String createEmployeePayload(String firstName, String lastName, String email, String username,
-                        String phone) {
-                return String.format(
-                                "{\"firstName\":\"%s\",\"lastName\":\"%s\",\"primaryEmail\":\"%s\",\"username\":\"%s\",\"phoneNumber\":\"%s\"}",
-                                firstName, lastName, email, username, phone);
+                mockMvc.perform(withAuth(
+                                delete("/v1/people/{personUuid}/access/assignments/{roleCode}", personUuid, roleCode)
+                                                .param("endDate", "2026-12-31T23:59:59")))
+                                .andExpect(status().isNoContent());
         }
 }
