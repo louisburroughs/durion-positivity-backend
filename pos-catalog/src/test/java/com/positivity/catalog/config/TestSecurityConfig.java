@@ -1,6 +1,7 @@
 package com.positivity.catalog.config;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -38,7 +39,7 @@ public class TestSecurityConfig {
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary
-    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
@@ -59,9 +60,19 @@ public class TestSecurityConfig {
 
     private static class TestAutoAuthFilter extends OncePerRequestFilter {
         @Override
-        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                FilterChain filterChain)
                 throws ServletException, IOException {
-            var authentication = new UsernamePasswordAuthenticationToken("testuser", null, TEST_AUTHORITIES);
+            String headerAuthorities = request.getHeader("X-Authorities");
+            List<SimpleGrantedAuthority> authorities = headerAuthorities == null || headerAuthorities.isBlank()
+                    ? TEST_AUTHORITIES
+                    : Arrays.stream(headerAuthorities.split(","))
+                            .map(String::trim)
+                            .filter(value -> !value.isBlank())
+                            .map(SimpleGrantedAuthority::new)
+                            .toList();
+
+            var authentication = new UsernamePasswordAuthenticationToken("testuser", null, authorities);
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
         }

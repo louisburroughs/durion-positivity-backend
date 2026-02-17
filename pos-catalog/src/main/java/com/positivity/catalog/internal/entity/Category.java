@@ -1,4 +1,4 @@
-package com.positivity.catalog.internal.model;
+package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
@@ -8,11 +8,11 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-@Entity
 @Getter
 @Setter
 @Data
-public class CompetitorXReference {
+@Entity
+public class Category {
 
     @Id
     @Column(columnDefinition = "UUID")
@@ -25,8 +25,5 @@ public class CompetitorXReference {
         }
     }
 
-    @ManyToOne
-    private ProductEntity part; // Reference to the product
-    @ManyToOne
-    private ProductEntity competitorPart; // Reference to the Competitor product that matches
+    private String name;
 }

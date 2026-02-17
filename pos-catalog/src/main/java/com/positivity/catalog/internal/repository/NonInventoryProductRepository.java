@@ -1,7 +1,9 @@
 package com.positivity.catalog.internal.repository;
 
-import com.positivity.catalog.internal.model.NonInventoryProductEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.positivity.catalog.internal.entity.NonInventoryProductEntity;
+
 import java.util.List;
 import java.util.UUID;
 

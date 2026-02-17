@@ -42,11 +42,12 @@ public class InvoiceClient {
     @NonNull
     public InvoiceGenerationResponse getInvoice(@NonNull UUID invoiceId) {
         log.debug("Fetching invoice details from pos-invoice service for invoice {}", invoiceId);
-        
+
         Map<String, Object> invoiceData = invoiceServiceRestClient.get()
                 .uri("/v1/invoices/{invoiceId}", invoiceId)
                 .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {
+                });
 
         if (invoiceData == null) {
             throw new IllegalStateException("Invoice service returned an empty response for invoice " + invoiceId);
@@ -58,7 +59,7 @@ public class InvoiceClient {
     @NonNull
     private InvoiceGenerationResponse mapToInvoiceGenerationResponse(@NonNull Map<String, Object> data) {
         InvoiceGenerationResponse response = new InvoiceGenerationResponse();
-        
+
         response.setInvoiceId(parseUUID(data.get("invoiceId")));
         response.setStatus(parseString(data.get("status")));
         response.setWorkorderId(parseUUID(data.get("workorderId")));
@@ -69,7 +70,7 @@ public class InvoiceClient {
         response.setTaxAmount(parseBigDecimal(data.get("tax")));
         response.setTotalAmount(parseBigDecimal(data.get("total")));
         response.setCreatedAt(parseInstant(data.get("createdAt")));
-        
+
         return response;
     }
 
@@ -77,8 +78,8 @@ public class InvoiceClient {
         if (value == null) {
             return null;
         }
-        if (value instanceof String) {
-            return UUID.fromString((String) value);
+        if (value instanceof String s) {
+            return UUID.fromString(s);
         }
         return null;
     }
@@ -92,11 +93,11 @@ public class InvoiceClient {
             return null;
         }
         try {
-            if (value instanceof Number) {
-                return new BigDecimal(value.toString());
+            if (value instanceof Number n) {
+                return new BigDecimal(n.toString());
             }
-            if (value instanceof String) {
-                return new BigDecimal((String) value);
+            if (value instanceof String s) {
+                return new BigDecimal(s);
             }
         } catch (NumberFormatException e) {
             log.warn("Failed to parse BigDecimal from value: {}", value, e);
@@ -110,11 +111,11 @@ public class InvoiceClient {
             return null;
         }
         try {
-            if (value instanceof String) {
-                return Instant.parse((String) value);
+            if (value instanceof String s) {
+                return Instant.parse(s);
             }
-            if (value instanceof Number) {
-                return Instant.ofEpochMilli(((Number) value).longValue());
+            if (value instanceof Number number) {
+                return Instant.ofEpochMilli(number.longValue());
             }
         } catch (Exception e) {
             log.warn("Failed to parse Instant from value: {}", value, e);
