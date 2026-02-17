@@ -18,7 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -62,7 +61,7 @@ public class CustomerController {
     }
 
     @Operation(summary = "Create a new customer", description = "Add a new customer to the system.")
-    @ApiResponse(responseCode = "200", description = "Customer created successfully.")
+    @ApiResponse(responseCode = "201", description = "Customer created successfully.")
     @PostMapping
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
     @EmitEvent(id = "CUSTOMER_CUSTOMER_CREATE", apiVersion = "1")
@@ -70,7 +69,7 @@ public class CustomerController {
             @Parameter(description = "Customer object to be created") @RequestBody CustomerDTO customer) {
         log.info("Creating new customer: {}", customer);
         CustomerDTO saved = customerService.createCustomer(customer);
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.status(201).body(saved);
     }
 
     @Operation(summary = "Update an existing customer", description = "Update the details of an existing customer.")

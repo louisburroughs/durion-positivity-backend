@@ -65,7 +65,7 @@ public class APPaymentController {
         @ApiResponse(responseCode = "201", description = "Payment executed successfully (new payment created)")
         @ApiResponse(responseCode = "400", description = "Validation error: negative amounts, invalid bills, etc.")
         @ApiResponse(responseCode = "409", description = "Conflict: paymentRef exists with different payload")
-        @ApiResponse(responseCode = "502", description = "Payment gateway failure")
+        @ApiResponse(responseCode = "500", description = "Payment gateway failure")
         public @NonNull ResponseEntity<APPaymentResponse> executePayment(
                         @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request, Authentication authentication) {
 
@@ -107,9 +107,11 @@ public class APPaymentController {
                         @PathVariable @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NonNull String paymentRef) {
 
                 // Validate paymentRef to prevent log injection (S5145):
-                // Must be 1-100 characters and not contain control characters (newlines, carriage returns)
-                // to prevent CRLF injection that could create fake log entries or manipulate audit trails
-                if (paymentRef == null || paymentRef.isEmpty() || paymentRef.length() > 100) {
+                // Must be 1-100 characters and not contain control characters (newlines,
+                // carriage returns)
+                // to prevent CRLF injection that could create fake log entries or manipulate
+                // audit trails
+                if (paymentRef.isEmpty() || paymentRef.length() > 100) {
                         throw new IllegalArgumentException(
                                         "Invalid payment reference: must be 1-100 characters");
                 }

@@ -19,7 +19,7 @@ import com.positivity.accounting.internal.exception.PaymentGatewayException;
  * ErrorResponse format:
  * - EventNotFoundException → 404 Not Found
  * - IdempotencyConflictException → 409 Conflict
- * - PaymentGatewayException → 502 Bad Gateway
+ * - PaymentGatewayException → 500 Internal Server Error
  * - IllegalArgumentException → 400 Bad Request (validation errors)
  */
 @RestControllerAdvice(basePackages = "com.positivity.accounting.internal.controller")
@@ -58,7 +58,7 @@ public class APPaymentExceptionHandler {
                 .errorCode("PAYMENT_GATEWAY_FAILURE")
                 .message(ex.getMessage())
                 .build();
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

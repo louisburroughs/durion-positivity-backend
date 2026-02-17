@@ -117,10 +117,11 @@ public class EstimateController {
             +
             "Requires ESTIMATE_CREATE permission. System will generate a unique estimate number " +
             "and apply default values for location, currency, and tax region if not provided.")
-    @ApiResponse(responseCode = "200", description = "Estimate created successfully.")
+    @ApiResponse(responseCode = "201", description = "Estimate created successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid request - missing required fields.")
     @ApiResponse(responseCode = "403", description = "Forbidden - user does not have ESTIMATE_CREATE permission.")
-    @ApiResponse(responseCode = "500", description = "Internal server error - estimate creation failed.")
+    @ApiResponse(responseCode = "409", description = "Conflict - estimate could not be created due to state or integrity constraints.")
+    @ApiResponse(responseCode = "500", description = "Internal server error - unexpected estimate creation failure.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Estimate creation request with customer and vehicle IDs", required = true, content = @Content(schema = @Schema(implementation = CreateEstimateRequest.class), examples = @ExampleObject(name = "createEstimate", value = "{\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\",\"vehicleId\":\"550e8400-e29b-41d4-a716-446655440011\",\"locationId\":\"550e8400-e29b-41d4-a716-446655440020\"}")))
     @PostMapping()
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE", apiVersion = "1")
@@ -138,11 +139,15 @@ public class EstimateController {
             log.info("Estimate created successfully: id={}, number={}",
                     response.getId(), response.getEstimateNumber());
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (IllegalArgumentException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
+
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Conflict creating estimate: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
 
         } catch (Exception e) {
             log.error("Unexpected error creating estimate", e);

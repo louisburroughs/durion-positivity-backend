@@ -33,7 +33,7 @@ public class UserController {
     private final PasswordEncoder passwordEncoder;
 
     @Operation(summary = "Create a new user", description = "Creates a new user with username, password, and roles.")
-    @ApiResponse(responseCode = "200", description = "User created successfully.")
+    @ApiResponse(responseCode = "201", description = "User created successfully.")
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<User> createUser(@RequestBody Map<String, Object> payload) {
@@ -44,7 +44,7 @@ public class UserController {
                 .map(Object::toString)
                 .collect(Collectors.toSet());
         User user = userService.createUser(username, password, roles);
-        return ResponseEntity.ok(user);
+        return ResponseEntity.status(201).body(user);
     }
 
     @Operation(summary = "User login", description = "Authenticates a user and returns a JWT token.")

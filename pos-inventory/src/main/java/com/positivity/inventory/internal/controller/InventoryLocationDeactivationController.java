@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,7 +41,7 @@ public class InventoryLocationDeactivationController {
                         +
                         "If the location contains active inventory, a destination location must be specified.")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "202", description = "Deactivation accepted", content = @Content(mediaType = "application/json", schema = @Schema(implementation = DeactivateLocationResponse.class))),
+                        @ApiResponse(responseCode = "200", description = "Deactivation completed", content = @Content(mediaType = "application/json", schema = @Schema(implementation = DeactivateLocationResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Bad request - invalid parameters or destination required"),
                         @ApiResponse(responseCode = "404", description = "Location not found"),
                         @ApiResponse(responseCode = "409", description = "Conflict - business rule violation")
@@ -52,6 +51,6 @@ public class InventoryLocationDeactivationController {
                         @RequestBody(required = false) DeactivateLocationRequest body) {
                 DeactivateLocationResponse resp = service.deactivateLocation(locationId,
                                 body != null ? body.getDestinationLocationId() : null);
-                return ResponseEntity.status(HttpStatus.ACCEPTED).body(resp);
+                return ResponseEntity.ok(resp);
         }
 }
