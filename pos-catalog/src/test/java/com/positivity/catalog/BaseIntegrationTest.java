@@ -2,11 +2,9 @@ package com.positivity.catalog;
 
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
-import com.positivity.catalog.config.TestSecurityConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -14,9 +12,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest
 @ActiveProfiles("test")
-@Import(TestSecurityConfig.class)
 public abstract class BaseIntegrationTest {
 
     @Autowired
@@ -29,20 +26,10 @@ public abstract class BaseIntegrationTest {
 
     protected static final String TEST_USER = "testuser";
     protected static final String TEST_AUTHORITIES = String.join(",",
-            "catalog:product:view",
-            "catalog:product:create",
-            "catalog:product:edit",
-            "catalog:product:delete",
-            "catalog:category:view",
-            "catalog:category:create",
-            "catalog:category:edit",
-            "catalog:category:delete",
-            "catalog:service_type:view",
-            "catalog:service_type:create",
-            "catalog:service_type:edit",
-            "catalog:variant:view",
-            "catalog:variant:create",
-            "catalog:variant:edit");
+            "ROLE_ADMIN",
+            "ROLE_CATALOG_VIEW",
+            "ROLE_CATALOG_EDIT",
+            "ROLE_CATALOG_DELETE");
 
     @BeforeEach
     public void setUpMockMvc() {
