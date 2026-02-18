@@ -1,6 +1,6 @@
 package com.positivity.inventory.internal.dto;
 
-import com.positivity.inventory.internal.domain.OverrideReasonCode;
+import com.positivity.inventory.internal.enums.OverrideReasonCode;
 
 /**
  * Request DTO for executing a putaway move from staging to storage.
