@@ -21,7 +21,7 @@ public class CatalogExceptionHandler {
 
     @ExceptionHandler(CatalogForbiddenOperationException.class)
     public ResponseEntity<String> handleForbidden(CatalogForbiddenOperationException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
+        return ResponseEntity.badRequest().body("This field is system-managed and cannot be manually updated");
     }
 
     @ExceptionHandler({ CatalogValidationException.class, CatalogBusinessRuleException.class })
@@ -31,6 +31,7 @@ public class CatalogExceptionHandler {
 
     @ExceptionHandler({ ObjectOptimisticLockingFailureException.class, OptimisticLockException.class })
     public ResponseEntity<String> handleConflict(RuntimeException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body("CONFLICT: Resource was updated concurrently. Please retry.");
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body("CONFLICT: Resource was updated concurrently. Please retry.");
     }
 }

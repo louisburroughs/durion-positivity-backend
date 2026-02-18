@@ -10,13 +10,9 @@ import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ServiceDto;
-import com.positivity.catalog.internal.dto.SupplierItemCostCreateRequestDto;
-import com.positivity.catalog.internal.dto.SupplierItemCostResponseDto;
-import com.positivity.catalog.internal.dto.SupplierItemCostUpdateRequestDto;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.ProductDetailService;
 import com.positivity.catalog.service.ProductLifecycleService;
-import com.positivity.catalog.service.SupplierItemCostService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -51,7 +47,6 @@ public class CatalogController {
     private final CatalogService catalogService;
     private final ProductDetailService productDetailService;
     private final ProductLifecycleService productLifecycleService;
-    private final SupplierItemCostService supplierItemCostService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}")
@@ -63,57 +58,6 @@ public class CatalogController {
         return catalogService.getProductById(productId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PostMapping("/costs/supplier-item")
-    @Operation(summary = "Create supplier-item cost tiers", description = "Creates a supplier-item cost structure with optional volume-based tiers.")
-    @ApiResponse(responseCode = "201", description = "Supplier-item cost structure created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload or tier structure")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @EmitEvent(id = "CATALOG_SUPPLIER_ITEM_COST_CREATE", apiVersion = "1")
-    public ResponseEntity<SupplierItemCostResponseDto> createSupplierItemCost(
-            @RequestBody SupplierItemCostCreateRequestDto request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(supplierItemCostService.createSupplierItemCost(request));
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/costs/supplier-item/{supplierId}/{itemId}")
-    @Operation(summary = "Get supplier-item cost tiers", description = "Gets the supplier-item cost structure and ordered quantity tiers.")
-    @ApiResponse(responseCode = "200", description = "Supplier-item cost found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostResponseDto.class)))
-    @ApiResponse(responseCode = "404", description = "Supplier-item cost not found")
-    public ResponseEntity<SupplierItemCostResponseDto> getSupplierItemCost(
-            @Parameter(description = "Supplier ID", required = true) @PathVariable UUID supplierId,
-            @Parameter(description = "Item ID", required = true) @PathVariable UUID itemId) {
-        return ResponseEntity.ok(supplierItemCostService.getSupplierItemCost(supplierId, itemId));
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PutMapping("/costs/supplier-item/{supplierId}/{itemId}")
-    @Operation(summary = "Update supplier-item cost tiers", description = "Updates currency, base cost, and quantity-based tiers for an existing supplier-item cost structure.")
-    @ApiResponse(responseCode = "200", description = "Supplier-item cost updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = SupplierItemCostResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload or tier structure")
-    @ApiResponse(responseCode = "404", description = "Supplier-item cost not found")
-    @ApiResponse(responseCode = "409", description = "Update conflict")
-    @EmitEvent(id = "CATALOG_SUPPLIER_ITEM_COST_UPDATE", apiVersion = "1")
-    public ResponseEntity<SupplierItemCostResponseDto> updateSupplierItemCost(
-            @Parameter(description = "Supplier ID", required = true) @PathVariable UUID supplierId,
-            @Parameter(description = "Item ID", required = true) @PathVariable UUID itemId,
-            @RequestBody SupplierItemCostUpdateRequestDto request) {
-        return ResponseEntity.ok(supplierItemCostService.updateSupplierItemCost(supplierId, itemId, request));
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
-    @DeleteMapping("/costs/supplier-item/{supplierId}/{itemId}")
-    @Operation(summary = "Delete supplier-item cost tiers", description = "Deletes the supplier-item cost structure and all associated tiers.")
-    @ApiResponse(responseCode = "204", description = "Supplier-item cost deleted")
-    @ApiResponse(responseCode = "404", description = "Supplier-item cost not found")
-    @EmitEvent(id = "CATALOG_SUPPLIER_ITEM_COST_DELETE", apiVersion = "1")
-    public ResponseEntity<Void> deleteSupplierItemCost(
-            @Parameter(description = "Supplier ID", required = true) @PathVariable UUID supplierId,
-            @Parameter(description = "Item ID", required = true) @PathVariable UUID itemId) {
-        supplierItemCostService.deleteSupplierItemCost(supplierId, itemId);
-        return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('product:lifecycle:update')")
@@ -151,7 +95,8 @@ public class CatalogController {
     public ResponseEntity<ProductLifecycleResponse.ReplacementOption> addReplacementProduct(
             @Parameter(description = "ID of discontinued product", required = true) @PathVariable UUID productId,
             @RequestBody ProductReplacementRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(productLifecycleService.addReplacement(productId, request));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(productLifecycleService.addReplacement(productId, request));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")

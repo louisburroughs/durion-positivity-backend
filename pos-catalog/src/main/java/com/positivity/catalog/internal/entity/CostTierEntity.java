@@ -28,6 +28,9 @@ public class CostTierEntity {
     @JoinColumn(name = "supplier_item_cost_id", nullable = false)
     private SupplierItemCostEntity supplierItemCost;
 
+    @Column(name = "supplier_item_cost_id", insertable = false, updatable = false, columnDefinition = "UUID")
+    private UUID supplierItemCostId;
+
     @Column(name = "min_quantity", nullable = false)
     private Integer minQuantity;
 
@@ -36,9 +39,6 @@ public class CostTierEntity {
 
     @Column(name = "unit_cost", nullable = false, precision = 19, scale = 4)
     private BigDecimal unitCost;
-
-    @Column(name = "tier_order_index", nullable = false)
-    private Integer tierOrderIndex;
 
     @PrePersist
     void onCreate() {
