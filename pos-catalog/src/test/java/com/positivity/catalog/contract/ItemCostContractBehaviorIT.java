@@ -1,5 +1,6 @@
 package com.positivity.catalog.contract;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -63,9 +64,9 @@ class ItemCostContractBehaviorIT extends BaseIntegrationTest {
         mockMvc.perform(withAuth(get("/v1/products/items/{itemId}/costs", itemId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()))
-                .andExpect(jsonPath("$.standardCost").doesNotExist())
-                .andExpect(jsonPath("$.lastCost").doesNotExist())
-                .andExpect(jsonPath("$.averageCost").doesNotExist());
+                .andExpect(jsonPath("$.standardCost").value(nullValue()))
+                .andExpect(jsonPath("$.lastCost").value(nullValue()))
+                .andExpect(jsonPath("$.averageCost").value(nullValue()));
     }
 
     @Test

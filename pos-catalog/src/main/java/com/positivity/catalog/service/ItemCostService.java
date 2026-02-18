@@ -10,8 +10,7 @@ import org.jspecify.annotations.NonNull;
 
 public interface ItemCostService {
 
-    ItemCostsDto updateStandardCost(@NonNull UUID itemId, @NonNull UpdateStandardCostRequestDto request,
-            @NonNull String actor);
+    ItemCostsDto updateStandardCost(@NonNull UUID itemId, @NonNull UpdateStandardCostRequestDto request);
 
     ItemCostsDto getItemCosts(@NonNull UUID itemId);
 
