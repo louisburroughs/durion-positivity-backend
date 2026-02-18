@@ -41,5 +41,36 @@ public final class CatalogEventTypes {
                                                 "Delete supplier item cost structure").build(),
                                 EventTypeRegistration.write("CATALOG_ITEM_COST_STANDARD_UPDATE",
                                                 "Manually update item standard cost").build());
+                                EventTypeRegistration.write("CATALOG_GUARDRAIL_POLICY_UPSERT",
+                                                "Create or update location guardrail policy for price overrides")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_LOCATION_OVERRIDE_CREATE",
+                                                "Create location-specific price override with guardrail checks")
+                                                .build(),
+                                EventTypeRegistration.approval("CATALOG_LOCATION_OVERRIDE_APPROVE",
+                                                "Approve pending location price override and activate effective price")
+                                                .build(),
+                                EventTypeRegistration.approval("CATALOG_LOCATION_OVERRIDE_REJECT",
+                                                "Reject pending location price override with reason metadata").build(),
+                                EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_CREATE",
+                                                "Create supplier-item cost structure with optional volume tiers")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_UPDATE",
+                                                "Update supplier-item cost structure and volume tiers").build(),
+                                EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_DELETE",
+                                                "Delete supplier-item cost structure and all tiers").build(),
+                                EventTypeRegistration.write("CATALOG_MSRP_CREATE", "Create MSRP record").build(),
+                                EventTypeRegistration.write("CATALOG_MSRP_UPDATE", "Update MSRP record").build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_CREATE", "Create price book").build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_UPDATE", "Update price book").build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_RULE_CREATE", "Create price book rule")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_RULE_UPDATE", "Update price book rule")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_RULE_DEACTIVATE",
+                                                "Deactivate price book rule")
+                                                .build(),
+                                EventTypeRegistration.fastRead("CATALOG_PRICE_BOOK_RESOLVE_PRICE",
+                                                "Resolve effective price").build());
         }
 }

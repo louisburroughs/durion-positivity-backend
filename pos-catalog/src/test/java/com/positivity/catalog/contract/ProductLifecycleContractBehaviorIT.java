@@ -95,7 +95,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
                                                 LIFECYCLE_STATE, "ACTIVE",
                                                 "effectiveAt", Instant.now().plusSeconds(7200),
                                                 "changedBy", UUID.randomUUID()))))
-                                .andExpect(status().isBadRequest())
+                                .andExpect(status().isConflict())
                                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertTrue(
                                                 result.getResponse().getContentAsString()
                                                                 .contains(
