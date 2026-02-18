@@ -12,7 +12,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -24,11 +23,9 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(
-        name = "supplier_item_cost",
-        uniqueConstraints = @UniqueConstraint(name = "uk_supplier_item_cost_supplier_item", columnNames = {
-                "supplier_id", "item_id"
-        }))
+@Table(name = "supplier_item_cost", uniqueConstraints = @UniqueConstraint(name = "uk_supplier_item_cost_supplier_item", columnNames = {
+        "supplier_id", "item_id"
+}))
 public class SupplierItemCostEntity {
 
     @Id
@@ -46,9 +43,6 @@ public class SupplierItemCostEntity {
 
     @Column(name = "base_cost", precision = 19, scale = 4)
     private BigDecimal baseCost;
-
-    @Version
-    private Long version;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
