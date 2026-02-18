@@ -12,15 +12,19 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
+import com.positivity.security.common.SecurityContextHelper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -61,6 +65,63 @@ public class ProductLifecycleService {
 
     @Transactional
     public ProductLifecycleResponse updateLifecycle(UUID productId, ProductLifecycleUpdateRequest request) {
+        return doUpdateLifecycle(productId, request);
+    }
+
+    @Transactional
+    public ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId,
+            ProductReplacementRequest request) {
+        return doAddReplacement(productId, request);
+    }
+
+    @Transactional
+    public ProductLifecycleResponse setLifecycleState(
+            @NonNull UUID productId,
+            @NonNull ProductLifecycleState newState,
+            Instant effectiveAt,
+            String overrideReason,
+            LocalDate effectiveDate) {
+        ProductLifecycleUpdateRequest request = new ProductLifecycleUpdateRequest();
+        request.setLifecycleState(newState);
+        request.setEffectiveAt(effectiveAt);
+        request.setEffectiveDate(effectiveDate != null ? effectiveDate : LocalDate.now(ZoneOffset.UTC));
+        request.setOverrideReason(overrideReason);
+        request.setChangedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        return doUpdateLifecycle(productId, request);
+    }
+
+    @Transactional
+    public ProductLifecycleResponse.ReplacementOption addReplacementProduct(
+            @NonNull UUID discontinuedProductId,
+            @NonNull UUID replacementProductId,
+            int priorityOrder,
+            String notes,
+            Instant effectiveAt) {
+        ProductReplacementRequest request = new ProductReplacementRequest();
+        request.setReplacementProductId(replacementProductId);
+        request.setPriorityOrder(priorityOrder);
+        request.setNotes(notes);
+        request.setEffectiveAt(effectiveAt);
+        return doAddReplacement(discontinuedProductId, request);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductLifecycleResponse.ReplacementOption> getReplacementProducts(@NonNull UUID productId) {
+        findProduct(productId);
+        return productReplacementRepository
+                .findByOriginalProductIdAndDeletedAtIsNullOrderByPriorityOrderAsc(productId)
+                .stream()
+                .map(replacement -> ProductLifecycleResponse.ReplacementOption.builder()
+                        .replacementId(replacement.getReplacementId())
+                        .replacementProductId(replacement.getReplacementProductId())
+                        .priorityOrder(replacement.getPriorityOrder())
+                        .notes(replacement.getNotes())
+                        .effectiveAt(replacement.getEffectiveAt())
+                        .build())
+                .toList();
+    }
+
+    private ProductLifecycleResponse doUpdateLifecycle(UUID productId, ProductLifecycleUpdateRequest request) {
         if (request == null) {
             lifecycleUpdateDeniedCounter.increment();
             throw new CatalogValidationException("request is required");
@@ -71,15 +132,12 @@ public class ProductLifecycleService {
         }
         if (request.getEffectiveAt() == null && request.getEffectiveDate() == null) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new CatalogValidationException("effectiveAt or effectiveDate is required");
-        }
-        if (request.getChangedBy() == null) {
-            lifecycleUpdateDeniedCounter.increment();
-            throw new CatalogValidationException("changedBy is required");
+            throw new CatalogValidationException("either effectiveAt or effectiveDate is required");
         }
         ProductEntity product = findProduct(productId);
         ProductLifecycleState currentState = resolveCurrentState(product);
         ProductLifecycleState nextState = request.getLifecycleState();
+        UUID changedBy = resolveChangedByFromSecurityContext();
 
         if (currentState == nextState) {
             lifecycleUpdateDeniedCounter.increment();
@@ -115,7 +173,7 @@ public class ProductLifecycleService {
 
         product.setLifecycleState(nextState);
         product.setLifecycleStateEffectiveAt(effectiveAt);
-        product.setLastStateChangedBy(request.getChangedBy());
+        product.setLastStateChangedBy(changedBy);
         product.setLastStateChangedAt(currentInstant());
         product.setLifecycleOverrideReason(request.getOverrideReason());
         ProductEntity saved = productRepository.save(product);
@@ -127,7 +185,7 @@ public class ProductLifecycleService {
                 currentState,
                 nextState,
                 effectiveAt,
-                request.getChangedBy(),
+                changedBy,
                 overridePermissionUsed);
 
         List<ProductReplacementEntity> replacements = productReplacementRepository
@@ -135,8 +193,7 @@ public class ProductLifecycleService {
         return toResponse(saved, replacements);
     }
 
-    @Transactional
-    public ProductLifecycleResponse.ReplacementOption addReplacement(UUID productId,
+    private ProductLifecycleResponse.ReplacementOption doAddReplacement(UUID productId,
             ProductReplacementRequest request) {
         if (request == null || request.getReplacementProductId() == null) {
             throw new CatalogValidationException("replacementProductId is required");
@@ -177,6 +234,16 @@ public class ProductLifecycleService {
     private ProductEntity findProduct(UUID productId) {
         return productRepository.findById(productId)
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + productId));
+    }
+
+    private UUID resolveChangedByFromSecurityContext() {
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        try {
+            return UUID.fromString(username);
+        } catch (IllegalArgumentException ignored) {
+            // Keep actor identity deterministic even when principal is not UUID-formatted.
+            return UUID.nameUUIDFromBytes(username.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     private ProductLifecycleState resolveCurrentState(ProductEntity product) {

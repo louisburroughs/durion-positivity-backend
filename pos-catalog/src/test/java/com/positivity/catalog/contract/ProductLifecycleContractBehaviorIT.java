@@ -42,7 +42,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
         private CatalogService catalogService;
 
         @Test
-        @DisplayName("LC-001: Set product lifecycle to INACTIVE with effective date")
+        @DisplayName("CP-165-010: Set product lifecycle to INACTIVE with effective date")
         void testSetInactiveLifecycle() throws Exception {
                 UUID productId = createProductAndReturnId("Lifecycle Product A");
 
@@ -75,7 +75,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("LC-003: Prevent reactivation from DISCONTINUED")
+        @DisplayName("LC-165-010: Prevent reactivation from DISCONTINUED")
         void testPreventReactivationAfterDiscontinued() throws Exception {
                 UUID productId = createProductAndReturnId("Lifecycle Product C");
 
@@ -103,7 +103,7 @@ class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("LC-004: Add replacement to discontinued product")
+        @DisplayName("CP-165-011: Add replacement to discontinued product")
         void testAddReplacementToDiscontinuedProduct() throws Exception {
                 UUID originalProductId = createProductAndReturnId("Lifecycle Product D");
                 UUID replacementProductId = createProductAndReturnId("Lifecycle Product E");
