@@ -25,9 +25,14 @@ public class CatalogExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
     }
 
-    @ExceptionHandler({ CatalogValidationException.class, CatalogBusinessRuleException.class })
-    public ResponseEntity<String> handleBadRequest(RuntimeException ex) {
+    @ExceptionHandler(CatalogValidationException.class)
+    public ResponseEntity<String> handleBadRequest(CatalogValidationException ex) {
         return ResponseEntity.badRequest().body(ex.getMessage());
+    }
+
+    @ExceptionHandler(CatalogBusinessRuleException.class)
+    public ResponseEntity<String> handleBusinessConflict(CatalogBusinessRuleException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
     }
 
     @ExceptionHandler({ ObjectOptimisticLockingFailureException.class, OptimisticLockException.class })
