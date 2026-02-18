@@ -21,6 +21,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@SuppressWarnings("java:S100") // Test class is allowed to have non-camel-case method names for readability
 class TimeEntryAdjustmentServiceTest {
 
     private TimeEntryAdjustmentRepository adjustmentRepository;
