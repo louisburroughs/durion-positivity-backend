@@ -34,14 +34,14 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
         mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "locationId", locationId,
-                                "productId", productId,
-                                "basePrice", 100.00,
-                                "cost", 50.00,
-                                "overridePrice", 95.00,
-                                "createdByUserId", actorUserId))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "locationId", locationId,
+                        "productId", productId,
+                        "basePrice", 100.00,
+                        "cost", 50.00,
+                        "overridePrice", 95.00,
+                        "createdByUserId", actorUserId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.locationId").value(locationId.toString()))
                 .andExpect(jsonPath("$.productId").value(productId.toString()))
@@ -58,14 +58,14 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
         mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "locationId", locationId,
-                                "productId", productId,
-                                "basePrice", 100.00,
-                                "cost", 50.00,
-                                "overridePrice", 88.00,
-                                "createdByUserId", actorUserId))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "locationId", locationId,
+                        "productId", productId,
+                        "basePrice", 100.00,
+                        "cost", 50.00,
+                        "overridePrice", 88.00,
+                        "createdByUserId", actorUserId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
                 .andExpect(jsonPath("$.assignmentStrategy").value("LOCATION_SCOPE_PRIMARY_THEN_POOL"))
@@ -81,14 +81,14 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
         mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "locationId", locationId,
-                                "productId", productId,
-                                "basePrice", 100.00,
-                                "cost", 90.00,
-                                "overridePrice", 92.00,
-                                "createdByUserId", UUID.randomUUID()))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "locationId", locationId,
+                        "productId", productId,
+                        "basePrice", 100.00,
+                        "cost", 90.00,
+                        "overridePrice", 92.00,
+                        "createdByUserId", UUID.randomUUID()))))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(containsString("MIN_MARGIN_VIOLATION")));
     }
@@ -102,14 +102,14 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
         mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "locationId", locationId,
-                                "productId", productId,
-                                "basePrice", 100.00,
-                                "cost", 50.00,
-                                "overridePrice", 60.00,
-                                "createdByUserId", UUID.randomUUID()))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "locationId", locationId,
+                        "productId", productId,
+                        "basePrice", 100.00,
+                        "cost", 50.00,
+                        "overridePrice", 60.00,
+                        "createdByUserId", UUID.randomUUID()))))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(containsString("MAX_DISCOUNT_EXCEEDED")));
     }
@@ -125,33 +125,35 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
         MvcResult createResult = mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "locationId", locationId,
-                                "productId", productId,
-                                "basePrice", 100.00,
-                                "cost", 50.00,
-                                "overridePrice", 88.00,
-                                "createdByUserId", createdBy))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "locationId", locationId,
+                        "productId", productId,
+                        "basePrice", 100.00,
+                        "cost", 50.00,
+                        "overridePrice", 88.00,
+                        "createdByUserId", createdBy))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
                 .andReturn();
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> created = objectMapper.readValue(createResult.getResponse().getContentAsString(), Map.class);
+        Map<String, Object> created = objectMapper.readValue(createResult.getResponse().getContentAsString(),
+                Map.class);
         String overrideId = (String) created.get("overrideId");
         Long version = ((Number) created.get("version")).longValue();
 
         mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides/{overrideId}/approve", overrideId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "version", version,
-                                "actorUserId", approver))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "version", version,
+                        "actorUserId", approver))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.approvedByUserId").value(approver.toString()));
 
-        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+        mockMvc.perform(
+                withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.overrideStatus").value("ACTIVE"))
                 .andExpect(jsonPath("$.effectivePrice").value(88.0));
@@ -168,30 +170,31 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
         MvcResult createResult = mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "locationId", locationId,
-                                "productId", productId,
-                                "basePrice", 100.00,
-                                "cost", 50.00,
-                                "overridePrice", 88.00,
-                                "createdByUserId", createdBy))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "locationId", locationId,
+                        "productId", productId,
+                        "basePrice", 100.00,
+                        "cost", 50.00,
+                        "overridePrice", 88.00,
+                        "createdByUserId", createdBy))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
                 .andReturn();
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> created = objectMapper.readValue(createResult.getResponse().getContentAsString(), Map.class);
+        Map<String, Object> created = objectMapper.readValue(createResult.getResponse().getContentAsString(),
+                Map.class);
         String overrideId = (String) created.get("overrideId");
         Long version = ((Number) created.get("version")).longValue();
 
         mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides/{overrideId}/reject", overrideId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "version", version,
-                                "actorUserId", approver,
-                                "rejectionReasonCode", "PRICE_POLICY_EXCEPTION",
-                                "rejectionNotes", "Price reduction requires regional review"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "version", version,
+                        "actorUserId", approver,
+                        "rejectionReasonCode", "PRICE_POLICY_EXCEPTION",
+                        "rejectionNotes", "Price reduction requires regional review"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectedBy").value(approver.toString()))
@@ -207,18 +210,19 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         upsertGuardrailPolicy(locationId, 15.0, 25.0, 10.0);
 
         mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "locationId", locationId,
-                                "productId", productId,
-                                "basePrice", 100.00,
-                                "cost", 50.00,
-                                "overridePrice", 95.00,
-                                "createdByUserId", UUID.randomUUID()))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "locationId", locationId,
+                        "productId", productId,
+                        "basePrice", 100.00,
+                        "cost", 50.00,
+                        "overridePrice", 95.00,
+                        "createdByUserId", UUID.randomUUID()))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
 
-        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+        mockMvc.perform(
+                withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.basePrice").value(100.0))
                 .andExpect(jsonPath("$.effectivePrice").value(95.0))
@@ -231,7 +235,8 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
         UUID locationId = UUID.randomUUID();
         UUID productId = createProductAndReturnId("CAP168-ID102-Product");
 
-        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+        mockMvc.perform(
+                withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(containsString("EFFECTIVE_PRICE_NOT_FOUND")));
     }
@@ -239,12 +244,12 @@ class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
     private void upsertGuardrailPolicy(UUID locationId, double minMarginPercent,
             double maxDiscountPercent, double autoApprovalThresholdPercent) throws Exception {
         mockMvc.perform(withAuth(post("/v1/products/pricing/guardrail-policies"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "scopeId", locationId,
-                                "minMarginPercent", minMarginPercent,
-                                "maxDiscountPercent", maxDiscountPercent,
-                                "autoApprovalThresholdPercent", autoApprovalThresholdPercent))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "scopeId", locationId,
+                        "minMarginPercent", minMarginPercent,
+                        "maxDiscountPercent", maxDiscountPercent,
+                        "autoApprovalThresholdPercent", autoApprovalThresholdPercent))))
                 .andExpect(status().isOk());
     }
 
