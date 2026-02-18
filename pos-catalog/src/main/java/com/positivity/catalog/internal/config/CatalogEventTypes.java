@@ -46,7 +46,7 @@ public final class CatalogEventTypes {
                                 EventTypeRegistration.write("CATALOG_UOM_CONVERSION_UPDATE",
                                                 "Update UOM conversion factor").build(),
                                 EventTypeRegistration.write("CATALOG_UOM_CONVERSION_DEACTIVATE",
-                                                "Deactivate UOM conversion").build());
+                                                "Deactivate UOM conversion").build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_COST_CREATE",
                                                 "Create supplier item cost structure").build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_COST_UPDATE",
