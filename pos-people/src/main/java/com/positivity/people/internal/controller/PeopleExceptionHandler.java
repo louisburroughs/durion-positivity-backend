@@ -4,6 +4,7 @@ import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
@@ -79,6 +80,15 @@ public class PeopleExceptionHandler {
     public ProblemDetail handleIllegalState(IllegalStateException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(SemanticValidationException.class)
+    public ProblemDetail handleSemanticValidation(SemanticValidationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_CONTENT,
                 ex.getMessage());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problem;

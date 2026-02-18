@@ -4,7 +4,6 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,10 +40,8 @@ public class WorkSessionController {
     }
 
     @Operation(summary = "Start work session break", description = "Start a break within an active work session.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Break started successfully."),
-            @ApiResponse(responseCode = "404", description = "Work session not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Break started successfully.")
+    @ApiResponse(responseCode = "404", description = "Work session not found.")
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_START", apiVersion = "1")
     @PostMapping("/{id}/breaks/start")
     public ResponseEntity<Object> startWorkSessionBreak(
@@ -56,10 +53,8 @@ public class WorkSessionController {
     }
 
     @Operation(summary = "Stop work session break", description = "End a break within a work session.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Break stopped successfully."),
-            @ApiResponse(responseCode = "404", description = "Work session or break not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Break stopped successfully.")
+    @ApiResponse(responseCode = "404", description = "Work session or break not found.")
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @PostMapping("/{id}/breaks/stop")
     public ResponseEntity<Object> stopWorkSessionBreak(
