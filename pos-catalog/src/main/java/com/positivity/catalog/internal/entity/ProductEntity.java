@@ -13,7 +13,13 @@ import java.util.UUID;
 @Setter
 @Getter
 @Entity
-@Table(name = "product")
+@Table(name = "product", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_product_sku", columnNames = "sku"),
+        @UniqueConstraint(name = "uk_product_manufacturer_mpn", columnNames = { "manufacturer_id",
+                "manufacturer_part_number" })
+}, indexes = {
+        @Index(name = "idx_product_manufacturer_part_number", columnList = "manufacturer_part_number")
+})
 @Schema(description = "Represents a product in the catalog")
 public class ProductEntity implements CatalogItem {
 
@@ -24,13 +30,34 @@ public class ProductEntity implements CatalogItem {
 
     @PrePersist
     public void generateId() {
+        Instant now = Instant.now();
         if (id == null) {
             id = UUIDv7Generator.generate();
+        }
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        updatedAt = now;
+        if (status == null) {
+            status = ProductStatus.ACTIVE;
+        }
+        if (lifecycleState == null) {
+            lifecycleState = ProductLifecycleState.ACTIVE;
         }
     }
 
     @Schema(description = "Name of the product", example = "Heavy Duty Wrench")
     private String name;
+
+    @Schema(description = "Product description", example = "A versatile wrench for heavy-duty applications.")
+    private String description;
+
+    @Schema(description = "Operational product status", implementation = ProductStatus.class)
+    @Enumerated(EnumType.STRING)
+    private ProductStatus status = ProductStatus.ACTIVE;
+
+    @Schema(description = "Unit of measure", example = "EA")
+    private String unitOfMeasure;
 
     @Schema(description = "Short description of the product", example = "A versatile wrench for heavy-duty applications.")
     private String shortDescription;
@@ -48,7 +75,8 @@ public class ProductEntity implements CatalogItem {
     private String manufacturerPartNumber;
 
     @Schema(description = "Identifier for the manufacturer", example = "MAN-123")
-    private String manufacturerId;
+    @Column(columnDefinition = "UUID")
+    private UUID manufacturerId;
 
     @Schema(description = "Name of the manufacturer", example = "Acme Tools")
     private String manufacturerName;
@@ -77,6 +105,13 @@ public class ProductEntity implements CatalogItem {
 
     @Schema(description = "Product code (e.g., UPC, EAN)", example = "0123456789012")
     private String productCode;
+
+    @Schema(description = "UPC code for product", example = "0123456789012")
+    private String upc;
+
+    @Lob
+    @Schema(description = "Arbitrary key-value product attributes stored as JSON")
+    private String attributes;
 
     @Enumerated(EnumType.STRING)
     @Schema(description = "Type of the product code (e.g., UPC, EAN)", implementation = ProductCodeType.class)
@@ -129,5 +164,28 @@ public class ProductEntity implements CatalogItem {
 
     @Schema(description = "Reason when discontinued override permission is used")
     private String lifecycleOverrideReason;
+
+    @Column(nullable = false)
+    @Schema(description = "Timestamp when product was created")
+    private Instant createdAt;
+
+    @Column(nullable = false)
+    @Schema(description = "Timestamp when product was last updated")
+    private Instant updatedAt;
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = Instant.now();
+    }
+
+    @PostLoad
+    public void ensureDefaults() {
+        if (status == null) {
+            status = ProductStatus.ACTIVE;
+        }
+        if (lifecycleState == null) {
+            lifecycleState = ProductLifecycleState.ACTIVE;
+        }
+    }
 
 }
