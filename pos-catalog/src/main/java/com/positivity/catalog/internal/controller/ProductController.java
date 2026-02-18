@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -58,7 +59,7 @@ public class ProductController {
     @ApiResponse(responseCode = "400", description = "Invalid policy payload")
     @EmitEvent(id = "CATALOG_GUARDRAIL_POLICY_UPSERT", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> upsertLocationGuardrailPolicy(
-            @RequestBody GuardrailPolicyUpsertRequestDto request) {
+            @Valid @RequestBody GuardrailPolicyUpsertRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.upsertLocationGuardrailPolicy(request));
     }
 
@@ -68,9 +69,9 @@ public class ProductController {
     @ApiResponse(responseCode = "201", description = "Override created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Guardrail validation failed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
-    @EmitEvent(id = "CATALOG_PRICE_OVERRIDE_CREATE", apiVersion = "1")
+    @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_CREATE", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> createLocationPriceOverride(
-            @RequestBody LocationPriceOverrideCreateRequestDto request) {
+            @Valid @RequestBody LocationPriceOverrideCreateRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(locationPriceOverrideService.createOverride(request));
     }
 
@@ -92,10 +93,10 @@ public class ProductController {
     @ApiResponse(responseCode = "400", description = "Invalid approval request")
     @ApiResponse(responseCode = "404", description = "Override or approval request not found")
     @ApiResponse(responseCode = "409", description = "Version conflict")
-    @EmitEvent(id = "CATALOG_PRICE_OVERRIDE_APPROVED", apiVersion = "1")
+    @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_APPROVE", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> approveLocationPriceOverride(
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
-            @RequestBody LocationPriceOverrideDecisionRequestDto request) {
+            @Valid @RequestBody LocationPriceOverrideDecisionRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.approveOverride(overrideId, request));
     }
 
@@ -106,10 +107,10 @@ public class ProductController {
     @ApiResponse(responseCode = "400", description = "Invalid rejection request")
     @ApiResponse(responseCode = "404", description = "Override or approval request not found")
     @ApiResponse(responseCode = "409", description = "Version conflict")
-    @EmitEvent(id = "CATALOG_PRICE_OVERRIDE_REJECTED", apiVersion = "1")
+    @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_REJECT", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> rejectLocationPriceOverride(
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
-            @RequestBody LocationPriceOverrideDecisionRequestDto request) {
+            @Valid @RequestBody LocationPriceOverrideDecisionRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.rejectOverride(overrideId, request));
     }
 
