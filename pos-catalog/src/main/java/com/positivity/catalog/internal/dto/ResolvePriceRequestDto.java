@@ -17,5 +17,7 @@ public class ResolvePriceRequestDto {
 
     private String customerTier;
 
+    private String currency;
+
     private LocalDate asOf;
 }
