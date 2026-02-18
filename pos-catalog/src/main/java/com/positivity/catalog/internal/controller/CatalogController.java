@@ -3,6 +3,11 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.dto.CatalogDto;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
+import com.positivity.catalog.internal.dto.EffectiveLocationPriceResponseDto;
+import com.positivity.catalog.internal.dto.GuardrailPolicyUpsertRequestDto;
+import com.positivity.catalog.internal.dto.LocationPriceOverrideCreateRequestDto;
+import com.positivity.catalog.internal.dto.LocationPriceOverrideDecisionRequestDto;
+import com.positivity.catalog.internal.dto.LocationPriceOverrideResponseDto;
 import com.positivity.catalog.internal.dto.NonInventoryProductDto;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDto;
@@ -11,6 +16,7 @@ import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.service.CatalogService;
+import com.positivity.catalog.service.LocationPriceOverrideService;
 import com.positivity.catalog.service.ProductDetailService;
 import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.events.EmitEvent;
@@ -47,6 +53,69 @@ public class CatalogController {
     private final CatalogService catalogService;
     private final ProductDetailService productDetailService;
     private final ProductLifecycleService productLifecycleService;
+    private final LocationPriceOverrideService locationPriceOverrideService;
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PostMapping("/pricing/guardrail-policies")
+    @Operation(summary = "Upsert location guardrail policy", description = "Creates or updates the active LOCATION guardrail policy used by price overrides.")
+    @ApiResponse(responseCode = "200", description = "Guardrail policy upserted", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid policy payload")
+    @EmitEvent(id = "CATALOG_GUARDRAIL_POLICY_UPSERT", apiVersion = "1")
+    public ResponseEntity<LocationPriceOverrideResponseDto> upsertLocationGuardrailPolicy(
+            @RequestBody GuardrailPolicyUpsertRequestDto request) {
+        return ResponseEntity.ok(locationPriceOverrideService.upsertLocationGuardrailPolicy(request));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PostMapping("/pricing/location-overrides")
+    @Operation(summary = "Create location price override", description = "Creates a location-specific price override and enforces guardrails for margin and discount limits.")
+    @ApiResponse(responseCode = "201", description = "Override created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @ApiResponse(responseCode = "400", description = "Guardrail validation failed")
+    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @EmitEvent(id = "CATALOG_PRICE_OVERRIDE_CREATE", apiVersion = "1")
+    public ResponseEntity<LocationPriceOverrideResponseDto> createLocationPriceOverride(
+            @RequestBody LocationPriceOverrideCreateRequestDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(locationPriceOverrideService.createOverride(request));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @GetMapping("/pricing/effective-price/{locationId}/{productId}")
+    @Operation(summary = "Get effective location price", description = "Resolves effective price using precedence: ACTIVE override first, otherwise base price.")
+    @ApiResponse(responseCode = "200", description = "Effective price returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = EffectiveLocationPriceResponseDto.class)))
+    @ApiResponse(responseCode = "404", description = "No pricing context found")
+    public ResponseEntity<EffectiveLocationPriceResponseDto> getEffectiveLocationPrice(
+            @Parameter(description = "Location ID", required = true) @PathVariable UUID locationId,
+            @Parameter(description = "Product ID", required = true) @PathVariable UUID productId) {
+        return ResponseEntity.ok(locationPriceOverrideService.getEffectivePrice(locationId, productId));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('pricing:override:approve')")
+    @PostMapping("/pricing/location-overrides/{overrideId}/approve")
+    @Operation(summary = "Approve pending location price override", description = "Approves a pending override and activates it as the effective location price.")
+    @ApiResponse(responseCode = "200", description = "Override approved", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid approval request")
+    @ApiResponse(responseCode = "404", description = "Override or approval request not found")
+    @ApiResponse(responseCode = "409", description = "Version conflict")
+    @EmitEvent(id = "CATALOG_PRICE_OVERRIDE_APPROVED", apiVersion = "1")
+    public ResponseEntity<LocationPriceOverrideResponseDto> approveLocationPriceOverride(
+            @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
+            @RequestBody LocationPriceOverrideDecisionRequestDto request) {
+        return ResponseEntity.ok(locationPriceOverrideService.approveOverride(overrideId, request));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('pricing:override:approve')")
+    @PostMapping("/pricing/location-overrides/{overrideId}/reject")
+    @Operation(summary = "Reject pending location price override", description = "Rejects a pending override, persists rejection metadata, and marks the request as terminal.")
+    @ApiResponse(responseCode = "200", description = "Override rejected", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid rejection request")
+    @ApiResponse(responseCode = "404", description = "Override or approval request not found")
+    @ApiResponse(responseCode = "409", description = "Version conflict")
+    @EmitEvent(id = "CATALOG_PRICE_OVERRIDE_REJECTED", apiVersion = "1")
+    public ResponseEntity<LocationPriceOverrideResponseDto> rejectLocationPriceOverride(
+            @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
+            @RequestBody LocationPriceOverrideDecisionRequestDto request) {
+        return ResponseEntity.ok(locationPriceOverrideService.rejectOverride(overrideId, request));
+    }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}")
@@ -95,7 +164,8 @@ public class CatalogController {
     public ResponseEntity<ProductLifecycleResponse.ReplacementOption> addReplacementProduct(
             @Parameter(description = "ID of discontinued product", required = true) @PathVariable UUID productId,
             @RequestBody ProductReplacementRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(productLifecycleService.addReplacement(productId, request));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(productLifecycleService.addReplacement(productId, request));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
