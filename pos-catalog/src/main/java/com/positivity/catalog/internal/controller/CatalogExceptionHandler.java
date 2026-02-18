@@ -4,8 +4,11 @@ import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogForbiddenOperationException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
+import jakarta.persistence.OptimisticLockException;
+import jakarta.servlet.ServletException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -25,5 +28,21 @@ public class CatalogExceptionHandler {
     @ExceptionHandler({ CatalogValidationException.class, CatalogBusinessRuleException.class })
     public ResponseEntity<String> handleBadRequest(RuntimeException ex) {
         return ResponseEntity.badRequest().body(ex.getMessage());
+    }
+
+    @ExceptionHandler({ ObjectOptimisticLockingFailureException.class, OptimisticLockException.class })
+    public ResponseEntity<String> handleConflict(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body("CONFLICT: Resource was updated concurrently. Please retry.");
+    }
+
+    @ExceptionHandler(ServletException.class)
+    public ResponseEntity<String> handleServletException(ServletException ex) {
+        Throwable cause = ex.getCause();
+        if (cause instanceof OptimisticLockException || cause instanceof ObjectOptimisticLockingFailureException) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("CONFLICT: Resource was updated concurrently. Please retry.");
+        }
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
     }
 }
