@@ -85,7 +85,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("CP-006: Auto-approval creates ACTIVE location override")
         void testCreateLocationOverride_AutoApproved() throws Exception {
                 UUID locationId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("CP-006 Product");
                 UUID actorId = UUID.randomUUID();
 
                 upsertLocationGuardrailPolicy(locationId, new BigDecimal("15.0"), new BigDecimal("25.0"),
@@ -110,7 +110,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("CP-007: Override beyond threshold creates PENDING_APPROVAL and keeps base as effective")
         void testCreateLocationOverride_PendingApproval() throws Exception {
                 UUID locationId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("CP-007 Product");
                 UUID actorId = UUID.randomUUID();
 
                 upsertLocationGuardrailPolicy(locationId, new BigDecimal("15.0"), new BigDecimal("25.0"),
@@ -170,7 +170,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("VE-005: Reject override below minimum margin hard guardrail")
         void testCreateLocationOverride_BelowMinMarginRejected() throws Exception {
                 UUID locationId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("VE-005 Product");
                 UUID actorId = UUID.randomUUID();
 
                 upsertLocationGuardrailPolicy(locationId, new BigDecimal("15.0"), new BigDecimal("60.0"),
@@ -189,7 +189,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("VE-006: Create override forbidden without edit role")
         void testCreateLocationOverride_ForbiddenWithoutEditRole() throws Exception {
                 UUID locationId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("VE-006 Product");
                 UUID actorId = UUID.randomUUID();
 
                 upsertLocationGuardrailPolicy(locationId, new BigDecimal("15.0"), new BigDecimal("25.0"),
@@ -238,7 +238,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("ID-003: Repeated effective price GET returns stable result")
         void testGetEffectivePrice_IdempotentRead() throws Exception {
                 UUID locationId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("ID-003 Product");
                 UUID actorId = UUID.randomUUID();
 
                 upsertLocationGuardrailPolicy(locationId, new BigDecimal("15.0"), new BigDecimal("25.0"),
@@ -299,7 +299,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @DisplayName("CC-003: Reject pending override enforces optimistic locking version")
         void testRejectOverride_OptimisticLock() throws Exception {
                 UUID locationId = UUID.randomUUID();
-                UUID productId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("CC-003 Product");
                 UUID creatorId = UUID.randomUUID();
                 UUID approverId = UUID.randomUUID();
 
@@ -326,10 +326,44 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 .andExpect(status().isConflict());
         }
 
+        @Test
+        @DisplayName("VE-007: Create override with unknown product returns 404")
+        void testCreateLocationOverride_UnknownProductReturns404() throws Exception {
+                UUID locationId = UUID.randomUUID();
+                UUID actorId = UUID.randomUUID();
+
+                upsertLocationGuardrailPolicy(locationId, new BigDecimal("15.0"), new BigDecimal("25.0"),
+                                new BigDecimal("10.0"));
+
+                mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(locationOverridePayload(locationId, UUID.randomUUID(), actorId, "100.00",
+                                                "50.00", "95.00")))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$")
+                                                .value(org.hamcrest.Matchers.containsString("PRODUCT_NOT_FOUND")));
+        }
+
         private UUID createCatalogAndReturnId(String name, String description) throws Exception {
                 MvcResult result = mockMvc.perform(withAuth(post("/v1/products/catalog"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(catalogPayload(name, description)))
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = objectMapper.readValue(result.getResponse().getContentAsString(),
+                                Map.class);
+                return UUID.fromString((String) response.get("id"));
+        }
+
+        private UUID createProductAndReturnId(String name) throws Exception {
+                MvcResult result = mockMvc.perform(withAuth(post("/v1/products/product"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(Map.of(
+                                                "name", name,
+                                                "shortDescription", "contract test product",
+                                                "type", "PHYSICAL"))))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 

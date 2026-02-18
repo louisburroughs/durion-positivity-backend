@@ -16,6 +16,7 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ApprovalRequestRepository;
 import com.positivity.catalog.internal.repository.GuardrailPolicyRepository;
 import com.positivity.catalog.internal.repository.LocationPriceOverrideRepository;
+import com.positivity.catalog.internal.repository.ProductRepository;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -34,14 +35,17 @@ public class LocationPriceOverrideService {
     private final LocationPriceOverrideRepository locationPriceOverrideRepository;
     private final GuardrailPolicyRepository guardrailPolicyRepository;
     private final ApprovalRequestRepository approvalRequestRepository;
+    private final ProductRepository productRepository;
 
     public LocationPriceOverrideService(
             LocationPriceOverrideRepository locationPriceOverrideRepository,
             GuardrailPolicyRepository guardrailPolicyRepository,
-            ApprovalRequestRepository approvalRequestRepository) {
+            ApprovalRequestRepository approvalRequestRepository,
+            ProductRepository productRepository) {
         this.locationPriceOverrideRepository = locationPriceOverrideRepository;
         this.guardrailPolicyRepository = guardrailPolicyRepository;
         this.approvalRequestRepository = approvalRequestRepository;
+        this.productRepository = productRepository;
     }
 
     @Transactional
@@ -69,6 +73,7 @@ public class LocationPriceOverrideService {
     @Transactional
     public LocationPriceOverrideResponseDto createOverride(@NonNull LocationPriceOverrideCreateRequestDto request) {
         validateCreateRequest(request);
+        validateProductExists(request.getProductId());
 
         GuardrailPolicyEntity policy = guardrailPolicyRepository
                 .findTopByScopeAndScopeIdOrderByCreatedAtDesc(GuardrailPolicyScope.LOCATION, request.getLocationId())
@@ -349,6 +354,12 @@ public class LocationPriceOverrideService {
     private void validateVersion(Long requestVersion, Long currentVersion) {
         if (!requestVersion.equals(currentVersion)) {
             throw new OptimisticLockException("Version mismatch for location price override update.");
+        }
+    }
+
+    private void validateProductExists(UUID productId) {
+        if (!productRepository.existsById(productId)) {
+            throw new CatalogNotFoundException("PRODUCT_NOT_FOUND: productId=" + productId);
         }
     }
 }
