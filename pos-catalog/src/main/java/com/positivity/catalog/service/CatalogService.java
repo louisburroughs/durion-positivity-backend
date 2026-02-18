@@ -92,7 +92,8 @@ public class CatalogService {
         };
     }
 
-    public Optional<CatalogItemResponseDto> updateCatalogItem(String type, UUID catalogId, CatalogItemRequestDto request) {
+    public Optional<CatalogItemResponseDto> updateCatalogItem(String type, UUID catalogId,
+            CatalogItemRequestDto request) {
         return switch (normalizeType(type)) {
             case PRODUCT ->
                 productRepository.findById(catalogId).map(existing -> {
@@ -160,18 +161,21 @@ public class CatalogService {
         product.setLongDescription(dto.getLongDescription());
         product.setImages(dto.getImages());
         product.setManufacturerPartNumber(dto.getManufacturerPartNumber());
-        product.setManufacturerId(dto.getManufacturerId());
+        product.setManufacturerId(parseUuid(dto.getManufacturerId()));
         product.setManufacturerName(dto.getManufacturerName());
         product.setManufacturerWarranty(dto.getManufacturerWarranty());
         product.setManufacturerBrand(dto.getManufacturerBrand());
         product.setCountryOfOrigin(dto.getCountryOfOrigin());
         product.setSku(dto.getSku());
         product.setProductCode(dto.getProductCode());
+        product.setUpc(dto.getProductCode());
         product.setType(dto.getType());
         product.setMaterial(dto.getMaterial());
         product.setColor(dto.getColor());
         product.setWarranty(dto.getWarranty());
         product.setSpecifications(dto.getSpecifications());
+        product.setAttributes(dto.getSpecifications());
+        product.setDescription(dto.getLongDescription());
         return product;
     }
 
@@ -299,7 +303,10 @@ public class CatalogService {
         dto.setManufacturerBrand(entity.getManufacturerBrand());
         dto.setCountryOfOrigin(entity.getCountryOfOrigin());
         dto.setSku(entity.getSku());
+        dto.setMpn(entity.getManufacturerPartNumber());
         dto.setProductCode(entity.getProductCode());
+        dto.setUpc(entity.getUpc());
+        dto.setAttributes(entity.getAttributes());
         dto.setProductCodeType(entity.getProductCodeType());
         dto.setCategory(toCategoryDto(entity.getCategory()));
         dto.setSubcategory(toSubcategoryDto(entity.getSubcategory()));
@@ -309,12 +316,24 @@ public class CatalogService {
         dto.setColor(entity.getColor());
         dto.setWarranty(entity.getWarranty());
         dto.setSpecifications(entity.getSpecifications());
+        dto.setDescription(entity.getDescription());
+        dto.setUnitOfMeasure(entity.getUnitOfMeasure());
+        dto.setStatus(entity.getStatus());
         dto.setLifecycleState(entity.getLifecycleState());
         dto.setLifecycleStateEffectiveAt(entity.getLifecycleStateEffectiveAt());
         dto.setLastStateChangedBy(entity.getLastStateChangedBy());
         dto.setLastStateChangedAt(entity.getLastStateChangedAt());
         dto.setLifecycleOverrideReason(entity.getLifecycleOverrideReason());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setUpdatedAt(entity.getUpdatedAt());
         return dto;
+    }
+
+    private UUID parseUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return UUID.fromString(value);
     }
 
     private ServiceDto toServiceDto(ServiceEntity entity) {

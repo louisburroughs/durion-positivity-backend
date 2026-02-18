@@ -6,16 +6,19 @@ import com.positivity.catalog.internal.dto.LocationPriceOverrideCreateRequestDto
 import com.positivity.catalog.internal.dto.LocationPriceOverrideDecisionRequestDto;
 import com.positivity.catalog.internal.dto.LocationPriceOverrideResponseDto;
 import com.positivity.catalog.internal.dto.NonInventoryProductDto;
+import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDto;
 import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
+import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.LocationPriceOverrideService;
 import com.positivity.catalog.service.ProductDetailService;
 import com.positivity.catalog.service.ProductLifecycleService;
+import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -51,6 +54,7 @@ public class ProductController {
     private final ProductDetailService productDetailService;
     private final ProductLifecycleService productLifecycleService;
     private final LocationPriceOverrideService locationPriceOverrideService;
+    private final ProductMasterDataService productMasterDataService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/pricing/guardrail-policies")
@@ -112,6 +116,31 @@ public class ProductController {
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
             @Valid @RequestBody LocationPriceOverrideDecisionRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.rejectOverride(overrideId, request));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PostMapping
+    @Operation(summary = "Create product master record", description = "Creates a product master record with immutable SKU and uniqueness checks.")
+    @ApiResponse(responseCode = "201", description = "Product created", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @ApiResponse(responseCode = "400", description = "Validation error")
+    @ApiResponse(responseCode = "409", description = "Business conflict")
+    @EmitEvent(id = "CATALOG_PRODUCT_CREATED", apiVersion = "1")
+    public ResponseEntity<ProductDto> createProduct(@Valid @RequestBody ProductCreateRequestDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(productMasterDataService.createProduct(request));
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PutMapping("/{productId}")
+    @Operation(summary = "Update product master record", description = "Updates mutable product master fields. SKU is immutable.")
+    @ApiResponse(responseCode = "200", description = "Product updated", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+    @ApiResponse(responseCode = "400", description = "Validation error")
+    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(responseCode = "409", description = "Business conflict")
+    @EmitEvent(id = "CATALOG_PRODUCT_UPDATED", apiVersion = "1")
+    public ResponseEntity<ProductDto> updateProduct(
+            @Parameter(description = "ID of the product to update", required = true) @PathVariable UUID productId,
+            @Valid @RequestBody ProductUpdateRequestDto request) {
+        return ResponseEntity.ok(productMasterDataService.updateProduct(productId, request));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
@@ -215,6 +244,15 @@ public class ProductController {
         return ResponseEntity.ok(productLifecycleService.getLifecycle(productId));
     }
 
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('product:lifecycle:update')")
+    @GetMapping("/{productId}/replacements")
+    @Operation(summary = "List replacement products", description = "Returns replacement options for a product.")
+    @ApiResponse(responseCode = "200", description = "Replacements listed")
+    public ResponseEntity<List<ProductLifecycleResponse.ReplacementOption>> getReplacements(
+            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
+        return ResponseEntity.ok(productLifecycleService.getReplacementProducts(productId));
+    }
+
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
     @PutMapping("/{productId}/lifecycle")
     @Operation(summary = "Set product lifecycle state", description = "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.")
@@ -224,7 +262,7 @@ public class ProductController {
     @ApiResponse(responseCode = "404", description = "Product not found")
     @ApiResponse(responseCode = "409", description = "Lifecycle business rule conflict")
     @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_UPDATE", apiVersion = "1")
-    public ResponseEntity<ProductLifecycleResponse> updateProductLifecycle(
+    public ResponseEntity<ProductLifecycleResponse> setLifecycleState(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
             @RequestBody ProductLifecycleUpdateRequest request) {
         return ResponseEntity.ok(productLifecycleService.updateLifecycle(productId, request));
