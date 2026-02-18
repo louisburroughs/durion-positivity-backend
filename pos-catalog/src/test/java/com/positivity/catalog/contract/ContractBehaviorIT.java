@@ -150,6 +150,108 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    @DisplayName("CP-010: Create active location override within auto-approval threshold")
+    void testCreateLocationOverride_ActiveWithinThreshold() throws Exception {
+        UUID locationId = UUID.randomUUID();
+        UUID productId = createProductAndReturnId("CP-010 Product");
+        UUID actorUserId = UUID.randomUUID();
+
+        upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+
+        mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(locationOverridePayload(locationId, productId, actorUserId, 100.00, 50.00, 95.00)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.overridePrice").value(95.0))
+                .andExpect(jsonPath("$.discountPercent").value(5.0));
+
+        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overrideStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.basePrice").value(100.0))
+                .andExpect(jsonPath("$.effectivePrice").value(95.0));
+    }
+
+    @Test
+    @DisplayName("CP-011: Create pending location override above auto-approval threshold")
+    void testCreateLocationOverride_PendingApproval() throws Exception {
+        UUID locationId = UUID.randomUUID();
+        UUID productId = createProductAndReturnId("CP-011 Product");
+        UUID actorUserId = UUID.randomUUID();
+
+        upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+
+        mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(locationOverridePayload(locationId, productId, actorUserId, 100.00, 50.00, 88.00)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                .andExpect(jsonPath("$.overridePrice").value(88.0))
+                .andExpect(jsonPath("$.assignedApproverId").exists())
+                .andExpect(jsonPath("$.assignmentStrategy").value("LOCATION_SCOPE_PRIMARY_THEN_POOL"));
+
+        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overrideStatus").value("PENDING_APPROVAL"))
+                .andExpect(jsonPath("$.basePrice").value(100.0))
+                .andExpect(jsonPath("$.effectivePrice").value(100.0));
+    }
+
+    @Test
+    @DisplayName("CP-012: Approve pending location override and activate effective price")
+    void testApproveLocationOverride_HappyPath() throws Exception {
+        UUID locationId = UUID.randomUUID();
+        UUID productId = createProductAndReturnId("CP-012 Product");
+        UUID createdByUserId = UUID.randomUUID();
+        UUID approverUserId = UUID.randomUUID();
+
+        upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+        Map<String, Object> createdOverride = createLocationOverrideAndReturnResponse(
+                locationId, productId, createdByUserId, 100.00, 50.00, 88.00, "ROLE_ADMIN");
+
+        UUID overrideId = UUID.fromString((String) createdOverride.get("overrideId"));
+        Long version = ((Number) createdOverride.get("version")).longValue();
+
+        mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides/{overrideId}/approve", overrideId), "ROLE_ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(approvalDecisionPayload(version, approverUserId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.approvedByUserId").value(approverUserId.toString()));
+
+        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overrideStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.effectivePrice").value(88.0));
+    }
+
+    @Test
+    @DisplayName("CP-013: Reject pending location override and persist rejection metadata")
+    void testRejectLocationOverride_HappyPath() throws Exception {
+        UUID locationId = UUID.randomUUID();
+        UUID productId = createProductAndReturnId("CP-013 Product");
+        UUID createdByUserId = UUID.randomUUID();
+        UUID approverUserId = UUID.randomUUID();
+
+        upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+        Map<String, Object> createdOverride = createLocationOverrideAndReturnResponse(
+                locationId, productId, createdByUserId, 100.00, 50.00, 88.00, "ROLE_ADMIN");
+
+        UUID overrideId = UUID.fromString((String) createdOverride.get("overrideId"));
+        Long version = ((Number) createdOverride.get("version")).longValue();
+
+        mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides/{overrideId}/reject", overrideId), "ROLE_ADMIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(rejectionDecisionPayload(version, approverUserId, "THRESHOLD_EXCEEDED",
+                        "Needs regional approval review")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectedBy").value(approverUserId.toString()))
+                .andExpect(jsonPath("$.rejectionReasonCode").value("THRESHOLD_EXCEEDED"));
+    }
+
     // ===============================================
     // VALIDATION ERROR SCENARIOS
     // ===============================================
@@ -242,6 +344,86 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 .andExpect(status().isForbidden());
         }
 
+        @Test
+        @DisplayName("VE-010: Hard guardrail minimum margin violation returns 400")
+        void testCreateLocationOverride_MinMarginViolation() throws Exception {
+                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("VE-010 Product");
+
+                upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+
+                mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                        .content(locationOverridePayload(locationId, productId, UUID.randomUUID(), 100.00, 70.00, 75.00)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("MIN_MARGIN_VIOLATION")));
+        }
+
+        @Test
+        @DisplayName("VE-011: Hard guardrail max discount violation returns 400")
+        void testCreateLocationOverride_MaxDiscountViolation() throws Exception {
+                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("VE-011 Product");
+
+                upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+
+                mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(locationOverridePayload(locationId, productId, UUID.randomUUID(), 100.00, 50.00, 70.00)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("MAX_DISCOUNT_EXCEEDED")));
+        }
+
+        @Test
+        @DisplayName("VE-012: Invalid product for location override returns 404")
+        void testCreateLocationOverride_ProductNotFound() throws Exception {
+                UUID locationId = UUID.randomUUID();
+
+                upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+
+                mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(locationOverridePayload(locationId, UUID.randomUUID(), UUID.randomUUID(), 100.00, 50.00, 95.00)))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("PRODUCT_NOT_FOUND")));
+        }
+
+        @Test
+        @DisplayName("VE-013: Unauthorized role cannot create location override")
+        void testCreateLocationOverride_Forbidden() throws Exception {
+                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("VE-013 Product");
+
+                upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+
+                mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"), "ROLE_CATALOG_VIEW")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(locationOverridePayload(locationId, productId, UUID.randomUUID(), 100.00, 50.00, 95.00)))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("VE-014: Reject override requires rejection notes")
+        void testRejectLocationOverride_MissingNotes() throws Exception {
+                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("VE-014 Product");
+                UUID createdByUserId = UUID.randomUUID();
+                UUID approverUserId = UUID.randomUUID();
+
+                upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+                Map<String, Object> createdOverride = createLocationOverrideAndReturnResponse(
+                                locationId, productId, createdByUserId, 100.00, 50.00, 88.00, "ROLE_ADMIN");
+
+                UUID overrideId = UUID.fromString((String) createdOverride.get("overrideId"));
+                Long version = ((Number) createdOverride.get("version")).longValue();
+
+                mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides/{overrideId}/reject", overrideId), "ROLE_ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(rejectionDecisionPayload(version, approverUserId, "THRESHOLD_EXCEEDED", "")))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("rejectionNotes")));
+        }
+
     // ===============================================
     // IDEMPOTENCY SCENARIOS
     // ===============================================
@@ -290,6 +472,27 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
+    }
+
+    @Test
+    @DisplayName("ID-004: Repeated effective price lookup returns stable payload")
+    void testEffectivePrice_IdempotentRead() throws Exception {
+        UUID locationId = UUID.randomUUID();
+        UUID productId = createProductAndReturnId("ID-004 Product");
+
+        upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+        createLocationOverrideAndReturnResponse(locationId, productId, UUID.randomUUID(), 100.00, 50.00, 95.00,
+                "ROLE_ADMIN");
+
+        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overrideStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.effectivePrice").value(95.0));
+
+        mockMvc.perform(withAuth(get("/v1/products/pricing/effective-price/{locationId}/{productId}", locationId, productId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overrideStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.effectivePrice").value(95.0));
     }
 
     // ===============================================
@@ -351,6 +554,63 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
         }
 
+            @Test
+            @DisplayName("CC-004: Approve override with stale version returns 409")
+            void testApproveLocationOverride_StaleVersionConflict() throws Exception {
+                UUID locationId = UUID.randomUUID();
+                UUID productId = createProductAndReturnId("CC-004 Product");
+                UUID createdByUserId = UUID.randomUUID();
+                UUID approverUserId = UUID.randomUUID();
+
+                upsertGuardrailPolicy(locationId, BigDecimal.valueOf(15), BigDecimal.valueOf(25), BigDecimal.valueOf(10));
+                Map<String, Object> createdOverride = createLocationOverrideAndReturnResponse(
+                        locationId, productId, createdByUserId, 100.00, 50.00, 88.00, "ROLE_ADMIN");
+
+                UUID overrideId = UUID.fromString((String) createdOverride.get("overrideId"));
+                Long version = ((Number) createdOverride.get("version")).longValue();
+
+                mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides/{overrideId}/approve", overrideId), "ROLE_ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(approvalDecisionPayload(version + 1, approverUserId)))
+                        .andExpect(status().isConflict());
+            }
+
+            private UUID createProductAndReturnId(String name) throws Exception {
+                MvcResult result = mockMvc.perform(withAuth(post("/v1/catalog-items/{type}", "product"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(catalogProductPayload(name)))
+                        .andExpect(status().isCreated())
+                        .andReturn();
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+                return UUID.fromString((String) response.get("id"));
+            }
+
+            private void upsertGuardrailPolicy(UUID locationId, BigDecimal minMarginPercent, BigDecimal maxDiscountPercent,
+                    BigDecimal autoApprovalThresholdPercent) throws Exception {
+                mockMvc.perform(withAuth(post("/v1/products/pricing/guardrail-policies"), "ROLE_ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(guardrailPolicyPayload(locationId, minMarginPercent, maxDiscountPercent,
+                                autoApprovalThresholdPercent)))
+                        .andExpect(status().isOk());
+            }
+
+            private Map<String, Object> createLocationOverrideAndReturnResponse(UUID locationId, UUID productId,
+                    UUID createdByUserId, double basePrice, double cost, double overridePrice, String authorities)
+                    throws Exception {
+                MvcResult result = mockMvc.perform(withAuth(post("/v1/products/pricing/location-overrides"), authorities)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(locationOverridePayload(locationId, productId, createdByUserId, basePrice, cost,
+                                overridePrice)))
+                        .andExpect(status().isCreated())
+                        .andReturn();
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+                return response;
+            }
+
     private UUID createCatalogAndReturnId(String name, String description) throws Exception {
         MvcResult result = mockMvc.perform(withAuth(post("/v1/catalogs"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -367,6 +627,49 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         return objectMapper.writeValueAsString(Map.of(
                 "name", name,
                 "description", description));
+    }
+
+    private String catalogProductPayload(String name) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "name", name,
+                "shortDescription", name + " short description",
+                "longDescription", name + " long description",
+                "sku", "SKU-" + UUID.randomUUID()));
+    }
+
+    private String guardrailPolicyPayload(UUID locationId, BigDecimal minMarginPercent, BigDecimal maxDiscountPercent,
+            BigDecimal autoApprovalThresholdPercent) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "scopeId", locationId,
+                "minMarginPercent", minMarginPercent,
+                "maxDiscountPercent", maxDiscountPercent,
+                "autoApprovalThresholdPercent", autoApprovalThresholdPercent));
+    }
+
+    private String locationOverridePayload(UUID locationId, UUID productId, UUID createdByUserId,
+            double basePrice, double cost, double overridePrice) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "locationId", locationId,
+                "productId", productId,
+                "basePrice", basePrice,
+                "cost", cost,
+                "overridePrice", overridePrice,
+                "createdByUserId", createdByUserId));
+    }
+
+    private String approvalDecisionPayload(Long version, UUID actorUserId) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "version", version,
+                "actorUserId", actorUserId));
+    }
+
+    private String rejectionDecisionPayload(Long version, UUID actorUserId,
+            String rejectionReasonCode, String rejectionNotes) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "version", version,
+                "actorUserId", actorUserId,
+                "rejectionReasonCode", rejectionReasonCode,
+                "rejectionNotes", rejectionNotes));
     }
 
     private void createSupplierItemCost(UUID supplierId, UUID itemId) throws Exception {
