@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,9 +42,8 @@ public class ItemCostController {
     @EmitEvent(id = "CATALOG_ITEM_COST_STANDARD_UPDATE", apiVersion = "1")
     public ResponseEntity<ItemCostsDto> updateStandardCost(
             @Parameter(required = true) @PathVariable UUID itemId,
-            @Valid @RequestBody UpdateStandardCostRequestDto request,
-            @RequestHeader(value = "X-User", required = false, defaultValue = "system") String actor) {
-        return ResponseEntity.ok(itemCostService.updateStandardCost(itemId, request, actor));
+            @Valid @RequestBody UpdateStandardCostRequestDto request) {
+        return ResponseEntity.ok(itemCostService.updateStandardCost(itemId, request));
     }
 
     @GetMapping("/{itemId}/costs")

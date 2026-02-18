@@ -13,6 +13,7 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ItemCostAuditRepository;
 import com.positivity.catalog.internal.repository.ItemCostRepository;
 import com.positivity.catalog.service.ItemCostService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -38,8 +39,7 @@ public class ItemCostServiceImpl implements ItemCostService {
 
     @Override
     @Transactional
-    public ItemCostsDto updateStandardCost(@NonNull UUID itemId, @NonNull UpdateStandardCostRequestDto request,
-            @NonNull String actor) {
+    public ItemCostsDto updateStandardCost(@NonNull UUID itemId, @NonNull UpdateStandardCostRequestDto request) {
         if (request.getReasonCode() == null || request.getReasonCode().isBlank()) {
             throw new CatalogValidationException("reasonCode is required.");
         }
@@ -55,6 +55,7 @@ public class ItemCostServiceImpl implements ItemCostService {
         itemCost.setStandardCost(newValue);
         itemCostRepository.save(itemCost);
 
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         itemCostAuditRepository.save(buildAudit(itemId, CostType.STANDARD, oldValue, newValue,
                 new AuditSource(ChangeSourceType.MANUAL, "MANUAL"), actor, request.getReasonCode()));
 
@@ -121,10 +122,6 @@ public class ItemCostServiceImpl implements ItemCostService {
                 new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), "system", null));
         itemCostAuditRepository.save(buildAudit(event.getItemId(), CostType.AVERAGE, oldAverage, newAverage,
                 new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), "system", null));
-    }
-
-    public void rejectManualSystemManagedFieldUpdate() {
-        throw new CatalogForbiddenOperationException("This field is system-managed and cannot be manually updated");
     }
 
     private ItemCostEntity initializeItemCost(UUID itemId) {

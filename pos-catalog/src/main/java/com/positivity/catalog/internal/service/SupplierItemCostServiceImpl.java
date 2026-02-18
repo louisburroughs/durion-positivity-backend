@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SupplierItemCostServiceImpl implements SupplierItemCostService {
 
     private static final String NOT_FOUND_BY_ID = "Supplier item cost not found for id=";
+    private static final String DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE = "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.";
 
     private final SupplierItemCostRepository supplierItemCostRepository;
 
@@ -39,8 +41,7 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
                 request.getTiers());
         supplierItemCostRepository.findBySupplierIdAndItemId(request.getSupplierId(), request.getItemId())
                 .ifPresent(existing -> {
-                    throw new CatalogBusinessRuleException(
-                            "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.");
+                    throw duplicateSupplierItemCostException();
                 });
 
         SupplierItemCostEntity entity = new SupplierItemCostEntity();
@@ -50,7 +51,14 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
         entity.setBaseCost(request.getBaseCost());
         entity.setCostTiers(toTierEntities(request.getTiers()));
 
-        return toDto(supplierItemCostRepository.save(entity));
+        try {
+            return toDto(supplierItemCostRepository.save(entity));
+        } catch (DataIntegrityViolationException ex) {
+            if (isDuplicateSupplierItemCostViolation(ex)) {
+                throw duplicateSupplierItemCostException();
+            }
+            throw ex;
+        }
     }
 
     @Override
@@ -74,8 +82,7 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
         supplierItemCostRepository.findBySupplierIdAndItemId(request.getSupplierId(), request.getItemId())
                 .filter(found -> !found.getId().equals(id))
                 .ifPresent(found -> {
-                    throw new CatalogBusinessRuleException(
-                            "DUPLICATE_SUPPLIER_ITEM_COST: supplierId and itemId already have a cost structure.");
+                    throw duplicateSupplierItemCostException();
                 });
 
         existing.setSupplierId(request.getSupplierId());
@@ -208,5 +215,30 @@ public class SupplierItemCostServiceImpl implements SupplierItemCostService {
 
     private String normalizeCurrencyCode(String currencyCode) {
         return currencyCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private CatalogBusinessRuleException duplicateSupplierItemCostException() {
+        return new CatalogBusinessRuleException(DUPLICATE_SUPPLIER_ITEM_COST_MESSAGE);
+    }
+
+    private boolean isDuplicateSupplierItemCostViolation(DataIntegrityViolationException ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null) {
+                String normalized = message.toLowerCase(Locale.ROOT);
+                if (normalized.contains("uk_supplier_item_cost_supplier_item")) {
+                    return true;
+                }
+                if (normalized.contains("supplier_item_cost")
+                        && normalized.contains("supplier_id")
+                        && normalized.contains("item_id")
+                        && (normalized.contains("unique") || normalized.contains("duplicate"))) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

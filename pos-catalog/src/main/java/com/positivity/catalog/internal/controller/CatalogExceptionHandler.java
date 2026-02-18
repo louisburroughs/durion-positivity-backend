@@ -22,7 +22,7 @@ public class CatalogExceptionHandler {
 
     @ExceptionHandler(CatalogForbiddenOperationException.class)
     public ResponseEntity<String> handleForbidden(CatalogForbiddenOperationException ex) {
-        return ResponseEntity.badRequest().body("This field is system-managed and cannot be manually updated");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
     }
 
     @ExceptionHandler(CatalogValidationException.class)

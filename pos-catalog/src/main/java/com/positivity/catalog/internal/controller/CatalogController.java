@@ -10,10 +10,10 @@ import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ServiceDto;
+import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.ProductDetailService;
 import com.positivity.catalog.service.ProductLifecycleService;
-import com.positivity.catalog.service.CatalogService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
@@ -116,20 +117,10 @@ public class CatalogController {
     public ResponseEntity<ProductDetailView> getProductDetailView(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
             @Parameter(description = "Location/store ID for location-specific data", required = true) @RequestParam(name = "location_id") UUID locationId) {
-
-        log.info("Product detail view requested: productId={}, locationId={}", productId, locationId);
-        if (locationId == null) {
-            log.warn("Invalid location_id provided: {}", locationId);
-            return ResponseEntity.badRequest().build();
-        }
-
         ProductDetailView productDetail = productDetailService.getProductDetail(productId, locationId);
         if (productDetail == null) {
-            log.warn("Product not found: productId={}", productId);
-            return ResponseEntity.notFound().build();
+            throw new CatalogNotFoundException("Product not found: " + productId);
         }
-
-        log.debug("Product detail view generated with confidence={}", productDetail.getConfidence());
         return ResponseEntity.ok(productDetail);
     }
 
