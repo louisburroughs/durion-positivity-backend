@@ -30,7 +30,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     @Test
     @DisplayName("CP-001: Create catalog with valid payload")
     void testCreateCatalog_HappyPath() throws Exception {
-        mockMvc.perform(withAuth(post("/v1/products/catalog"))
+        mockMvc.perform(withAuth(post("/v1/catalogs"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(catalogPayload("Retail Catalog", "Primary retail catalog")))
                 .andExpect(status().isCreated())
@@ -44,7 +44,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     void testGetCatalogById_HappyPath() throws Exception {
         UUID catalogId = createCatalogAndReturnId("Service Catalog", "Catalog for services");
 
-        mockMvc.perform(withAuth(get("/v1/products/catalog/{catalogId}", catalogId)))
+        mockMvc.perform(withAuth(get("/v1/catalogs/{catalogId}", catalogId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(catalogId.toString()))
                 .andExpect(jsonPath("$.name").value("Service Catalog"));
@@ -55,7 +55,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     void testUpdateCatalog_HappyPath() throws Exception {
         UUID catalogId = createCatalogAndReturnId("Initial Name", "Initial description");
 
-        mockMvc.perform(withAuth(put("/v1/products/catalog/{catalogId}", catalogId))
+        mockMvc.perform(withAuth(put("/v1/catalogs/{catalogId}", catalogId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(catalogPayload("Updated Name", "Updated description")))
                 .andExpect(status().isOk())
@@ -69,17 +69,17 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     void testDeleteCatalog_HappyPath() throws Exception {
         UUID catalogId = createCatalogAndReturnId("Delete Me", "To be deleted");
 
-        mockMvc.perform(withAuth(delete("/v1/products/catalog/{catalogId}", catalogId)))
+        mockMvc.perform(withAuth(delete("/v1/catalogs/{catalogId}", catalogId)))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(withAuth(get("/v1/products/catalog/{catalogId}", catalogId)))
+        mockMvc.perform(withAuth(get("/v1/catalogs/{catalogId}", catalogId)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("CP-005: Substitutes endpoint returns not implemented")
     void testGetSubstitutes_NotImplemented() throws Exception {
-        mockMvc.perform(withAuth(get("/v1/products/substitutes/{productId}", UUID.randomUUID())))
+        mockMvc.perform(withAuth(get("/v1/products/{productId}/substitutes", UUID.randomUUID())))
                 .andExpect(status().isNotImplemented());
     }
 
@@ -89,7 +89,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         UUID supplierId = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
 
-        mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+        mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validSupplierItemCostPayload(supplierId, itemId)))
                 .andExpect(status().isCreated())
@@ -111,7 +111,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         UUID itemId = UUID.randomUUID();
         createSupplierItemCost(supplierId, itemId);
 
-        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+        mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()))
@@ -126,7 +126,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         createSupplierItemCost(supplierId, itemId);
         Long currentVersion = getSupplierItemCostVersion(supplierId, itemId);
 
-        mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
+        mockMvc.perform(withAuth(put("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updatedSupplierItemCostPayload(currentVersion)))
                 .andExpect(status().isOk())
@@ -143,10 +143,10 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         UUID itemId = UUID.randomUUID();
         createSupplierItemCost(supplierId, itemId);
 
-        mockMvc.perform(withAuth(delete("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+        mockMvc.perform(withAuth(delete("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+        mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
                 .andExpect(status().isNotFound());
     }
 
@@ -157,14 +157,14 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     @Test
     @DisplayName("VE-001: Unknown catalog id returns 404")
     void testGetCatalogById_NotFound() throws Exception {
-        mockMvc.perform(withAuth(get("/v1/products/catalog/{catalogId}", UUID.randomUUID())))
+        mockMvc.perform(withAuth(get("/v1/catalogs/{catalogId}", UUID.randomUUID())))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("VE-002: Update non-existent catalog returns 404")
     void testUpdateCatalog_NotFound() throws Exception {
-        mockMvc.perform(withAuth(put("/v1/products/catalog/{catalogId}", UUID.randomUUID()))
+        mockMvc.perform(withAuth(put("/v1/catalogs/{catalogId}", UUID.randomUUID()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(catalogPayload("Missing", "Missing")))
                 .andExpect(status().isNotFound());
@@ -173,14 +173,14 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     @Test
     @DisplayName("VE-003: Delete non-existent catalog returns 404")
     void testDeleteCatalog_NotFound() throws Exception {
-        mockMvc.perform(withAuth(delete("/v1/products/catalog/{catalogId}", UUID.randomUUID())))
+        mockMvc.perform(withAuth(delete("/v1/catalogs/{catalogId}", UUID.randomUUID())))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("VE-004: Unsupported item type returns 400")
     void testUnsupportedType_BadRequest() throws Exception {
-        mockMvc.perform(withAuth(delete("/v1/products/{type}/{catalogId}", "unsupported", UUID.randomUUID())))
+        mockMvc.perform(withAuth(delete("/v1/catalog-items/{type}/{catalogId}", "unsupported", UUID.randomUUID())))
                 .andExpect(status().isBadRequest());
     }
 
@@ -190,7 +190,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(overlappingTierPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
@@ -203,7 +203,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(gapTierPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
@@ -216,7 +216,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidUnitCostPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
@@ -226,7 +226,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         @Test
         @DisplayName("VE-008: Missing supplier-item cost returns 404")
         void testGetSupplierItemCost_NotFound() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", UUID.randomUUID(), UUID.randomUUID())))
+                mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", UUID.randomUUID(), UUID.randomUUID())))
                                 .andExpect(status().isNotFound());
         }
 
@@ -236,7 +236,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"), "ROLE_CATALOG_VIEW")
+                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"), "ROLE_CATALOG_VIEW")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(validSupplierItemCostPayload(supplierId, itemId)))
                                 .andExpect(status().isForbidden());
@@ -251,12 +251,12 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     void testGetCatalog_IdempotentRead() throws Exception {
         UUID catalogId = createCatalogAndReturnId("Stable Catalog", "Stable payload");
 
-        mockMvc.perform(withAuth(get("/v1/products/catalog/{catalogId}", catalogId)))
+        mockMvc.perform(withAuth(get("/v1/catalogs/{catalogId}", catalogId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(catalogId.toString()))
                 .andExpect(jsonPath("$.name").value("Stable Catalog"));
 
-        mockMvc.perform(withAuth(get("/v1/products/catalog/{catalogId}", catalogId)))
+        mockMvc.perform(withAuth(get("/v1/catalogs/{catalogId}", catalogId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(catalogId.toString()))
                 .andExpect(jsonPath("$.name").value("Stable Catalog"));
@@ -267,10 +267,10 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     void testDeleteCatalog_RepeatedRequest() throws Exception {
         UUID catalogId = createCatalogAndReturnId("Delete Twice", "Delete scenario");
 
-        mockMvc.perform(withAuth(delete("/v1/products/catalog/{catalogId}", catalogId)))
+        mockMvc.perform(withAuth(delete("/v1/catalogs/{catalogId}", catalogId)))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(withAuth(delete("/v1/products/catalog/{catalogId}", catalogId)))
+        mockMvc.perform(withAuth(delete("/v1/catalogs/{catalogId}", catalogId)))
                 .andExpect(status().isNotFound());
     }
 
@@ -281,12 +281,12 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         UUID itemId = UUID.randomUUID();
         createSupplierItemCost(supplierId, itemId);
 
-        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+        mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
 
-        mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+        mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
@@ -301,13 +301,13 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     void testCatalogSequentialUpdates_PreserveIdentity() throws Exception {
         UUID catalogId = createCatalogAndReturnId("Version A", "First state");
 
-        mockMvc.perform(withAuth(put("/v1/products/catalog/{catalogId}", catalogId))
+        mockMvc.perform(withAuth(put("/v1/catalogs/{catalogId}", catalogId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(catalogPayload("Version B", "Second state")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(catalogId.toString()));
 
-        mockMvc.perform(withAuth(put("/v1/products/catalog/{catalogId}", catalogId))
+        mockMvc.perform(withAuth(put("/v1/catalogs/{catalogId}", catalogId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(catalogPayload("Version C", "Third state")))
                 .andExpect(status().isOk())
@@ -334,7 +334,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 createSupplierItemCost(supplierId, itemId);
                 Long versionAfterCreate = getSupplierItemCostVersion(supplierId, itemId);
 
-                mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
+                mockMvc.perform(withAuth(put("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(updatedSupplierItemCostPayload(versionAfterCreate)))
                                 .andExpect(status().isOk())
@@ -343,7 +343,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
                 Long versionAfterFirstUpdate = getSupplierItemCostVersion(supplierId, itemId);
 
-                mockMvc.perform(withAuth(put("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId))
+                mockMvc.perform(withAuth(put("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(validUpdatePayloadWithDifferentValues(versionAfterFirstUpdate)))
                                 .andExpect(status().isOk())
@@ -352,7 +352,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         }
 
     private UUID createCatalogAndReturnId(String name, String description) throws Exception {
-        MvcResult result = mockMvc.perform(withAuth(post("/v1/products/catalog"))
+        MvcResult result = mockMvc.perform(withAuth(post("/v1/catalogs"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(catalogPayload(name, description)))
                 .andExpect(status().isCreated())
@@ -370,7 +370,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     }
 
     private void createSupplierItemCost(UUID supplierId, UUID itemId) throws Exception {
-        mockMvc.perform(withAuth(post("/v1/products/costs/supplier-item"))
+        mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validSupplierItemCostPayload(supplierId, itemId)))
                 .andExpect(status().isCreated());
@@ -441,7 +441,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
     }
 
     private Long getSupplierItemCostVersion(UUID supplierId, UUID itemId) throws Exception {
-        MvcResult result = mockMvc.perform(withAuth(get("/v1/products/costs/supplier-item/{supplierId}/{itemId}", supplierId, itemId)))
+        MvcResult result = mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
                 .andExpect(status().isOk())
                 .andReturn();
 

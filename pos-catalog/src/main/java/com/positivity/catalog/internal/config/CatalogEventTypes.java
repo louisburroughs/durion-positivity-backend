@@ -43,9 +43,10 @@ public final class CatalogEventTypes {
                                                 "Approve pending location price override and activate effective price")
                                                 .build(),
                                 EventTypeRegistration.write("CATALOG_PRICE_OVERRIDE_REJECTED",
-                                                "Reject pending location price override with reason metadata").build());
+                                                "Reject pending location price override with reason metadata").build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_CREATE",
-                                                "Create supplier-item cost structure with optional volume tiers").build(),
+                                                "Create supplier-item cost structure with optional volume tiers")
+                                                .build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_UPDATE",
                                                 "Update supplier-item cost structure and volume tiers").build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_DELETE",
