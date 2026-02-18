@@ -33,11 +33,13 @@ public final class CatalogEventTypes {
                                                 "Set product lifecycle state with effective date").build(),
                                 EventTypeRegistration.write("CATALOG_PRODUCT_REPLACEMENT_ADD",
                                                 "Add replacement recommendation for a discontinued product").build(),
-                                EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_CREATE",
-                                                "Create supplier-item cost structure with optional volume tiers").build(),
-                                EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_UPDATE",
-                                                "Update supplier-item cost structure and volume tiers").build(),
-                                EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_DELETE",
-                                                "Delete supplier-item cost structure and all tiers").build());
+                                EventTypeRegistration.write("CATALOG_SUPPLIER_COST_CREATE",
+                                                "Create supplier item cost structure").build(),
+                                EventTypeRegistration.write("CATALOG_SUPPLIER_COST_UPDATE",
+                                                "Update supplier item cost structure").build(),
+                                EventTypeRegistration.write("CATALOG_SUPPLIER_COST_DELETE",
+                                                "Delete supplier item cost structure").build(),
+                                EventTypeRegistration.write("CATALOG_ITEM_COST_STANDARD_UPDATE",
+                                                "Manually update item standard cost").build());
         }
 }
