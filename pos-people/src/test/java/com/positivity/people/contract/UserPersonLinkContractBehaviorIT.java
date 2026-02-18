@@ -7,6 +7,10 @@ import org.springframework.http.MediaType;
 
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -86,7 +90,11 @@ class UserPersonLinkContractBehaviorIT extends BaseIntegrationTest {
 
         mockMvc.perform(withAuth(get("/v1/people/user-links/{personId}", personId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].personId").value(personId.toString()));
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[*].personId", everyItem(is(personId.toString()))))
+                .andExpect(jsonPath("$[*].userId", containsInAnyOrder(
+                        userIdOne.toString(),
+                        userIdTwo.toString())));
     }
 
     private UUID createPerson() throws Exception {

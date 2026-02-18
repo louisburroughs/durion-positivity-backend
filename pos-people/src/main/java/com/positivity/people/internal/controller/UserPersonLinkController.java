@@ -32,7 +32,7 @@ public class UserPersonLinkController {
         this.linkService = linkService;
     }
 
-    @PostMapping("/users/{userId}/link")
+    @PostMapping("/users/link")
     @EmitEvent(id = "PEOPLE_USER_LINK_CREATE", apiVersion = "1")
     @Operation(summary = "Link user to person", description = "Create a link between an authentication user and a person record")
     @ApiResponse(responseCode = "201", description = "Link created successfully", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
@@ -41,11 +41,9 @@ public class UserPersonLinkController {
     @ApiResponse(responseCode = "404", description = "Person not found")
     @ApiResponse(responseCode = "409", description = "User already linked to different person")
     public ResponseEntity<UserPersonLinkResponse> linkUserToPerson(
-            @Parameter(description = "User ID from authentication system", required = true) @PathVariable UUID userId,
             @Valid @RequestBody LinkUserToPersonRequest request) {
 
-        request.setUserId(userId);
-        boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(userId, request.getPersonId());
+        boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(request.getUserId(), request.getPersonId());
 
         UserPersonLinkResponse response = linkService.linkUserToPerson(request);
         return alreadyLinked ? ResponseEntity.ok(response) : ResponseEntity.status(HttpStatus.CREATED).body(response);

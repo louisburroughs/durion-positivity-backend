@@ -10,8 +10,16 @@ import org.jspecify.annotations.NonNull;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Entity representing a link between a user and a person.
+ * Enforces a unique constraint on userId to ensure one-to-one mapping between
+ * users and persons.
+ * Allows multiple links per person to support scenarios like multiple
+ * authentication methods.
+ */
 @Entity
-@Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "person_id" }))
+@Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = {
+        "user_id" }), indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
 @Getter
 @Setter
 public class UserPersonLink {
@@ -20,7 +28,7 @@ public class UserPersonLink {
     @Column(columnDefinition = "UUID")
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id", nullable = false, unique = true)
     @NonNull
     private UUID userId;
 

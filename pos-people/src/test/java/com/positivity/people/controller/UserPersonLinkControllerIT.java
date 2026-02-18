@@ -54,12 +54,11 @@ class UserPersonLinkControllerIT {
                                 createLinkRequestJson(userId, personId, "PRIMARY", "integration test"),
                                 authenticatedHeaders());
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                                "/v1/people/users/{userId}/link",
+                                "/v1/people/users/link",
                                 HttpMethod.POST,
                                 entity,
                                 new ParameterizedTypeReference<>() {
-                                },
-                                userId);
+                                });
 
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
                 assertThat(response.getBody()).isNotNull();
@@ -74,12 +73,11 @@ class UserPersonLinkControllerIT {
                                 createLinkRequestJson(userId, UUID.randomUUID(), "PRIMARY", null),
                                 authenticatedHeaders());
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                                "/v1/people/users/{userId}/link",
+                                "/v1/people/users/link",
                                 HttpMethod.POST,
                                 entity,
                                 new ParameterizedTypeReference<>() {
-                                },
-                                userId);
+                                });
 
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
                 assertThat(response.getBody()).isNotNull();
@@ -95,21 +93,19 @@ class UserPersonLinkControllerIT {
                                 authenticatedHeaders());
 
                 ResponseEntity<Map<String, Object>> firstResponse = restTemplate.exchange(
-                                "/v1/people/users/{userId}/link",
+                                "/v1/people/users/link",
                                 HttpMethod.POST,
                                 entity,
                                 new ParameterizedTypeReference<>() {
-                                },
-                                userId);
+                                });
                 assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
                 ResponseEntity<Map<String, Object>> secondResponse = restTemplate.exchange(
-                                "/v1/people/users/{userId}/link",
+                                "/v1/people/users/link",
                                 HttpMethod.POST,
                                 entity,
                                 new ParameterizedTypeReference<>() {
-                                },
-                                userId);
+                                });
 
                 assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
                 assertThat(secondResponse.getBody()).isNotNull();
@@ -123,18 +119,17 @@ class UserPersonLinkControllerIT {
                 HttpEntity<String> entity = new HttpEntity<>(invalidPayload,
                                 authenticatedHeaders());
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                                "/v1/people/users/{userId}/link",
+                                "/v1/people/users/link",
                                 HttpMethod.POST,
                                 entity,
                                 new ParameterizedTypeReference<>() {
-                                },
-                                "user-invalid");
+                                });
 
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
                 assertThat(response.getBody()).isNotNull();
                 assertThat(response.getBody()).containsEntry("status", 400);
                 assertThat(response.getBody()).containsEntry("error", "Bad Request");
-                assertThat(response.getBody()).containsEntry("path", "/v1/people/users/user-invalid/link");
+                assertThat(response.getBody()).containsEntry("path", "/v1/people/users/link");
         }
 
         @Test
@@ -270,12 +265,11 @@ class UserPersonLinkControllerIT {
                                 createLinkRequestJson(userId, personId, "PRIMARY", null),
                                 authenticatedHeaders());
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                                "/v1/people/users/{userId}/link",
+                                "/v1/people/users/link",
                                 HttpMethod.POST,
                                 entity,
                                 new ParameterizedTypeReference<>() {
-                                },
-                                userId);
+                                });
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         }
 
