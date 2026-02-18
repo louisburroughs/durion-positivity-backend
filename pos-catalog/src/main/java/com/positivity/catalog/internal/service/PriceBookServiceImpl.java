@@ -32,10 +32,13 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class PriceBookServiceImpl implements PriceBookService {
@@ -46,16 +49,19 @@ public class PriceBookServiceImpl implements PriceBookService {
     private final PriceBookRuleRepository priceBookRuleRepository;
     private final ProductRepository productRepository;
     private final ProductMsrpRepository productMsrpRepository;
+    private final ObjectMapper objectMapper;
 
     public PriceBookServiceImpl(
             PriceBookRepository priceBookRepository,
             PriceBookRuleRepository priceBookRuleRepository,
             ProductRepository productRepository,
-            ProductMsrpRepository productMsrpRepository) {
+            ProductMsrpRepository productMsrpRepository,
+            ObjectMapper objectMapper) {
         this.priceBookRepository = priceBookRepository;
         this.priceBookRuleRepository = priceBookRuleRepository;
         this.productRepository = productRepository;
         this.productMsrpRepository = productMsrpRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -193,7 +199,7 @@ public class PriceBookServiceImpl implements PriceBookService {
 
             var winner = pickWinner(candidates, product);
             if (winner != null) {
-                return fromRule(winner);
+                return fromRule(winner, request);
             }
         }
 
@@ -214,8 +220,8 @@ public class PriceBookServiceImpl implements PriceBookService {
                 });
     }
 
-    private ResolvePriceResponseDto fromRule(PriceBookRuleEntity rule) {
-        PricePayload payload = parsePricePayload(rule.getPricingLogic());
+    private ResolvePriceResponseDto fromRule(PriceBookRuleEntity rule, ResolvePriceRequestDto request) {
+        PricePayload payload = parsePricePayload(rule.getPricingLogic(), request.getCurrency());
         ResolvePriceResponseDto dto = new ResolvePriceResponseDto();
         dto.setResolvedAmount(payload.amount().setScale(4, RoundingMode.HALF_UP).toPlainString());
         dto.setCurrency(payload.currency());
@@ -224,51 +230,71 @@ public class PriceBookServiceImpl implements PriceBookService {
         return dto;
     }
 
-    private PricePayload parsePricePayload(String pricingLogic) {
-        String compact = pricingLogic.replace(" ", "");
-        String amountToken = extractJsonValue(compact, "amount");
-        if (amountToken == null) {
-            amountToken = extractJsonValue(compact, "fixedAmount");
+    private PricePayload parsePricePayload(String pricingLogic, String requestedCurrency) {
+        try {
+            JsonNode root = objectMapper.readTree(pricingLogic);
+            JsonNode amountsNode = root.path("amounts");
+            if (!amountsNode.isObject() || amountsNode.isEmpty()) {
+                throw new CatalogValidationException("pricingLogic.amounts must be a non-empty object.");
+            }
+
+            String selectedCurrency = selectConfiguredCurrency(
+                    amountsNode,
+                    requestedCurrency,
+                    root.path("defaultCurrency").asText(null));
+
+            JsonNode amountNode = amountsNode.get(selectedCurrency);
+            if (amountNode == null || amountNode.isNull()) {
+                throw new CatalogValidationException("No amount configured for currency: " + selectedCurrency);
+            }
+
+            BigDecimal amount = new BigDecimal(amountNode.asText());
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new CatalogValidationException("Resolved amount must be positive.");
+            }
+
+            return new PricePayload(amount, selectedCurrency);
+        } catch (CatalogValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CatalogValidationException(
+                    "pricingLogic must be valid JSON using {\"amounts\": {\"USD\": \"10.00\"}, \"defaultCurrency\": \"USD\"}.");
         }
-        if (amountToken == null) {
-            throw new CatalogValidationException("pricingLogic must include amount or fixedAmount.");
-        }
-        String currencyToken = extractJsonValue(compact, "currency");
-        if (currencyToken == null) {
-            currencyToken = "USD";
-        }
-        BigDecimal amount = new BigDecimal(amountToken);
-        return new PricePayload(amount, currencyToken);
     }
 
-    private String extractJsonValue(String json, String field) {
-        String quoted = "\"" + field + "\"";
-        int fieldIndex = json.indexOf(quoted);
-        if (fieldIndex < 0) {
-            return null;
-        }
-        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
-        if (colonIndex < 0) {
-            return null;
-        }
-        int startIndex = colonIndex + 1;
-        if (startIndex >= json.length()) {
-            return null;
-        }
-
-        if (json.charAt(startIndex) == '"') {
-            int endQuote = json.indexOf('"', startIndex + 1);
-            if (endQuote < 0) {
-                return null;
+    private String selectConfiguredCurrency(JsonNode amountsNode, String requestedCurrency, String defaultCurrency) {
+        if (requestedCurrency != null && !requestedCurrency.isBlank()) {
+            String normalizedRequested = normalizeCurrency(requestedCurrency, "request.currency");
+            if (!amountsNode.has(normalizedRequested)) {
+                throw new CatalogValidationException(
+                        "Requested currency is not configured in pricingLogic.amounts: " + normalizedRequested);
             }
-            return json.substring(startIndex + 1, endQuote);
+            return normalizedRequested;
         }
 
-        int end = startIndex;
-        while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}') {
-            end++;
+        if (defaultCurrency != null && !defaultCurrency.isBlank()) {
+            String normalizedDefault = normalizeCurrency(defaultCurrency, "pricingLogic.defaultCurrency");
+            if (!amountsNode.has(normalizedDefault)) {
+                throw new CatalogValidationException(
+                        "pricingLogic.defaultCurrency is not present in pricingLogic.amounts: " + normalizedDefault);
+            }
+            return normalizedDefault;
         }
-        return json.substring(startIndex, end);
+
+        if (amountsNode.size() == 1) {
+            return normalizeCurrency(amountsNode.fieldNames().next(), "pricingLogic.amounts key");
+        }
+
+        throw new CatalogValidationException(
+                "request.currency is required when pricingLogic.amounts has multiple currencies and no defaultCurrency.");
+    }
+
+    private String normalizeCurrency(String currency, String fieldName) {
+        String normalized = currency == null ? null : currency.trim().toUpperCase(Locale.ROOT);
+        if (normalized == null || normalized.length() != 3) {
+            throw new CatalogValidationException(fieldName + " must be a 3-letter ISO currency code.");
+        }
+        return normalized;
     }
 
     private PriceBookRuleEntity pickWinner(List<PriceBookRuleEntity> candidates, ProductEntity product) {
@@ -304,7 +330,8 @@ public class PriceBookServiceImpl implements PriceBookService {
     private boolean isRuleApplicable(PriceBookRuleEntity rule, ResolvePriceRequestDto request, ProductEntity product) {
         boolean targetMatch = switch (rule.getTargetType()) {
             case SKU -> rule.getTargetId() != null && rule.getTargetId().equals(request.getProductId());
-            // TODO(CAP-167): replace direct category-id equality with taxonomy-aware traversal when category hierarchy data is available.
+            // TODO(CAP-167): replace direct category-id equality with taxonomy-aware
+            // traversal when category hierarchy data is available.
             case CATEGORY -> rule.getTargetId() != null && product.getCategory() != null
                     && rule.getTargetId().equals(product.getCategory().getId());
             case GLOBAL -> true;
@@ -352,8 +379,9 @@ public class PriceBookServiceImpl implements PriceBookService {
         if (request.getScope() == null) {
             throw new CatalogValidationException("scope is required.");
         }
-        if (request.getScope() == PriceBookScope.LOCATION && request.getScopeId() == null) {
-            throw new CatalogValidationException("scopeId is required for LOCATION scope.");
+        if ((request.getScope() == PriceBookScope.LOCATION
+                || request.getScope() == PriceBookScope.CUSTOMER_TIER) && request.getScopeId() == null) {
+            throw new CatalogValidationException("scopeId is required for LOCATION and CUSTOMER_TIER scopes.");
         }
     }
 

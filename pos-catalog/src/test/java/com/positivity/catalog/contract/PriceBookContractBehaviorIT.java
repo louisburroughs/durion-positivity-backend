@@ -2,6 +2,7 @@ package com.positivity.catalog.contract;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,6 +27,36 @@ class PriceBookContractBehaviorIT extends BaseIntegrationTest {
     private CatalogService catalogService;
 
     @Test
+    @DisplayName("VE-167-011: Reject CUSTOMER_TIER price book without scopeId")
+    void rejectCustomerTierPriceBookWithoutScopeId() throws Exception {
+        mockMvc.perform(withAuth(post("/v1/products/price-books"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "name", "CAP167 Customer Tier Missing Scope",
+                        "scope", "CUSTOMER_TIER",
+                        "isDefault", false))))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "scopeId is required for LOCATION and CUSTOMER_TIER scopes.")));
+    }
+
+    @Test
+    @DisplayName("CP-167-013: Create CUSTOMER_TIER price book when scopeId is provided")
+    void createCustomerTierPriceBookWithScopeId() throws Exception {
+        UUID tierId = UUID.randomUUID();
+        mockMvc.perform(withAuth(post("/v1/products/price-books"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "name", "CAP167 Customer Tier Book",
+                        "scope", "CUSTOMER_TIER",
+                        "scopeId", tierId.toString(),
+                        "isDefault", false))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.scope").value("CUSTOMER_TIER"))
+                .andExpect(jsonPath("$.scopeId").value(tierId.toString()));
+    }
+
+    @Test
     @DisplayName("CP-167-010: Create price book, add global rule, and resolve rule price")
     void resolvePriceFromGlobalRule() throws Exception {
         UUID productId = createProductAndReturnId("CAP167 PriceBook Product A");
@@ -35,7 +66,7 @@ class PriceBookContractBehaviorIT extends BaseIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                         "targetType", "GLOBAL",
-                        "pricingLogic", "{\"amount\":\"59.9900\",\"currency\":\"USD\"}",
+                        "pricingLogic", "{\"amounts\":{\"USD\":\"59.9900\"},\"defaultCurrency\":\"USD\"}",
                         "conditionType", "NONE",
                         "priority", 10,
                         "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
@@ -63,7 +94,7 @@ class PriceBookContractBehaviorIT extends BaseIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                         "targetType", "GLOBAL",
-                        "pricingLogic", "{\"amount\":\"49.9900\",\"currency\":\"USD\"}",
+                        "pricingLogic", "{\"amounts\":{\"USD\":\"49.9900\"},\"defaultCurrency\":\"USD\"}",
                         "conditionType", "NONE",
                         "priority", 1,
                         "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
@@ -75,7 +106,7 @@ class PriceBookContractBehaviorIT extends BaseIntegrationTest {
                 .content(objectMapper.writeValueAsString(Map.of(
                         "targetType", "SKU",
                         "targetId", productId.toString(),
-                        "pricingLogic", "{\"amount\":\"39.9900\",\"currency\":\"USD\"}",
+                        "pricingLogic", "{\"amounts\":{\"USD\":\"39.9900\"},\"defaultCurrency\":\"USD\"}",
                         "conditionType", "NONE",
                         "priority", 1,
                         "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
@@ -104,7 +135,7 @@ class PriceBookContractBehaviorIT extends BaseIntegrationTest {
                 .content(objectMapper.writeValueAsString(Map.of(
                         "targetType", "SKU",
                         "targetId", productId.toString(),
-                        "pricingLogic", "{\"amount\":\"29.9900\",\"currency\":\"USD\"}",
+                        "pricingLogic", "{\"amounts\":{\"USD\":\"29.9900\"},\"defaultCurrency\":\"USD\"}",
                         "conditionType", "NONE",
                         "priority", 5,
                         "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
@@ -117,13 +148,44 @@ class PriceBookContractBehaviorIT extends BaseIntegrationTest {
                 .content(objectMapper.writeValueAsString(Map.of(
                         "targetType", "SKU",
                         "targetId", productId.toString(),
-                        "pricingLogic", "{\"amount\":\"24.9900\",\"currency\":\"USD\"}",
+                        "pricingLogic", "{\"amounts\":{\"USD\":\"24.9900\"},\"defaultCurrency\":\"USD\"}",
                         "conditionType", "NONE",
                         "priority", 10,
                         "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).toString(),
                         "effectiveEndAt", OffsetDateTime.now(ZoneOffset.UTC).plusDays(8).toString(),
                         "createdByUserId", UUID.randomUUID().toString()))))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("CP-167-012: Resolve price using requested currency from multi-currency rule")
+    void resolvePriceWithRequestedCurrency() throws Exception {
+        UUID productId = createProductAndReturnId("CAP167 PriceBook Product E");
+        String priceBookId = createPriceBook("CAP167 Multi Currency Book", "COMPANY_DEFAULT", null, true);
+
+        mockMvc.perform(withAuth(post("/v1/products/price-books/{priceBookId}/rules", priceBookId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "targetType", "GLOBAL",
+                        "pricingLogic",
+                        "{\"amounts\":{\"USD\":\"59.9900\",\"CAD\":\"79.9900\"},\"defaultCurrency\":\"USD\"}",
+                        "conditionType", "NONE",
+                        "priority", 10,
+                        "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
+                        "createdByUserId", UUID.randomUUID().toString()))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "productId", productId.toString(),
+                        "priceBookId", priceBookId,
+                        "currency", "cad",
+                        "asOf", LocalDate.now().toString())))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
+                .andExpect(jsonPath("$.resolvedAmount").value("79.9900"))
+                .andExpect(jsonPath("$.currency").value("CAD"));
     }
 
     @Test
@@ -146,7 +208,7 @@ class PriceBookContractBehaviorIT extends BaseIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "targetType", "GLOBAL",
-                                "pricingLogic", "{\"amount\":\"44.4400\",\"currency\":\"USD\"}",
+                                "pricingLogic", "{\"amounts\":{\"USD\":\"44.4400\"},\"defaultCurrency\":\"USD\"}",
                                 "conditionType", "NONE",
                                 "priority", 2,
                                 "effectiveStartAt", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
