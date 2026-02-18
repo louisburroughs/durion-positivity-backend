@@ -25,8 +25,16 @@
             "description": "API for products, lifecycle, and pricing"
         },
         {
+            "name": "Product MSRP API",
+            "description": "Manage MSRP values with effective dates"
+        },
+        {
             "name": "Catalog API",
             "description": "API for managing catalogs"
+        },
+        {
+            "name": "Price Book API",
+            "description": "Manage price books, pricing rules, and resolution"
         },
         {
             "name": "Catalog Items API",
@@ -65,20 +73,20 @@
                     }
                 ],
                 "responses": {
-                    "404": {
-                        "description": "Supplier-item cost not found",
+                    "200": {
+                        "description": "Supplier-item cost found",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/SupplierItemCostResponseDto"
                                 }
                             }
                         }
                     },
-                    "200": {
-                        "description": "Supplier-item cost found",
+                    "404": {
+                        "description": "Supplier-item cost not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/SupplierItemCostResponseDto"
                                 }
@@ -208,6 +216,98 @@
                 }
             }
         },
+        "/v1/products/{productId}/msrp/{msrpId}": {
+            "put": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "Update MSRP",
+                "description": "Updates a non-historical MSRP record.",
+                "operationId": "updateMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "msrpId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateMsrpRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "MSRP record not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Temporal overlap or optimistic locking conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "MSRP updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/products/{productId}/lifecycle": {
             "get": {
                 "tags": [
@@ -320,6 +420,201 @@
                                 }
                             }
                         }
+                    },
+                    "409": {
+                        "description": "Lifecycle business rule conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/{priceBookId}": {
+            "get": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Get price book",
+                "operationId": "getPriceBook",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Price book returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Price book not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Update price book",
+                "operationId": "updatePriceBook",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Price book updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Price book not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/{priceBookId}/rules/{ruleId}": {
+            "put": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Update price book rule",
+                "operationId": "updateRule",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "ruleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookRuleCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Price book rule updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Rule conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Deactivate price book rule",
+                "operationId": "deactivateRule",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "ruleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Rule deactivated"
                     }
                 }
             }
@@ -398,20 +693,20 @@
                     "required": true
                 },
                 "responses": {
-                    "400": {
-                        "description": "Invalid request body",
+                    "200": {
+                        "description": "Catalog updated successfully",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/CatalogDto"
                                 }
                             }
                         }
                     },
-                    "200": {
-                        "description": "Catalog updated successfully",
+                    "400": {
+                        "description": "Invalid request body",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/CatalogDto"
                                 }
@@ -499,20 +794,20 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "Catalog item updated successfully",
+                    "400": {
+                        "description": "Invalid item type or request body",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/CatalogItemResponseDto"
                                 }
                             }
                         }
                     },
-                    "400": {
-                        "description": "Invalid item type or request body",
+                    "200": {
+                        "description": "Catalog item updated successfully",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/CatalogItemResponseDto"
                                 }
@@ -688,6 +983,110 @@
                 }
             }
         },
+        "/v1/products/{productId}/msrp": {
+            "get": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "List MSRP history",
+                "description": "Returns all MSRP records for a product.",
+                "operationId": "listMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "MSRP records returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "Create MSRP",
+                "description": "Creates a product MSRP record with effective date constraints.",
+                "operationId": "createMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateMsrpRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Temporal overlap conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "MSRP created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/products/pricing/location-overrides": {
             "post": {
                 "tags": [
@@ -707,6 +1106,16 @@
                     "required": true
                 },
                 "responses": {
+                    "201": {
+                        "description": "Override created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
                     "400": {
                         "description": "Guardrail validation failed",
                         "content": {
@@ -721,16 +1130,6 @@
                         "description": "Forbidden",
                         "content": {
                             "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
-                                }
-                            }
-                        }
-                    },
-                    "201": {
-                        "description": "Override created",
-                        "content": {
-                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
                                 }
@@ -930,6 +1329,160 @@
                 }
             }
         },
+        "/v1/products/price-books": {
+            "post": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Create price book",
+                "operationId": "createPriceBook",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Price book created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/{priceBookId}/rules": {
+            "get": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "List price book rules",
+                "operationId": "listRules",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rule list returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Create price book rule",
+                "operationId": "createRule",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookRuleCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Rule conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Price book rule created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/resolve-price": {
+            "post": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Resolve effective product price",
+                "operationId": "resolvePrice",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResolvePriceRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Resolved price returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ResolvePriceResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/catalogs": {
             "post": {
                 "tags": [
@@ -1047,20 +1600,20 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Successfully retrieved product",
+                    "404": {
+                        "description": "Product not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductDto"
                                 }
                             }
                         }
                     },
-                    "404": {
-                        "description": "Product not found",
+                    "200": {
+                        "description": "Successfully retrieved product",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductDto"
                                 }
@@ -1107,6 +1660,58 @@
                 }
             }
         },
+        "/v1/products/{productId}/msrp/active": {
+            "get": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "Get active MSRP",
+                "description": "Returns MSRP active for the provided asOf date (or today).",
+                "operationId": "getActiveMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "asOf",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Active MSRP returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No active MSRP for date",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/products/{productId}/detail": {
             "get": {
                 "tags": [
@@ -1138,20 +1743,20 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Successfully retrieved product details (may be partial if some services unavailable)",
+                    "400": {
+                        "description": "Invalid location ID",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductDetailView"
                                 }
                             }
                         }
                     },
-                    "400": {
-                        "description": "Invalid location ID",
+                    "200": {
+                        "description": "Successfully retrieved product details (may be partial if some services unavailable)",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductDetailView"
                                 }
@@ -1289,20 +1894,20 @@
                     }
                 ],
                 "responses": {
-                    "404": {
-                        "description": "No pricing context found",
+                    "200": {
+                        "description": "Effective price returned",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/EffectiveLocationPriceResponseDto"
                                 }
                             }
                         }
                     },
-                    "200": {
-                        "description": "Effective price returned",
+                    "404": {
+                        "description": "No pricing context found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/EffectiveLocationPriceResponseDto"
                                 }
@@ -1554,6 +2159,82 @@
                     }
                 }
             },
+            "UpdateMsrpRequestDto": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "createdByUserId",
+                    "currency",
+                    "effectiveStartDate"
+                ]
+            },
+            "ProductMsrpDto": {
+                "type": "object",
+                "properties": {
+                    "msrpId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedBy": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
             "ProductLifecycleUpdateRequest": {
                 "type": "object",
                 "description": "Product lifecycle update request",
@@ -1667,6 +2348,218 @@
                         "type": "string",
                         "format": "date-time",
                         "description": "Replacement option effective instant"
+                    }
+                }
+            },
+            "PriceBookCreateRequestDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string",
+                        "enum": [
+                            "COMPANY_DEFAULT",
+                            "LOCATION",
+                            "CUSTOMER_TIER"
+                        ]
+                    },
+                    "scopeId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "isDefault": {
+                        "type": "boolean"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE"
+                        ]
+                    }
+                },
+                "required": [
+                    "name",
+                    "scope"
+                ]
+            },
+            "PriceBookDto": {
+                "type": "object",
+                "properties": {
+                    "priceBookId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string",
+                        "enum": [
+                            "COMPANY_DEFAULT",
+                            "LOCATION",
+                            "CUSTOMER_TIER"
+                        ]
+                    },
+                    "scopeId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE"
+                        ]
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "default": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PriceBookRuleCreateRequestDto": {
+                "type": "object",
+                "properties": {
+                    "targetType": {
+                        "type": "string",
+                        "enum": [
+                            "SKU",
+                            "CATEGORY",
+                            "GLOBAL"
+                        ]
+                    },
+                    "targetId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "pricingLogic": {
+                        "type": "string"
+                    },
+                    "conditionType": {
+                        "type": "string",
+                        "enum": [
+                            "CUSTOMER_TIER",
+                            "LOCATION",
+                            "NONE"
+                        ]
+                    },
+                    "conditionValue": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "effectiveStartAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "effectiveEndAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "required": [
+                    "createdByUserId",
+                    "effectiveStartAt",
+                    "pricingLogic",
+                    "targetType"
+                ]
+            },
+            "PriceBookRuleDto": {
+                "type": "object",
+                "properties": {
+                    "ruleId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "priceBookId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "targetType": {
+                        "type": "string",
+                        "enum": [
+                            "SKU",
+                            "CATEGORY",
+                            "GLOBAL"
+                        ]
+                    },
+                    "targetId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "pricingLogic": {
+                        "type": "string"
+                    },
+                    "conditionType": {
+                        "type": "string",
+                        "enum": [
+                            "CUSTOMER_TIER",
+                            "LOCATION",
+                            "NONE"
+                        ]
+                    },
+                    "conditionValue": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "effectiveStartAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "effectiveEndAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE",
+                            "NOT_APPLICABLE_MISSING_BASE"
+                        ]
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
                     }
                 }
             },
@@ -1887,6 +2780,35 @@
                     }
                 }
             },
+            "CreateMsrpRequestDto": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "createdByUserId",
+                    "currency",
+                    "effectiveStartDate"
+                ]
+            },
             "LocationPriceOverrideCreateRequestDto": {
                 "type": "object",
                 "properties": {
@@ -1899,19 +2821,29 @@
                         "format": "uuid"
                     },
                     "basePrice": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 0.0
                     },
                     "cost": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 0.0
                     },
                     "overridePrice": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 0.0
                     },
                     "createdByUserId": {
                         "type": "string",
                         "format": "uuid"
                     }
-                }
+                },
+                "required": [
+                    "basePrice",
+                    "createdByUserId",
+                    "locationId",
+                    "overridePrice",
+                    "productId"
+                ]
             },
             "LocationPriceOverrideResponseDto": {
                 "type": "object",
@@ -2012,7 +2944,11 @@
                     "rejectionNotes": {
                         "type": "string"
                     }
-                }
+                },
+                "required": [
+                    "actorUserId",
+                    "version"
+                ]
             },
             "GuardrailPolicyUpsertRequestDto": {
                 "type": "object",
@@ -2022,13 +2958,81 @@
                         "format": "uuid"
                     },
                     "minMarginPercent": {
-                        "type": "number"
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0
                     },
                     "maxDiscountPercent": {
-                        "type": "number"
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0
                     },
                     "autoApprovalThresholdPercent": {
-                        "type": "number"
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0
+                    }
+                },
+                "required": [
+                    "autoApprovalThresholdPercent",
+                    "maxDiscountPercent",
+                    "minMarginPercent",
+                    "scopeId"
+                ]
+            },
+            "ResolvePriceRequestDto": {
+                "type": "object",
+                "properties": {
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "priceBookId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "customerTier": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "asOf": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "productId"
+                ]
+            },
+            "ResolvePriceResponseDto": {
+                "type": "object",
+                "properties": {
+                    "resolvedAmount": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "PRICE_BOOK_RULE",
+                            "MSRP",
+                            "UNAVAILABLE"
+                        ]
+                    },
+                    "sourceRuleId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "fallbackReason": {
+                        "type": "string"
                     }
                 }
             },

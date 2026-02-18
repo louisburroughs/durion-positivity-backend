@@ -44,6 +44,7 @@ import tools.jackson.databind.ObjectMapper;
 public class PriceBookServiceImpl implements PriceBookService {
 
     private static final String PRICE_BASE_DATA_MISSING = "PRICE_BASE_DATA_MISSING";
+    private static final OffsetDateTime FAR_FUTURE_EFFECTIVE_END_AT = OffsetDateTime.parse("2099-12-31T23:59:59Z");
 
     private final PriceBookRepository priceBookRepository;
     private final PriceBookRuleRepository priceBookRuleRepository;
@@ -113,6 +114,7 @@ public class PriceBookServiceImpl implements PriceBookService {
 
         PriceBookRuleEntity entity = new PriceBookRuleEntity();
         entity.setPriceBook(priceBook);
+        entity.setPriceBookId(priceBook.getPriceBookId());
         entity.setTargetType(request.getTargetType());
         entity.setTargetId(request.getTargetId());
         entity.setPricingLogic(request.getPricingLogic());
@@ -241,14 +243,14 @@ public class PriceBookServiceImpl implements PriceBookService {
             String selectedCurrency = selectConfiguredCurrency(
                     amountsNode,
                     requestedCurrency,
-                    root.path("defaultCurrency").asText(null));
+                    root.path("defaultCurrency").asString(null));
 
             JsonNode amountNode = amountsNode.get(selectedCurrency);
             if (amountNode == null || amountNode.isNull()) {
                 throw new CatalogValidationException("No amount configured for currency: " + selectedCurrency);
             }
 
-            BigDecimal amount = new BigDecimal(amountNode.asText());
+            BigDecimal amount = new BigDecimal(amountNode.asString());
             if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new CatalogValidationException("Resolved amount must be positive.");
             }
@@ -282,11 +284,19 @@ public class PriceBookServiceImpl implements PriceBookService {
         }
 
         if (amountsNode.size() == 1) {
-            return normalizeCurrency(amountsNode.fieldNames().next(), "pricingLogic.amounts key");
+            return resolveSingleConfiguredCurrency(amountsNode);
         }
 
         throw new CatalogValidationException(
                 "request.currency is required when pricingLogic.amounts has multiple currencies and no defaultCurrency.");
+    }
+
+    private String resolveSingleConfiguredCurrency(JsonNode amountsNode) {
+        var properties = amountsNode.properties();
+        if (properties.isEmpty()) {
+            throw new CatalogValidationException("pricingLogic.amounts must be a non-empty object.");
+        }
+        return normalizeCurrency(properties.iterator().next().getKey(), "pricingLogic.amounts key");
     }
 
     private String normalizeCurrency(String currency, String fieldName) {
@@ -386,40 +396,56 @@ public class PriceBookServiceImpl implements PriceBookService {
     }
 
     private void validateRuleRequest(PriceBookRuleCreateRequestDto request) {
+        validateRuleTarget(request);
+        validateRuleRequiredFields(request);
+        validateRuleEffectiveWindow(request);
+        validateRuleCondition(request);
+    }
+
+    private void validateRuleTarget(PriceBookRuleCreateRequestDto request) {
         if (request.getTargetType() == null) {
             throw new CatalogValidationException("targetType is required.");
         }
         if (request.getTargetType() != PriceBookRuleTargetType.GLOBAL && request.getTargetId() == null) {
             throw new CatalogValidationException("targetId is required for SKU and CATEGORY targets.");
         }
+    }
+
+    private void validateRuleRequiredFields(PriceBookRuleCreateRequestDto request) {
         if (request.getPricingLogic() == null || request.getPricingLogic().isBlank()) {
             throw new CatalogValidationException("pricingLogic is required.");
         }
         if (request.getEffectiveStartAt() == null) {
             throw new CatalogValidationException("effectiveStartAt is required.");
         }
+        if (request.getCreatedByUserId() == null) {
+            throw new CatalogValidationException("createdByUserId is required.");
+        }
+    }
+
+    private void validateRuleEffectiveWindow(PriceBookRuleCreateRequestDto request) {
         if (request.getEffectiveEndAt() != null
                 && request.getEffectiveEndAt().isBefore(request.getEffectiveStartAt())) {
             throw new CatalogValidationException("effectiveEndAt must be on or after effectiveStartAt.");
         }
-        if (request.getCreatedByUserId() == null) {
-            throw new CatalogValidationException("createdByUserId is required.");
-        }
+    }
 
+    private void validateRuleCondition(PriceBookRuleCreateRequestDto request) {
         PriceBookRuleConditionType conditionType = request.getConditionType();
-        if (conditionType == PriceBookRuleConditionType.LOCATION) {
+        if (conditionType == PriceBookRuleConditionType.LOCATION
+                || conditionType == PriceBookRuleConditionType.CUSTOMER_TIER) {
             if (request.getConditionValue() == null || request.getConditionValue().isBlank()) {
-                throw new CatalogValidationException("conditionValue is required for LOCATION conditionType.");
-            }
-            try {
-                UUID.fromString(request.getConditionValue());
-            } catch (IllegalArgumentException ex) {
                 throw new CatalogValidationException(
-                        "conditionValue must be a valid UUID for LOCATION conditionType.");
+                        "conditionValue is required for LOCATION and CUSTOMER_TIER conditionType.");
             }
-        } else if (conditionType == PriceBookRuleConditionType.CUSTOMER_TIER) {
-            if (request.getConditionValue() == null || request.getConditionValue().isBlank()) {
-                throw new CatalogValidationException("conditionValue is required for CUSTOMER_TIER conditionType.");
+
+            if (conditionType == PriceBookRuleConditionType.LOCATION) {
+                try {
+                    UUID.fromString(request.getConditionValue());
+                } catch (IllegalArgumentException ex) {
+                    throw new CatalogValidationException(
+                            "conditionValue must be a valid UUID for LOCATION conditionType.");
+                }
             }
         }
     }
@@ -428,7 +454,7 @@ public class PriceBookServiceImpl implements PriceBookService {
         PriceBookRuleConditionType conditionType = request.getConditionType() == null ? PriceBookRuleConditionType.NONE
                 : request.getConditionType();
 
-        OffsetDateTime windowEnd = request.getEffectiveEndAt() == null ? OffsetDateTime.parse("9999-12-31T23:59:59Z")
+        OffsetDateTime windowEnd = request.getEffectiveEndAt() == null ? FAR_FUTURE_EFFECTIVE_END_AT
                 : request.getEffectiveEndAt();
 
         var conflicts = priceBookRuleRepository.findConflicts(
@@ -455,7 +481,7 @@ public class PriceBookServiceImpl implements PriceBookService {
     private PriceBookRuleEntity requireRule(UUID priceBookId, UUID ruleId) {
         PriceBookRuleEntity entity = priceBookRuleRepository.findById(ruleId)
                 .orElseThrow(() -> new CatalogNotFoundException("PriceBook rule not found: " + ruleId));
-        if (!entity.getPriceBook().getPriceBookId().equals(priceBookId)) {
+        if (!entity.getPriceBookId().equals(priceBookId)) {
             throw new CatalogNotFoundException("PriceBook rule not found for priceBookId=" + priceBookId);
         }
         return entity;
@@ -478,7 +504,7 @@ public class PriceBookServiceImpl implements PriceBookService {
     private PriceBookRuleDto toPriceBookRuleDto(PriceBookRuleEntity entity) {
         PriceBookRuleDto dto = new PriceBookRuleDto();
         dto.setRuleId(entity.getRuleId());
-        dto.setPriceBookId(entity.getPriceBook().getPriceBookId());
+        dto.setPriceBookId(entity.getPriceBookId());
         dto.setTargetType(entity.getTargetType());
         dto.setTargetId(entity.getTargetId());
         dto.setPricingLogic(entity.getPricingLogic());

@@ -33,6 +33,9 @@ public class PriceBookRuleEntity {
     @JoinColumn(name = "price_book_id", nullable = false)
     private PriceBookEntity priceBook;
 
+    @Column(name = "price_book_id", nullable = false, columnDefinition = "UUID", insertable = false, updatable = false)
+    private UUID priceBookId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private PriceBookRuleTargetType targetType;

@@ -70,10 +70,12 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
     @Transactional
     public ProductMsrpDto updateMsrp(@NonNull UUID productId, @NonNull UUID msrpId,
             @NonNull UpdateMsrpRequestDto request) {
+        // 1) Validate basic request integrity before touching persistence.
         validateProductExists(productId);
         validateDates(request.getEffectiveStartDate(), request.getEffectiveEndDate());
         validateAmountAndCurrency(request.getAmount(), request.getCurrency());
 
+        // 2) Load target record and enforce ownership by product.
         ProductMsrpEntity entity = productMsrpRepository.findById(msrpId)
                 .orElseThrow(() -> new CatalogNotFoundException("MSRP record not found: " + msrpId));
 
@@ -81,21 +83,30 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
             throw new CatalogNotFoundException("MSRP record not found for product: " + productId);
         }
 
+        // 3) Protect historical data from retroactive edits.
         if (entity.getEffectiveEndDate() != null && entity.getEffectiveEndDate().isBefore(LocalDate.now())) {
             throw new CatalogValidationException("Historical MSRP records are immutable.");
         }
 
+        // 4) Enforce optimistic locking when a version is supplied.
         if (request.getVersion() != null && !request.getVersion().equals(entity.getVersion())) {
             throw new OptimisticLockException("Version mismatch for MSRP update.");
         }
 
-        if (request.getEffectiveEndDate() == null
-                && productMsrpRepository.countByProductIdAndEffectiveEndDateIsNull(productId) > 0
-                && entity.getEffectiveEndDate() != null) {
-            throw new CatalogValidationException(
+        // 5) Enforce "single open-ended MSRP per product" invariant.
+        // If this update sets effectiveEndDate to null, allow it only when no other
+        // open-ended record exists (excluding this record if it is already open-ended).
+        if (request.getEffectiveEndDate() == null) {
+            long openEndedCount = productMsrpRepository.countByProductIdAndEffectiveEndDateIsNull(productId);
+            boolean entityCurrentlyOpenEnded = entity.getEffectiveEndDate() == null;
+            long otherOpenEndedCount = entityCurrentlyOpenEnded ? openEndedCount - 1 : openEndedCount;
+            if (otherOpenEndedCount > 0) {
+                throw new CatalogValidationException(
                     "Only one open-ended MSRP record is allowed per product.");
+            }
         }
 
+        // 6) Reject updates that create an overlapping effective date window.
         var overlaps = productMsrpRepository.findOverlapping(
                 productId,
                 request.getEffectiveStartDate(),
@@ -105,6 +116,7 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
             throw new CatalogBusinessRuleException("MSRP dates overlap with existing record.");
         }
 
+        // 7) Apply normalized values and persist.
         entity.setAmount(request.getAmount().setScale(4, RoundingMode.HALF_UP));
         entity.setCurrency(normalizeCurrency(request.getCurrency()));
         entity.setEffectiveStartDate(request.getEffectiveStartDate());

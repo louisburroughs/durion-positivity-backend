@@ -15,14 +15,14 @@ public interface PriceBookRuleRepository extends JpaRepository<PriceBookRuleEnti
 
     @Query("""
             select r from PriceBookRuleEntity r
-            where r.priceBook.priceBookId = :priceBookId
+            where r.priceBookId = :priceBookId
             order by r.priority desc, r.effectiveStartAt desc, r.ruleId asc
             """)
     List<PriceBookRuleEntity> findAllByPriceBookId(@Param("priceBookId") UUID priceBookId);
 
     @Query("""
             select r from PriceBookRuleEntity r
-            where r.priceBook.priceBookId = :priceBookId
+            where r.priceBookId = :priceBookId
               and r.status <> com.positivity.catalog.internal.entity.PriceBookRuleStatus.INACTIVE
               and r.targetType = :targetType
               and ((r.targetId is null and :targetId is null) or r.targetId = :targetId)
@@ -44,7 +44,7 @@ public interface PriceBookRuleRepository extends JpaRepository<PriceBookRuleEnti
 
     @Query("""
             select r from PriceBookRuleEntity r
-            where r.priceBook.priceBookId in :priceBookIds
+            where r.priceBookId in :priceBookIds
               and r.status = :status
               and r.effectiveStartAt <= :asOf
               and (r.effectiveEndAt is null or r.effectiveEndAt >= :asOf)
