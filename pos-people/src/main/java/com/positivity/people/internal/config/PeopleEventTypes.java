@@ -27,6 +27,18 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_PERSON_UPDATE",
                                                 "Update an existing person record").build(),
 
+                                // LocationController - 5 events
+                                EventTypeRegistration.write("PEOPLE_LOCATION_CREATED",
+                                                "Create a new location").build(),
+                                EventTypeRegistration.write("PEOPLE_LOCATION_UPDATED",
+                                                "Update an existing location").build(),
+                                EventTypeRegistration.write("PEOPLE_LOCATION_DELETED",
+                                                "Soft-delete an existing location").build(),
+                                EventTypeRegistration.write("PEOPLE_STAFF_ASSIGNED",
+                                                "Assign a person to a location").build(),
+                                EventTypeRegistration.write("PEOPLE_STAFF_UNASSIGNED",
+                                                "Unassign a person from a location").build(),
+
                                 // WorkSessionController - 4 events
                                 EventTypeRegistration.write("PEOPLE_WORK_SESSION_START",
                                                 "Start a work session for a person").build(),

@@ -1,8 +1,12 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.people.internal.client.SecurityServiceException;
+import com.positivity.people.internal.exception.DuplicateLocationCodeException;
+import com.positivity.people.internal.exception.LocationAssignmentNotFoundException;
+import com.positivity.people.internal.exception.LocationNotFoundException;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.PersonLocationAssignmentConflictException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
@@ -41,6 +45,42 @@ public class PeopleExceptionHandler {
     public ProblemDetail handleUserAlreadyLinked(UserAlreadyLinkedException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(DuplicateLocationCodeException.class)
+    public ProblemDetail handleDuplicateLocationCode(DuplicateLocationCodeException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(PersonLocationAssignmentConflictException.class)
+    public ProblemDetail handleAssignmentConflict(PersonLocationAssignmentConflictException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(LocationNotFoundException.class)
+    public ProblemDetail handleLocationNotFound(LocationNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(LocationAssignmentNotFoundException.class)
+    public ProblemDetail handleLocationAssignmentNotFound(LocationAssignmentNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
                 ex.getMessage());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problem;
