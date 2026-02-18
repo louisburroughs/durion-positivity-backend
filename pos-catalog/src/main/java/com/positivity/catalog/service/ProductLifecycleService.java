@@ -12,9 +12,10 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.security.common.SecurityContextHelper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -73,22 +74,23 @@ public class ProductLifecycleService {
         return doAddReplacement(productId, request);
     }
 
+    @Transactional
     public ProductLifecycleResponse setLifecycleState(
             @NonNull UUID productId,
             @NonNull ProductLifecycleState newState,
             Instant effectiveAt,
-            String changedBy,
             String overrideReason,
             LocalDate effectiveDate) {
         ProductLifecycleUpdateRequest request = new ProductLifecycleUpdateRequest();
         request.setLifecycleState(newState);
         request.setEffectiveAt(effectiveAt);
         request.setEffectiveDate(effectiveDate != null ? effectiveDate : LocalDate.now(ZoneOffset.UTC));
-        request.setChangedBy(parseChangedBy(changedBy));
         request.setOverrideReason(overrideReason);
+        request.setChangedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         return doUpdateLifecycle(productId, request);
     }
 
+    @Transactional
     public ProductLifecycleResponse.ReplacementOption addReplacementProduct(
             @NonNull UUID discontinuedProductId,
             @NonNull UUID replacementProductId,
@@ -132,13 +134,10 @@ public class ProductLifecycleService {
             lifecycleUpdateDeniedCounter.increment();
             throw new CatalogValidationException("either effectiveAt or effectiveDate is required");
         }
-        if (request.getChangedBy() == null) {
-            lifecycleUpdateDeniedCounter.increment();
-            throw new CatalogValidationException("changedBy is required");
-        }
         ProductEntity product = findProduct(productId);
         ProductLifecycleState currentState = resolveCurrentState(product);
         ProductLifecycleState nextState = request.getLifecycleState();
+        UUID changedBy = resolveChangedByFromSecurityContext();
 
         if (currentState == nextState) {
             lifecycleUpdateDeniedCounter.increment();
@@ -174,7 +173,7 @@ public class ProductLifecycleService {
 
         product.setLifecycleState(nextState);
         product.setLifecycleStateEffectiveAt(effectiveAt);
-        product.setLastStateChangedBy(request.getChangedBy());
+        product.setLastStateChangedBy(changedBy);
         product.setLastStateChangedAt(currentInstant());
         product.setLifecycleOverrideReason(request.getOverrideReason());
         ProductEntity saved = productRepository.save(product);
@@ -186,7 +185,7 @@ public class ProductLifecycleService {
                 currentState,
                 nextState,
                 effectiveAt,
-                request.getChangedBy(),
+                changedBy,
                 overridePermissionUsed);
 
         List<ProductReplacementEntity> replacements = productReplacementRepository
@@ -237,11 +236,14 @@ public class ProductLifecycleService {
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + productId));
     }
 
-    private UUID parseChangedBy(String changedBy) {
-        if (isBlank(changedBy)) {
-            return UUIDv7Generator.generate();
+    private UUID resolveChangedByFromSecurityContext() {
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        try {
+            return UUID.fromString(username);
+        } catch (IllegalArgumentException ignored) {
+            // Keep actor identity deterministic even when principal is not UUID-formatted.
+            return UUID.nameUUIDFromBytes(username.getBytes(StandardCharsets.UTF_8));
         }
-        return UUID.fromString(changedBy);
     }
 
     private ProductLifecycleState resolveCurrentState(ProductEntity product) {
