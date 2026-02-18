@@ -51,9 +51,9 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
         personRepository.findById(personId)
                 .orElseThrow(() -> new PersonNotFoundException(personId));
 
-        var existing = linkRepository.findByUserId(userId);
-        if (existing.isPresent()) {
-            UserPersonLink existingLink = existing.get();
+        if (linkRepository.existsByUserId(userId)) {
+            UserPersonLink existingLink = linkRepository.findByUserId(userId)
+                    .orElseThrow(() -> new UserAlreadyLinkedException(userId));
             if (existingLink.getPersonId().equals(personId)) {
                 return toResponse(existingLink);
             }
@@ -87,15 +87,17 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     public UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request) {
         UserPersonLinkResponse response = createUserLink(request.getUserId(), request.getPersonId());
         if (request.getNotes() != null || request.getLinkType() != null) {
-            UserPersonLink link = linkRepository.findByUserId(request.getUserId())
-                    .orElseThrow(() -> new UserPersonLinkNotFoundException(request.getUserId()));
-            if (request.getLinkType() != null && !request.getLinkType().isBlank()) {
-                link.setLinkType(request.getLinkType());
+            var existingLink = linkRepository.findByUserId(request.getUserId());
+            if (existingLink.isPresent()) {
+                UserPersonLink link = existingLink.get();
+                if (request.getLinkType() != null && !request.getLinkType().isBlank()) {
+                    link.setLinkType(request.getLinkType());
+                }
+                if (request.getNotes() != null) {
+                    link.setNotes(request.getNotes());
+                }
+                response = toResponse(linkRepository.save(link));
             }
-            if (request.getNotes() != null) {
-                link.setNotes(request.getNotes());
-            }
-            response = toResponse(linkRepository.save(link));
         }
         return response;
     }
