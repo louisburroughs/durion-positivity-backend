@@ -13,6 +13,7 @@ import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonLinkService;
 import com.positivity.security.common.SecurityContextHelper;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,8 +66,17 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
         link.setPersonId(personId);
         link.setLinkType("PRIMARY");
         link.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
-        UserPersonLink saved = linkRepository.save(link);
-        return toResponse(saved);
+        try {
+            UserPersonLink saved = linkRepository.save(link);
+            return toResponse(saved);
+        } catch (DataIntegrityViolationException e) {
+            UserPersonLink existingLink = linkRepository.findByUserId(userId)
+                    .orElseThrow(() -> e);
+            if (existingLink.getPersonId().equals(personId)) {
+                return toResponse(existingLink);
+            }
+            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+        }
     }
 
     @Override

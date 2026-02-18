@@ -51,6 +51,10 @@
         {
             "name": "User-Person Linking API",
             "description": "Link authentication users to person records"
+        },
+        {
+            "name": "Employee API",
+            "description": "Employee profile and offboarding operations"
         }
     ],
     "paths": {
@@ -177,6 +181,128 @@
                     },
                     "204": {
                         "description": "Person deleted successfully."
+                    }
+                }
+            }
+        },
+        "/v1/people/employees/{employeeId}": {
+            "get": {
+                "tags": [
+                    "Employee API"
+                ],
+                "summary": "Get employee profile",
+                "operationId": "getEmployee",
+                "parameters": [
+                    {
+                        "name": "employeeId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Employee not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Employee found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Employee API"
+                ],
+                "summary": "Update employee profile",
+                "operationId": "updateEmployee",
+                "parameters": [
+                    {
+                        "name": "employeeId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateEmployeeRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "404": {
+                        "description": "Employee not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Semantic validation failure",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate employee",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Employee updated",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -327,8 +453,8 @@
                             }
                         }
                     },
-                    "400": {
-                        "description": "Invalid request",
+                    "404": {
+                        "description": "Person or role not found",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -337,8 +463,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "Person or role not found",
+                    "400": {
+                        "description": "Invalid request",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -508,7 +634,7 @@
                 }
             }
         },
-        "/v1/people/users/{userId}/link": {
+        "/v1/people/users/link": {
             "post": {
                 "tags": [
                     "User-Person Linking API"
@@ -516,18 +642,6 @@
                 "summary": "Link user to person",
                 "description": "Create a link between an authentication user and a person record",
                 "operationId": "linkUserToPerson",
-                "parameters": [
-                    {
-                        "name": "userId",
-                        "in": "path",
-                        "description": "User ID from authentication system",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -539,8 +653,18 @@
                     "required": true
                 },
                 "responses": {
-                    "409": {
-                        "description": "User already linked",
+                    "200": {
+                        "description": "Link already exists and is returned",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Link created successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -559,8 +683,8 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Link created successfully",
+                    "409": {
+                        "description": "User already linked to different person",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -580,32 +704,76 @@
                         }
                     }
                 }
-            },
-            "delete": {
+            }
+        },
+        "/v1/people/user-links": {
+            "post": {
                 "tags": [
                     "User-Person Linking API"
                 ],
-                "summary": "Unlink user from person",
-                "description": "Remove the link between a user and person",
-                "operationId": "unlinkUserFromPerson",
-                "parameters": [
-                    {
-                        "name": "userId",
-                        "in": "path",
-                        "description": "User ID",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
+                "summary": "Create user-person link (admin)",
+                "description": "Create a link between an authentication user and a person record",
+                "operationId": "createUserPersonLink",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateUserLinkRequest"
+                            }
                         }
-                    }
-                ],
+                    },
+                    "required": true
+                },
                 "responses": {
-                    "204": {
-                        "description": "Link deleted successfully"
+                    "200": {
+                        "description": "Link already exists and is returned",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Link created successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
                     },
                     "404": {
-                        "description": "Link not found"
+                        "description": "Person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "User already linked to different person",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1136,6 +1304,128 @@
                 }
             }
         },
+        "/v1/people/employees": {
+            "post": {
+                "tags": [
+                    "Employee API"
+                ],
+                "summary": "Create employee profile",
+                "operationId": "createEmployee",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateEmployeeRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Employee created",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Semantic validation failure",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate employee",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/employees/{employeeId}/disable": {
+            "post": {
+                "tags": [
+                    "Employee API"
+                ],
+                "summary": "Disable employee profile",
+                "operationId": "disableEmployee",
+                "parameters": [
+                    {
+                        "name": "employeeId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DisableEmployeeRequestDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "404": {
+                        "description": "Employee not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Employee disabled",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Employee cannot be disabled",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmployeeProfileDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/people/{personUuid}/access/roles": {
             "get": {
                 "tags": [
@@ -1268,6 +1558,53 @@
                 }
             }
         },
+        "/v1/people/user-links/{personId}": {
+            "get": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Get links by person ID",
+                "description": "Retrieve user-person links for person",
+                "operationId": "getLinkByPersonId",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "in": "path",
+                        "description": "Person ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Links found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Link or person not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/people/timeEntries/{timeEntryId}/adjustments": {
             "get": {
                 "tags": [
@@ -1309,15 +1646,101 @@
                     "People Reports API"
                 ],
                 "summary": "Get attendance and job time discrepancy report",
-                "description": "Generates a summary report of time entry approval statuses, aggregating counts of approved, pending, and rejected time entries. This report helps identify discrepancies between recorded attendance and job time data.",
+                "description": "Generates a per-technician, per-location, per-day discrepancy report based on attendance and approved job time totals.",
                 "operationId": "getAttendanceDiscrepancyReport",
+                "parameters": [
+                    {
+                        "name": "startDate",
+                        "in": "query",
+                        "description": "Start date (inclusive)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2026-02-01"
+                    },
+                    {
+                        "name": "endDate",
+                        "in": "query",
+                        "description": "End date (inclusive)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2026-02-07"
+                    },
+                    {
+                        "name": "timezone",
+                        "in": "query",
+                        "description": "IANA timezone",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "America/Chicago"
+                    },
+                    {
+                        "name": "locationId",
+                        "in": "query",
+                        "description": "Optional location filter",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "technicianIds",
+                        "in": "query",
+                        "description": "Optional technician IDs filter",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "format": "uuid"
+                            }
+                        }
+                    },
+                    {
+                        "name": "flaggedOnly",
+                        "in": "query",
+                        "description": "Return flagged rows only",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    },
+                    {
+                        "name": "X-User",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Correlation-Id",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Report generated successfully. Returns aggregated counts of time entries by approval status.",
+                        "description": "Report generated successfully.",
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AttendanceDiscrepancyReportResponse"
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AttendanceDiscrepancyReportResponse"
+                                    }
                                 }
                             }
                         }
@@ -1429,6 +1852,36 @@
                     }
                 }
             }
+        },
+        "/v1/people/users/{userId}/link": {
+            "delete": {
+                "tags": [
+                    "User-Person Linking API"
+                ],
+                "summary": "Unlink user from person",
+                "description": "Remove the link between a user and person",
+                "operationId": "unlinkUserFromPerson",
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "description": "User ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Link deleted successfully"
+                    },
+                    "404": {
+                        "description": "Link not found"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -1461,6 +1914,166 @@
                     },
                     "username": {
                         "type": "string"
+                    }
+                }
+            },
+            "EmployeeAddressDto": {
+                "type": "object",
+                "properties": {
+                    "line1": {
+                        "type": "string"
+                    },
+                    "line2": {
+                        "type": "string"
+                    },
+                    "city": {
+                        "type": "string"
+                    },
+                    "region": {
+                        "type": "string"
+                    },
+                    "postalCode": {
+                        "type": "string"
+                    },
+                    "country": {
+                        "type": "string"
+                    }
+                }
+            },
+            "EmployeeContactInfoDto": {
+                "type": "object",
+                "properties": {
+                    "primaryEmail": {
+                        "type": "string"
+                    },
+                    "primaryPhone": {
+                        "type": "string"
+                    },
+                    "secondaryEmail": {
+                        "type": "string"
+                    },
+                    "secondaryPhone": {
+                        "type": "string"
+                    },
+                    "address": {
+                        "$ref": "#/components/schemas/EmployeeAddressDto"
+                    },
+                    "emergencyContact": {
+                        "$ref": "#/components/schemas/EmployeeEmergencyContactDto"
+                    }
+                }
+            },
+            "EmployeeEmergencyContactDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "relationship": {
+                        "type": "string"
+                    },
+                    "phone": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    }
+                }
+            },
+            "UpdateEmployeeRequest": {
+                "type": "object",
+                "properties": {
+                    "legalName": {
+                        "type": "string"
+                    },
+                    "preferredName": {
+                        "type": "string"
+                    },
+                    "employeeNumber": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "ON_LEAVE",
+                            "SUSPENDED",
+                            "TERMINATED",
+                            "DISABLED"
+                        ]
+                    },
+                    "hireDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "terminationDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "contactInfo": {
+                        "$ref": "#/components/schemas/EmployeeContactInfoDto"
+                    },
+                    "duplicatePolicy": {
+                        "type": "string",
+                        "enum": [
+                            "STRICT",
+                            "BALANCED"
+                        ]
+                    }
+                },
+                "required": [
+                    "employeeNumber",
+                    "hireDate",
+                    "legalName",
+                    "status"
+                ]
+            },
+            "EmployeeProfileDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "legalName": {
+                        "type": "string"
+                    },
+                    "preferredName": {
+                        "type": "string"
+                    },
+                    "employeeNumber": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "ON_LEAVE",
+                            "SUSPENDED",
+                            "TERMINATED",
+                            "DISABLED"
+                        ]
+                    },
+                    "hireDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "terminationDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "contactInfo": {
+                        "$ref": "#/components/schemas/EmployeeContactInfoDto"
+                    },
+                    "statusEffectiveAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "warnings": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 }
             },
@@ -1592,6 +2205,23 @@
                         "type": "string"
                     }
                 }
+            },
+            "CreateUserLinkRequest": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "personId",
+                    "userId"
+                ]
             },
             "Decision": {
                 "type": "object",
@@ -1760,6 +2390,73 @@
                     "success"
                 ]
             },
+            "CreateEmployeeRequest": {
+                "type": "object",
+                "properties": {
+                    "legalName": {
+                        "type": "string"
+                    },
+                    "preferredName": {
+                        "type": "string"
+                    },
+                    "employeeNumber": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "ON_LEAVE",
+                            "SUSPENDED",
+                            "TERMINATED",
+                            "DISABLED"
+                        ]
+                    },
+                    "hireDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "terminationDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "contactInfo": {
+                        "$ref": "#/components/schemas/EmployeeContactInfoDto"
+                    },
+                    "duplicatePolicy": {
+                        "type": "string",
+                        "enum": [
+                            "STRICT",
+                            "BALANCED"
+                        ]
+                    }
+                },
+                "required": [
+                    "employeeNumber",
+                    "hireDate",
+                    "legalName",
+                    "status"
+                ]
+            },
+            "DisableEmployeeRequestDto": {
+                "type": "object",
+                "properties": {
+                    "disableReason": {
+                        "type": "string"
+                    },
+                    "assignmentPolicy": {
+                        "type": "string",
+                        "enum": [
+                            "IMMEDIATE",
+                            "GRACE_PERIOD"
+                        ]
+                    },
+                    "assignmentEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                }
+            },
             "RoleDto": {
                 "type": "object",
                 "properties": {
@@ -1896,38 +2593,69 @@
             },
             "AttendanceDiscrepancyReportResponse": {
                 "type": "object",
-                "description": "Attendance discrepancy report aggregating time entry approval statuses",
+                "description": "Attendance vs job time discrepancy row",
                 "properties": {
-                    "generatedAt": {
+                    "technicianId": {
                         "type": "string",
-                        "format": "date-time",
-                        "description": "Timestamp when the report was generated",
-                        "example": "2026-02-17T10:30:00Z"
+                        "description": "Technician identifier",
+                        "example": "123e4567-e89b-12d3-a456-426614174000"
                     },
-                    "approvedCount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Count of approved time entries",
-                        "example": 42
+                    "technicianName": {
+                        "type": "string",
+                        "description": "Technician display name",
+                        "example": "Jane Doe"
                     },
-                    "pendingApprovalCount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Count of time entries pending approval",
-                        "example": 7
+                    "locationId": {
+                        "type": "string",
+                        "description": "Location identifier",
+                        "example": "22222222-2222-2222-2222-222222222222"
                     },
-                    "rejectedCount": {
+                    "reportDate": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Report local date",
+                        "example": "2026-02-16"
+                    },
+                    "totalAttendanceHours": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Total attendance time in decimal hours",
+                        "example": 8.0
+                    },
+                    "totalJobHours": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Total approved job time in decimal hours",
+                        "example": 6.0
+                    },
+                    "discrepancyHours": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Attendance minus job time in decimal hours",
+                        "example": 2.0
+                    },
+                    "isFlagged": {
+                        "type": "boolean",
+                        "description": "True when absolute discrepancy exceeds threshold",
+                        "example": true
+                    },
+                    "thresholdApplied": {
                         "type": "integer",
-                        "format": "int64",
-                        "description": "Count of rejected time entries",
-                        "example": 3
+                        "format": "int32",
+                        "description": "Threshold in minutes used for this row",
+                        "example": 60
                     }
                 },
                 "required": [
-                    "approvedCount",
-                    "generatedAt",
-                    "pendingApprovalCount",
-                    "rejectedCount"
+                    "discrepancyHours",
+                    "isFlagged",
+                    "locationId",
+                    "reportDate",
+                    "technicianId",
+                    "technicianName",
+                    "thresholdApplied",
+                    "totalAttendanceHours",
+                    "totalJobHours"
                 ]
             },
             "TimeEntryException": {

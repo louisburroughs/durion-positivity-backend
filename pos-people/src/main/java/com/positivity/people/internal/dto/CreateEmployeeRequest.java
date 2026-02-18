@@ -30,6 +30,16 @@ public class CreateEmployeeRequest {
     @Valid
     private EmployeeContactInfoDto contactInfo;
 
-    @NotNull(message = "duplicatePolicy is required")
+    /**
+     * Defines the policy for handling duplicate employee records during creation.
+     * Defaults to STRICT, which will reject the request if a potential duplicate is
+     * detected.
+     * Other options may include LENIENT (allow creation with a warning) or IGNORE
+     * (proceed without checks).
+     */
     private DuplicatePolicy duplicatePolicy = DuplicatePolicy.STRICT;
+
+    public void setDuplicatePolicy(DuplicatePolicy duplicatePolicy) {
+        this.duplicatePolicy = duplicatePolicy == null ? DuplicatePolicy.STRICT : duplicatePolicy;
+    }
 }
