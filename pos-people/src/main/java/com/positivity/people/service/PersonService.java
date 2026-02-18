@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PersonService {
+
     private final PersonRepository personRepository;
 
     public List<Person> getAllPeople() {
@@ -69,4 +71,5 @@ public class PersonService {
         entity.setUsername(dto.getUsername());
         return entity;
     }
+
 }
