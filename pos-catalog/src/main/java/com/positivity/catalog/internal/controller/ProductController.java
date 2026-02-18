@@ -222,6 +222,7 @@ public class ProductController {
     @ApiResponse(responseCode = "400", description = "Validation error")
     @ApiResponse(responseCode = "403", description = "Missing override permission")
     @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(responseCode = "409", description = "Lifecycle business rule conflict")
     @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_UPDATE", apiVersion = "1")
     public ResponseEntity<ProductLifecycleResponse> updateProductLifecycle(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
