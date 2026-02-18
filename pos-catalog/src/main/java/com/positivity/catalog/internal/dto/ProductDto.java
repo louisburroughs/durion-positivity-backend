@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.dto;
 
 import com.positivity.catalog.internal.entity.ProductCodeType;
 import com.positivity.catalog.internal.entity.ProductLifecycleState;
+import com.positivity.catalog.internal.entity.ProductStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -24,6 +25,9 @@ public class ProductDto {
     @Schema(description = "Long product description")
     private String longDescription;
 
+    @Schema(description = "Product description")
+    private String description;
+
     @Schema(description = "Product image URLs")
     private List<String> images;
 
@@ -31,7 +35,7 @@ public class ProductDto {
     private String manufacturerPartNumber;
 
     @Schema(description = "Manufacturer identifier")
-    private String manufacturerId;
+    private UUID manufacturerId;
 
     @Schema(description = "Manufacturer name")
     private String manufacturerName;
@@ -47,6 +51,21 @@ public class ProductDto {
 
     @Schema(description = "SKU")
     private String sku;
+
+    @Schema(description = "Manufacturer part number")
+    private String mpn;
+
+    @Schema(description = "UPC")
+    private String upc;
+
+    @Schema(description = "Attributes JSON")
+    private String attributes;
+
+    @Schema(description = "Unit of measure")
+    private String unitOfMeasure;
+
+    @Schema(description = "Operational status", implementation = ProductStatus.class)
+    private ProductStatus status;
 
     @Schema(description = "Product code")
     private String productCode;
@@ -92,4 +111,10 @@ public class ProductDto {
 
     @Schema(description = "Lifecycle override reason")
     private String lifecycleOverrideReason;
+
+    @Schema(description = "Created timestamp")
+    private Instant createdAt;
+
+    @Schema(description = "Updated timestamp")
+    private Instant updatedAt;
 }

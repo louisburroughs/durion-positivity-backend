@@ -6,13 +6,9 @@ import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
 import com.positivity.catalog.internal.dto.NonInventoryProductDto;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDto;
-import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
-import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
-import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.ProductDetailService;
-import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,57 +42,6 @@ public class CatalogController {
 
     private final CatalogService catalogService;
     private final ProductDetailService productDetailService;
-    private final ProductLifecycleService productLifecycleService;
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/{productId}")
-    @Operation(summary = "Get a product by ID", description = "Retrieves a specific product by its unique ID.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved product", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    public ResponseEntity<ProductDto> getProductById(
-            @Parameter(description = "ID of the product to be obtained") @PathVariable UUID productId) {
-        return catalogService.getProductById(productId)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('product:lifecycle:update')")
-    @GetMapping("/{productId}/lifecycle")
-    @Operation(summary = "Get product lifecycle state", description = "Retrieves lifecycle state and replacement suggestions for a product.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved lifecycle state", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductLifecycleResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_GET", apiVersion = "1")
-    public ResponseEntity<ProductLifecycleResponse> getProductLifecycle(
-            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
-        return ResponseEntity.ok(productLifecycleService.getLifecycle(productId));
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
-    @PutMapping("/{productId}/lifecycle")
-    @Operation(summary = "Set product lifecycle state", description = "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.")
-    @ApiResponse(responseCode = "200", description = "Lifecycle state updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductLifecycleResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "403", description = "Missing override permission")
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_UPDATE", apiVersion = "1")
-    public ResponseEntity<ProductLifecycleResponse> updateProductLifecycle(
-            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
-            @RequestBody ProductLifecycleUpdateRequest request) {
-        return ResponseEntity.ok(productLifecycleService.updateLifecycle(productId, request));
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
-    @PostMapping("/{productId}/replacements")
-    @Operation(summary = "Add replacement product", description = "Adds a replacement suggestion to a discontinued product.")
-    @ApiResponse(responseCode = "201", description = "Replacement added successfully")
-    @ApiResponse(responseCode = "400", description = "Validation error")
-    @ApiResponse(responseCode = "404", description = "Product not found")
-    @EmitEvent(id = "CATALOG_PRODUCT_REPLACEMENT_ADD", apiVersion = "1")
-    public ResponseEntity<ProductLifecycleResponse.ReplacementOption> addReplacementProduct(
-            @Parameter(description = "ID of discontinued product", required = true) @PathVariable UUID productId,
-            @RequestBody ProductReplacementRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(productLifecycleService.addReplacement(productId, request));
-    }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/name/{name}")
