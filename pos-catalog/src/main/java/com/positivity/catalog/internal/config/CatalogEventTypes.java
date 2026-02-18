@@ -33,6 +33,17 @@ public final class CatalogEventTypes {
                                                 "Set product lifecycle state with effective date").build(),
                                 EventTypeRegistration.write("CATALOG_PRODUCT_REPLACEMENT_ADD",
                                                 "Add replacement recommendation for a discontinued product").build(),
+                                EventTypeRegistration.write("CATALOG_GUARDRAIL_POLICY_UPSERT",
+                                                "Create or update location guardrail policy for price overrides")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_OVERRIDE_CREATE",
+                                                "Create location-specific price override with guardrail checks")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_OVERRIDE_APPROVED",
+                                                "Approve pending location price override and activate effective price")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_OVERRIDE_REJECTED",
+                                                "Reject pending location price override with reason metadata").build());
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_CREATE",
                                                 "Create supplier-item cost structure with optional volume tiers").build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_UPDATE",
