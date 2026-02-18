@@ -55,6 +55,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CatalogController {
 
     private final CatalogService catalogService;
+    private final SupplierItemCostService supplierItemCostService;
     private final ProductDetailService productDetailService;
     private final ProductLifecycleService productLifecycleService;
     private final LocationPriceOverrideService locationPriceOverrideService;
@@ -120,7 +121,6 @@ public class CatalogController {
             @RequestBody LocationPriceOverrideDecisionRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.rejectOverride(overrideId, request));
     }
-    private final SupplierItemCostService supplierItemCostService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/{productId}")
@@ -300,7 +300,7 @@ public class CatalogController {
     public List<NonInventoryProductDto> getNonInventoryProductByName(
             @Parameter(description = "Name of the non-inventory products to be obtained") @PathVariable String name) {
         return catalogService.getNonInventoryProductsByName(name);
-    }
+            }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/catalog/{catalogId}")
