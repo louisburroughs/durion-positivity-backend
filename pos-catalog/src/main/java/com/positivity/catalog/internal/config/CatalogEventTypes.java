@@ -36,13 +36,13 @@ public final class CatalogEventTypes {
                                 EventTypeRegistration.write("CATALOG_GUARDRAIL_POLICY_UPSERT",
                                                 "Create or update location guardrail policy for price overrides")
                                                 .build(),
-                                EventTypeRegistration.write("CATALOG_PRICE_OVERRIDE_CREATE",
+                                EventTypeRegistration.write("CATALOG_LOCATION_OVERRIDE_CREATE",
                                                 "Create location-specific price override with guardrail checks")
                                                 .build(),
-                                EventTypeRegistration.write("CATALOG_PRICE_OVERRIDE_APPROVED",
+                                EventTypeRegistration.approval("CATALOG_LOCATION_OVERRIDE_APPROVE",
                                                 "Approve pending location price override and activate effective price")
                                                 .build(),
-                                EventTypeRegistration.write("CATALOG_PRICE_OVERRIDE_REJECTED",
+                                EventTypeRegistration.approval("CATALOG_LOCATION_OVERRIDE_REJECT",
                                                 "Reject pending location price override with reason metadata").build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_CREATE",
                                                 "Create supplier-item cost structure with optional volume tiers")
