@@ -40,7 +40,7 @@ public final class CatalogEventTypes {
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_COST_DELETE",
                                                 "Delete supplier item cost structure").build(),
                                 EventTypeRegistration.write("CATALOG_ITEM_COST_STANDARD_UPDATE",
-                                                "Manually update item standard cost").build());
+                                                "Manually update item standard cost").build(),
                                 EventTypeRegistration.write("CATALOG_GUARDRAIL_POLICY_UPSERT",
                                                 "Create or update location guardrail policy for price overrides")
                                                 .build(),
