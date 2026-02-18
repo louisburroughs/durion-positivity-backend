@@ -89,7 +89,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
+                mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(validSupplierItemCostPayload(supplierId, itemId)))
                                 .andExpect(status().isCreated())
@@ -109,9 +109,9 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         void testGetSupplierItemCost_HappyPath() throws Exception {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
-                createSupplierItemCost(supplierId, itemId);
+                UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
-                mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
+                mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", supplierItemCostId)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()))
@@ -123,12 +123,11 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         void testUpdateSupplierItemCost_HappyPath() throws Exception {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
-                createSupplierItemCost(supplierId, itemId);
-                Long currentVersion = getSupplierItemCostVersion(supplierId, itemId);
+                UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
-                mockMvc.perform(withAuth(put("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId))
+                mockMvc.perform(withAuth(put("/v1/products/supplier-costs/{id}", supplierItemCostId))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(updatedSupplierItemCostPayload(currentVersion)))
+                                .content(updatedSupplierItemCostPayload(supplierId, itemId)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.currencyCode").value("USD"))
                                 .andExpect(jsonPath("$.baseCost").value(6.50))
@@ -141,12 +140,12 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         void testDeleteSupplierItemCost_HappyPath() throws Exception {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
-                createSupplierItemCost(supplierId, itemId);
+                UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
-                mockMvc.perform(withAuth(delete("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
+                mockMvc.perform(withAuth(delete("/v1/products/supplier-costs/{id}", supplierItemCostId)))
                                 .andExpect(status().isNoContent());
 
-                mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
+                mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", supplierItemCostId)))
                                 .andExpect(status().isNotFound());
         }
 
@@ -306,7 +305,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
+                mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(overlappingTierPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
@@ -320,12 +319,13 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
+                mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(gapTierPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$")
-                                                .value(org.hamcrest.Matchers.containsString("INVALID_TIER_STRUCTURE")));
+                                                .value(org.hamcrest.Matchers
+                                                                .containsString("tier ranges must be contiguous")));
         }
 
         @Test
@@ -334,18 +334,19 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
+                mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidUnitCostPayload(supplierId, itemId)))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$").value(org.hamcrest.Matchers.containsString("INVALID_DATA")));
+                                .andExpect(jsonPath("$")
+                                                .value(org.hamcrest.Matchers
+                                                                .containsString("unitCost must be positive.")));
         }
 
         @Test
         @DisplayName("VE-008: Missing supplier-item cost returns 404")
         void testGetSupplierItemCost_NotFound() throws Exception {
-                mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", UUID.randomUUID(),
-                                UUID.randomUUID())))
+                mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", UUID.randomUUID())))
                                 .andExpect(status().isNotFound());
         }
 
@@ -355,7 +356,7 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
 
-                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"), "ROLE_CATALOG_VIEW")
+                mockMvc.perform(withAuth(post("/v1/products/supplier-costs"), "ROLE_CATALOG_VIEW")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(validSupplierItemCostPayload(supplierId, itemId)))
                                 .andExpect(status().isForbidden());
@@ -492,14 +493,14 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         void testGetSupplierItemCost_IdempotentRead() throws Exception {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
-                createSupplierItemCost(supplierId, itemId);
+                UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
-                mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
+                mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", supplierItemCostId)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
 
-                mockMvc.perform(withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
+                mockMvc.perform(withAuth(get("/v1/products/supplier-costs/{id}", supplierItemCostId)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
@@ -568,21 +569,18 @@ class ContractBehaviorIT extends BaseIntegrationTest {
         void testSupplierItemCostSequentialUpdates_PreserveIdentity() throws Exception {
                 UUID supplierId = UUID.randomUUID();
                 UUID itemId = UUID.randomUUID();
-                createSupplierItemCost(supplierId, itemId);
-                Long versionAfterCreate = getSupplierItemCostVersion(supplierId, itemId);
+                UUID supplierItemCostId = createSupplierItemCost(supplierId, itemId);
 
-                mockMvc.perform(withAuth(put("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId))
+                mockMvc.perform(withAuth(put("/v1/products/supplier-costs/{id}", supplierItemCostId))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(updatedSupplierItemCostPayload(versionAfterCreate)))
+                                .content(updatedSupplierItemCostPayload(supplierId, itemId)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
 
-                Long versionAfterFirstUpdate = getSupplierItemCostVersion(supplierId, itemId);
-
-                mockMvc.perform(withAuth(put("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId))
+                mockMvc.perform(withAuth(put("/v1/products/supplier-costs/{id}", supplierItemCostId))
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(validUpdatePayloadWithDifferentValues(versionAfterFirstUpdate)))
+                                .content(validUpdatePayloadWithDifferentValues(supplierId, itemId)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath(SUPPLIER_ID).value(supplierId.toString()))
                                 .andExpect(jsonPath("$.itemId").value(itemId.toString()));
@@ -715,11 +713,17 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 "rejectionNotes", rejectionNotes));
         }
 
-        private void createSupplierItemCost(UUID supplierId, UUID itemId) throws Exception {
-                mockMvc.perform(withAuth(post("/v1/suppliers/costs/items"))
+        private UUID createSupplierItemCost(UUID supplierId, UUID itemId) throws Exception {
+                MvcResult result = mockMvc.perform(withAuth(post("/v1/products/supplier-costs"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(validSupplierItemCostPayload(supplierId, itemId)))
-                                .andExpect(status().isCreated());
+                                .andExpect(status().isCreated())
+                                .andReturn();
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = objectMapper.readValue(result.getResponse().getContentAsString(),
+                                Map.class);
+                return UUID.fromString((String) response.get("id"));
         }
 
         private String validSupplierItemCostPayload(UUID supplierId, UUID itemId) throws Exception {
@@ -734,9 +738,10 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                                 Map.of("minQuantity", 51, "unitCost", 4.00))));
         }
 
-        private String updatedSupplierItemCostPayload(Long version) throws Exception {
+        private String updatedSupplierItemCostPayload(UUID supplierId, UUID itemId) throws Exception {
                 return objectMapper.writeValueAsString(Map.of(
-                                "version", version,
+                                "supplierId", supplierId,
+                                "itemId", itemId,
                                 "currencyCode", "USD",
                                 "baseCost", 6.50,
                                 "tiers", java.util.List.of(
@@ -776,25 +781,14 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                                 Map.of("minQuantity", 11, "unitCost", 4.10))));
         }
 
-        private String validUpdatePayloadWithDifferentValues(Long version) throws Exception {
+        private String validUpdatePayloadWithDifferentValues(UUID supplierId, UUID itemId) throws Exception {
                 return objectMapper.writeValueAsString(Map.of(
-                                "version", version,
+                                "supplierId", supplierId,
+                                "itemId", itemId,
                                 "currencyCode", "USD",
                                 "baseCost", 6.80,
                                 "tiers", java.util.List.of(
                                                 Map.of("minQuantity", 1, "maxQuantity", 30, "unitCost", 5.10),
                                                 Map.of("minQuantity", 31, "unitCost", 4.55))));
-        }
-
-        private Long getSupplierItemCostVersion(UUID supplierId, UUID itemId) throws Exception {
-                MvcResult result = mockMvc.perform(
-                                withAuth(get("/v1/suppliers/{supplierId}/items/{itemId}/costs", supplierId, itemId)))
-                                .andExpect(status().isOk())
-                                .andReturn();
-
-                @SuppressWarnings("unchecked")
-                Map<String, Object> response = objectMapper.readValue(result.getResponse().getContentAsString(),
-                                Map.class);
-                return ((Number) response.get("version")).longValue();
         }
 }
