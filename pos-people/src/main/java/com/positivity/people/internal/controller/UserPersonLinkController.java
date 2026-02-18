@@ -1,6 +1,7 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.people.internal.dto.CreateUserLinkRequest;
 import com.positivity.people.internal.dto.LinkUserToPersonRequest;
 import com.positivity.people.internal.dto.PersonResponse;
 import com.positivity.people.internal.dto.UserPersonLinkResponse;
@@ -32,20 +33,37 @@ public class UserPersonLinkController {
     }
 
     @PostMapping("/users/{userId}/link")
-    @EmitEvent(id = "PEOPLE_USER_PERSON_LINK_CREATE", apiVersion = "1")
+    @EmitEvent(id = "PEOPLE_USER_LINK_CREATE", apiVersion = "1")
     @Operation(summary = "Link user to person", description = "Create a link between an authentication user and a person record")
     @ApiResponse(responseCode = "201", description = "Link created successfully", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
+    @ApiResponse(responseCode = "200", description = "Link already exists and is returned", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Person not found")
-    @ApiResponse(responseCode = "409", description = "User already linked")
+    @ApiResponse(responseCode = "409", description = "User already linked to different person")
     public ResponseEntity<UserPersonLinkResponse> linkUserToPerson(
             @Parameter(description = "User ID from authentication system", required = true) @PathVariable UUID userId,
             @Valid @RequestBody LinkUserToPersonRequest request) {
 
         request.setUserId(userId);
+        boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(userId, request.getPersonId());
 
         UserPersonLinkResponse response = linkService.linkUserToPerson(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return alreadyLinked ? ResponseEntity.ok(response) : ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/user-links")
+    @EmitEvent(id = "PEOPLE_USER_LINK_CREATE", apiVersion = "1")
+    @Operation(summary = "Create user-person link (admin)", description = "Create a link between an authentication user and a person record")
+    @ApiResponse(responseCode = "201", description = "Link created successfully", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
+    @ApiResponse(responseCode = "200", description = "Link already exists and is returned", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(responseCode = "404", description = "Person not found")
+    @ApiResponse(responseCode = "409", description = "User already linked to different person")
+    public ResponseEntity<UserPersonLinkResponse> createUserPersonLink(
+            @Valid @RequestBody CreateUserLinkRequest request) {
+        boolean alreadyLinked = linkService.linkExistsByUserIdAndPersonId(request.getUserId(), request.getPersonId());
+        UserPersonLinkResponse response = linkService.createUserLink(request.getUserId(), request.getPersonId());
+        return alreadyLinked ? ResponseEntity.ok(response) : ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @DeleteMapping("/users/{userId}/link")
@@ -80,5 +98,15 @@ public class UserPersonLinkController {
 
         List<UUID> userIds = linkService.findUserIdsByPersonId(personId);
         return ResponseEntity.ok(userIds);
+    }
+
+    @GetMapping("/user-links/{personId}")
+    @EmitEvent(id = "PEOPLE_USER_LINK_GET", apiVersion = "1")
+    @Operation(summary = "Get links by person ID", description = "Retrieve user-person links for person")
+    @ApiResponse(responseCode = "200", description = "Links found", content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Link or person not found")
+    public ResponseEntity<List<UserPersonLinkResponse>> getLinkByPersonId(
+            @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
+        return ResponseEntity.ok(linkService.getUserLinks(personId));
     }
 }

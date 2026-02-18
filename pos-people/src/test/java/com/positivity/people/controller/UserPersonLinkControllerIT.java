@@ -48,7 +48,7 @@ class UserPersonLinkControllerIT {
         @Test
         void linkUserToPerson_success_returns201() {
                 UUID personId = createPerson("Casey", "Lane", "casey@example.com");
-                String userId = "user-it-1";
+                String userId = UUID.randomUUID().toString();
 
                 HttpEntity<String> entity = new HttpEntity<>(
                                 createLinkRequestJson(userId, personId, "PRIMARY", "integration test"),
@@ -69,7 +69,7 @@ class UserPersonLinkControllerIT {
 
         @Test
         void linkUserToPerson_personNotFound_returns404() {
-                String userId = "user-it-404";
+                String userId = UUID.randomUUID().toString();
                 HttpEntity<String> entity = new HttpEntity<>(
                                 createLinkRequestJson(userId, UUID.randomUUID(), "PRIMARY", null),
                                 authenticatedHeaders());
@@ -87,9 +87,9 @@ class UserPersonLinkControllerIT {
         }
 
         @Test
-        void linkUserToPerson_alreadyLinked_returns409() {
+        void linkUserToPerson_alreadyLinked_returns200() {
                 UUID personId = createPerson("Taylor", "Ray", "taylor@example.com");
-                String userId = "user-it-dup";
+                String userId = UUID.randomUUID().toString();
                 HttpEntity<String> entity = new HttpEntity<>(
                                 createLinkRequestJson(userId, personId, "PRIMARY", null),
                                 authenticatedHeaders());
@@ -111,9 +111,9 @@ class UserPersonLinkControllerIT {
                                 },
                                 userId);
 
-                assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
                 assertThat(secondResponse.getBody()).isNotNull();
-                assertThat(secondResponse.getBody().get("detail").toString()).contains("already linked");
+                assertThat(secondResponse.getBody()).containsEntry("userId", userId);
         }
 
         @Test
@@ -140,7 +140,7 @@ class UserPersonLinkControllerIT {
         @Test
         void unlinkUserFromPerson_success_returns204() {
                 UUID personId = createPerson("Chris", "Doe", "chris@example.com");
-                String userId = "user-unlink";
+                String userId = UUID.randomUUID().toString();
                 linkUser(userId, personId);
 
                 HttpEntity<Void> entity = new HttpEntity<>(authenticatedHeaders());
@@ -163,7 +163,7 @@ class UserPersonLinkControllerIT {
                                 entity,
                                 new ParameterizedTypeReference<>() {
                                 },
-                                "missing-user");
+                                UUID.randomUUID().toString());
 
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
                 assertThat(response.getBody()).isNotNull();
@@ -173,7 +173,7 @@ class UserPersonLinkControllerIT {
         @Test
         void findPersonByUserId_success_returns200() {
                 UUID personId = createPerson("Jordan", "Case", "jordan@example.com");
-                String userId = "user-find";
+                String userId = UUID.randomUUID().toString();
                 linkUser(userId, personId);
 
                 HttpEntity<Void> entity = new HttpEntity<>(authenticatedHeaders());
@@ -200,7 +200,7 @@ class UserPersonLinkControllerIT {
                                 entity,
                                 new ParameterizedTypeReference<>() {
                                 },
-                                "unknown-user");
+                                UUID.randomUUID().toString());
 
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
                 assertThat(response.getBody()).isNotNull();
@@ -210,8 +210,10 @@ class UserPersonLinkControllerIT {
         @Test
         void findUserIdsByPersonId_success_returns200() {
                 UUID personId = createPerson("Dana", "Stone", "dana@example.com");
-                linkUser("user-a", personId);
-                linkUser("user-b", personId);
+                String userA = UUID.randomUUID().toString();
+                String userB = UUID.randomUUID().toString();
+                linkUser(userA, personId);
+                linkUser(userB, personId);
 
                 HttpEntity<Void> entity = new HttpEntity<>(authenticatedHeaders());
                 ResponseEntity<List<String>> response = restTemplate.exchange(
@@ -223,7 +225,7 @@ class UserPersonLinkControllerIT {
                                 personId);
 
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-                assertThat(response.getBody()).containsExactlyInAnyOrder("user-a", "user-b");
+                assertThat(response.getBody()).containsExactlyInAnyOrder(userA, userB);
         }
 
         @Test
@@ -258,7 +260,7 @@ class UserPersonLinkControllerIT {
                                 new ParameterizedTypeReference<>() {
                                 });
 
-                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
                 assertThat(response.getBody()).isNotNull();
                 return UUID.fromString(response.getBody().get("id").toString());
         }
