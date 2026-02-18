@@ -377,6 +377,23 @@ public class PriceBookServiceImpl implements PriceBookService {
         if (request.getCreatedByUserId() == null) {
             throw new CatalogValidationException("createdByUserId is required.");
         }
+
+        PriceBookRuleConditionType conditionType = request.getConditionType();
+        if (conditionType == PriceBookRuleConditionType.LOCATION) {
+            if (request.getConditionValue() == null || request.getConditionValue().isBlank()) {
+                throw new CatalogValidationException("conditionValue is required for LOCATION conditionType.");
+            }
+            try {
+                UUID.fromString(request.getConditionValue());
+            } catch (IllegalArgumentException ex) {
+                throw new CatalogValidationException(
+                        "conditionValue must be a valid UUID for LOCATION conditionType.");
+            }
+        } else if (conditionType == PriceBookRuleConditionType.CUSTOMER_TIER) {
+            if (request.getConditionValue() == null || request.getConditionValue().isBlank()) {
+                throw new CatalogValidationException("conditionValue is required for CUSTOMER_TIER conditionType.");
+            }
+        }
     }
 
     private void ensureRuleNoConflict(UUID priceBookId, PriceBookRuleCreateRequestDto request, UUID excludeRuleId) {
