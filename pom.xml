@@ -325,6 +325,14 @@
 					<target>21</target>
 				</configuration>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.4</version>
+				<configuration>
+					<failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 
