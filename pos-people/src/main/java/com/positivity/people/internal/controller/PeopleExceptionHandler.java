@@ -1,7 +1,6 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.people.internal.client.SecurityServiceException;
-import com.positivity.people.internal.exception.DuplicateLocationCodeException;
 import com.positivity.people.internal.exception.LocationAssignmentNotFoundException;
 import com.positivity.people.internal.exception.LocationNotFoundException;
 import com.positivity.people.internal.exception.NotFoundException;
@@ -43,15 +42,6 @@ public class PeopleExceptionHandler {
 
     @ExceptionHandler(UserAlreadyLinkedException.class)
     public ProblemDetail handleUserAlreadyLinked(UserAlreadyLinkedException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
-        return problem;
-    }
-
-    @ExceptionHandler(DuplicateLocationCodeException.class)
-    public ProblemDetail handleDuplicateLocationCode(DuplicateLocationCodeException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
                 ex.getMessage());

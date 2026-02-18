@@ -11,50 +11,36 @@ import java.util.List;
  */
 public final class LocationEventTypes {
 
-    private LocationEventTypes() {
-        // Utility class
-    }
+        private LocationEventTypes() {
+                // Utility class
+        }
 
-    // Location events
-    public static final EventTypeRegistration LOCATION_LOCATION_CREATE = EventTypeRegistration
-            .write("LOCATION_LOCATION_CREATE", "Create a new location").build();
+        public static final EventTypeRegistration LOCATION_CREATED = EventTypeRegistration
+                        .write("LOCATION_CREATED", "Create a location").build();
 
-    public static final EventTypeRegistration LOCATION_LOCATION_UPDATE = EventTypeRegistration
-            .write("LOCATION_LOCATION_UPDATE", "Update an existing location").build();
+        public static final EventTypeRegistration LOCATION_UPDATED = EventTypeRegistration
+                        .write("LOCATION_UPDATED", "Update a location").build();
 
-    public static final EventTypeRegistration LOCATION_PARENT_ADD = EventTypeRegistration
-            .write("LOCATION_PARENT_ADD", "Add a parent relationship to a location").build();
+        public static final EventTypeRegistration LOCATION_DELETED = EventTypeRegistration
+                        .write("LOCATION_DELETED", "Delete a location").build();
 
-    // Bay events
-    public static final EventTypeRegistration LOCATION_BAY_CREATE = EventTypeRegistration
-            .write("LOCATION_BAY_CREATE", "Create a new bay for a location").build();
+        public static final EventTypeRegistration LOCATION_GET = EventTypeRegistration
+                        .fastRead("LOCATION_GET", "Get location by ID").build();
 
-    public static final EventTypeRegistration LOCATION_BAY_MANAGE = EventTypeRegistration
-            .write("LOCATION_BAY_MANAGE", "Create or update bays in bulk").build();
+        public static final EventTypeRegistration LOCATION_LIST = EventTypeRegistration
+                        .fastRead("LOCATION_LIST", "List locations").build();
 
-    // Mobile Unit events
-    public static final EventTypeRegistration LOCATION_MOBILE_UNIT_CREATE = EventTypeRegistration
-            .write("LOCATION_MOBILE_UNIT_CREATE", "Create a new mobile unit for a location").build();
-
-    public static final EventTypeRegistration LOCATION_MOBILE_UNIT_MANAGE = EventTypeRegistration
-            .write("LOCATION_MOBILE_UNIT_MANAGE", "Create or update mobile units in bulk").build();
-
-    /**
-     * Returns all event types for registration with the event service.
-     *
-     * @return list of all location event type registrations
-     */
-    public static List<EventTypeRegistration> all() {
-        return List.of(
-                // Location events
-                LOCATION_LOCATION_CREATE,
-                LOCATION_LOCATION_UPDATE,
-                LOCATION_PARENT_ADD,
-                // Bay events
-                LOCATION_BAY_CREATE,
-                LOCATION_BAY_MANAGE,
-                // Mobile Unit events
-                LOCATION_MOBILE_UNIT_CREATE,
-                LOCATION_MOBILE_UNIT_MANAGE);
-    }
+        /**
+         * Returns all event types for registration with the event service.
+         *
+         * @return list of all location event type registrations
+         */
+        public static List<EventTypeRegistration> all() {
+                return List.of(
+                                LOCATION_CREATED,
+                                LOCATION_UPDATED,
+                                LOCATION_DELETED,
+                                LOCATION_GET,
+                                LOCATION_LIST);
+        }
 }

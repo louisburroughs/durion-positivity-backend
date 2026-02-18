@@ -2,10 +2,7 @@ package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.AssignStaffRequest;
-import com.positivity.people.internal.dto.CreateLocationRequest;
-import com.positivity.people.internal.dto.LocationDto;
 import com.positivity.people.internal.dto.PersonLocationAssignmentDto;
-import com.positivity.people.internal.dto.UpdateLocationRequest;
 import com.positivity.people.service.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,7 +14,6 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,52 +29,6 @@ public class LocationController {
 
     public LocationController(@NonNull LocationService locationService) {
         this.locationService = locationService;
-    }
-
-    @GetMapping
-    @Operation(summary = "List active locations")
-    @ApiResponse(responseCode = "200", description = "Locations returned")
-    public ResponseEntity<List<LocationDto>> listLocations() {
-        return ResponseEntity.ok(locationService.listActiveLocations());
-    }
-
-    @PostMapping
-    @EmitEvent(id = "PEOPLE_LOCATION_CREATED", apiVersion = "1")
-    @Operation(summary = "Create location")
-    @ApiResponse(responseCode = "201", description = "Location created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "409", description = "Duplicate location code")
-    public ResponseEntity<LocationDto> createLocation(@Valid @RequestBody CreateLocationRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(locationService.createLocation(request));
-    }
-
-    @GetMapping("/{locationId}")
-    @Operation(summary = "Get location by id")
-    @ApiResponse(responseCode = "200", description = "Location found")
-    @ApiResponse(responseCode = "404", description = "Location not found")
-    public ResponseEntity<LocationDto> getLocation(@PathVariable UUID locationId) {
-        return ResponseEntity.ok(locationService.getLocation(locationId));
-    }
-
-    @PutMapping("/{locationId}")
-    @EmitEvent(id = "PEOPLE_LOCATION_UPDATED", apiVersion = "1")
-    @Operation(summary = "Update location")
-    @ApiResponse(responseCode = "200", description = "Location updated")
-    @ApiResponse(responseCode = "404", description = "Location not found")
-    public ResponseEntity<LocationDto> updateLocation(
-            @PathVariable UUID locationId,
-            @Valid @RequestBody UpdateLocationRequest request) {
-        return ResponseEntity.ok(locationService.updateLocation(locationId, request));
-    }
-
-    @DeleteMapping("/{locationId}")
-    @EmitEvent(id = "PEOPLE_LOCATION_DELETED", apiVersion = "1")
-    @Operation(summary = "Soft-delete location")
-    @ApiResponse(responseCode = "204", description = "Location deleted")
-    @ApiResponse(responseCode = "404", description = "Location not found")
-    public ResponseEntity<Void> deleteLocation(@PathVariable UUID locationId) {
-        locationService.deleteLocation(locationId);
-        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{locationId}/staff")

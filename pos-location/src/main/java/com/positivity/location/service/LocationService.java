@@ -1,66 +1,26 @@
 package com.positivity.location.service;
 
-import com.positivity.location.internal.client.PersonClient;
-import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.LocationParent;
-import com.positivity.location.internal.entity.ParentType;
-import com.positivity.location.internal.repository.LocationParentRepository;
-import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.dto.PersonDTO;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import com.positivity.location.internal.dto.CreateLocationRequest;
+import com.positivity.location.internal.dto.LocationDto;
+import com.positivity.location.internal.dto.UpdateLocationRequest;
+import org.jspecify.annotations.NonNull;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class LocationService {
-    private final LocationRepository locationRepository;
-    private final LocationParentRepository locationParentRepository;
-    private final PersonClient personClient;
+public interface LocationService {
 
-    public List<Location> getAllLocations() {
-        return locationRepository.findAll();
-    }
+    @NonNull
+    List<LocationDto> listLocations();
 
-    public Optional<Location> getLocationById(UUID id) {
-        return locationRepository.findById(id);
-    }
+    @NonNull
+    LocationDto getLocationById(@NonNull UUID locationId);
 
-    @Transactional
-    public Location saveLocation(Location location) {
-        return locationRepository.save(location);
-    }
+    @NonNull
+    LocationDto createLocation(@NonNull CreateLocationRequest request);
 
-    public void deleteLocation(UUID id) {
-        locationRepository.deleteById(id);
-    }
+    @NonNull
+    LocationDto updateLocation(@NonNull UUID locationId, @NonNull UpdateLocationRequest request);
 
-    @Transactional
-    public LocationParent addParent(UUID childId, UUID parentId, ParentType parentType) {
-        Location child = locationRepository.findById(childId).orElseThrow();
-        Location parent = locationRepository.findById(parentId).orElseThrow();
-        LocationParent locationParent = LocationParent.builder()
-                .child(child)
-                .parent(parent)
-                .parentType(parentType)
-                .build();
-        return locationParentRepository.save(locationParent);
-    }
-
-    public List<LocationParent> getAllParents() {
-        return locationParentRepository.findAll();
-    }
-
-    public PersonDTO getResponsiblePerson(UUID locationId) {
-        Location location = locationRepository.findById(locationId).orElseThrow();
-        if (location.getResponsiblePersonId() == null)
-            return null;
-        return personClient.getPersonById(location.getResponsiblePersonId());
-    }
+    void deleteLocation(@NonNull UUID locationId);
 }

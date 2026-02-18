@@ -1,47 +1,57 @@
 package com.positivity.location.internal.entity;
 
-import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
-import lombok.*;
-import java.util.HashSet;
-import java.util.Set;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.MapKeyEnumerated;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Table(name = "locations")
+@Getter
+@Setter
 public class Location {
+
     @Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
+    @Column(nullable = false)
+    private String name;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "location_type_id", nullable = false)
+    private LocationType type;
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "location_parents", joinColumns = @JoinColumn(name = "location_id"))
+    @MapKeyColumn(name = "parent_type")
+    @MapKeyEnumerated(EnumType.STRING)
+    @Column(name = "parent_location_id", nullable = false)
+    private Map<ParentType, UUID> parents = new EnumMap<>(ParentType.class);
+
+    @Column(name = "geographical_location_id", columnDefinition = "UUID")
+    private UUID geographicalLocationId;
+
     @PrePersist
-    public void generateId() {
+    void prePersist() {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
     }
-
-    private String name;
-    private String addressLine1;
-    private String addressLine2;
-    private String city;
-    private String state;
-    private String postalCode;
-    private String country;
-    private String mailingAddress;
-
-    // Reference to Person (responsible) by ID from pos-people
-    private Long responsiblePersonId;
-
-    @Builder.Default
-    // Bi-directional parent-child relationship
-    @OneToMany(mappedBy = "child", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<LocationParent> parents = new HashSet<>();
-
-    @Builder.Default
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<LocationParent> children = new HashSet<>();
 }

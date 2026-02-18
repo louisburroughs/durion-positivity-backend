@@ -56,3 +56,9 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+pos:
+  location:
+    base-url: ${POS_LOCATION_BASE_URL:http://localhost:8086}
+    validation:
+      enabled: ${POS_LOCATION_VALIDATION_ENABLED:true}

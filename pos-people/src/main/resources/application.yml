@@ -53,3 +53,7 @@ springdoc:
 pos:
   security-service:
     base-url: ${POS_SECURITY_SERVICE_BASE_URL:http://pos-security-service:8086}
+  location:
+    base-url: ${POS_LOCATION_BASE_URL:http://localhost:8086}
+    validation:
+      enabled: ${POS_LOCATION_VALIDATION_ENABLED:true}
