@@ -50,6 +50,19 @@ public final class CatalogEventTypes {
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_UPDATE",
                                                 "Update supplier-item cost structure and volume tiers").build(),
                                 EventTypeRegistration.write("CATALOG_SUPPLIER_ITEM_COST_DELETE",
-                                                "Delete supplier-item cost structure and all tiers").build());
+                                                "Delete supplier-item cost structure and all tiers").build(),
+                                EventTypeRegistration.write("CATALOG_MSRP_CREATE", "Create MSRP record").build(),
+                                EventTypeRegistration.write("CATALOG_MSRP_UPDATE", "Update MSRP record").build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_CREATE", "Create price book").build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_UPDATE", "Update price book").build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_RULE_CREATE", "Create price book rule")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_RULE_UPDATE", "Update price book rule")
+                                                .build(),
+                                EventTypeRegistration.write("CATALOG_PRICE_BOOK_RULE_DEACTIVATE",
+                                                "Deactivate price book rule")
+                                                .build(),
+                                EventTypeRegistration.fastRead("CATALOG_PRICE_BOOK_RESOLVE_PRICE",
+                                                "Resolve effective price").build());
         }
 }

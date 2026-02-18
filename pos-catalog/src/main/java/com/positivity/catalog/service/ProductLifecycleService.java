@@ -69,13 +69,9 @@ public class ProductLifecycleService {
             lifecycleUpdateDeniedCounter.increment();
             throw new CatalogValidationException("lifecycleState is required");
         }
-        if (request.getEffectiveAt() == null) {
+        if (request.getEffectiveAt() == null && request.getEffectiveDate() == null) {
             lifecycleUpdateDeniedCounter.increment();
-            throw new CatalogValidationException("effectiveAt is required");
-        }
-        if (request.getEffectiveDate() == null) {
-            lifecycleUpdateDeniedCounter.increment();
-            throw new CatalogValidationException("effectiveDate is required");
+            throw new CatalogValidationException("effectiveAt or effectiveDate is required");
         }
         if (request.getChangedBy() == null) {
             lifecycleUpdateDeniedCounter.increment();
