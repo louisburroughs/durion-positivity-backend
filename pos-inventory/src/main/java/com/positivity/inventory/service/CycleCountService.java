@@ -3,11 +3,11 @@ package com.positivity.inventory.service;
 import java.util.List;
 import java.util.UUID;
 
+import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
+import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
-import com.positivity.inventory.internal.entity.CountEntry;
-import com.positivity.inventory.internal.entity.CycleCountTask;
 
 /**
  * Service for cycle count operations.
@@ -47,7 +47,7 @@ public interface CycleCountService {
      * @param taskId the task ID
      * @return the task entity
      */
-    CycleCountTask getTask(UUID taskId);
+    CycleCountTaskResponse getTask(UUID taskId);
     
     /**
      * Get all count entries for a task, ordered by sequence.
@@ -55,7 +55,7 @@ public interface CycleCountService {
      * @param taskId the task ID
      * @return list of count entries
      */
-    List<CountEntry> getCountHistory(UUID taskId);
+    List<CountEntryResponse> getCountHistory(UUID taskId);
     
     /**
      * Get tasks assigned to an auditor.
@@ -63,5 +63,5 @@ public interface CycleCountService {
      * @param auditorId the auditor ID
      * @return list of assigned tasks
      */
-    List<CycleCountTask> getTasksByAuditor(String auditorId);
+    List<CycleCountTaskResponse> getTasksByAuditor(String auditorId);
 }
