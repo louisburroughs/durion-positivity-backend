@@ -5,14 +5,14 @@ import org.jspecify.annotations.NonNull;
 public interface WorkSessionService {
 
     @NonNull
-    WorkSessionDto startSession(@NonNull String personId, @NonNull String actor);
+    WorkSessionDto startSession(@NonNull String personId);
 
     @NonNull
-    WorkSessionDto stopSession(@NonNull String personId, @NonNull String actor);
+    WorkSessionDto stopSession(@NonNull String personId);
 
     @NonNull
-    BreakDto startBreak(@NonNull Long sessionId, @NonNull String actor);
+    BreakDto startBreak(@NonNull Long sessionId);
 
     @NonNull
-    BreakDto stopBreak(@NonNull Long sessionId, @NonNull String actor);
+    BreakDto stopBreak(@NonNull Long sessionId);
 }
