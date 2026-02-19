@@ -89,8 +89,8 @@ class ContractBehaviorIT {
         }
 
         @Test
-        @DisplayName("VE-119-002: Duplicate code returns 409")
-        void ve119002_duplicateCode() throws Exception {
+        @DisplayName("VE-119-002: Missing location type returns 404 on create")
+        void ve119002_missingLocationType() throws Exception {
                 UUID missingTypeId = UUID.randomUUID();
 
                 mockMvc.perform(post("/v1/locations")

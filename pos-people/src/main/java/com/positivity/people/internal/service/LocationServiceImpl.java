@@ -99,9 +99,15 @@ public class LocationServiceImpl implements LocationService {
 
         LocalDate today = LocalDate.now();
         PersonLocationAssignment activeAssignment = existing.stream()
-                .filter(a -> a.getEffectiveTo() == null || !a.getEffectiveTo().isBefore(today))
+                .filter(a -> isActiveOn(a, today))
+                .sorted(Comparator
+                        .comparing(PersonLocationAssignment::getEffectiveFrom, Comparator.reverseOrder())
+                        .thenComparing(PersonLocationAssignment::getCreatedAt,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(PersonLocationAssignment::getAssignmentId,
+                                Comparator.nullsLast(Comparator.reverseOrder())))
                 .findFirst()
-                .orElse(existing.get(0));
+                .orElseThrow(() -> new LocationAssignmentNotFoundException(locationId, personId));
 
         activeAssignment.setPrimary(false);
         activeAssignment.setEffectiveTo(today);
@@ -118,7 +124,11 @@ public class LocationServiceImpl implements LocationService {
         for (PersonLocationAssignment assignment : assignments) {
             if (assignment.isPrimary() && isActiveOn(assignment, newPrimaryStartDate)) {
                 assignment.setPrimary(false);
+                // Keep intervals valid when assignments start on the same day.
                 LocalDate demotedEndDate = newPrimaryStartDate.minusDays(1);
+                if (demotedEndDate.isBefore(assignment.getEffectiveFrom())) {
+                    demotedEndDate = assignment.getEffectiveFrom();
+                }
                 if (assignment.getEffectiveTo() == null || assignment.getEffectiveTo().isAfter(demotedEndDate)) {
                     assignment.setEffectiveTo(demotedEndDate);
                 }

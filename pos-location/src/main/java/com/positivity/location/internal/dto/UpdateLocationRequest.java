@@ -1,7 +1,8 @@
 package com.positivity.location.internal.dto;
 
 import com.positivity.location.internal.entity.ParentType;
-import org.jspecify.annotations.NonNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,10 +13,10 @@ import java.util.UUID;
 @Setter
 public class UpdateLocationRequest {
 
-    @NonNull
+    @NotBlank
     private String name;
 
-    @NonNull
+    @NotNull
     private UUID typeId;
 
     private Map<ParentType, UUID> parents;

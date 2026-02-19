@@ -123,12 +123,15 @@ class LocationContractBehaviorIT extends BaseIntegrationTest {
                 .getContentAsString();
 
         var array = objectMapper.readTree(firstLocationStaff);
+        boolean firstAssignmentFound = false;
         for (var node : array) {
             if (firstAssignmentId.equals(node.get("assignmentId").asText())) {
+                firstAssignmentFound = true;
                 org.assertj.core.api.Assertions.assertThat(node.get("isPrimary").asBoolean()).isFalse();
                 org.assertj.core.api.Assertions.assertThat(node.get("effectiveTo").asText()).isEqualTo("2026-05-31");
             }
         }
+        org.assertj.core.api.Assertions.assertThat(firstAssignmentFound).isTrue();
     }
 
     @Test

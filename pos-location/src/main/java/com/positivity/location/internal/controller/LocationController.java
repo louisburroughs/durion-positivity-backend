@@ -50,7 +50,7 @@ public class LocationController {
     @Operation(summary = "Create a new location", description = "Add a new location to the system.")
     @ApiResponse(responseCode = "201", description = "Location created successfully.")
     @ApiResponse(responseCode = "400", description = "Validation error.")
-    @ApiResponse(responseCode = "409", description = "Duplicate location code.")
+    @ApiResponse(responseCode = "409", description = "Duplicate location error.")
     @EmitEvent(id = "LOCATION_CREATED", apiVersion = "1")
     @PostMapping
     public ResponseEntity<LocationDto> createLocation(
@@ -62,7 +62,7 @@ public class LocationController {
     @ApiResponse(responseCode = "200", description = "Location updated successfully.")
     @ApiResponse(responseCode = "400", description = "Validation error.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
-    @ApiResponse(responseCode = "409", description = "Duplicate location code.")
+    @ApiResponse(responseCode = "409", description = "Duplicate location error.")
     @EmitEvent(id = "LOCATION_UPDATED", apiVersion = "1")
     @PutMapping("/{locationId}")
     public ResponseEntity<LocationDto> updateLocation(

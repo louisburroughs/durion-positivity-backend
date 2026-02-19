@@ -17,7 +17,7 @@ public final class PeopleEventTypes {
 
         /**
          * All event type registrations for the people module.
-         * Total: 20 event types.
+         * Total: 22 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
