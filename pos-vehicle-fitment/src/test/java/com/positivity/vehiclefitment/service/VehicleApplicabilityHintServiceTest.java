@@ -166,7 +166,7 @@ class VehicleApplicabilityHintServiceTest {
 
         // Then
         assertThat(response.getProductIds()).isEmpty();
-        assertThat(response.getCount()).isEqualTo(0);
+        assertThat(response.getCount()).isZero();
     }
 
     @Test
