@@ -49,11 +49,11 @@ class LocationServiceCycleGuardIT {
         Location child = createLocation("Child-A");
         Location parent = createLocation("Parent-B");
 
-        locationService.addParent(child.getId(), parent.getId(), ParentType.HOME_OFFICE);
+        locationService.addParent(child.getId(), parent.getId(), ParentType.PHYSICAL);
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
-                () -> locationService.addParent(parent.getId(), child.getId(), ParentType.HOME_OFFICE));
+                () -> locationService.addParent(parent.getId(), child.getId(), ParentType.PHYSICAL));
 
         assertTrue(ex.getMessage().contains("inverse relationship already exists"));
         assertEquals(1L, locationParentRepository.count());
@@ -65,12 +65,12 @@ class LocationServiceCycleGuardIT {
         Location b = createLocation("Node-B");
         Location c = createLocation("Node-C");
 
-        locationService.addParent(a.getId(), b.getId(), ParentType.HOME_OFFICE);
-        locationService.addParent(b.getId(), c.getId(), ParentType.HOME_OFFICE);
+        locationService.addParent(a.getId(), b.getId(), ParentType.PHYSICAL);
+        locationService.addParent(b.getId(), c.getId(), ParentType.PHYSICAL);
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
-                () -> locationService.addParent(c.getId(), a.getId(), ParentType.HOME_OFFICE));
+                () -> locationService.addParent(c.getId(), a.getId(), ParentType.PHYSICAL));
 
         assertTrue(ex.getMessage().contains("parent is a descendant of child"));
         assertEquals(2L, locationParentRepository.count());

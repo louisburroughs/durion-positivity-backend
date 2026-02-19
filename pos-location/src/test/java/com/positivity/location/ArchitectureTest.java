@@ -3,20 +3,21 @@ package com.positivity.location;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 
 /**
  * ArchUnit tests enforcing architecture rules for pos-location module.
- * 
+ *
  * Enforces:
  * - Internal package encapsulation
  * - Service layer as only public API
  * - Controller -> Service -> Repository layering
  * - No circular dependencies
  */
-@AnalyzeClasses(packages = "com.positivity.location")
+@AnalyzeClasses(packages = "com.positivity.location", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
     @ArchTest

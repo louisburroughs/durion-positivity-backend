@@ -50,7 +50,7 @@ class ContractBehaviorIT {
         void testCreateLocation_HappyPath() throws Exception {
                 String payload = createLocationPayload("Main Store", "123 Main St", "ACTIVE");
 
-                mockMvc.perform(post("/api/v1/locations")
+                mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-001"))
@@ -67,7 +67,7 @@ class ContractBehaviorIT {
         void testGetLocation_HappyPath() throws Exception {
                 String payload = createLocationPayload("Secondary Store", "456 Oak Ave", "ACTIVE");
 
-                MvcResult createResult = mockMvc.perform(post("/api/v1/locations")
+                MvcResult createResult = mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-002"))
@@ -77,7 +77,7 @@ class ContractBehaviorIT {
                 String responseBody = createResult.getResponse().getContentAsString();
                 String locationId = objectMapper.readTree(responseBody).get("id").asString();
 
-                mockMvc.perform(get("/api/v1/locations/{id}", locationId)
+                mockMvc.perform(get("/v1/locations/{id}", locationId)
                                 .header("X-Correlation-Id", "test-002"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(locationId))
@@ -92,7 +92,7 @@ class ContractBehaviorIT {
         void testCreateLocation_MissingName() throws Exception {
                 String invalidPayload = "{\"address\":\"789 Elm St\",\"status\":\"ACTIVE\"}";
 
-                mockMvc.perform(post("/api/v1/locations")
+                mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-001"))
@@ -106,14 +106,14 @@ class ContractBehaviorIT {
                 String payload = createLocationPayload("Unique Store", "999 Test Rd", "ACTIVE");
 
                 // Create first location
-                mockMvc.perform(post("/api/v1/locations")
+                mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-ve-002a"))
                                 .andExpect(status().isCreated());
 
                 // Try to create duplicate
-                mockMvc.perform(post("/api/v1/locations")
+                mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-ve-002b"))
@@ -126,7 +126,7 @@ class ContractBehaviorIT {
         void testCreateLocation_InvalidStatus() throws Exception {
                 String invalidPayload = "{\"name\":\"Bad Store\",\"address\":\"111 Bad St\",\"status\":\"INVALID_STATUS\"}";
 
-                mockMvc.perform(post("/api/v1/locations")
+                mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-003"))
@@ -142,7 +142,7 @@ class ContractBehaviorIT {
                 String idempotencyKey = "idem-loc-" + System.currentTimeMillis();
                 String payload = createLocationPayload("Idempotent Store", "222 Same St", "ACTIVE");
 
-                MvcResult result1 = mockMvc.perform(post("/api/v1/locations")
+                MvcResult result1 = mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
@@ -153,7 +153,7 @@ class ContractBehaviorIT {
                 String id1 = objectMapper.readTree(result1.getResponse().getContentAsString()).get("id").asString();
 
                 // Retry with same key
-                MvcResult result2 = mockMvc.perform(post("/api/v1/locations")
+                MvcResult result2 = mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
@@ -172,7 +172,7 @@ class ContractBehaviorIT {
         void testUpdateLocation_OptimisticLockingConflict() throws Exception {
                 String payload = createLocationPayload("Concurrency Store", "333 Concurrent Ave", "ACTIVE");
 
-                MvcResult createResult = mockMvc.perform(post("/api/v1/locations")
+                MvcResult createResult = mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-cc-001"))
@@ -184,7 +184,7 @@ class ContractBehaviorIT {
 
                 String updatePayload = "{\"name\":\"Updated Store\",\"status\":\"ACTIVE\",\"version\":0}";
 
-                mockMvc.perform(patch("/api/v1/locations/{id}", locationId)
+                mockMvc.perform(patch("/v1/locations/{id}", locationId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(updatePayload)
                                 .header("X-Correlation-Id", "test-cc-001"))
@@ -197,7 +197,7 @@ class ContractBehaviorIT {
         void testUpdateLocation_InvalidStateTransition() throws Exception {
                 String payload = createLocationPayload("State Store", "444 State Rd", "ACTIVE");
 
-                MvcResult createResult = mockMvc.perform(post("/api/v1/locations")
+                MvcResult createResult = mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-cc-002"))
@@ -210,7 +210,7 @@ class ContractBehaviorIT {
                 // Try invalid state transition
                 String invalidUpdatePayload = "{\"name\":\"State Store\",\"status\":\"INVALID\"}";
 
-                mockMvc.perform(patch("/api/v1/locations/{id}", locationId)
+                mockMvc.perform(patch("/v1/locations/{id}", locationId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidUpdatePayload)
                                 .header("X-Correlation-Id", "test-cc-002"))
@@ -225,7 +225,7 @@ class ContractBehaviorIT {
         void testLocation_TimestampFormat() throws Exception {
                 String payload = createLocationPayload("Timestamp Store", "555 Time Blvd", "ACTIVE");
 
-                MvcResult result = mockMvc.perform(post("/api/v1/locations")
+                MvcResult result = mockMvc.perform(post("/v1/locations")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-ff-001"))
@@ -247,7 +247,7 @@ class ContractBehaviorIT {
                 for (String status : validStatuses) {
                         String payload = createLocationPayload("Status Store " + status, "666 Status Way", status);
 
-                        mockMvc.perform(post("/api/v1/locations")
+                        mockMvc.perform(post("/v1/locations")
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(payload)
                                         .header("X-Correlation-Id", "test-ff-002-" + status))
