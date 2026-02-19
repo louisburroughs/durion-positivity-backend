@@ -41,4 +41,20 @@ public class RestClientConfig {
                 .baseUrl(workexecBaseUrl)
                 .build();
     }
+
+    @Bean
+    public RestClient locationServiceRestClient(
+            RestClient.Builder builder,
+            @Value("${pos.location-service.base-url:http://pos-location:8084}") String locationServiceBaseUrl,
+            @Value("${pos.restclient.connect.timeout:3000}") int connectTimeoutMs,
+            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+
+        return builder
+                .requestFactory(factory)
+                .baseUrl(locationServiceBaseUrl)
+                .build();
+    }
 }

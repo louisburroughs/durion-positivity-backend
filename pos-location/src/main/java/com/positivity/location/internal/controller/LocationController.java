@@ -21,6 +21,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
+import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.service.LocationService;
 
@@ -55,6 +56,14 @@ public class LocationController {
         return locationService.getLocationByIdDto(locationId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Validate location reference", description = "Return existence and active state for a location ID.")
+    @ApiResponse(responseCode = "200", description = "Validation result returned.")
+    @GetMapping("/{locationId}/validation")
+    public ResponseEntity<LocationValidationResponseDTO> validateLocation(
+            @Parameter(description = "ID of the location to validate", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId) {
+        return ResponseEntity.ok(locationService.getLocationValidation(locationId));
     }
 
     @Operation(summary = "Create a new location", description = "Add a new location to the system.")

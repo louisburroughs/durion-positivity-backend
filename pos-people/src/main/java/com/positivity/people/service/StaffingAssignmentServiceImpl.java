@@ -1,11 +1,14 @@
 package com.positivity.people.service;
 
+import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
 import com.positivity.people.internal.entity.PersonLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
+import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
+import com.positivity.people.internal.repository.PersonRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -25,12 +28,15 @@ import java.util.UUID;
 public class StaffingAssignmentServiceImpl implements StaffingAssignmentService {
 
     private final PersonLocationAssignmentRepository repository;
+    private final PersonRepository personRepository;
+    private final LocationReferenceClient locationReferenceClient;
 
     @Override
     @Transactional
     public @NonNull StaffingAssignmentResponse create(
             @NonNull CreateStaffingAssignmentRequest request,
             @NonNull String actor) {
+        validatePersonAndLocation(request.personId(), request.locationId());
 
         if (repository.existsOverlapping(
                 request.personId(), request.locationId(), request.role(),
@@ -43,7 +49,20 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
             repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(
                     request.personId(), AssignmentStatus.ACTIVE)
                     .ifPresent(existing -> {
-                        existing.setEffectiveTo(request.effectiveFrom().minusDays(1));
+                        if (!dateRangesOverlap(
+                                existing.getEffectiveFrom(),
+                                existing.getEffectiveTo(),
+                                request.effectiveFrom(),
+                                request.effectiveTo())) {
+                            return;
+                        }
+
+                        LocalDate demotionDate = request.effectiveFrom().minusDays(1);
+                        if (demotionDate.isBefore(existing.getEffectiveFrom())) {
+                            demotionDate = existing.getEffectiveFrom();
+                        }
+
+                        existing.setEffectiveTo(demotionDate);
                         existing.setStatus(AssignmentStatus.ENDED);
                         repository.save(existing);
                     });
@@ -89,6 +108,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         if (existingAssignment.isEmpty()) {
             return Optional.empty();
         }
+        validatePersonAndLocation(request.personId(), request.locationId());
 
         if (repository.existsOverlappingExcludingId(
                 assignmentId,
@@ -152,5 +172,24 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                 assignment.getCreatedAt(),
                 assignment.getUpdatedAt(),
                 assignment.getCreatedBy());
+    }
+
+    private boolean dateRangesOverlap(LocalDate leftStart, LocalDate leftEnd, LocalDate rightStart, LocalDate rightEnd) {
+        LocalDate normalizedLeftEnd = leftEnd != null ? leftEnd : LocalDate.MAX;
+        LocalDate normalizedRightEnd = rightEnd != null ? rightEnd : LocalDate.MAX;
+        return !normalizedLeftEnd.isBefore(rightStart) && !normalizedRightEnd.isBefore(leftStart);
+    }
+
+    private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
+        var person = personRepository.findById(personId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
+
+        if (person.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
+        }
+
+        if (!locationReferenceClient.isLocationActive(locationId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
+        }
     }
 }

@@ -44,6 +44,9 @@ public class Location {
     private String postalCode;
     private String country;
     private String mailingAddress;
+    @Builder.Default
+    @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
+    private boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "location_type_id")

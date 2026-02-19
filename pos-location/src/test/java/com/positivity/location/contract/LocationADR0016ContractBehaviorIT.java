@@ -146,6 +146,55 @@ class LocationADR0016ContractBehaviorIT {
                 .andExpect(status().isConflict());
     }
 
+    @Test
+    @DisplayName("CP-119-003A: GET /v1/locations/{id}/validation returns exists=true and active=true for existing location")
+    void CP_119_003A_locationValidation_existing_returns_exists_and_active() throws Exception {
+        String payload = """
+                {
+                    "name": "Validation Target",
+                    "code": "VALIDATE-LOC-001",
+                    "type": { "name": "Shop" },
+                    "parents": {}
+                }
+                """;
+
+        MvcResult createResult = mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-User", "test-user")
+                .header("X-Authorities", "location:create")
+                .header("X-Correlation-Id", "cp-119-003a-create"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+                .get("id").asString();
+
+        mockMvc.perform(get("/v1/locations/" + locationId + "/validation")
+                .header("X-User", "test-user")
+                .header("X-Authorities", "location:view")
+                .header("X-Correlation-Id", "cp-119-003a-validate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.locationId").value(locationId))
+                .andExpect(jsonPath("$.exists").value(true))
+                .andExpect(jsonPath("$.active").value(true));
+    }
+
+    @Test
+    @DisplayName("CP-119-003B: GET /v1/locations/{id}/validation returns exists=false and active=false for missing location")
+    void CP_119_003B_locationValidation_missing_returns_false_flags() throws Exception {
+        String missingLocationId = "018e1c9f-dead-7000-8000-300000000001";
+
+        mockMvc.perform(get("/v1/locations/" + missingLocationId + "/validation")
+                .header("X-User", "test-user")
+                .header("X-Authorities", "location:view")
+                .header("X-Correlation-Id", "cp-119-003b-validate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.locationId").value(missingLocationId))
+                .andExpect(jsonPath("$.exists").value(false))
+                .andExpect(jsonPath("$.active").value(false));
+    }
+
     // ========== ADR-0016 PARENT TYPE ENUM MIGRATION ==========
 
     @Test
