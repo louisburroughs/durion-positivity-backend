@@ -33,6 +33,5 @@ public interface PersonLocationAssignmentRepository extends JpaRepository<Person
             @Param("locationId") @NonNull UUID locationId,
             @Param("role") @NonNull String role,
             @Param("effectiveFrom") @NonNull LocalDate effectiveFrom,
-            @Param("effectiveTo") LocalDate effectiveTo
-    );
+            @Param("effectiveTo") LocalDate effectiveTo);
 }

@@ -13,6 +13,5 @@ public record CreateStaffingAssignmentRequest(
         @NonNull @NotBlank String role,
         boolean isPrimary,
         @NonNull @NotNull LocalDate effectiveFrom,
-        LocalDate effectiveTo
-) {
+        LocalDate effectiveTo) {
 }

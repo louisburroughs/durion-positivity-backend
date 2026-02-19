@@ -96,7 +96,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andReturn();
 
         String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         String updatePayload = """
                 {
@@ -169,7 +169,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andExpect(status().isCreated())
                 .andReturn();
         String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         // Create child location
         String childPayload = """
@@ -189,7 +189,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andExpect(status().isCreated())
                 .andReturn();
         String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         // Add PHYSICAL parent relationship — ADR-0016 value
         // RED: this will fail until ParentType enum is migrated from HOME_OFFICE to
@@ -223,7 +223,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andExpect(status().isCreated())
                 .andReturn();
         String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         String childPayload = """
                 {
@@ -242,7 +242,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andExpect(status().isCreated())
                 .andReturn();
         String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         // RED: ORGANIZATIONAL is an ADR-0016 value not yet in enum
         mockMvc.perform(post("/v1/locations/" + childId + "/parents/" + parentId)
@@ -274,7 +274,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andExpect(status().isCreated())
                 .andReturn();
         String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         String childPayload = """
                 {
@@ -293,7 +293,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andExpect(status().isCreated())
                 .andReturn();
         String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         // RED: HOME_OFFICE is the OLD enum value that must be rejected after ADR-0016
         // migration
@@ -332,7 +332,7 @@ class LocationADR0016ContractBehaviorIT {
                     .andExpect(status().isCreated())
                     .andReturn();
             String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
-                    .get("id").asText();
+                    .get("id").asString();
 
             String childPayload = String.format("""
                     {
@@ -351,7 +351,7 @@ class LocationADR0016ContractBehaviorIT {
                     .andExpect(status().isCreated())
                     .andReturn();
             String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
-                    .get("id").asText();
+                    .get("id").asString();
 
             // RED: PHYSICAL/ORGANIZATIONAL/FINANCIAL/SHIPPING not in current enum
             mockMvc.perform(post("/v1/locations/" + childId + "/parents/" + parentId)
@@ -467,7 +467,7 @@ class LocationADR0016ContractBehaviorIT {
                 .andReturn();
 
         String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-                .get("id").asText();
+                .get("id").asString();
 
         mockMvc.perform(delete("/v1/locations/" + locationId)
                 .header("X-User", "test-user")
