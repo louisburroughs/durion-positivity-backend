@@ -20,6 +20,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
 import com.positivity.people.internal.repository.PersonRepository;
 
 /**
@@ -54,11 +55,16 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
         @Autowired
         private PersonRepository personRepository;
 
+        @Autowired
+        private PersonLocationAssignmentRepository assignmentRepository;
+
         @MockitoBean
         private LocationReferenceClient locationReferenceClient;
 
         @BeforeEach
         void setUpReferenceData() {
+                assignmentRepository.deleteAll();
+
                 UUID personId = UUID.fromString(VALID_PERSON_ID);
                 personRepository.findById(personId).ifPresentOrElse(existing -> {
                         existing.setStatus(EmployeeStatus.ACTIVE);
