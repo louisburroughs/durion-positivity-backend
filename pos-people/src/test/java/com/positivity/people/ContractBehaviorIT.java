@@ -3,6 +3,7 @@ package com.positivity.people;
 import com.positivity.people.internal.client.SecurityServiceException;
 import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.client.WorkexecJobTimeClient;
+import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.client.dto.UserRoleDto;
@@ -21,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -51,6 +54,9 @@ class ContractBehaviorIT extends BaseIntegrationTest {
 
         @MockitoBean
         private WorkexecJobTimeClient workexecJobTimeClient;
+
+        @MockitoBean
+        private LocationReferenceClient locationReferenceClient;
 
         @Autowired
         private TimeEntryRepository timeEntryRepository;
@@ -169,6 +175,87 @@ class ContractBehaviorIT extends BaseIntegrationTest {
                                 .param("timezone", "UTC")))
                                 .andExpect(status().isServiceUnavailable())
                                 .andExpect(jsonPath("$.errorCode").value("WORKEXEC_UNAVAILABLE"));
+        }
+
+        @Test
+        @DisplayName("happy path: approved time export rows are returned")
+        void approvedTimeExport_happyPath() throws Exception {
+                resetReportData();
+                LocalDate reportDate = LocalDate.parse("2026-02-16");
+
+                seedTechnician(technicianId, "Jane", "Doe");
+
+                TimeEntry approved = new TimeEntry();
+                approved.setPersonId(technicianId.toString());
+                approved.setLocationId(locationId);
+                approved.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.APPROVED);
+                approved.setAttendanceStartAt(Instant.parse("2026-02-16T08:00:00Z"));
+                approved.setAttendanceEndAt(Instant.parse("2026-02-16T16:30:00Z"));
+                approved.setApprovedAt(Instant.parse("2026-02-16T17:00:00Z"));
+                approved.setApprovedBy("manager-1");
+                timeEntryRepository.save(approved);
+
+                when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
+                when(locationReferenceClient.getLocationName(locationId)).thenReturn("North Shop");
+
+                mockMvc.perform(withAuth(get("/v1/people/reports/approvedTime")
+                                .param("startDate", reportDate.toString())
+                                .param("endDate", reportDate.toString())
+                                .param("locationId", locationId.toString())
+                                .header("X-Authorities", "people:time:export:read")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].employeeId").value(technicianId.toString()))
+                                .andExpect(jsonPath("$[0].employeeName").value("Jane Doe"))
+                                .andExpect(jsonPath("$[0].locationName").value("North Shop"))
+                                .andExpect(jsonPath("$[0].hoursWorked").value(8.50));
+        }
+
+        @Test
+        @DisplayName("validation: approved time export rejects invalid date range")
+        void approvedTimeExport_invalidDateRange() throws Exception {
+                mockMvc.perform(withAuth(get("/v1/people/reports/approvedTime")
+                                .param("startDate", "2026-02-17")
+                                .param("endDate", "2026-02-16")
+                                .param("locationId", locationId.toString())
+                                .header("X-Authorities", "people:time:export:read")))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.detail").value("endDate must be on or after startDate"));
+        }
+
+        @Test
+        @DisplayName("auth failure: approved time export requires export authority")
+        void approvedTimeExport_forbiddenWithoutAuthority() throws Exception {
+                mockMvc.perform(withAuth(get("/v1/people/reports/approvedTime")
+                                .param("startDate", "2026-02-16")
+                                .param("endDate", "2026-02-16")
+                                .param("locationId", locationId.toString())))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("dependency failure: approved time export propagates 503")
+        void approvedTimeExport_dependencyFailure() throws Exception {
+                when(locationReferenceClient.isLocationActive(locationId)).thenReturn(true);
+                when(locationReferenceClient.getLocationName(locationId))
+                                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                                "Unable to fetch location"));
+
+                TimeEntry approved = new TimeEntry();
+                approved.setPersonId(technicianId.toString());
+                approved.setLocationId(locationId);
+                approved.setStatus(com.positivity.people.internal.enums.TimeEntryStatus.APPROVED);
+                approved.setAttendanceStartAt(Instant.parse("2026-02-16T08:00:00Z"));
+                approved.setAttendanceEndAt(Instant.parse("2026-02-16T16:00:00Z"));
+                approved.setApprovedAt(Instant.parse("2026-02-16T17:00:00Z"));
+                approved.setApprovedBy("manager-1");
+                timeEntryRepository.save(approved);
+
+                mockMvc.perform(withAuth(get("/v1/people/reports/approvedTime")
+                                .param("startDate", "2026-02-16")
+                                .param("endDate", "2026-02-16")
+                                .param("locationId", locationId.toString())
+                                .header("X-Authorities", "people:time:export:read")))
+                                .andExpect(status().isServiceUnavailable());
         }
 
         @Test

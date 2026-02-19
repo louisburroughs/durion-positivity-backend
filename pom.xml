@@ -219,6 +219,7 @@
 		<module>pos-location</module>
 		<module>pos-tax</module>
 		<module>pos-documents</module>
+		<module>pos-document-helper</module>
 		<module>pos-api-gateway</module>
 		<module>pos-service-discovery</module>
 		<module>pos-mcp-server</module>
