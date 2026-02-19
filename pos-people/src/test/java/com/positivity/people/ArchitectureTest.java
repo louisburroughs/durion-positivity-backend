@@ -73,4 +73,16 @@ public class ArchitectureTest {
                         .allowEmptyShould(true)
                         .because("service layer is the public API of this module");
 
+        @ArchTest
+        static final ArchRule classes_outside_internal_should_use_service_naming = classes()
+                        .that().resideInAPackage("com.positivity.people..")
+                        .and().resideOutsideOfPackages("..internal..", "com.positivity.people")
+                        .and().areNotAnonymousClasses()
+                        .and().areNotInnerClasses()
+                        .and().haveSimpleNameNotContaining("Dto")
+                        .and().haveSimpleNameNotContaining("Exception")
+                        .should().haveSimpleNameEndingWith("Service")
+                        .allowEmptyShould(true)
+                        .because("outside internal packages, exposed module types should be service contracts");
+
 }

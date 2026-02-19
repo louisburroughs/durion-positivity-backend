@@ -1,18 +1,22 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.dto;
 
 import java.time.Instant;
 
-public class BreakDto {
+public class WorkSessionDto {
 
     private Long sessionId;
+    private String personId;
+    private String status;
     private Instant startedAt;
     private Instant endedAt;
 
-    public BreakDto() {
+    public WorkSessionDto() {
     }
 
-    public BreakDto(Long sessionId, Instant startedAt, Instant endedAt) {
+    public WorkSessionDto(Long sessionId, String personId, String status, Instant startedAt, Instant endedAt) {
         this.sessionId = sessionId;
+        this.personId = personId;
+        this.status = status;
         this.startedAt = startedAt;
         this.endedAt = endedAt;
     }
@@ -23,6 +27,22 @@ public class BreakDto {
 
     public void setSessionId(Long sessionId) {
         this.sessionId = sessionId;
+    }
+
+    public String getPersonId() {
+        return personId;
+    }
+
+    public void setPersonId(String personId) {
+        this.personId = personId;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public Instant getStartedAt() {

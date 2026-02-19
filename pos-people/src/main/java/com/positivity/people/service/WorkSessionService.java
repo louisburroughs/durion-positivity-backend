@@ -2,6 +2,9 @@ package com.positivity.people.service;
 
 import org.jspecify.annotations.NonNull;
 
+import com.positivity.people.internal.dto.BreakDto;
+import com.positivity.people.internal.dto.WorkSessionDto;
+
 public interface WorkSessionService {
 
     @NonNull

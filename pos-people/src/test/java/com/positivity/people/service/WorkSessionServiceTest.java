@@ -3,6 +3,9 @@ package com.positivity.people.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.people.internal.dto.BreakDto;
+import com.positivity.people.internal.dto.WorkSessionDto;
+import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import org.junit.jupiter.api.BeforeEach;

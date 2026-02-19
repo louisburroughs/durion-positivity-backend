@@ -1,9 +1,9 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.people.internal.dto.BreakDto;
+import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionRequest;
-import com.positivity.people.service.BreakDto;
-import com.positivity.people.service.WorkSessionDto;
 import com.positivity.people.service.WorkSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
