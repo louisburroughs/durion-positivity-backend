@@ -361,7 +361,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * @param ruleVersion the selected posting rule version
      * @return evaluation result with resolved GL account lines
      */
-    @SuppressWarnings("unchecked")
+
     private MappingEvaluation evaluateMappingKeys(AccountingEvent event, PostingRuleVersion ruleVersion) {
         MappingEvaluation eval = new MappingEvaluation();
         String rulesJson = ruleVersion.getRulesDefinition();
@@ -393,7 +393,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             // Evaluate each condition block; first matching condition wins
             for (JsonNode conditionBlock : conditions) {
                 String conditionExpr = conditionBlock.has("condition")
-                        ? conditionBlock.get("condition").asText()
+                        ? conditionBlock.get("condition").asString()
                         : null;
 
                 eval.addEvaluatedKey(conditionExpr != null ? conditionExpr : "(default)");
@@ -413,12 +413,12 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                 boolean allLinesResolved = true;
 
                 for (JsonNode lineNode : linesNode) {
-                    String side = lineNode.has("side") ? lineNode.get("side").asText() : "DEBIT";
+                    String side = lineNode.has("side") ? lineNode.get("side").asString() : "DEBIT";
                     String amountField = lineNode.has("amountField")
-                            ? lineNode.get("amountField").asText()
+                            ? lineNode.get("amountField").asString()
                             : null;
                     String description = lineNode.has("description")
-                            ? lineNode.get("description").asText()
+                            ? lineNode.get("description").asString()
                             : null;
 
                     BigDecimal amount = resolveAmount(amountField, event);
@@ -428,8 +428,8 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                     UUID glAccountId = null;
 
                     if (lineNode.has("postingCategoryId") && lineNode.has("mappingKeyId")) {
-                        UUID postingCategoryId = UUID.fromString(lineNode.get("postingCategoryId").asText());
-                        UUID mappingKeyId = UUID.fromString(lineNode.get("mappingKeyId").asText());
+                        UUID postingCategoryId = UUID.fromString(lineNode.get("postingCategoryId").asString());
+                        UUID mappingKeyId = UUID.fromString(lineNode.get("mappingKeyId").asString());
 
                         try {
                             glAccountId = glMappingResolver.resolveGLAccount(
@@ -443,7 +443,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                         }
                     } else if (lineNode.has("glAccountId")) {
                         // Direct GL account reference (simpler rules without mapping tables)
-                        glAccountId = UUID.fromString(lineNode.get("glAccountId").asText());
+                        glAccountId = UUID.fromString(lineNode.get("glAccountId").asString());
                     }
 
                     if (glAccountId == null) {
@@ -524,7 +524,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * @param event       the accounting event
      * @return resolved amount, or BigDecimal.ZERO if unresolvable
      */
-    @SuppressWarnings("unchecked")
+
     private BigDecimal resolveAmount(String amountField, AccountingEvent event) {
         if (amountField == null || amountField.isBlank()) {
             return BigDecimal.ZERO;
@@ -570,7 +570,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      * resolution.
      * Looks for a "dimensions" map within the event payload.
      */
-    @SuppressWarnings("unchecked")
+
     private Map<String, String> extractDimensions(AccountingEvent event) {
         Map<String, Object> payload = event.getPayload();
         if (payload == null) {

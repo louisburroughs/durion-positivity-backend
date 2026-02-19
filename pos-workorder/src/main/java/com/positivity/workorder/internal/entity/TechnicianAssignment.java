@@ -1,14 +1,25 @@
 package com.positivity.workorder.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
-import jakarta.persistence.*;
-import lombok.*;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.UUID;
+import com.positivity.shared.id.UUIDv7Generator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Represents a technician assignment to a workorder.

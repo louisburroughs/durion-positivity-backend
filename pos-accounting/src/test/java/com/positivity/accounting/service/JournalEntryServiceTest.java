@@ -20,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -76,7 +75,7 @@ class JournalEntryServiceTest {
     void createJournalEntry_balanced_success() {
         // Arrange
         JournalEntry entry = createBalancedEntry();
-        
+
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -99,7 +98,7 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry entry = createBalancedEntry();
         entry.setJournalEntryId(null);
-        
+
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -188,11 +187,11 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry existingEntry = createBalancedEntry();
         existingEntry.setStatus(JournalEntryStatus.DRAFT);
-        
+
         JournalEntry updates = new JournalEntry();
         updates.setDescription("Updated description");
         updates.setLines(createBalancedLines());
-        
+
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(existingEntry));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -211,10 +210,10 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry existingEntry = createBalancedEntry();
         existingEntry.setStatus(JournalEntryStatus.POSTED);
-        
+
         JournalEntry updates = new JournalEntry();
         updates.setDescription("Updated description");
-        
+
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(existingEntry));
 
         // Act & Assert
@@ -231,7 +230,7 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry entry = createBalancedEntry();
         entry.setStatus(JournalEntryStatus.DRAFT);
-        
+
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -252,7 +251,7 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry entry = createBalancedEntry();
         entry.setStatus(JournalEntryStatus.POSTED);
-        
+
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
 
         // Act & Assert
@@ -269,7 +268,7 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry original = createBalancedEntry();
         original.setStatus(JournalEntryStatus.POSTED);
-        
+
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(original));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -282,13 +281,13 @@ class JournalEntryServiceTest {
         assertThat(reversal.getDescription()).contains("Reversal of");
         assertThat(reversal.getDescription()).contains("CORRECTION");
         assertThat(reversal.getLines()).hasSize(2);
-        
+
         // Verify debits and credits are swapped
         JournalEntryLine reversalLine1 = reversal.getLines().get(0);
         JournalEntryLine originalLine1 = original.getLines().get(0);
         assertThat(reversalLine1.getDebitAmount()).isEqualTo(originalLine1.getCreditAmount());
         assertThat(reversalLine1.getCreditAmount()).isEqualTo(originalLine1.getDebitAmount());
-        
+
         verify(journalEntryRepository).save(any(JournalEntry.class));
     }
 
@@ -298,7 +297,7 @@ class JournalEntryServiceTest {
         // Arrange
         JournalEntry entry = createBalancedEntry();
         entry.setStatus(JournalEntryStatus.DRAFT);
-        
+
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
 
         // Act & Assert
@@ -316,7 +315,7 @@ class JournalEntryServiceTest {
         List<JournalEntry> entries = List.of(createBalancedEntry(), createBalancedEntry());
         Page<JournalEntry> page = new PageImpl<>(entries);
         Pageable pageable = PageRequest.of(0, 10);
-        
+
         when(journalEntryRepository.findAll(pageable)).thenReturn(page);
 
         // Act
@@ -334,7 +333,7 @@ class JournalEntryServiceTest {
         List<JournalEntry> entries = List.of(createBalancedEntry());
         Page<JournalEntry> page = new PageImpl<>(entries);
         Pageable pageable = PageRequest.of(0, 10);
-        
+
         when(journalEntryRepository.findByStatus(JournalEntryStatus.POSTED, pageable)).thenReturn(page);
 
         // Act
@@ -374,7 +373,7 @@ class JournalEntryServiceTest {
 
     private List<JournalEntryLine> createBalancedLines() {
         List<JournalEntryLine> lines = new ArrayList<>();
-        
+
         JournalEntryLine line1 = new JournalEntryLine();
         line1.setLineId(UUID.randomUUID());
         line1.setJournalEntryId(testJournalEntryId);
@@ -383,7 +382,7 @@ class JournalEntryServiceTest {
         line1.setCreditAmount(BigDecimal.ZERO);
         line1.setDescription("Debit line");
         lines.add(line1);
-        
+
         JournalEntryLine line2 = new JournalEntryLine();
         line2.setLineId(UUID.randomUUID());
         line2.setJournalEntryId(testJournalEntryId);
@@ -392,7 +391,7 @@ class JournalEntryServiceTest {
         line2.setCreditAmount(new BigDecimal("100.00"));
         line2.setDescription("Credit line");
         lines.add(line2);
-        
+
         return lines;
     }
 
@@ -401,7 +400,7 @@ class JournalEntryServiceTest {
         entry.setJournalEntryId(testJournalEntryId);
         entry.setTransactionDate(testTransactionDate);
         entry.setDescription("Unbalanced entry");
-        
+
         List<JournalEntryLine> lines = new ArrayList<>();
         JournalEntryLine line1 = new JournalEntryLine();
         line1.setLineId(UUID.randomUUID());
@@ -409,14 +408,14 @@ class JournalEntryServiceTest {
         line1.setDebitAmount(new BigDecimal("100.00"));
         line1.setCreditAmount(BigDecimal.ZERO);
         lines.add(line1);
-        
+
         JournalEntryLine line2 = new JournalEntryLine();
         line2.setLineId(UUID.randomUUID());
         line2.setGlAccountId(testGLAccountId2);
         line2.setDebitAmount(BigDecimal.ZERO);
         line2.setCreditAmount(new BigDecimal("50.00")); // Unbalanced!
         lines.add(line2);
-        
+
         entry.setLines(lines);
         return entry;
     }

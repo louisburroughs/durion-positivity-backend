@@ -1,23 +1,22 @@
 package com.positivity.accounting.contract;
 
-import com.positivity.accounting.BaseIntegrationTest;
-
-import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
-import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
-import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
-import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MvcResult;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Map;
 import java.util.UUID;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
+
+import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
+import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 
 /**
  * Contract Behavioral Integration Tests for Posting Category and Mapping Key
@@ -32,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests run against the actual service in test mode (not mocked).
  */
 @DisplayName("Posting Category and Mapping Key Contract Behavioral Tests")
-public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegrationTest {
+class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegrationTest {
 
         private static final String API_V1 = "/v1/accounting";
 
@@ -42,7 +41,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("PC-001: Create Posting Category with valid fields")
-        public void testCreatePostingCategoryHappyPath() throws Exception {
+        void testCreatePostingCategoryHappyPath() throws Exception {
                 // Arrange: Prepare valid payload
                 PostingCategoryCreateRequest request = new PostingCategoryCreateRequest();
                 request.setCategoryName("Sales_" + UUID.randomUUID().toString().substring(0, 8));
@@ -65,7 +64,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("PC-002: Get Posting Category by ID")
-        public void testGetPostingCategory() throws Exception {
+        void testGetPostingCategory() throws Exception {
                 // Arrange: Create a posting category first
                 UUID categoryId = createPostingCategory("Revenue_" + UUID.randomUUID().toString().substring(0, 8),
                                 "Revenue transactions", "test-user");
@@ -79,7 +78,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("PC-VE-001: Reject duplicate Posting Category name")
-        public void testCreatePostingCategoryDuplicate() throws Exception {
+        void testCreatePostingCategoryDuplicate() throws Exception {
                 // Arrange: Create first posting category with unique name
                 String uniqueName = "Inventory_" + UUID.randomUUID().toString().substring(0, 8);
                 createPostingCategory(uniqueName, "Inventory transactions", "test-user");
@@ -100,7 +99,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("PC-VE-002: Reject duplicate with different whitespace")
-        public void testCreatePostingCategoryDuplicateWithWhitespace() throws Exception {
+        void testCreatePostingCategoryDuplicateWithWhitespace() throws Exception {
                 // Arrange: Create first posting category
                 String uniqueName = "Assets_" + UUID.randomUUID().toString().substring(0, 8);
                 createPostingCategory(uniqueName, "Asset transactions", "test-user");
@@ -121,7 +120,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("PC-VE-003: Reject Get with non-existent ID")
-        public void testGetNonExistentPostingCategory() throws Exception {
+        void testGetNonExistentPostingCategory() throws Exception {
                 // Arrange: Generate a random UUID that doesn't exist
                 UUID nonExistentId = UUID.randomUUID();
 
@@ -137,7 +136,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("MK-001: Create Mapping Key with valid fields")
-        public void testCreateMappingKeyHappyPath() throws Exception {
+        void testCreateMappingKeyHappyPath() throws Exception {
                 // Arrange: Create a posting category first
                 UUID categoryId = createPostingCategory("Services_" + UUID.randomUUID().toString().substring(0, 8),
                                 "Service transactions", "test-user");
@@ -165,7 +164,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("MK-002: Get Mapping Key by ID")
-        public void testGetMappingKey() throws Exception {
+        void testGetMappingKey() throws Exception {
                 // Arrange: Create category and mapping key
                 UUID categoryId = createPostingCategory("Materials_" + UUID.randomUUID().toString().substring(0, 8),
                                 "Material transactions", "test-user");
@@ -183,7 +182,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("MK-VE-001: Reject Mapping Key with non-existent Posting Category")
-        public void testCreateMappingKeyNonExistentCategory() throws Exception {
+        void testCreateMappingKeyNonExistentCategory() throws Exception {
                 // Arrange: Generate a random UUID that doesn't exist
                 UUID nonExistentCategoryId = UUID.randomUUID();
 
@@ -203,7 +202,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("MK-VE-002: Reject duplicate Mapping Key name within same category")
-        public void testCreateMappingKeyDuplicateWithinCategory() throws Exception {
+        void testCreateMappingKeyDuplicateWithinCategory() throws Exception {
                 // Arrange: Create category and first mapping key
                 UUID categoryId = createPostingCategory("Supplies_" + UUID.randomUUID().toString().substring(0, 8),
                                 "Supply transactions", "test-user");
@@ -226,7 +225,7 @@ public class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegration
 
         @Test
         @DisplayName("MK-VE-003: Allow same Mapping Key name in different categories")
-        public void testCreateMappingKeySameNameDifferentCategory() throws Exception {
+        void testCreateMappingKeySameNameDifferentCategory() throws Exception {
                 // Arrange: Create two different categories
                 UUID category1 = createPostingCategory("CategoryX_" + UUID.randomUUID().toString().substring(0, 8),
                                 "Description X", "test-user");

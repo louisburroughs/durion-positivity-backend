@@ -2,7 +2,6 @@ package com.positivity.accounting.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -118,12 +117,11 @@ class IdempotencyServiceTest {
         when(repository.save(any(IdempotencyKey.class))).thenAnswer(invocation -> {
             IdempotencyKey saved = invocation.getArgument(0);
             Instant expectedExpiry = beforeCall.plus(24, ChronoUnit.HOURS);
-            
+
             // Allow 1 second tolerance for test execution time
             assertThat(saved.getExpiresAt()).isBetween(
-                expectedExpiry.minus(1, ChronoUnit.SECONDS),
-                expectedExpiry.plus(1, ChronoUnit.SECONDS)
-            );
+                    expectedExpiry.minus(1, ChronoUnit.SECONDS),
+                    expectedExpiry.plus(1, ChronoUnit.SECONDS));
             assertThat(saved.getKeyValue()).isEqualTo(testKeyValue);
             assertThat(saved.getInvoiceId()).isEqualTo(testInvoiceId);
             return saved;
@@ -176,9 +174,8 @@ class IdempotencyServiceTest {
             Instant passedTime = invocation.getArgument(0);
             // Allow 1 second tolerance
             assertThat(passedTime).isBetween(
-                beforeCall.minus(1, ChronoUnit.SECONDS),
-                Instant.now().plus(1, ChronoUnit.SECONDS)
-            );
+                    beforeCall.minus(1, ChronoUnit.SECONDS),
+                    Instant.now().plus(1, ChronoUnit.SECONDS));
             return 0;
         });
 
