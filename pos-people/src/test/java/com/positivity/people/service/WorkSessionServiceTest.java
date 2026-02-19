@@ -3,38 +3,49 @@ package com.positivity.people.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.people.internal.service.WorkSessionServiceImpl;
+import com.positivity.people.internal.repository.WorkSessionBreakRepository;
+import com.positivity.people.internal.repository.WorkSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
+        "spring.datasource.url=jdbc:h2:mem:work-session-service-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.flyway.enabled=false",
+        "eureka.client.enabled=false",
+        "pos.security.permission-registration.enabled=false"
+})
+@ActiveProfiles("test")
 class WorkSessionServiceTest {
 
-    @Mock
-    private com.positivity.people.internal.repository.TimeEntryRepository workSessionRepository;
-
-    @Mock
-    private com.positivity.people.internal.repository.TimeEntryExceptionRepository breakRepository;
-
-    @InjectMocks
-    private WorkSessionServiceImpl workSessionService;
+    @Autowired
+    private WorkSessionService workSessionService;
+    @Autowired
+    private WorkSessionRepository workSessionRepository;
+    @Autowired
+    private WorkSessionBreakRepository workSessionBreakRepository;
 
     private String personId;
     private String actor;
 
     @BeforeEach
     void setUp() {
+        workSessionBreakRepository.deleteAll();
+        workSessionRepository.deleteAll();
         personId = "person-1001";
         actor = "manager.user";
     }
 
     @Test
     void startSession_whenNoActiveSessionExists_createsActiveSession() {
-        com.positivity.people.service.WorkSessionDto result = workSessionService.startSession(personId, actor);
+        WorkSessionDto result = workSessionService.startSession(personId, actor);
 
         assertThat(result).isNotNull();
         assertThat(result.getSessionId()).isNotNull();
@@ -56,7 +67,7 @@ class WorkSessionServiceTest {
     void stopSession_whenActiveSessionExists_endsSession() {
         workSessionService.startSession(personId, actor);
 
-        com.positivity.people.service.WorkSessionDto result = workSessionService.stopSession(personId, actor);
+        WorkSessionDto result = workSessionService.stopSession(personId, actor);
 
         assertThat(result).isNotNull();
         assertThat(result.getPersonId()).isEqualTo(personId);
@@ -67,14 +78,14 @@ class WorkSessionServiceTest {
     @Test
     void stopSession_whenNoActiveSessionExists_throwsWorkSessionNotFoundException() {
         assertThatThrownBy(() -> workSessionService.stopSession(personId, actor))
-                .isInstanceOf(com.positivity.people.service.WorkSessionNotFoundException.class);
+                .isInstanceOf(WorkSessionNotFoundException.class);
     }
 
     @Test
     void startBreak_whenSessionExistsAndNoActiveBreak_createsActiveBreak() {
-        com.positivity.people.service.WorkSessionDto session = workSessionService.startSession(personId, actor);
+        WorkSessionDto session = workSessionService.startSession(personId, actor);
 
-        com.positivity.people.service.BreakDto result = workSessionService.startBreak(session.getSessionId(), actor);
+        BreakDto result = workSessionService.startBreak(session.getSessionId(), actor);
 
         assertThat(result).isNotNull();
         assertThat(result.getSessionId()).isEqualTo(session.getSessionId());
@@ -85,12 +96,12 @@ class WorkSessionServiceTest {
     @Test
     void startBreak_whenSessionDoesNotExist_throwsWorkSessionNotFoundException() {
         assertThatThrownBy(() -> workSessionService.startBreak(999L, actor))
-                .isInstanceOf(com.positivity.people.service.WorkSessionNotFoundException.class);
+                .isInstanceOf(WorkSessionNotFoundException.class);
     }
 
     @Test
     void startBreak_whenBreakAlreadyActive_throwsException() {
-        com.positivity.people.service.WorkSessionDto session = workSessionService.startSession(personId, actor);
+        WorkSessionDto session = workSessionService.startSession(personId, actor);
         workSessionService.startBreak(session.getSessionId(), actor);
 
         assertThatThrownBy(() -> workSessionService.startBreak(session.getSessionId(), actor))
@@ -100,10 +111,10 @@ class WorkSessionServiceTest {
 
     @Test
     void stopBreak_whenActiveBreakExists_endsBreak() {
-        com.positivity.people.service.WorkSessionDto session = workSessionService.startSession(personId, actor);
+        WorkSessionDto session = workSessionService.startSession(personId, actor);
         workSessionService.startBreak(session.getSessionId(), actor);
 
-        com.positivity.people.service.BreakDto result = workSessionService.stopBreak(session.getSessionId(), actor);
+        BreakDto result = workSessionService.stopBreak(session.getSessionId(), actor);
 
         assertThat(result).isNotNull();
         assertThat(result.getSessionId()).isEqualTo(session.getSessionId());
@@ -112,7 +123,7 @@ class WorkSessionServiceTest {
 
     @Test
     void stopBreak_whenNoActiveBreakExists_throwsException() {
-        com.positivity.people.service.WorkSessionDto session = workSessionService.startSession(personId, actor);
+        WorkSessionDto session = workSessionService.startSession(personId, actor);
 
         assertThatThrownBy(() -> workSessionService.stopBreak(session.getSessionId(), actor))
                 .isInstanceOf(IllegalStateException.class)
