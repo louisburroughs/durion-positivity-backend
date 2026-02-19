@@ -1,45 +1,36 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
-import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.entity.WorkSession;
+import com.positivity.people.internal.entity.WorkSessionBreak;
+import com.positivity.people.internal.repository.WorkSessionBreakRepository;
+import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.people.service.BreakDto;
 import com.positivity.people.service.WorkSessionDto;
 import com.positivity.people.service.WorkSessionNotFoundException;
 import com.positivity.people.service.WorkSessionService;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional
 public class WorkSessionServiceImpl implements WorkSessionService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_ENDED = "ENDED";
     private static final String ACTOR_MUST_NOT_BE_NULL = "actor must not be null";
-    private static final long DUPLICATE_START_WINDOW_MS = 300L;
 
-    private final Map<String, WorkSessionDto> activeSessionsByPersonId = new ConcurrentHashMap<>();
-    private final Map<Long, BreakDto> activeBreaksBySessionId = new ConcurrentHashMap<>();
-    private final Map<Long, WorkSessionDto> sessionsById = new ConcurrentHashMap<>();
-    private final Map<String, Long> lastStartTimestampByPersonId = new ConcurrentHashMap<>();
-    private final AtomicLong sessionIdGenerator = new AtomicLong(2L);
+    private final WorkSessionRepository workSessionRepository;
+    private final WorkSessionBreakRepository workSessionBreakRepository;
 
     public WorkSessionServiceImpl(
-            TimeEntryRepository timeEntryRepository,
-            TimeEntryExceptionRepository timeEntryExceptionRepository) {
-        Objects.requireNonNull(timeEntryRepository, "workSessionRepository must not be null");
-        Objects.requireNonNull(timeEntryExceptionRepository, "breakRepository must not be null");
-
-        WorkSessionDto seededSession = new WorkSessionDto();
-        seededSession.setSessionId(1L);
-        seededSession.setPersonId("seed-person");
-        seededSession.setStatus(STATUS_ACTIVE);
-        seededSession.setStartedAt(Instant.now());
-        sessionsById.put(1L, seededSession);
+            WorkSessionRepository workSessionRepository,
+            WorkSessionBreakRepository workSessionBreakRepository) {
+        this.workSessionRepository = Objects.requireNonNull(workSessionRepository, "workSessionRepository must not be null");
+        this.workSessionBreakRepository = Objects.requireNonNull(
+                workSessionBreakRepository, "workSessionBreakRepository must not be null");
     }
 
     @Override
@@ -47,29 +38,19 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         Objects.requireNonNull(personId, "personId must not be null");
         Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
 
-        WorkSessionDto existingSession = activeSessionsByPersonId.get(personId);
-        long now = System.currentTimeMillis();
-        if (existingSession != null) {
-            Long lastStart = lastStartTimestampByPersonId.get(personId);
-            if (lastStart != null && (now - lastStart) <= DUPLICATE_START_WINDOW_MS) {
-                throw new IllegalStateException("An active session already exists for personId=" + personId);
-            }
-            existingSession.setStatus(STATUS_ENDED);
-            existingSession.setEndedAt(Instant.now());
-            activeSessionsByPersonId.remove(personId);
+        if (workSessionRepository.findByPersonIdAndEndedAtIsNull(personId).isPresent()) {
+            throw new IllegalStateException("An active session already exists for personId=" + personId);
         }
 
-        WorkSessionDto session = new WorkSessionDto();
-        session.setSessionId(sessionIdGenerator.getAndIncrement());
+        WorkSession session = new WorkSession();
         session.setPersonId(personId);
         session.setStatus(STATUS_ACTIVE);
         session.setStartedAt(Instant.now());
         session.setEndedAt(null);
+        session.setActor(actor);
 
-        activeSessionsByPersonId.put(personId, session);
-        sessionsById.put(session.getSessionId(), session);
-        lastStartTimestampByPersonId.put(personId, now);
-        return session;
+        WorkSession saved = workSessionRepository.save(session);
+        return toWorkSessionDto(saved);
     }
 
     @Override
@@ -77,15 +58,23 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         Objects.requireNonNull(personId, "personId must not be null");
         Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
 
-        WorkSessionDto session = activeSessionsByPersonId.remove(personId);
-        if (session == null) {
-            throw new WorkSessionNotFoundException("No active session found for personId=" + personId);
-        }
+        WorkSession session = workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)
+                .orElseThrow(() -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
 
+        Instant endedAt = Instant.now();
         session.setStatus(STATUS_ENDED);
-        session.setEndedAt(Instant.now());
-        activeBreaksBySessionId.remove(session.getSessionId());
-        return session;
+        session.setEndedAt(endedAt);
+        session.setActor(actor);
+        WorkSession savedSession = workSessionRepository.save(session);
+
+        workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(savedSession.getSessionId())
+                .ifPresent(activeBreak -> {
+                    activeBreak.setEndedAt(endedAt);
+                    activeBreak.setActor(actor);
+                    workSessionBreakRepository.save(activeBreak);
+                });
+
+        return toWorkSessionDto(savedSession);
     }
 
     @Override
@@ -93,22 +82,21 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
 
-        WorkSessionDto session = sessionsById.get(sessionId);
-        if (session == null) {
-            throw new WorkSessionNotFoundException("No active work session found for sessionId=" + sessionId);
-        }
+        WorkSession session = workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)
+                .orElseThrow(() -> new WorkSessionNotFoundException("No active work session found for sessionId=" + sessionId));
 
-        BreakDto existingBreak = activeBreaksBySessionId.get(sessionId);
-        if (existingBreak != null && existingBreak.getEndedAt() == null) {
+        if (workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(session.getSessionId()).isPresent()) {
             throw new IllegalStateException("A break is already active for sessionId=" + sessionId);
         }
 
-        BreakDto breakDto = new BreakDto();
-        breakDto.setSessionId(sessionId);
-        breakDto.setStartedAt(Instant.now());
-        breakDto.setEndedAt(null);
-        activeBreaksBySessionId.put(sessionId, breakDto);
-        return breakDto;
+        WorkSessionBreak breakRecord = new WorkSessionBreak();
+        breakRecord.setSessionId(sessionId);
+        breakRecord.setStartedAt(Instant.now());
+        breakRecord.setEndedAt(null);
+        breakRecord.setActor(actor);
+
+        WorkSessionBreak saved = workSessionBreakRepository.save(breakRecord);
+        return toBreakDto(saved);
     }
 
     @Override
@@ -116,20 +104,30 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
 
-        BreakDto activeBreak = activeBreaksBySessionId.get(sessionId);
-        if (activeBreak == null || activeBreak.getEndedAt() != null) {
-            if (sessionId.equals(1L) && sessionsById.containsKey(1L)) {
-                BreakDto syntheticBreak = new BreakDto();
-                syntheticBreak.setSessionId(1L);
-                syntheticBreak.setStartedAt(Instant.now());
-                syntheticBreak.setEndedAt(Instant.now());
-                return syntheticBreak;
-            }
-            throw new IllegalStateException("No active break found for sessionId=" + sessionId);
-        }
+        WorkSessionBreak activeBreak = workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)
+                .orElseThrow(() -> new IllegalStateException("No active break found for sessionId=" + sessionId));
 
         activeBreak.setEndedAt(Instant.now());
-        activeBreaksBySessionId.remove(sessionId);
-        return activeBreak;
+        activeBreak.setActor(actor);
+        WorkSessionBreak saved = workSessionBreakRepository.save(activeBreak);
+        return toBreakDto(saved);
+    }
+
+    private WorkSessionDto toWorkSessionDto(WorkSession session) {
+        WorkSessionDto dto = new WorkSessionDto();
+        dto.setSessionId(session.getSessionId());
+        dto.setPersonId(session.getPersonId());
+        dto.setStatus(session.getStatus());
+        dto.setStartedAt(session.getStartedAt());
+        dto.setEndedAt(session.getEndedAt());
+        return dto;
+    }
+
+    private BreakDto toBreakDto(WorkSessionBreak breakRecord) {
+        BreakDto dto = new BreakDto();
+        dto.setSessionId(breakRecord.getSessionId());
+        dto.setStartedAt(breakRecord.getStartedAt());
+        dto.setEndedAt(breakRecord.getEndedAt());
+        return dto;
     }
 }
