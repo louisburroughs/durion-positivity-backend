@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.exception;
 
 public class WorkSessionNotFoundException extends RuntimeException {
 

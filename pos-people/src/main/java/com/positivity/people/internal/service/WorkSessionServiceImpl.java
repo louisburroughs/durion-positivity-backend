@@ -1,12 +1,12 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.dto.BreakDto;
+import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
+import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
-import com.positivity.people.service.BreakDto;
-import com.positivity.people.service.WorkSessionDto;
-import com.positivity.people.service.WorkSessionNotFoundException;
 import com.positivity.people.service.WorkSessionService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
@@ -30,7 +30,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     public WorkSessionServiceImpl(
             WorkSessionRepository workSessionRepository,
             WorkSessionBreakRepository workSessionBreakRepository) {
-        this.workSessionRepository = Objects.requireNonNull(workSessionRepository, "workSessionRepository must not be null");
+        this.workSessionRepository = Objects.requireNonNull(workSessionRepository,
+                "workSessionRepository must not be null");
         this.workSessionBreakRepository = Objects.requireNonNull(
                 workSessionBreakRepository, "workSessionBreakRepository must not be null");
     }
@@ -66,7 +67,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSession session = workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)
-                .orElseThrow(() -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
+                .orElseThrow(
+                        () -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
 
         Instant endedAt = Instant.now();
         session.setStatus(STATUS_ENDED);
@@ -90,7 +92,8 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSession session = workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)
-                .orElseThrow(() -> new WorkSessionNotFoundException("No active work session found for sessionId=" + sessionId));
+                .orElseThrow(() -> new WorkSessionNotFoundException(
+                        "No active work session found for sessionId=" + sessionId));
 
         if (workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(session.getSessionId()).isPresent()) {
             throw new IllegalStateException("A break is already active for sessionId=" + sessionId);
