@@ -45,7 +45,7 @@ class WorkSessionServiceTest {
 
     @Test
     void startSession_whenNoActiveSessionExists_createsActiveSession() {
-        WorkSessionDto result = workSessionService.startSession(personId, actor);
+        WorkSessionDto result = workSessionService.startSession(personId);
 
         assertThat(result).isNotNull();
         assertThat(result.getSessionId()).isNotNull();
@@ -56,18 +56,18 @@ class WorkSessionServiceTest {
 
     @Test
     void startSession_whenActiveSessionAlreadyExists_throwsException() {
-        workSessionService.startSession(personId, actor);
+        workSessionService.startSession(personId);
 
-        assertThatThrownBy(() -> workSessionService.startSession(personId, actor))
+        assertThatThrownBy(() -> workSessionService.startSession(personId))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("active session");
     }
 
     @Test
     void stopSession_whenActiveSessionExists_endsSession() {
-        workSessionService.startSession(personId, actor);
+        workSessionService.startSession(personId);
 
-        WorkSessionDto result = workSessionService.stopSession(personId, actor);
+        WorkSessionDto result = workSessionService.stopSession(personId);
 
         assertThat(result).isNotNull();
         assertThat(result.getPersonId()).isEqualTo(personId);
@@ -77,15 +77,15 @@ class WorkSessionServiceTest {
 
     @Test
     void stopSession_whenNoActiveSessionExists_throwsWorkSessionNotFoundException() {
-        assertThatThrownBy(() -> workSessionService.stopSession(personId, actor))
+        assertThatThrownBy(() -> workSessionService.stopSession(personId))
                 .isInstanceOf(WorkSessionNotFoundException.class);
     }
 
     @Test
     void startBreak_whenSessionExistsAndNoActiveBreak_createsActiveBreak() {
-        WorkSessionDto session = workSessionService.startSession(personId, actor);
+        WorkSessionDto session = workSessionService.startSession(personId);
 
-        BreakDto result = workSessionService.startBreak(session.getSessionId(), actor);
+        BreakDto result = workSessionService.startBreak(session.getSessionId());
 
         assertThat(result).isNotNull();
         assertThat(result.getSessionId()).isEqualTo(session.getSessionId());
@@ -95,26 +95,26 @@ class WorkSessionServiceTest {
 
     @Test
     void startBreak_whenSessionDoesNotExist_throwsWorkSessionNotFoundException() {
-        assertThatThrownBy(() -> workSessionService.startBreak(999L, actor))
+        assertThatThrownBy(() -> workSessionService.startBreak(999L))
                 .isInstanceOf(WorkSessionNotFoundException.class);
     }
 
     @Test
     void startBreak_whenBreakAlreadyActive_throwsException() {
-        WorkSessionDto session = workSessionService.startSession(personId, actor);
-        workSessionService.startBreak(session.getSessionId(), actor);
+        WorkSessionDto session = workSessionService.startSession(personId);
+        workSessionService.startBreak(session.getSessionId());
 
-        assertThatThrownBy(() -> workSessionService.startBreak(session.getSessionId(), actor))
+        assertThatThrownBy(() -> workSessionService.startBreak(session.getSessionId()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already active");
     }
 
     @Test
     void stopBreak_whenActiveBreakExists_endsBreak() {
-        WorkSessionDto session = workSessionService.startSession(personId, actor);
-        workSessionService.startBreak(session.getSessionId(), actor);
+        WorkSessionDto session = workSessionService.startSession(personId);
+        workSessionService.startBreak(session.getSessionId());
 
-        BreakDto result = workSessionService.stopBreak(session.getSessionId(), actor);
+        BreakDto result = workSessionService.stopBreak(session.getSessionId());
 
         assertThat(result).isNotNull();
         assertThat(result.getSessionId()).isEqualTo(session.getSessionId());
@@ -123,9 +123,9 @@ class WorkSessionServiceTest {
 
     @Test
     void stopBreak_whenNoActiveBreakExists_throwsException() {
-        WorkSessionDto session = workSessionService.startSession(personId, actor);
+        WorkSessionDto session = workSessionService.startSession(personId);
 
-        assertThatThrownBy(() -> workSessionService.stopBreak(session.getSessionId(), actor))
+        assertThatThrownBy(() -> workSessionService.stopBreak(session.getSessionId()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("No active break");
     }

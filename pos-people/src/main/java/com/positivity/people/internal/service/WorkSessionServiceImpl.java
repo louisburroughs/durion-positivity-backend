@@ -8,10 +8,12 @@ import com.positivity.people.service.BreakDto;
 import com.positivity.people.service.WorkSessionDto;
 import com.positivity.people.service.WorkSessionNotFoundException;
 import com.positivity.people.service.WorkSessionService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -20,7 +22,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_ENDED = "ENDED";
-    private static final String ACTOR_MUST_NOT_BE_NULL = "actor must not be null";
+    private static final String SYSTEM_USER = "system";
 
     private final WorkSessionRepository workSessionRepository;
     private final WorkSessionBreakRepository workSessionBreakRepository;
@@ -34,9 +36,9 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public WorkSessionDto startSession(@NonNull String personId, @NonNull String actor) {
+    public WorkSessionDto startSession(@NonNull String personId) {
         Objects.requireNonNull(personId, "personId must not be null");
-        Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
+        String resolvedActor = resolveActorFromSecurityContext();
 
         if (workSessionRepository.findByPersonIdAndEndedAtIsNull(personId).isPresent()) {
             throw new IllegalStateException("An active session already exists for personId=" + personId);
@@ -47,16 +49,21 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         session.setStatus(STATUS_ACTIVE);
         session.setStartedAt(Instant.now());
         session.setEndedAt(null);
-        session.setActor(actor);
+        session.setActor(resolvedActor);
 
-        WorkSession saved = workSessionRepository.save(session);
-        return toWorkSessionDto(saved);
+        try {
+            WorkSession saved = workSessionRepository.save(session);
+            return toWorkSessionDto(saved);
+        } catch (DataIntegrityViolationException ex) {
+            // Protect against concurrent start requests racing past the pre-check.
+            throw new IllegalStateException("An active session already exists for personId=" + personId, ex);
+        }
     }
 
     @Override
-    public WorkSessionDto stopSession(@NonNull String personId, @NonNull String actor) {
+    public WorkSessionDto stopSession(@NonNull String personId) {
         Objects.requireNonNull(personId, "personId must not be null");
-        Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
+        String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSession session = workSessionRepository.findByPersonIdAndEndedAtIsNull(personId)
                 .orElseThrow(() -> new WorkSessionNotFoundException("No active session found for personId=" + personId));
@@ -64,13 +71,13 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         Instant endedAt = Instant.now();
         session.setStatus(STATUS_ENDED);
         session.setEndedAt(endedAt);
-        session.setActor(actor);
+        session.setActor(resolvedActor);
         WorkSession savedSession = workSessionRepository.save(session);
 
         workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(savedSession.getSessionId())
                 .ifPresent(activeBreak -> {
                     activeBreak.setEndedAt(endedAt);
-                    activeBreak.setActor(actor);
+                    activeBreak.setActor(resolvedActor);
                     workSessionBreakRepository.save(activeBreak);
                 });
 
@@ -78,9 +85,9 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public BreakDto startBreak(@NonNull Long sessionId, @NonNull String actor) {
+    public BreakDto startBreak(@NonNull Long sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
-        Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
+        String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSession session = workSessionRepository.findBySessionIdAndEndedAtIsNull(sessionId)
                 .orElseThrow(() -> new WorkSessionNotFoundException("No active work session found for sessionId=" + sessionId));
@@ -93,24 +100,33 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         breakRecord.setSessionId(sessionId);
         breakRecord.setStartedAt(Instant.now());
         breakRecord.setEndedAt(null);
-        breakRecord.setActor(actor);
+        breakRecord.setActor(resolvedActor);
 
-        WorkSessionBreak saved = workSessionBreakRepository.save(breakRecord);
-        return toBreakDto(saved);
+        try {
+            WorkSessionBreak saved = workSessionBreakRepository.save(breakRecord);
+            return toBreakDto(saved);
+        } catch (DataIntegrityViolationException ex) {
+            // Protect against concurrent break-start requests racing past the pre-check.
+            throw new IllegalStateException("A break is already active for sessionId=" + sessionId, ex);
+        }
     }
 
     @Override
-    public BreakDto stopBreak(@NonNull Long sessionId, @NonNull String actor) {
+    public BreakDto stopBreak(@NonNull Long sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
-        Objects.requireNonNull(actor, ACTOR_MUST_NOT_BE_NULL);
+        String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSessionBreak activeBreak = workSessionBreakRepository.findBySessionIdAndEndedAtIsNull(sessionId)
                 .orElseThrow(() -> new IllegalStateException("No active break found for sessionId=" + sessionId));
 
         activeBreak.setEndedAt(Instant.now());
-        activeBreak.setActor(actor);
+        activeBreak.setActor(resolvedActor);
         WorkSessionBreak saved = workSessionBreakRepository.save(activeBreak);
         return toBreakDto(saved);
+    }
+
+    private String resolveActorFromSecurityContext() {
+        return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
     }
 
     private WorkSessionDto toWorkSessionDto(WorkSession session) {

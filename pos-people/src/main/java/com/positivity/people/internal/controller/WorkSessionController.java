@@ -29,11 +29,9 @@ public class WorkSessionController {
     @EmitEvent(id = "PEOPLE_WORK_SESSION_START", apiVersion = "1")
     @PostMapping("/start")
     public ResponseEntity<WorkSessionDto> startWorkSession(
-            @Parameter(description = "Work session start request body") @RequestBody @NonNull WorkSessionRequest request,
-            @RequestHeader(value = "X-User", required = false) String actorHeader) {
-        String actor = resolveActor(actorHeader, request.getActor());
+            @Parameter(description = "Work session start request body") @RequestBody @NonNull WorkSessionRequest request) {
         log.info("Starting work session for personId={}", request.getPersonId());
-        WorkSessionDto response = workSessionService.startSession(request.getPersonId(), actor);
+        WorkSessionDto response = workSessionService.startSession(request.getPersonId());
         return ResponseEntity.ok(response);
     }
 
@@ -42,11 +40,9 @@ public class WorkSessionController {
     @EmitEvent(id = "PEOPLE_WORK_SESSION_STOP", apiVersion = "1")
     @PostMapping("/stop")
     public ResponseEntity<WorkSessionDto> stopWorkSession(
-            @Parameter(description = "Work session stop request body") @RequestBody @NonNull WorkSessionRequest request,
-            @RequestHeader(value = "X-User", required = false) String actorHeader) {
-        String actor = resolveActor(actorHeader, request.getActor());
+            @Parameter(description = "Work session stop request body") @RequestBody @NonNull WorkSessionRequest request) {
         log.info("Stopping work session for personId={}", request.getPersonId());
-        WorkSessionDto response = workSessionService.stopSession(request.getPersonId(), actor);
+        WorkSessionDto response = workSessionService.stopSession(request.getPersonId());
         return ResponseEntity.ok(response);
     }
 
@@ -56,11 +52,9 @@ public class WorkSessionController {
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_START", apiVersion = "1")
     @PostMapping("/{id}/breaks/start")
     public ResponseEntity<BreakDto> startWorkSessionBreak(
-            @Parameter(description = "Work session ID", example = "1") @PathVariable @NonNull Long id,
-            @RequestHeader(value = "X-User", required = false) String actorHeader) {
-        String actor = resolveActor(actorHeader, null);
+            @Parameter(description = "Work session ID", example = "1") @PathVariable @NonNull Long id) {
         log.info("Starting break for work session ID: {}", id);
-        BreakDto response = workSessionService.startBreak(id, actor);
+        BreakDto response = workSessionService.startBreak(id);
         return ResponseEntity.ok(response);
     }
 
@@ -70,21 +64,9 @@ public class WorkSessionController {
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @PostMapping("/{id}/breaks/stop")
     public ResponseEntity<BreakDto> stopWorkSessionBreak(
-            @Parameter(description = "Work session ID", example = "1") @PathVariable @NonNull Long id,
-            @RequestHeader(value = "X-User", required = false) String actorHeader) {
-        String actor = resolveActor(actorHeader, null);
+            @Parameter(description = "Work session ID", example = "1") @PathVariable @NonNull Long id) {
         log.info("Stopping break for work session ID: {}", id);
-        BreakDto response = workSessionService.stopBreak(id, actor);
+        BreakDto response = workSessionService.stopBreak(id);
         return ResponseEntity.ok(response);
-    }
-
-    private String resolveActor(String actorHeader, String actorFromRequest) {
-        if (actorHeader != null && !actorHeader.isBlank()) {
-            return actorHeader;
-        }
-        if (actorFromRequest != null && !actorFromRequest.isBlank()) {
-            return actorFromRequest;
-        }
-        return "system";
     }
 }
