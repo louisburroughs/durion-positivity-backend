@@ -1,19 +1,31 @@
 package com.positivity.vehiclefitment.service;
 
-import com.positivity.vehiclefitment.internal.entity.*;
-import com.positivity.vehiclefitment.internal.repository.*;
-import com.positivity.vehiclefitment.internal.exception.VehicleFitmentException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import com.positivity.vehiclefitment.internal.entity.Make;
+import com.positivity.vehiclefitment.internal.entity.Manufacturer;
+import com.positivity.vehiclefitment.internal.entity.Model;
+import com.positivity.vehiclefitment.internal.entity.VehicleType;
+import com.positivity.vehiclefitment.internal.entity.VehicleVariable;
+import com.positivity.vehiclefitment.internal.entity.VehicleVariableValue;
+import com.positivity.vehiclefitment.internal.exception.VehicleFitmentException;
+import com.positivity.vehiclefitment.internal.repository.MakeRepository;
+import com.positivity.vehiclefitment.internal.repository.ManufacturerRepository;
+import com.positivity.vehiclefitment.internal.repository.ModelRepository;
+import com.positivity.vehiclefitment.internal.repository.VehicleTypeRepository;
+import com.positivity.vehiclefitment.internal.repository.VehicleVariableRepository;
+import com.positivity.vehiclefitment.internal.repository.VehicleVariableValueRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import java.time.LocalDateTime;
-import java.time.Duration;
-import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -60,7 +72,7 @@ public class VehicleFitmentService {
         return vehicleVariableRepository.findAll();
     }
 
-    public List<VehicleVariableValue> getVehicleVariableValues(Long variableId) {
+    public List<VehicleVariableValue> getVehicleVariableValues(UUID variableId) {
         List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariableId(variableId);
         if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
@@ -105,7 +117,7 @@ public class VehicleFitmentService {
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
                 // Generate UUID from NHTSA ID for consistency
-                long nhtsaId = node.path("Mfr_ID").asLong();
+                UUID nhtsaId = UUID.fromString(node.path("Mfr_ID").asString());
                 m.setId(java.util.UUID.nameUUIDFromBytes(("manufacturer-" + nhtsaId).getBytes()));
                 m.setName(node.path("Mfr_CommonName").asString(""));
                 m.setCacheTimestamp(LocalDateTime.now());
@@ -117,7 +129,7 @@ public class VehicleFitmentService {
         return manufacturerRepository.findAll();
     }
 
-    public List<Make> getMakesByManufacturer(Long manufacturerId) {
+    public List<Make> getMakesByManufacturer(UUID manufacturerId) {
         Manufacturer manufacturer = manufacturerRepository.findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
@@ -136,7 +148,7 @@ public class VehicleFitmentService {
             for (JsonNode node : results) {
                 Make make = new Make();
                 // Generate UUID from NHTSA ID for consistency
-                long nhtsaId = node.path("Make_ID").asLong();
+                UUID nhtsaId = UUID.fromString(node.path("Make_ID").asString());
                 make.setId(java.util.UUID.nameUUIDFromBytes(("make-" + nhtsaId).getBytes()));
                 make.setName(node.path("Make_Name").asString(""));
                 make.setManufacturer(manufacturer);
@@ -149,7 +161,7 @@ public class VehicleFitmentService {
         return makeRepository.findByManufacturerId(manufacturerId);
     }
 
-    public List<Model> getModelsByMake(Long makeId) {
+    public List<Model> getModelsByMake(UUID makeId) {
         Make make = makeRepository.findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<Model> cached = modelRepository.findByMakeId(makeId);
@@ -168,7 +180,7 @@ public class VehicleFitmentService {
             for (JsonNode node : results) {
                 Model model = new Model();
                 // Generate UUID from NHTSA ID for consistency
-                long nhtsaId = node.path("Model_ID").asLong();
+                UUID nhtsaId = UUID.fromString(node.path("Model_ID").asString());
                 model.setId(java.util.UUID.nameUUIDFromBytes(("model-" + nhtsaId).getBytes()));
                 model.setName(node.path("Model_Name").asString(""));
                 model.setMake(make);
@@ -181,7 +193,7 @@ public class VehicleFitmentService {
         return modelRepository.findByMakeId(makeId);
     }
 
-    public List<VehicleType> getVehicleTypesForMake(Long makeId) {
+    public List<VehicleType> getVehicleTypesForMake(UUID makeId) {
         Make make = makeRepository.findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);

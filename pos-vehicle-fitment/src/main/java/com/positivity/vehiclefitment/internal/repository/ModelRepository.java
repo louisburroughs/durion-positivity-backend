@@ -3,8 +3,9 @@ package com.positivity.vehiclefitment.internal.repository;
 import com.positivity.vehiclefitment.internal.entity.Model;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
+import java.util.UUID;
 
-public interface ModelRepository extends JpaRepository<Model, Long> {
-    List<Model> findByMakeId(Long makeId);
+public interface ModelRepository extends JpaRepository<Model, UUID> {
+    List<Model> findByMakeId(UUID makeId);
 }
 

@@ -22,12 +22,11 @@ import java.util.UUID;
 public class VehicleInventoryClient {
 
     private final RestClient restClient;
-    private final String vehicleInventoryBaseUrl;
+
 
     public VehicleInventoryClient(
             RestClient.Builder restClientBuilder,
             @Value("${pos.vehicle-inventory.base-url:http://localhost:8086}") String vehicleInventoryBaseUrl) {
-        this.vehicleInventoryBaseUrl = vehicleInventoryBaseUrl;
         this.restClient = restClientBuilder.baseUrl(vehicleInventoryBaseUrl).build();
         log.info("VehicleInventoryClient initialized with baseUrl: {}", vehicleInventoryBaseUrl);
     }

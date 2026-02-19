@@ -1,5 +1,19 @@
 package com.positivity.vehicle.internal.controller;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.positivity.vehicle.internal.dao.VehicleDao;
 import com.positivity.vehicle.internal.entity.VehicleEntity;
 
@@ -9,11 +23,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
@@ -38,7 +47,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @GetMapping("/{id}")
     public ResponseEntity<VehicleEntity> getVehicle(
-            @Parameter(description = "ID of the vehicle to retrieve", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID of the vehicle to retrieve", example = "1") @PathVariable UUID id) {
         Optional<VehicleEntity> vehicle = vehicleDao.findById(id);
         return vehicle.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -55,7 +64,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @PutMapping("/{id}")
     public ResponseEntity<VehicleEntity> updateVehicle(
-            @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable Long id,
+            @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable UUID id,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleEntity updated) {
         Optional<VehicleEntity> existing = vehicleDao.findById(id);
         if (existing.isEmpty()) {
@@ -75,7 +84,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVehicle(
-            @Parameter(description = "ID of the vehicle to delete", example = "1") @PathVariable Long id) {
+            @Parameter(description = "ID of the vehicle to delete", example = "1") @PathVariable UUID id) {
         if (vehicleDao.findById(id).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
