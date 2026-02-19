@@ -364,6 +364,69 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("VE-119-105: Create assignment with effectiveTo before effectiveFrom returns 400")
+    void VE_119_105_createInvalidDateWindow_returns400() throws Exception {
+        String payload = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "TECHNICIAN",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-06-10",
+                    "effectiveTo": "2026-06-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("VE-119-106: Update assignment with effectiveTo before effectiveFrom returns 400")
+    void VE_119_106_updateInvalidDateWindow_returns400() throws Exception {
+        String createPayload = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "TECHNICIAN",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-02-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        var createResult = mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String assignmentId = objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("assignmentId").asText();
+
+        String invalidUpdatePayload = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "TECHNICIAN",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-06-10",
+                    "effectiveTo": "2026-06-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        mockMvc.perform(withAuth(
+                put(STAFFING_BASE + "/" + assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidUpdatePayload)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("VE-119-101: Non-existent locationId returns 404 or 400")
     void VE_119_101_nonExistentLocation_returns4xx() throws Exception {
         String nonExistentLocationId = "018e1c9f-dead-7000-8000-000000000000";
