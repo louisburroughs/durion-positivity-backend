@@ -60,21 +60,19 @@ public class CommunicationPreferenceService {
      * If no preferences exist, returns defaults with all channels set to OPT_OUT.
      * </p>
      * 
-     * @param partyId the party ID as a string (Long)
+     * @param partyId the party ID
      * @return response containing preferences
      * @throws IllegalArgumentException if party not found or invalid ID
      */
     @NonNull
     @Transactional(readOnly = true)
-    public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull String partyId) {
-        UUID partyUuid = parseUuid(partyId, "partyId");
-
+    public GetCommunicationPreferencesResponse getCommunicationPreferences(@NonNull UUID partyId) {
         // Verify party exists
-        partyRepository.findById(partyUuid)
+        partyRepository.findById(partyId)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
 
         // Get preferences or return defaults
-        return preferenceRepository.findByPartyId(partyUuid)
+        return preferenceRepository.findByPartyId(partyId)
                 .map(this::mapToResponse)
                 .orElseGet(() -> createDefaultResponse(partyId));
     }
@@ -86,7 +84,7 @@ public class CommunicationPreferenceService {
      * Null preference values are interpreted as OPT_OUT.
      * </p>
      * 
-     * @param partyId the party ID as a string (Long)
+     * @param partyId the party ID
      * @param request the preferences to set
      * @return response with update status
      * @throws IllegalArgumentException if party not found or invalid data
@@ -94,20 +92,18 @@ public class CommunicationPreferenceService {
     @NonNull
     @Transactional
     public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
-            @NonNull String partyId,
+            @NonNull UUID partyId,
             @NonNull UpsertCommunicationPreferencesRequest request) {
 
-        UUID partyUuid = parseUuid(partyId, "partyId");
-
         // Verify party exists
-        partyRepository.findById(partyUuid)
+        partyRepository.findById(partyId)
                 .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
 
         // Find existing preferences or create new
-        CommunicationPreference preference = preferenceRepository.findByPartyId(partyUuid)
+        CommunicationPreference preference = preferenceRepository.findByPartyId(partyId)
                 .orElseGet(() -> {
                     CommunicationPreference newPref = new CommunicationPreference();
-                    newPref.setPartyId(partyUuid);
+                    newPref.setPartyId(partyId);
                     return newPref;
                 });
 
@@ -143,7 +139,7 @@ public class CommunicationPreferenceService {
                 partyId, isCreate ? "CREATE" : "UPDATE", updateSource);
 
         return UpsertCommunicationPreferencesResponse.builder()
-                .partyId(partyId)
+                .partyId(partyId.toString())
                 .version(String.valueOf(saved.getVersion()))
                 .operationType(isCreate ? "CREATE" : "UPDATE")
                 .status("SUCCESS")
@@ -181,9 +177,9 @@ public class CommunicationPreferenceService {
      * @return default response with OPT_OUT for all channels
      */
     @NonNull
-    private GetCommunicationPreferencesResponse createDefaultResponse(@NonNull String partyId) {
+    private GetCommunicationPreferencesResponse createDefaultResponse(@NonNull UUID partyId) {
         return GetCommunicationPreferencesResponse.builder()
-                .partyId(partyId)
+                .partyId(partyId.toString())
                 .version("0")
                 .emailPreference(DEFAULT_PREFERENCE)
                 .smsPreference(DEFAULT_PREFERENCE)
@@ -193,40 +189,5 @@ public class CommunicationPreferenceService {
                 .updatedAt(Instant.now().toString())
                 .updateSource("DEFAULT")
                 .build();
-    }
-
-    /**
-     * Parse a Long string with helpful error messages.
-     * 
-     * @param longStr   the Long string
-     * @param fieldName the field name for error messages
-     * @return parsed Long
-     * @throws IllegalArgumentException if Long is invalid
-     */
-    @Deprecated
-    @NonNull
-    private Long parseLong(@NonNull String longStr, @NonNull String fieldName) {
-        try {
-            return Long.parseLong(longStr);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid " + fieldName + " format: " + longStr, e);
-        }
-    }
-
-    /**
-     * Parse UUID from string.
-     *
-     * @param uuidStr   UUID string
-     * @param fieldName field name for error messages
-     * @return parsed UUID
-     * @throws IllegalArgumentException if UUID is invalid
-     */
-    @NonNull
-    private UUID parseUuid(@NonNull String uuidStr, @NonNull String fieldName) {
-        try {
-            return UUID.fromString(uuidStr);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid " + fieldName + " format: " + uuidStr, e);
-        }
     }
 }

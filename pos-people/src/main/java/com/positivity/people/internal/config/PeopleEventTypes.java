@@ -17,7 +17,7 @@ public final class PeopleEventTypes {
 
         /**
          * All event type registrations for the people module.
-         * Total: 21 event types.
+         * Total: 26 event types.
          */
         public static List<EventTypeRegistration> all() {
                 return List.of(
@@ -26,6 +26,24 @@ public final class PeopleEventTypes {
                                                 "Create a new person record").build(),
                                 EventTypeRegistration.write("PEOPLE_PERSON_UPDATE",
                                                 "Update an existing person record").build(),
+
+                                // StaffingAssignmentController - 3 events
+                                EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_CREATE",
+                                                "Create a person-to-location staffing assignment").build(),
+                                EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_UPDATE",
+                                                "Update a staffing assignment").build(),
+                                EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_END",
+                                                "End a staffing assignment").build(),
+
+                                // EmployeeController - 4 events
+                                EventTypeRegistration.write("PEOPLE_EMPLOYEE_CREATE",
+                                                "Create employee profile").build(),
+                                EventTypeRegistration.fastRead("PEOPLE_EMPLOYEE_GET",
+                                                "Get employee profile").build(),
+                                EventTypeRegistration.write("PEOPLE_EMPLOYEE_UPDATE",
+                                                "Update employee profile").build(),
+                                EventTypeRegistration.write("PEOPLE_EMPLOYEE_DISABLE",
+                                                "Disable employee profile").build(),
 
                                 // WorkSessionController - 4 events
                                 EventTypeRegistration.write("PEOPLE_WORK_SESSION_START",
@@ -59,9 +77,11 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE",
                                                 "Waive an exception with a reason").build(),
 
-                                // UserPersonLinkController - 2 events
-                                EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_CREATE",
+                                // UserPersonLinkController - 3 events
+                                EventTypeRegistration.write("PEOPLE_USER_LINK_CREATE",
                                                 "Link user to person").build(),
+                                EventTypeRegistration.fastRead("PEOPLE_USER_LINK_GET",
+                                                "Get user links by person").build(),
                                 EventTypeRegistration.write("PEOPLE_USER_PERSON_LINK_DELETE",
                                                 "Unlink user from person").build(),
 
@@ -73,6 +93,10 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_CREATE",
                                                 "Create role assignment for a person").build(),
                                 EventTypeRegistration.write("PEOPLE_ACCESS_ASSIGNMENT_REVOKE",
-                                                "Revoke role assignment for a person").build());
+                                                "Revoke role assignment for a person").build(),
+
+                                // PeopleReportsController - 1 event
+                                EventTypeRegistration.search("REPORT_ATTENDANCE_VS_JOBTIME_GENERATED",
+                                                "Generate attendance vs job-time discrepancy report").build());
         }
 }

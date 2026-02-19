@@ -5,6 +5,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -14,7 +15,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
 
 @Entity
-@Table(name = "time_entry")
+@Table(name = "time_entry", indexes = {
+        @Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
+        @Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
+        @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at")
+})
 public class TimeEntry {
 
     @Id
@@ -33,6 +38,15 @@ public class TimeEntry {
 
     @Column(name = "timesheet_id")
     private String timesheetId;
+
+    @Column(name = "location_id")
+    private UUID locationId;
+
+    @Column(name = "attendance_start_at")
+    private Instant attendanceStartAt;
+
+    @Column(name = "attendance_end_at")
+    private Instant attendanceEndAt;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
@@ -75,6 +89,30 @@ public class TimeEntry {
 
     public void setTimesheetId(String timesheetId) {
         this.timesheetId = timesheetId;
+    }
+
+    public UUID getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(UUID locationId) {
+        this.locationId = locationId;
+    }
+
+    public Instant getAttendanceStartAt() {
+        return attendanceStartAt;
+    }
+
+    public void setAttendanceStartAt(Instant attendanceStartAt) {
+        this.attendanceStartAt = attendanceStartAt;
+    }
+
+    public Instant getAttendanceEndAt() {
+        return attendanceEndAt;
+    }
+
+    public void setAttendanceEndAt(Instant attendanceEndAt) {
+        this.attendanceEndAt = attendanceEndAt;
     }
 
     public TimeEntryStatus getStatus() {

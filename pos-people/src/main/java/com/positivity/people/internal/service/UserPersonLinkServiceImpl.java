@@ -13,6 +13,7 @@ import com.positivity.people.internal.repository.UserPersonLinkRepository;
 import com.positivity.people.service.UserPersonLinkService;
 import com.positivity.security.common.SecurityContextHelper;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,25 +37,79 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
     }
 
     @Override
-    @NonNull
-    public UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request) {
-        personRepository.findById(request.getPersonId())
-                .orElseThrow(() -> new PersonNotFoundException(request.getPersonId()));
+    public boolean linkExistsByUserId(@NonNull UUID userId) {
+        return linkRepository.existsByUserId(userId);
+    }
 
-        if (linkRepository.existsByUserId(request.getUserId())) {
-            throw new UserAlreadyLinkedException(request.getUserId());
+    @Override
+    public boolean linkExistsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId) {
+        return linkRepository.existsByUserIdAndPersonId(userId, personId);
+    }
+
+    @Override
+    @NonNull
+    public UserPersonLinkResponse createUserLink(@NonNull UUID userId, @NonNull UUID personId) {
+        personRepository.findById(personId)
+                .orElseThrow(() -> new PersonNotFoundException(personId));
+
+        if (linkRepository.existsByUserId(userId)) {
+            UserPersonLink existingLink = linkRepository.findByUserId(userId)
+                    .orElseThrow(() -> new UserAlreadyLinkedException(userId));
+            if (existingLink.getPersonId().equals(personId)) {
+                return toResponse(existingLink);
+            }
+            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
         }
 
         UserPersonLink link = new UserPersonLink();
-        link.setUserId(request.getUserId());
-        link.setPersonId(request.getPersonId());
-        link.setLinkType(request.getLinkType() != null ? request.getLinkType() : "PRIMARY");
-        link.setNotes(request.getNotes());
+        link.setUserId(userId);
+        link.setPersonId(personId);
+        link.setLinkType("PRIMARY");
         link.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
+        try {
+            UserPersonLink saved = linkRepository.save(link);
+            return toResponse(saved);
+        } catch (DataIntegrityViolationException e) {
+            UserPersonLink existingLink = linkRepository.findByUserId(userId)
+                    .orElseThrow(() -> e);
+            if (existingLink.getPersonId().equals(personId)) {
+                return toResponse(existingLink);
+            }
+            throw new UserAlreadyLinkedException(userId, existingLink.getPersonId(), personId);
+        }
+    }
 
-        UserPersonLink saved = linkRepository.save(link);
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public List<UserPersonLinkResponse> getUserLinks(@NonNull UUID personId) {
+        personRepository.findById(personId)
+                .orElseThrow(() -> new PersonNotFoundException(personId));
 
-        return toResponse(saved);
+        return linkRepository.findByPersonId(personId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @NonNull
+    public UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request) {
+        UserPersonLinkResponse response = createUserLink(request.getUserId(), request.getPersonId());
+        if (request.getNotes() != null || request.getLinkType() != null) {
+            var existingLink = linkRepository.findByUserId(request.getUserId());
+            if (existingLink.isPresent()) {
+                UserPersonLink link = existingLink.get();
+                if (request.getLinkType() != null && !request.getLinkType().isBlank()) {
+                    link.setLinkType(request.getLinkType());
+                }
+                if (request.getNotes() != null) {
+                    link.setNotes(request.getNotes());
+                }
+                response = toResponse(linkRepository.save(link));
+            }
+        }
+        return response;
     }
 
     @Override
@@ -89,6 +144,21 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
                 .stream()
                 .map(UserPersonLink::getUserId)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public UserPersonLinkResponse findLinkByPersonId(@NonNull UUID personId) {
+        personRepository.findById(personId)
+                .orElseThrow(() -> new PersonNotFoundException(personId));
+
+        UserPersonLink link = linkRepository.findFirstByPersonIdAndStatusOrderByCreatedAtDesc(
+                personId,
+                com.positivity.people.internal.enums.UserLinkStatus.ACTIVE)
+                .orElseThrow(() -> new UserPersonLinkNotFoundException(personId));
+
+        return toResponse(link);
     }
 
     private UserPersonLinkResponse toResponse(UserPersonLink link) {

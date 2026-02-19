@@ -82,99 +82,142 @@ public class CreditMemoService {
         log.info("Creating Credit Memo for invoice {} with amount {}, reason: {}",
                 request.getOriginalInvoiceId(), request.getCreditAmount(), request.getReasonCode());
 
-        // Fetch invoice details from Invoice service
-        InvoiceDetails invoice;
+        InvoiceDetails invoice = fetchInvoiceDetails(request.getOriginalInvoiceId());
+        validateInvoiceStatus(invoice);
+
+        BigDecimal balanceDue = resolveBalanceDue(invoice);
+        validateBalanceDue(invoice, balanceDue);
+
+        CreditAmountCalculation creditCalculation = calculateCreditAmounts(request, balanceDue);
+        validateCreditDoesNotExceedBalance(request, balanceDue, creditCalculation);
+
+        PriorPeriodInfo priorPeriodInfo = determinePriorPeriodInfo(invoice);
+
+        CreditMemo creditMemo = creditMemoRepository.save(buildCreditMemo(
+                request,
+                currentUser,
+                invoice,
+                creditCalculation.taxReversed(),
+                priorPeriodInfo));
+
+        log.info("Created Credit Memo {} with total amount {}",
+                creditMemo.getCreditMemoId(), creditMemo.calculateTotalAmount());
+
+        postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo);
+        ApplyCreditMemoResponse invoiceResponse = applyCreditMemoToInvoice(creditMemo, invoice, currentUser);
+
+        log.info("Applied Credit Memo {} to invoice {}: balance {} -> {}",
+                creditMemo.getCreditMemoId(),
+                invoice.getInvoiceId(),
+                invoiceResponse.getBalanceBefore(),
+                invoiceResponse.getBalanceAfter());
+
+        // Build and return response
+        return buildResponse(creditMemo, invoiceResponse.getBalanceAfter());
+    }
+
+    private InvoiceDetails fetchInvoiceDetails(UUID invoiceId) {
         try {
-            invoice = invoiceServiceClient.getInvoiceDetails(request.getOriginalInvoiceId());
+            return invoiceServiceClient.getInvoiceDetails(invoiceId);
         } catch (InvoiceServiceException e) {
-            log.error("Failed to fetch invoice details for {}: {}", request.getOriginalInvoiceId(), e.getMessage());
+            log.error("Failed to fetch invoice details for {}: {}", invoiceId, e.getMessage());
             HttpStatus status = HttpStatus.resolve(e.getHttpStatus());
             if (status == null) {
                 status = HttpStatus.INTERNAL_SERVER_ERROR;
             }
-            throw new ResponseStatusException(
-                    status,
-                    "Invoice not found or unavailable: " + e.getMessage());
+            throw new ResponseStatusException(status, "Invoice not found or unavailable: " + e.getMessage());
         }
+    }
 
-        // Validate invoice status (must be finalized/open)
+    private void validateInvoiceStatus(InvoiceDetails invoice) {
         if (InvoiceStatus.VOIDED.equals(invoice.getStatus()) || InvoiceStatus.CANCELLED.equals(invoice.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Credit memos cannot be issued against " + invoice.getStatus() + " invoices");
         }
+    }
 
-        // Calculate remaining balance (balanceDue) before attempting tax calculation
-        BigDecimal balanceDue = invoice.getBalanceDue();
-        if (balanceDue == null) {
-            // Fallback to computed value only if balanceDue is unavailable
-            BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
-            balanceDue = invoice.getTotalAmount().subtract(totalPaid);
+    private BigDecimal resolveBalanceDue(InvoiceDetails invoice) {
+        if (invoice.getBalanceDue().compareTo(BigDecimal.ZERO) != 0) {
+            return invoice.getBalanceDue();
         }
+        BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
+        return invoice.getTotalAmount().subtract(totalPaid);
+    }
 
-        // Validate balanceDue > 0 before attempting division to avoid
-        // ArithmeticException
-        if (balanceDue.compareTo(BigDecimal.ZERO) <= 0) {
-            BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Invoice has no remaining balance to credit. Balance due: " + balanceDue
-                            + ", Total amount: " + invoice.getTotalAmount()
-                            + ", Total paid: " + totalPaid);
+    private void validateBalanceDue(InvoiceDetails invoice, BigDecimal balanceDue) {
+        if (balanceDue.compareTo(BigDecimal.ZERO) > 0) {
+            return;
         }
+        BigDecimal totalPaid = invoice.getTotalPaid() != null ? invoice.getTotalPaid() : BigDecimal.ZERO;
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Invoice has no remaining balance to credit. Balance due: " + balanceDue
+                        + ", Total amount: " + invoice.getTotalAmount()
+                        + ", Total paid: " + totalPaid);
+    }
 
-        // Calculate proportional tax reversal
-        BigDecimal taxAmount = balanceDue.multiply(new BigDecimal("0.10")); // Simplified: assume 10% tax
-        BigDecimal creditRatio = request.getCreditAmount()
-                .divide(balanceDue, 4, RoundingMode.HALF_UP);
-        BigDecimal taxReversed = taxAmount
-                .multiply(creditRatio)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        // Calculate total amount that will be applied to invoice
+    private CreditAmountCalculation calculateCreditAmounts(CreateCreditMemoRequest request, BigDecimal balanceDue) {
+        BigDecimal taxAmount = balanceDue.multiply(new BigDecimal("0.10"));
+        BigDecimal creditRatio = request.getCreditAmount().divide(balanceDue, 4, RoundingMode.HALF_UP);
+        BigDecimal taxReversed = taxAmount.multiply(creditRatio).setScale(2, RoundingMode.HALF_UP);
         BigDecimal totalCreditAmount = request.getCreditAmount().add(taxReversed);
+        return new CreditAmountCalculation(taxReversed, totalCreditAmount);
+    }
 
-        // Validate total credit amount doesn't exceed balance
-        if (totalCreditAmount.compareTo(balanceDue) > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Total credit amount " + totalCreditAmount
-                            + " (credit: " + request.getCreditAmount() + " + tax: " + taxReversed + ")"
-                            + " exceeds invoice outstanding balance " + balanceDue);
+    private void validateCreditDoesNotExceedBalance(
+            CreateCreditMemoRequest request,
+            BigDecimal balanceDue,
+            CreditAmountCalculation creditCalculation) {
+        if (creditCalculation.totalCreditAmount().compareTo(balanceDue) <= 0) {
+            return;
         }
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Total credit amount " + creditCalculation.totalCreditAmount()
+                        + " (credit: " + request.getCreditAmount() + " + tax: " + creditCalculation.taxReversed()
+                        + ")"
+                        + " exceeds invoice outstanding balance " + balanceDue);
+    }
 
-        // Check if prior period adjustment
-        boolean isPriorPeriod = false;
-        String originalPeriodId = null;
-        if (invoice.getInvoiceDate() != null) {
-            isPriorPeriod = periodService.isPriorPeriod(invoice.getInvoiceDate());
-            if (isPriorPeriod) {
-                originalPeriodId = periodService.getPeriodIdForDate(invoice.getInvoiceDate());
-                log.info("Credit Memo is a prior period adjustment: invoice period {}, current period {}",
-                        originalPeriodId, periodService.getCurrentPeriodId());
-            }
+    private PriorPeriodInfo determinePriorPeriodInfo(InvoiceDetails invoice) {
+        if (invoice.getInvoiceDate() == null) {
+            return new PriorPeriodInfo(false, null);
         }
+        boolean isPriorPeriod = periodService.isPriorPeriod(invoice.getInvoiceDate());
+        if (!isPriorPeriod) {
+            return new PriorPeriodInfo(false, null);
+        }
+        String originalPeriodId = periodService.getPeriodIdForDate(invoice.getInvoiceDate());
+        log.info("Credit Memo is a prior period adjustment: invoice period {}, current period {}",
+                originalPeriodId, periodService.getCurrentPeriodId());
+        return new PriorPeriodInfo(true, originalPeriodId);
+    }
 
-        // Create Credit Memo entity
+    private CreditMemo buildCreditMemo(
+            CreateCreditMemoRequest request,
+            String currentUser,
+            InvoiceDetails invoice,
+            BigDecimal taxReversed,
+            PriorPeriodInfo priorPeriodInfo) {
         CreditMemo creditMemo = new CreditMemo();
         creditMemo.setOriginalInvoiceId(request.getOriginalInvoiceId());
         creditMemo.setCustomerId(invoice.getCustomerId());
         creditMemo.setCreditAmount(request.getCreditAmount());
         creditMemo.setTaxAmountReversed(taxReversed);
-        // totalAmount is now calculated automatically from creditAmount +
-        // taxAmountReversed
         creditMemo.setReasonCode(request.getReasonCode());
         creditMemo.setJustificationNote(request.getJustificationNote());
         creditMemo.setStatus(CreditMemoStatus.POSTED);
         creditMemo.setCreatedByUserId(currentUser);
-        creditMemo.setPriorPeriodAdjustment(isPriorPeriod);
-        creditMemo.setOriginalPeriodId(originalPeriodId);
+        creditMemo.setPriorPeriodAdjustment(priorPeriodInfo.priorPeriod());
+        creditMemo.setOriginalPeriodId(priorPeriodInfo.originalPeriodId());
         creditMemo.setCurrency(invoice.getCurrency());
         creditMemo.setPostedTimestamp(Instant.now());
+        return creditMemo;
+    }
 
-        creditMemo = creditMemoRepository.save(creditMemo);
-
-        log.info("Created Credit Memo {} with total amount {}",
-                creditMemo.getCreditMemoId(), creditMemo.calculateTotalAmount());
-
-        // Post GL entries
+    private void postGlEntries(
+            CreditMemo creditMemo,
+            CreateCreditMemoRequest request,
+            BigDecimal taxReversed,
+            PriorPeriodInfo priorPeriodInfo) {
         try {
             glPostingService.postCreditMemoReversal(
                     creditMemo.getCreditMemoId(),
@@ -184,19 +227,22 @@ public class CreditMemoService {
                     request.getCreditAmount(),
                     taxReversed,
                     "Credit Memo " + creditMemo.getCreditMemoId() + " - " + request.getReasonCode(),
-                    isPriorPeriod,
-                    originalPeriodId);
+                    priorPeriodInfo.priorPeriod(),
+                    priorPeriodInfo.originalPeriodId());
         } catch (Exception e) {
             log.error("Failed to post GL entries for Credit Memo {}: {}",
                     creditMemo.getCreditMemoId(), e.getMessage(), e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to post GL entries: " + e.getMessage());
         }
+    }
 
-        // Apply Credit Memo to invoice
-        ApplyCreditMemoResponse invoiceResponse;
+    private ApplyCreditMemoResponse applyCreditMemoToInvoice(
+            CreditMemo creditMemo,
+            InvoiceDetails invoice,
+            String currentUser) {
         try {
-            invoiceResponse = invoiceServiceClient.applyCreditMemo(
+            return invoiceServiceClient.applyCreditMemo(
                     invoice.getInvoiceId(),
                     ApplyCreditMemoRequest.builder()
                             .creditMemoId(creditMemo.getCreditMemoId())
@@ -210,15 +256,6 @@ public class CreditMemoService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Credit Memo created but failed to update invoice: " + e.getMessage());
         }
-
-        log.info("Applied Credit Memo {} to invoice {}: balance {} -> {}",
-                creditMemo.getCreditMemoId(),
-                invoice.getInvoiceId(),
-                invoiceResponse.getBalanceBefore(),
-                invoiceResponse.getBalanceAfter());
-
-        // Build and return response
-        return buildResponse(creditMemo, invoiceResponse.getBalanceAfter());
     }
 
     /**
@@ -306,6 +343,12 @@ public class CreditMemoService {
         response.setCurrency(creditMemo.getCurrency());
         response.setInvoiceBalanceAfter(invoiceBalanceAfter);
         return response;
+    }
+
+    public record CreditAmountCalculation(BigDecimal taxReversed, BigDecimal totalCreditAmount) {
+    }
+
+    public record PriorPeriodInfo(boolean priorPeriod, String originalPeriodId) {
     }
 
 }

@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.util.UUID;
 
 /**
  * CRM Contacts Controller
@@ -62,7 +63,7 @@ public class CrmContactsController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
     @EmitEvent(id = "CRM_CONTACTS_LIST", apiVersion = "1")
     public ResponseEntity<GetContactsWithRolesResponse> getContactsWithRoles(
-            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId) {
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId) {
 
         try {
             GetContactsWithRolesResponse response = contactRoleService.getContactsWithRoles(partyId);
@@ -90,8 +91,8 @@ public class CrmContactsController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
     @EmitEvent(id = "CRM_CONTACT_ROLES_UPDATE", apiVersion = "1")
     public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
-            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull String partyId,
-            @Parameter(description = "Contact ID", required = true) @PathVariable @NonNull String contactId,
+            @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
+            @Parameter(description = "Contact ID", required = true) @PathVariable @NonNull UUID contactId,
             @Parameter(description = "Role assignment request", required = true) @RequestBody @NonNull UpdateContactRolesRequest request) {
 
         try {
