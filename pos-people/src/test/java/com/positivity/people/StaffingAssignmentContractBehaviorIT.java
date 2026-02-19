@@ -1,5 +1,6 @@
 package com.positivity.people;
 
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -7,9 +8,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import com.positivity.people.internal.client.LocationReferenceClient;
+import com.positivity.people.internal.entity.Person;
+import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.repository.PersonRepository;
 
 /**
  * CAP-119 / Issue #86 — Person-to-Location Staffing Assignment Contract Tests.
@@ -40,11 +51,36 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
         private static final String VALID_LOCATION_ID = "018e1c9f-0000-7000-8000-200000000001";
         private static final String VALID_LOCATION_ID_2 = "018e1c9f-0000-7000-8000-200000000002";
 
+        @Autowired
+        private PersonRepository personRepository;
+
+        @MockitoBean
+        private LocationReferenceClient locationReferenceClient;
+
+        @BeforeEach
+        void setUpReferenceData() {
+                UUID personId = UUID.fromString(VALID_PERSON_ID);
+                personRepository.findById(personId).ifPresentOrElse(existing -> {
+                        existing.setStatus(EmployeeStatus.ACTIVE);
+                        personRepository.save(existing);
+                }, () -> personRepository.save(Person.builder()
+                        .id(personId)
+                        .firstName("Valid")
+                        .lastName("Person")
+                        .status(EmployeeStatus.ACTIVE)
+                        .build()));
+
+                when(locationReferenceClient.isLocationActive(UUID.fromString(VALID_LOCATION_ID))).thenReturn(true);
+                when(locationReferenceClient.isLocationActive(UUID.fromString(VALID_LOCATION_ID_2))).thenReturn(true);
+                when(locationReferenceClient.isLocationActive(UUID.fromString("018e1c9f-dead-7000-8000-000000000000")))
+                        .thenReturn(false);
+        }
+
         // ========== HAPPY PATH ==========
 
         @Test
         @DisplayName("CP-119-100: Create primary assignment returns 201 and ends previous primary automatically")
-        void CP_119_100_createPrimaryAssignment_returns201_and_ends_previousPrimary() throws Exception {
+    void CP_119_100_createPrimaryAssignment_returns201_and_ends_previousPrimary() throws Exception {
                 // First primary assignment
                 String firstPrimary = """
                                 {
@@ -93,12 +129,109 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
                 mockMvc.perform(withAuth(
                                 get(STAFFING_BASE + "/" + firstAssignmentId)))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status").value("ENDED"))
-                                .andExpect(jsonPath("$.effectiveTo").value("2026-05-31"));
-        }
+                .andExpect(jsonPath("$.status").value("ENDED"))
+                .andExpect(jsonPath("$.effectiveTo").value("2026-05-31"));
+    }
 
-        @Test
-        @DisplayName("CP-119-101: Create non-primary assignment does not affect existing primary")
+    @Test
+    @DisplayName("CP-119-105: Create primary assignment does not demote existing primary when date windows do not overlap")
+    void CP_119_105_createPrimaryAssignment_nonOverlapping_keeps_existing_primary() throws Exception {
+        String existingPrimary = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "TECHNICIAN",
+                    "isPrimary": true,
+                    "effectiveFrom": "2026-01-01",
+                    "effectiveTo": "2026-03-31"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        var existingResult = mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(existingPrimary)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String existingAssignmentId = objectMapper
+                .readTree(existingResult.getResponse().getContentAsString())
+                .get("assignmentId").asText();
+
+        String newNonOverlappingPrimary = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "SHOP_MANAGER",
+                    "isPrimary": true,
+                    "effectiveFrom": "2026-04-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID_2);
+
+        mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newNonOverlappingPrimary)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(withAuth(
+                get(STAFFING_BASE + "/" + existingAssignmentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.effectiveFrom").value("2026-01-01"))
+                .andExpect(jsonPath("$.effectiveTo").value("2026-03-31"));
+    }
+
+    @Test
+    @DisplayName("CP-119-106: Primary demotion clamps effectiveTo to existing effectiveFrom when needed")
+    void CP_119_106_createPrimaryAssignment_clamps_demotion_effectiveTo() throws Exception {
+        String existingPrimary = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "TECHNICIAN",
+                    "isPrimary": true,
+                    "effectiveFrom": "2026-06-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        var existingResult = mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(existingPrimary)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String existingAssignmentId = objectMapper
+                .readTree(existingResult.getResponse().getContentAsString())
+                .get("assignmentId").asText();
+
+        String earlierPrimary = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "SHOP_MANAGER",
+                    "isPrimary": true,
+                    "effectiveFrom": "2026-05-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID_2);
+
+        mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(earlierPrimary)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(withAuth(
+                get(STAFFING_BASE + "/" + existingAssignmentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ENDED"))
+                .andExpect(jsonPath("$.effectiveFrom").value("2026-06-01"))
+                .andExpect(jsonPath("$.effectiveTo").value("2026-06-01"));
+    }
+
+    @Test
+    @DisplayName("CP-119-101: Create non-primary assignment does not affect existing primary")
         void CP_119_101_createNonPrimaryAssignment_does_not_affect_existingPrimary() throws Exception {
                 // Create initial primary
                 String primary = """
@@ -425,9 +558,9 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
                                 .andExpect(status().isBadRequest());
         }
 
-        @Test
-        @DisplayName("VE-119-101: Non-existent locationId returns 404 or 400")
-        void VE_119_101_nonExistentLocation_returns4xx() throws Exception {
+    @Test
+    @DisplayName("VE-119-101: Non-existent locationId returns 404 or 400")
+    void VE_119_101_nonExistentLocation_returns4xx() throws Exception {
                 String nonExistentLocationId = "018e1c9f-dead-7000-8000-000000000000";
                 String payload = """
                                 {
@@ -444,11 +577,39 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
                                 post(STAFFING_BASE)
                                                 .contentType(MediaType.APPLICATION_JSON)
                                                 .content(payload)))
-                                .andExpect(status().is4xxClientError());
-        }
+                .andExpect(status().is4xxClientError());
+    }
 
-        @Test
-        @DisplayName("VE-119-102: Missing required personId returns 400")
+    @Test
+    @DisplayName("VE-119-107: Inactive person for staffing assignment returns 400")
+    void VE_119_107_inactivePerson_returns400() throws Exception {
+        UUID inactivePersonId = UUID.fromString("018e1c9f-0000-7000-8000-100000000099");
+        personRepository.save(Person.builder()
+                .id(inactivePersonId)
+                .firstName("Inactive")
+                .lastName("Person")
+                .status(EmployeeStatus.TERMINATED)
+                .build());
+
+        String payload = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "TECHNICIAN",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-02-01"
+                }
+                """.formatted(inactivePersonId, VALID_LOCATION_ID);
+
+        mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("VE-119-102: Missing required personId returns 400")
         void VE_119_102_missingPersonId_returns400() throws Exception {
                 String payload = """
                                 {

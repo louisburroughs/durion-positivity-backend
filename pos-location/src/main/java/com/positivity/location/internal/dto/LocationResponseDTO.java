@@ -23,6 +23,7 @@ public class LocationResponseDTO {
     private String postalCode;
     private String country;
     private String mailingAddress;
+    private boolean active;
     private Long responsiblePersonId;
     private LocationTypeDTO type;
 }

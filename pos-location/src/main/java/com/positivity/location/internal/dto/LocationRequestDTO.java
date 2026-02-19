@@ -33,6 +33,7 @@ public class LocationRequestDTO {
     private String postalCode;
     private String country;
     private String mailingAddress;
+    private Boolean active;
     private Long responsiblePersonId;
 
     @NotNull(message = "type is required")

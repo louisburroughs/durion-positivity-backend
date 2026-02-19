@@ -5,6 +5,7 @@ import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
+import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.LocationType;
@@ -45,6 +46,21 @@ public class LocationService {
     @Transactional(readOnly = true)
     public Optional<LocationResponseDTO> getLocationByIdDto(UUID id) {
         return locationRepository.findById(id).map(this::toLocationResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public LocationValidationResponseDTO getLocationValidation(UUID id) {
+        return locationRepository.findById(id)
+                .map(location -> LocationValidationResponseDTO.builder()
+                        .locationId(id)
+                        .exists(true)
+                        .active(location.isActive())
+                        .build())
+                .orElseGet(() -> LocationValidationResponseDTO.builder()
+                        .locationId(id)
+                        .exists(false)
+                        .active(false)
+                        .build());
     }
 
     @Transactional
@@ -222,6 +238,11 @@ public class LocationService {
         location.setPostalCode(request.getPostalCode());
         location.setCountry(request.getCountry());
         location.setMailingAddress(request.getMailingAddress());
+        if (request.getActive() != null) {
+            location.setActive(request.getActive());
+        } else if (location.getId() == null) {
+            location.setActive(true);
+        }
         location.setResponsiblePersonId(request.getResponsiblePersonId());
         location.setType(resolveLocationType(request.getType()));
     }
@@ -261,6 +282,7 @@ public class LocationService {
                 .postalCode(location.getPostalCode())
                 .country(location.getCountry())
                 .mailingAddress(location.getMailingAddress())
+                .active(location.isActive())
                 .responsiblePersonId(location.getResponsiblePersonId())
                 .type(toLocationTypeDto(location.getType()))
                 .build();
