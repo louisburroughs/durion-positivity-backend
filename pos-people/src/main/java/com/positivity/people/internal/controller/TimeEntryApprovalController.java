@@ -44,8 +44,11 @@ public class TimeEntryApprovalController {
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Permissions", required = false) String permissionsHeader,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
-        if (request == null || request.getDecisions() == null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid request: decisions required");
+        if (request == null || request.getDecisions() == null || request.getDecisions().isEmpty()) {
+            com.positivity.people.internal.dto.ErrorResponse err = new com.positivity.people.internal.dto.ErrorResponse(
+                    "INVALID_REQUEST",
+                    "Invalid request: decisions required and non-empty", correlationId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
         }
 
         // Prefer authentication from SecurityContext; fall back to headers
