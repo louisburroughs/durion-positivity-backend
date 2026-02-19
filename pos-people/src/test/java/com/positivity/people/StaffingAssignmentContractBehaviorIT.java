@@ -192,6 +192,76 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.effectiveFrom").value("2026-02-01"));
     }
 
+    @Test
+    @DisplayName("CP-119-104: PUT /v1/people/staffing/assignments/{id} updates assignment and returns 200")
+    void CP_119_104_updateAssignment_returns200() throws Exception {
+        String createPayload = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "RECEPTIONIST",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-02-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        var createResult = mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createPayload)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String assignmentId = objectMapper
+                .readTree(createResult.getResponse().getContentAsString())
+                .get("assignmentId").asText();
+
+        String updatePayload = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "SHOP_FOREMAN",
+                    "isPrimary": true,
+                    "effectiveFrom": "2026-03-01",
+                    "effectiveTo": "2026-12-31"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID_2);
+
+        mockMvc.perform(withAuth(
+                put(STAFFING_BASE + "/" + assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updatePayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignmentId").value(assignmentId))
+                .andExpect(jsonPath("$.personId").value(VALID_PERSON_ID))
+                .andExpect(jsonPath("$.locationId").value(VALID_LOCATION_ID_2))
+                .andExpect(jsonPath("$.role").value("SHOP_FOREMAN"))
+                .andExpect(jsonPath("$.isPrimary").value(true))
+                .andExpect(jsonPath("$.effectiveFrom").value("2026-03-01"))
+                .andExpect(jsonPath("$.effectiveTo").value("2026-12-31"));
+    }
+
+    @Test
+    @DisplayName("LC-119-102: Non-existent assignment PUT returns 404")
+    void LC_119_102_updateNonExistent_returns404() throws Exception {
+        String nonExistentId = "018e1c9f-dead-7000-8000-888888888888";
+        String updatePayload = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "SHOP_FOREMAN",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-03-01"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        mockMvc.perform(withAuth(
+                put(STAFFING_BASE + "/" + nonExistentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updatePayload)))
+                .andExpect(status().isNotFound());
+    }
+
     // ========== VALIDATION / EDGE CASES ==========
 
     @Test
@@ -230,6 +300,66 @@ class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
                 post(STAFFING_BASE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(overlapping)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("VE-119-104: Updating assignment to overlapping range returns 409")
+    void VE_119_104_updateOverlappingAssignment_returns409() throws Exception {
+        String first = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "DETAILER",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-01-01",
+                    "effectiveTo": "2026-06-30"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(first)))
+                .andExpect(status().isCreated());
+
+        String second = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "DETAILER",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-07-01",
+                    "effectiveTo": "2026-12-31"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        var secondResult = mockMvc.perform(withAuth(
+                post(STAFFING_BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(second)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String secondAssignmentId = objectMapper
+                .readTree(secondResult.getResponse().getContentAsString())
+                .get("assignmentId").asText();
+
+        String overlappingUpdate = """
+                {
+                    "personId": "%s",
+                    "locationId": "%s",
+                    "role": "DETAILER",
+                    "isPrimary": false,
+                    "effectiveFrom": "2026-06-15",
+                    "effectiveTo": "2026-12-31"
+                }
+                """.formatted(VALID_PERSON_ID, VALID_LOCATION_ID);
+
+        mockMvc.perform(withAuth(
+                put(STAFFING_BASE + "/" + secondAssignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(overlappingUpdate)))
                 .andExpect(status().isConflict());
     }
 

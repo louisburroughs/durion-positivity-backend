@@ -3,6 +3,7 @@ package com.positivity.people.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
+import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
 import com.positivity.people.service.StaffingAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -63,6 +65,22 @@ public class StaffingAssignmentController {
     public ResponseEntity<StaffingAssignmentResponse> getAssignment(
             @PathVariable @NonNull UUID assignmentId) {
         return staffingAssignmentService.findById(assignmentId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Update staffing assignment")
+    @ApiResponse(responseCode = "200", description = "Assignment updated.")
+    @ApiResponse(responseCode = "400", description = "Validation error.")
+    @ApiResponse(responseCode = "404", description = "Assignment not found.")
+    @ApiResponse(responseCode = "409", description = "Overlapping assignment exists.")
+    @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_UPDATE", apiVersion = "1")
+    @PutMapping("/{assignmentId}")
+    public ResponseEntity<StaffingAssignmentResponse> updateAssignment(
+            @PathVariable @NonNull UUID assignmentId,
+            @Valid @RequestBody @NonNull UpdateStaffingAssignmentRequest request,
+            @AuthenticationPrincipal String actor) {
+        return staffingAssignmentService.update(assignmentId, request, actor != null ? actor : "system")
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

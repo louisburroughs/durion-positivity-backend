@@ -34,4 +34,22 @@ public interface PersonLocationAssignmentRepository extends JpaRepository<Person
             @Param("role") @NonNull String role,
             @Param("effectiveFrom") @NonNull LocalDate effectiveFrom,
             @Param("effectiveTo") LocalDate effectiveTo);
+
+    @Query("""
+            SELECT COUNT(a) > 0 FROM PersonLocationAssignment a
+            WHERE a.id <> :assignmentId
+              AND a.personId = :personId
+              AND a.locationId = :locationId
+              AND a.role = :role
+              AND a.status = 'ACTIVE'
+              AND (a.effectiveTo IS NULL OR a.effectiveTo >= :effectiveFrom)
+              AND (:effectiveTo IS NULL OR a.effectiveFrom <= :effectiveTo)
+            """)
+    boolean existsOverlappingExcludingId(
+            @Param("assignmentId") @NonNull UUID assignmentId,
+            @Param("personId") @NonNull UUID personId,
+            @Param("locationId") @NonNull UUID locationId,
+            @Param("role") @NonNull String role,
+            @Param("effectiveFrom") @NonNull LocalDate effectiveFrom,
+            @Param("effectiveTo") LocalDate effectiveTo);
 }
