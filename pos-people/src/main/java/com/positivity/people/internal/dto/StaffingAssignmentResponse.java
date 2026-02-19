@@ -17,6 +17,5 @@ public record StaffingAssignmentResponse(
         LocalDate effectiveTo,
         Instant createdAt,
         Instant updatedAt,
-        String createdBy
-) {
+        String createdBy) {
 }

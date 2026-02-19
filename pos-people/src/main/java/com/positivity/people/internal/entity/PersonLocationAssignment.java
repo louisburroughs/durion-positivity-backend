@@ -24,12 +24,8 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(
-        name = "person_location_assignment",
-        uniqueConstraints = @UniqueConstraint(
-                columnNames = {"person_id", "location_id", "role", "effective_from"}
-        )
-)
+@Table(name = "person_location_assignment", uniqueConstraints = @UniqueConstraint(columnNames = { "person_id",
+        "location_id", "role", "effective_from" }))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

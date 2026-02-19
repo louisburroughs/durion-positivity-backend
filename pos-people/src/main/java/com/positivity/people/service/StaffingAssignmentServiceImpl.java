@@ -40,7 +40,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
         if (request.isPrimary()) {
             repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(
-                            request.personId(), AssignmentStatus.ACTIVE)
+                    request.personId(), AssignmentStatus.ACTIVE)
                     .ifPresent(existing -> {
                         existing.setEffectiveTo(request.effectiveFrom().minusDays(1));
                         existing.setStatus(AssignmentStatus.ENDED);
@@ -103,7 +103,6 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                 assignment.getEffectiveTo(),
                 assignment.getCreatedAt(),
                 assignment.getUpdatedAt(),
-                assignment.getCreatedBy()
-        );
+                assignment.getCreatedBy());
     }
 }

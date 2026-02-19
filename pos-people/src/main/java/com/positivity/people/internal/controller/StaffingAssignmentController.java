@@ -33,8 +33,7 @@ public class StaffingAssignmentController {
 
     private final StaffingAssignmentService staffingAssignmentService;
 
-    @Operation(summary = "Create staffing assignment",
-            description = "Link a person to a location with role, effective dates, and primary flag.")
+    @Operation(summary = "Create staffing assignment", description = "Link a person to a location with role, effective dates, and primary flag.")
     @ApiResponse(responseCode = "201", description = "Assignment created.")
     @ApiResponse(responseCode = "400", description = "Validation error.")
     @ApiResponse(responseCode = "404", description = "Location or person not found.")
