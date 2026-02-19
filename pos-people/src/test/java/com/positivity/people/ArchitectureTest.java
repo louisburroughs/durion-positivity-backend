@@ -36,7 +36,9 @@ public class ArchitectureTest {
 
         @ArchTest
         static final ArchRule services_should_not_depend_on_controllers = noClasses()
-                        .that().resideInAPackage("..service..")
+                        .that().resideInAnyPackage(
+                                        "com.positivity.people.service..",
+                                        "com.positivity.people.internal.service..")
                         .should().dependOnClassesThat().resideInAPackage("..internal.controller..")
                         .allowEmptyShould(true)
                         .because("services should not depend on web layer");
@@ -51,7 +53,11 @@ public class ArchitectureTest {
         @ArchTest
         static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
                         .that()
-                        .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+                        .resideOutsideOfPackages(
+                                        "com.positivity.people.service..",
+                                        "com.positivity.people.internal.service..",
+                                        "..internal.repository..",
+                                        "..internal.config..")
                         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
                         .allowEmptyShould(true)
                         .because("repositories should only be accessed from service layer");

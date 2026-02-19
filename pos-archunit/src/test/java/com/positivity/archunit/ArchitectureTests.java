@@ -98,10 +98,11 @@ class ArchitectureTests {
         ArchRule rule = classes()
                 .that().resideInAPackage("..internal..")
                 .and().arePublic()
+                .and().resideOutsideOfPackages("..internal.service..")
                 .should().haveSimpleNameNotContaining("Service")
                 .andShould().haveSimpleNameNotContaining("Dto")
                 .because(
-                        "internal classes should not be public unless they are configuration or DTOs used by services");
+                        "internal service implementations are allowed in ..internal.service.., while other internal public classes should avoid leaking service API types");
 
         // This rule is informational - allows some flexibility for internal public
         // classes
