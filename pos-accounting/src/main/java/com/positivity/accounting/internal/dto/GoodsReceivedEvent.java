@@ -105,6 +105,7 @@ public class GoodsReceivedEvent {
 
         @Schema(description = "Is this an inventory item (true) or expense item (false)", example = "true")
         @JsonProperty("isInventoryItem")
+        @lombok.Builder.Default
         private boolean isInventoryItem = true;
     }
 }
