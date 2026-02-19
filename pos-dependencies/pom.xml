@@ -25,6 +25,14 @@
                 <artifactId>pos-events</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+            <!-- Shared Document Helper Library -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-document-helper</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- Shared DTO Library -->
             <dependency>
                 <groupId>com.positivity</groupId>

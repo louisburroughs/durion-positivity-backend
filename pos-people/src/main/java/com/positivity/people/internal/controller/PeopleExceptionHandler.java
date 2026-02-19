@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 
@@ -138,6 +139,15 @@ public class PeopleExceptionHandler {
         HttpStatus status = determineHttpStatus(ex.getHttpStatus());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
         problem.setProperty("errorCode", ex.getErrorCode());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ProblemDetail handleResponseStatusException(ResponseStatusException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.valueOf(ex.getStatusCode().value()),
+                ex.getReason() == null ? ex.getMessage() : ex.getReason());
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problem;
     }

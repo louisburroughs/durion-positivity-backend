@@ -1,14 +1,19 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.client.WorkexecJobTimeClient;
 import com.positivity.people.internal.client.dto.WorkexecJobTimeTotal;
+import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.internal.dto.AttendanceReportKey;
 import com.positivity.people.internal.entity.Person;
 import com.positivity.people.internal.entity.TimeEntry;
+import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.repository.PersonRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.PeopleReportsService;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -31,17 +36,90 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
     private final TimeEntryRepository timeEntryRepository;
     private final PersonRepository personRepository;
     private final WorkexecJobTimeClient workexecJobTimeClient;
+    private final LocationReferenceClient locationReferenceClient;
     private final TimekeepingThresholdCache timekeepingThresholdCache;
 
     public PeopleReportsServiceImpl(
             TimeEntryRepository timeEntryRepository,
             PersonRepository personRepository,
             WorkexecJobTimeClient workexecJobTimeClient,
+            LocationReferenceClient locationReferenceClient,
             TimekeepingThresholdCache timekeepingThresholdCache) {
         this.timeEntryRepository = timeEntryRepository;
         this.personRepository = personRepository;
         this.workexecJobTimeClient = workexecJobTimeClient;
+        this.locationReferenceClient = locationReferenceClient;
         this.timekeepingThresholdCache = timekeepingThresholdCache;
+    }
+
+    @Override
+    @NonNull
+    public List<ApprovedTimeExportResponse> getApprovedTimeForExport(
+            @NonNull LocalDate startDate,
+            @NonNull LocalDate endDate,
+            @NonNull List<UUID> locationIds) {
+        // Issue #79: enforce stable approved-only export read contract.
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("endDate must be on or after startDate");
+        }
+        if (locationIds.isEmpty()) {
+            throw new IllegalArgumentException("At least one locationId is required");
+        }
+
+        for (UUID locationId : locationIds) {
+            if (!locationReferenceClient.isLocationActive(locationId)) {
+                throw new IllegalArgumentException("Unknown locationId: " + locationId);
+            }
+        }
+
+        Instant windowStartInclusive = startDate.atStartOfDay(ZoneId.of("UTC")).toInstant();
+        Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant();
+
+        List<TimeEntry> entries = timeEntryRepository.findApprovedForExport(
+                TimeEntryStatus.APPROVED,
+                windowStartInclusive,
+                windowEndExclusive,
+                locationIds);
+
+        if (entries.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, String> employeeNamesById = loadEmployeeNames(entries);
+        Map<UUID, String> locationNamesById = loadLocationNames(locationIds);
+
+        return entries.stream()
+                .filter(entry -> entry.getApprovedAt() != null
+                        && entry.getApprovedBy() != null
+                        && entry.getAttendanceStartAt() != null
+                        && entry.getAttendanceEndAt() != null
+                        && !entry.getAttendanceEndAt().isBefore(entry.getAttendanceStartAt()))
+                .map(entry -> {
+                    BigDecimal hoursWorked = BigDecimal.valueOf(Duration
+                            .between(entry.getAttendanceStartAt(), entry.getAttendanceEndAt())
+                            .toMinutes())
+                            .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+
+                    String employeeId = entry.getPersonId() == null ? "" : entry.getPersonId();
+                    String employeeName = employeeNamesById.getOrDefault(employeeId, employeeId);
+                    String locationName = locationNamesById.getOrDefault(entry.getLocationId(),
+                            entry.getLocationId().toString());
+
+                    return new ApprovedTimeExportResponse(
+                            entry.getTimeEntryId().toString(),
+                            employeeId,
+                            employeeName,
+                            entry.getLocationId(),
+                            locationName,
+                            entry.getAttendanceStartAt().atZone(ZoneId.of("UTC")).toLocalDate(),
+                            hoursWorked,
+                            entry.getApprovedAt(),
+                            entry.getApprovedBy());
+                })
+                .sorted(Comparator
+                        .comparing(ApprovedTimeExportResponse::entryDate)
+                        .thenComparing(ApprovedTimeExportResponse::timeEntryId))
+                .toList();
     }
 
     @Override
@@ -212,6 +290,46 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
             String fullName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
                     + (person.getLastName() == null ? "" : person.getLastName())).trim();
             namesById.put(person.getId().toString(), fullName.isBlank() ? person.getId().toString() : fullName);
+        }
+        return namesById;
+    }
+
+    private Map<String, String> loadEmployeeNames(List<TimeEntry> entries) {
+        Set<UUID> employeeIds = new HashSet<>();
+        for (TimeEntry entry : entries) {
+            if (entry.getPersonId() == null || entry.getPersonId().isBlank()) {
+                continue;
+            }
+            try {
+                employeeIds.add(UUID.fromString(entry.getPersonId()));
+            } catch (IllegalArgumentException ignored) {
+                // keep source identifier fallback for non-UUID person IDs
+            }
+        }
+
+        if (employeeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, String> namesById = new HashMap<>();
+        for (Person person : personRepository.findAllById(employeeIds)) {
+            String displayName = ((person.getFirstName() == null ? "" : person.getFirstName()) + " "
+                    + (person.getLastName() == null ? "" : person.getLastName())).trim();
+            if (displayName.isBlank() && person.getLegalName() != null && !person.getLegalName().isBlank()) {
+                displayName = person.getLegalName();
+            }
+            if (displayName.isBlank() && person.getPreferredName() != null && !person.getPreferredName().isBlank()) {
+                displayName = person.getPreferredName();
+            }
+            namesById.put(person.getId().toString(), displayName.isBlank() ? person.getId().toString() : displayName);
+        }
+        return namesById;
+    }
+
+    private Map<UUID, String> loadLocationNames(List<UUID> locationIds) {
+        Map<UUID, String> namesById = new HashMap<>();
+        for (UUID locationId : locationIds) {
+            namesById.put(locationId, locationReferenceClient.getLocationName(locationId));
         }
         return namesById;
     }
