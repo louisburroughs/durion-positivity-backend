@@ -1,6 +1,6 @@
 package com.positivity.people.internal.dto;
 
-public class WorkSessionStartRequest {
+public class WorkSessionRequest {
 
     private String personId;
     private String actor;

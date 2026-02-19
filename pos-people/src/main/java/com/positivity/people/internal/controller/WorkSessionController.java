@@ -1,7 +1,7 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.people.internal.dto.WorkSessionStartRequest;
+import com.positivity.people.internal.dto.WorkSessionRequest;
 import com.positivity.people.service.BreakDto;
 import com.positivity.people.service.WorkSessionDto;
 import com.positivity.people.service.WorkSessionService;
@@ -29,7 +29,7 @@ public class WorkSessionController {
     @EmitEvent(id = "PEOPLE_WORK_SESSION_START", apiVersion = "1")
     @PostMapping("/start")
     public ResponseEntity<WorkSessionDto> startWorkSession(
-            @Parameter(description = "Work session start request body") @RequestBody @NonNull WorkSessionStartRequest request,
+            @Parameter(description = "Work session start request body") @RequestBody @NonNull WorkSessionRequest request,
             @RequestHeader(value = "X-User", required = false) String actorHeader) {
         String actor = resolveActor(actorHeader, request.getActor());
         log.info("Starting work session for personId={}", request.getPersonId());
@@ -42,7 +42,7 @@ public class WorkSessionController {
     @EmitEvent(id = "PEOPLE_WORK_SESSION_STOP", apiVersion = "1")
     @PostMapping("/stop")
     public ResponseEntity<WorkSessionDto> stopWorkSession(
-            @Parameter(description = "Work session stop request body") @RequestBody @NonNull WorkSessionStartRequest request,
+            @Parameter(description = "Work session stop request body") @RequestBody @NonNull WorkSessionRequest request,
             @RequestHeader(value = "X-User", required = false) String actorHeader) {
         String actor = resolveActor(actorHeader, request.getActor());
         log.info("Stopping work session for personId={}", request.getPersonId());
