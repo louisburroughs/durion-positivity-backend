@@ -19,17 +19,20 @@ public class PersonServiceImpl implements PersonService {
     private final PersonRepository personRepository;
 
     @Override
+    @NonNull
     public List<Person> getAllPeople() {
         return personRepository.findAll().stream().map(this::toDto).toList();
     }
 
     @Override
+    @NonNull
     public Optional<Person> getPersonById(@NonNull UUID id) {
         return personRepository.findById(id).map(this::toDto);
     }
 
     @Override
     @Transactional
+    @NonNull
     public Person savePerson(@NonNull Person person) {
         if (person.getUsername() != null && !person.getUsername().isBlank()
                 && !validateUsernameWithSecurityService(person.getUsername())) {

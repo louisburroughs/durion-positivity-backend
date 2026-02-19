@@ -83,7 +83,7 @@ public class TimekeepingThresholdCache {
 
     private Set<UUID> extractUuidLocationIds(Collection<AttendanceReportKey> keys) {
         return keys.stream()
-                .map(AttendanceReportKey::locationId)
+                .map(AttendanceReportKey::getLocationId)
                 .map(this::tryParseUuid)
                 .flatMap(Optional::stream)
                 .collect(java.util.stream.Collectors.toSet());
