@@ -49,18 +49,20 @@ public class LocationService {
 
     @Transactional
     public LocationResponseDTO createLocation(LocationRequestDTO request) {
-        Location location = toLocationEntity(request);
+        Location location = new Location();
+        applyLocationRequest(location, request);
         Location saved = saveLocationInternal(location);
         return toLocationResponse(saved);
     }
 
     @Transactional
     public Optional<LocationResponseDTO> updateLocation(UUID id, LocationRequestDTO request) {
-        if (locationRepository.findById(id).isEmpty()) {
+        Optional<Location> existingLocation = locationRepository.findById(id);
+        if (existingLocation.isEmpty()) {
             return Optional.empty();
         }
-        Location location = toLocationEntity(request);
-        location.setId(id);
+        Location location = existingLocation.get();
+        applyLocationRequest(location, request);
         Location updated = saveLocationInternal(location);
         return Optional.of(toLocationResponse(updated));
     }
@@ -209,8 +211,7 @@ public class LocationService {
         }
     }
 
-    private Location toLocationEntity(LocationRequestDTO request) {
-        Location location = new Location();
+    private void applyLocationRequest(Location location, LocationRequestDTO request) {
         location.setName(request.getName());
         location.setCode(request.getCode());
         location.setGeographicalLocationId(request.getGeographicalLocationId());
@@ -223,7 +224,6 @@ public class LocationService {
         location.setMailingAddress(request.getMailingAddress());
         location.setResponsiblePersonId(request.getResponsiblePersonId());
         location.setType(resolveLocationType(request.getType()));
-        return location;
     }
 
     private LocationType resolveLocationType(LocationTypeDTO locationTypeDto) {
