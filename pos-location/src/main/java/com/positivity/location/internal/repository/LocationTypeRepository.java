@@ -11,18 +11,20 @@ import java.util.UUID;
 
 @Repository
 public interface LocationTypeRepository extends JpaRepository<LocationType, UUID> {
-    boolean existsByNameIgnoreCase(String name);
+        boolean existsByNameIgnoreCase(String name);
 
-    @Query("""
-            select new LocationType(lt.id, lt.name, lt.description)
-            from LocationType lt
-            """)
-    List<LocationType> findAllProjected();
+        Optional<LocationType> findByNameIgnoreCase(String name);
 
-    @Query("""
-            select new LocationType(lt.id, lt.name, lt.description)
-            from LocationType lt
-            where lt.id = :id
-            """)
-    Optional<LocationType> findProjectedById(UUID id);
+        @Query("""
+                        select new LocationType(lt.id, lt.name, lt.description)
+                        from LocationType lt
+                        """)
+        List<LocationType> findAllProjected();
+
+        @Query("""
+                        select new LocationType(lt.id, lt.name, lt.description)
+                        from LocationType lt
+                        where lt.id = :id
+                        """)
+        Optional<LocationType> findProjectedById(UUID id);
 }

@@ -10,6 +10,16 @@ import java.util.UUID;
 
 public interface UserPersonLinkService {
 
+    boolean linkExistsByUserId(@NonNull UUID userId);
+
+    boolean linkExistsByUserIdAndPersonId(@NonNull UUID userId, @NonNull UUID personId);
+
+    @NonNull
+    UserPersonLinkResponse createUserLink(@NonNull UUID userId, @NonNull UUID personId);
+
+    @NonNull
+    List<UserPersonLinkResponse> getUserLinks(@NonNull UUID personId);
+
     @NonNull
     UserPersonLinkResponse linkUserToPerson(@NonNull LinkUserToPersonRequest request);
 
@@ -20,4 +30,7 @@ public interface UserPersonLinkService {
 
     @NonNull
     List<UUID> findUserIdsByPersonId(@NonNull UUID personId);
+
+    @NonNull
+    UserPersonLinkResponse findLinkByPersonId(@NonNull UUID personId);
 }

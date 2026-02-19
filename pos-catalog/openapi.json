@@ -1,0 +1,4237 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Positivity Product API",
+        "description": "API documentation for the Product service, accessible via the API Gateway.",
+        "contact": {
+            "name": "Durion Team",
+            "email": "louis.burroughs@gmail.com"
+        },
+        "version": "v1"
+    },
+    "servers": [
+        {
+            "url": "http://api-gateway.local/api/catalog",
+            "description": "API Gateway"
+        }
+    ],
+    "tags": [
+        {
+            "name": "UOM Conversion API",
+            "description": "Unit of measure conversion API"
+        },
+        {
+            "name": "Products API",
+            "description": "API for products, lifecycle, and pricing"
+        },
+        {
+            "name": "Item Cost API",
+            "description": "Manage standard, last, and average item costs"
+        },
+        {
+            "name": "Supplier Item Cost API",
+            "description": "Manage supplier item costs with volume tiers"
+        },
+        {
+            "name": "Product MSRP API",
+            "description": "Manage MSRP values with effective dates"
+        },
+        {
+            "name": "Catalog API",
+            "description": "API for managing catalogs"
+        },
+        {
+            "name": "Price Book API",
+            "description": "Manage price books, pricing rules, and resolution"
+        },
+        {
+            "name": "Catalog Items API",
+            "description": "API for managing catalog items by type"
+        }
+    ],
+    "paths": {
+        "/v1/products/{productId}": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get a product by ID",
+                "description": "Retrieves a specific product by its unique ID.",
+                "operationId": "getProductById",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the product to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved product",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Update product master record",
+                "description": "Updates mutable product master fields. SKU is immutable.",
+                "operationId": "updateProduct",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the product to update",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProductUpdateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Validation error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Business conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Product updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/{productId}/msrp/{msrpId}": {
+            "put": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "Update MSRP",
+                "description": "Updates a non-historical MSRP record.",
+                "operationId": "updateMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "msrpId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateMsrpRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "MSRP record not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Temporal overlap or optimistic locking conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "MSRP updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/{productId}/lifecycle": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get product lifecycle state",
+                "description": "Retrieves lifecycle state and replacement suggestions for a product.",
+                "operationId": "getProductLifecycle",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the product",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Product not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Successfully retrieved lifecycle state",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Set product lifecycle state",
+                "description": "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.",
+                "operationId": "setLifecycleState",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the product",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProductLifecycleUpdateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Lifecycle state updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing override permission",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Lifecycle business rule conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductLifecycleResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/uom-conversions/{id}": {
+            "get": {
+                "tags": [
+                    "UOM Conversion API"
+                ],
+                "summary": "Get conversion",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Conversion found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UomConversionDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "UOM Conversion API"
+                ],
+                "summary": "Update conversion factor",
+                "operationId": "update",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UomConversionUpdateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Conversion updated",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UomConversionDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "UOM Conversion API"
+                ],
+                "summary": "Deactivate conversion",
+                "operationId": "deactivate",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Conversion deactivated"
+                    }
+                }
+            }
+        },
+        "/v1/products/supplier-costs/{id}": {
+            "get": {
+                "tags": [
+                    "Supplier Item Cost API"
+                ],
+                "summary": "Get supplier cost structure",
+                "operationId": "getCostStructure",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierItemCostDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierItemCostDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Supplier Item Cost API"
+                ],
+                "summary": "Update supplier cost structure",
+                "operationId": "updateCostStructure",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SupplierItemCostUpdateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierItemCostDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierItemCostDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Supplier Item Cost API"
+                ],
+                "summary": "Delete supplier cost structure",
+                "operationId": "deleteCostStructure",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/{priceBookId}": {
+            "get": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Get price book",
+                "operationId": "getPriceBook",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Price book not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Price book returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Update price book",
+                "operationId": "updatePriceBook",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "404": {
+                        "description": "Price book not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Price book updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/{priceBookId}/rules/{ruleId}": {
+            "put": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Update price book rule",
+                "operationId": "updateRule",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "ruleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookRuleCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Rule conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Price book rule updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Deactivate price book rule",
+                "operationId": "deactivateRule",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "ruleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Rule deactivated"
+                    }
+                }
+            }
+        },
+        "/v1/products/items/{itemId}/standard-cost": {
+            "put": {
+                "tags": [
+                    "Item Cost API"
+                ],
+                "summary": "Update standard item cost",
+                "operationId": "updateStandardCost",
+                "parameters": [
+                    {
+                        "name": "itemId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateStandardCostRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ItemCostsDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ItemCostsDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/catalogs/{catalogId}": {
+            "get": {
+                "tags": [
+                    "Catalog API"
+                ],
+                "summary": "Get a catalog by ID",
+                "description": "Retrieves a specific catalog by its unique ID.",
+                "operationId": "getCatalogById",
+                "parameters": [
+                    {
+                        "name": "catalogId",
+                        "in": "path",
+                        "description": "ID of the catalog to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved catalog",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Catalog not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Catalog API"
+                ],
+                "summary": "Update an existing catalog",
+                "description": "Updates an existing catalog.",
+                "operationId": "updateCatalog",
+                "parameters": [
+                    {
+                        "name": "catalogId",
+                        "in": "path",
+                        "description": "ID of the catalog to update",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "description": "Updated catalog object",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CatalogDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request body",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Catalog updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Catalog not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Catalog API"
+                ],
+                "summary": "Delete a catalog",
+                "description": "Deletes a catalog by its ID.",
+                "operationId": "deleteCatalog",
+                "parameters": [
+                    {
+                        "name": "catalogId",
+                        "in": "path",
+                        "description": "ID of the catalog to delete",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Catalog deleted successfully"
+                    },
+                    "404": {
+                        "description": "Catalog not found"
+                    }
+                }
+            }
+        },
+        "/v1/catalog-items/{type}/{catalogId}": {
+            "put": {
+                "tags": [
+                    "Catalog Items API"
+                ],
+                "summary": "Update an existing catalog item",
+                "description": "Updates an existing product, service, or non-inventory product in the catalog.",
+                "operationId": "updateCatalogItem",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "description": "Type of catalog item (product, service, noninventory)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "catalogId",
+                        "in": "path",
+                        "description": "ID of the catalog item to update",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CatalogItemRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Catalog item updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogItemResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid item type or request body",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogItemResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Catalog item not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogItemResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Catalog Items API"
+                ],
+                "summary": "Delete a catalog item",
+                "description": "Deletes a product, service, or non-inventory product from the catalog by its ID.",
+                "operationId": "deleteCatalogItem",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "description": "Type of catalog item (product, service, noninventory)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "catalogId",
+                        "in": "path",
+                        "description": "ID of the catalog item to delete",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Catalog item deleted successfully"
+                    },
+                    "400": {
+                        "description": "Invalid item type"
+                    },
+                    "404": {
+                        "description": "Catalog item not found"
+                    }
+                }
+            }
+        },
+        "/v1/products": {
+            "post": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Create product master record",
+                "description": "Creates a product master record with immutable SKU and uniqueness checks.",
+                "operationId": "createProduct",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProductCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Validation error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Business conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Product created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/{productId}/replacements": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "List replacement products",
+                "description": "Returns replacement options for a product.",
+                "operationId": "getReplacements",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the product",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Replacements listed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ReplacementOption"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Add replacement product",
+                "description": "Adds a replacement suggestion to a discontinued product.",
+                "operationId": "addReplacementProduct",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of discontinued product",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProductReplacementRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Replacement added successfully",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReplacementOption"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReplacementOption"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReplacementOption"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/{productId}/msrp": {
+            "get": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "List MSRP history",
+                "description": "Returns all MSRP records for a product.",
+                "operationId": "listMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "MSRP records returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "Create MSRP",
+                "description": "Creates a product MSRP record with effective date constraints.",
+                "operationId": "createMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateMsrpRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Temporal overlap conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "MSRP created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/uom-conversions": {
+            "get": {
+                "tags": [
+                    "UOM Conversion API"
+                ],
+                "summary": "List active conversions",
+                "operationId": "list",
+                "responses": {
+                    "200": {
+                        "description": "Conversions listed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/UomConversionDto"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "UOM Conversion API"
+                ],
+                "summary": "Create UOM conversion",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UomConversionCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Conversion created",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UomConversionDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/supplier-costs": {
+            "post": {
+                "tags": [
+                    "Supplier Item Cost API"
+                ],
+                "summary": "Create supplier cost structure",
+                "operationId": "createCostStructure",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SupplierItemCostCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierItemCostDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate supplier and item combination",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierItemCostDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierItemCostDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/pricing/location-overrides": {
+            "post": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Create location price override",
+                "description": "Creates a location-specific price override and enforces guardrails for margin and discount limits.",
+                "operationId": "createLocationPriceOverride",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LocationPriceOverrideCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Override created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Guardrail validation failed",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/pricing/location-overrides/{overrideId}/reject": {
+            "post": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Reject pending location price override",
+                "description": "Rejects a pending override, persists rejection metadata, and marks the request as terminal.",
+                "operationId": "rejectLocationPriceOverride",
+                "parameters": [
+                    {
+                        "name": "overrideId",
+                        "in": "path",
+                        "description": "Override ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Override rejected",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Override or approval request not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid rejection request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Version conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/pricing/location-overrides/{overrideId}/approve": {
+            "post": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Approve pending location price override",
+                "description": "Approves a pending override and activates it as the effective location price.",
+                "operationId": "approveLocationPriceOverride",
+                "parameters": [
+                    {
+                        "name": "overrideId",
+                        "in": "path",
+                        "description": "Override ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LocationPriceOverrideDecisionRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Override approved",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Override or approval request not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Version conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid approval request",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/pricing/guardrail-policies": {
+            "post": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Upsert location guardrail policy",
+                "description": "Creates or updates the active LOCATION guardrail policy used by price overrides.",
+                "operationId": "upsertLocationGuardrailPolicy",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GuardrailPolicyUpsertRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Guardrail policy upserted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid policy payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books": {
+            "post": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Create price book",
+                "operationId": "createPriceBook",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid payload",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Price book created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/{priceBookId}/rules": {
+            "get": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "List price book rules",
+                "operationId": "listRules",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rule list returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Create price book rule",
+                "operationId": "createRule",
+                "parameters": [
+                    {
+                        "name": "priceBookId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PriceBookRuleCreateRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Rule conflict",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Price book rule created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceBookRuleDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/price-books/resolve-price": {
+            "post": {
+                "tags": [
+                    "Price Book API"
+                ],
+                "summary": "Resolve effective product price",
+                "operationId": "resolvePrice",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResolvePriceRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Resolved price returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ResolvePriceResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/catalogs": {
+            "post": {
+                "tags": [
+                    "Catalog API"
+                ],
+                "summary": "Add a new catalog",
+                "description": "Adds a new catalog.",
+                "operationId": "addCatalog",
+                "requestBody": {
+                    "description": "Catalog object to be added",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CatalogDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Catalog created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/catalog-items/{type}": {
+            "post": {
+                "tags": [
+                    "Catalog Items API"
+                ],
+                "summary": "Add a new catalog item",
+                "description": "Adds a new product, service, or non-inventory product to the catalog.",
+                "operationId": "addCatalogItem",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "description": "Type of catalog item (product, service, noninventory)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CatalogItemRequestDto"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Catalog item created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogItemResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid item type or request body",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogItemResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/{productId}/substitutes": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get substitute parts",
+                "description": "Returns list of substitute parts for a given productId.",
+                "operationId": "getPartSubstitutes",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the product",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "501": {
+                        "description": "Not implemented",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ProductDto"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/{productId}/msrp/active": {
+            "get": {
+                "tags": [
+                    "Product MSRP API"
+                ],
+                "summary": "Get active MSRP",
+                "description": "Returns MSRP active for the provided asOf date (or today).",
+                "operationId": "getActiveMsrp",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "asOf",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Active MSRP returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No active MSRP for date",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/{productId}/detail": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get product details with pricing and availability",
+                "description": "Retrieves a consolidated view of product information including catalog data, location-specific pricing, and availability. Implements graceful degradation and returns partial data when non-critical services are unavailable.",
+                "operationId": "getProductDetailView",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the product",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "location_id",
+                        "in": "query",
+                        "description": "Location/store ID for location-specific data",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Invalid location ID",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDetailView"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Successfully retrieved product details (may be partial if some services unavailable)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDetailView"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDetailView"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error while retrieving product details",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDetailView"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/services/{serviceId}": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get a service by ID",
+                "description": "Retrieves a specific service by its unique ID.",
+                "operationId": "getServiceById",
+                "parameters": [
+                    {
+                        "name": "serviceId",
+                        "in": "path",
+                        "description": "ID of the service to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Service not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ServiceDto"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Successfully retrieved service",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ServiceDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/services/name/{name}": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get services by name",
+                "description": "Retrieves a list of services matching the given name.",
+                "operationId": "getServiceByName",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "description": "Name of the services to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved services",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ServiceDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/pricing/effective-price/{locationId}/{productId}": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get effective location price",
+                "description": "Resolves effective price using precedence: ACTIVE override first, otherwise base price.",
+                "operationId": "getEffectiveLocationPrice",
+                "parameters": [
+                    {
+                        "name": "locationId",
+                        "in": "path",
+                        "description": "Location ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "Product ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Effective price returned",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EffectiveLocationPriceResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No pricing context found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EffectiveLocationPriceResponseDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/noninventory/{productId}": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get a non-inventory product by ID",
+                "description": "Retrieves a specific non-inventory product by its unique ID.",
+                "operationId": "getNonInventoryProductById",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "description": "ID of the non-inventory product to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved non-inventory product",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NonInventoryProductDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Non-inventory product not found",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NonInventoryProductDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/noninventory/name/{name}": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get non-inventory products by name",
+                "description": "Retrieves a list of non-inventory products matching the given name.",
+                "operationId": "getNonInventoryProductByName",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "description": "Name of the non-inventory products to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved non-inventory products",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NonInventoryProductDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/name/{name}": {
+            "get": {
+                "tags": [
+                    "Products API"
+                ],
+                "summary": "Get products by name",
+                "description": "Retrieves a list of products matching the given name.",
+                "operationId": "getProductByName",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "description": "Name of the products to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved products",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/items/{itemId}/costs": {
+            "get": {
+                "tags": [
+                    "Item Cost API"
+                ],
+                "summary": "Get current item costs",
+                "operationId": "getItemCosts",
+                "parameters": [
+                    {
+                        "name": "itemId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ItemCostsDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/products/items/{itemId}/costs/audit": {
+            "get": {
+                "tags": [
+                    "Item Cost API"
+                ],
+                "summary": "Get item cost audit history",
+                "operationId": "getAuditHistory",
+                "parameters": [
+                    {
+                        "name": "itemId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ItemCostAuditDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/catalogs/name/{name}": {
+            "get": {
+                "tags": [
+                    "Catalog API"
+                ],
+                "summary": "Get catalogs by name",
+                "description": "Retrieves a list of catalogs matching the given name.",
+                "operationId": "getCatalogByName",
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "path",
+                        "description": "Name of the catalogs to be obtained",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved catalogs",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CatalogDto"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ProductUpdateRequestDto": {
+                "type": "object",
+                "description": "Update product request",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "unitOfMeasure": {
+                        "type": "string"
+                    },
+                    "manufacturerId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "categoryId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "sku": {
+                        "type": "string"
+                    },
+                    "mpn": {
+                        "type": "string"
+                    },
+                    "upc": {
+                        "type": "string"
+                    },
+                    "attributes": {
+                        "type": "string",
+                        "description": "JSON object represented as string"
+                    }
+                },
+                "required": [
+                    "description",
+                    "mpn",
+                    "name",
+                    "unitOfMeasure"
+                ]
+            },
+            "CategoryDto": {
+                "type": "object",
+                "description": "Product category",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Category identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Category name",
+                        "example": "Tools"
+                    }
+                }
+            },
+            "DimensionDto": {
+                "type": "object",
+                "description": "Product dimension detail",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Dimension identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "dimensionType": {
+                        "type": "string",
+                        "description": "Dimension type",
+                        "enum": [
+                            "LENGTH",
+                            "WIDTH",
+                            "HEIGHT",
+                            "WEIGHT",
+                            "VOLUME",
+                            "AREA",
+                            "DIAMETER",
+                            "CIRCUMFERENCE",
+                            "RADIUS",
+                            "TEMPERATURE",
+                            "TIME",
+                            "SPEED",
+                            "PRESSURE",
+                            "FORCE",
+                            "ENERGY",
+                            "POWER",
+                            "FREQUENCY",
+                            "ANGLE",
+                            "DATA_SIZE",
+                            "CURRENT",
+                            "VOLTAGE",
+                            "RESISTANCE"
+                        ]
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Dimension description",
+                        "example": "Length"
+                    },
+                    "unitOfMeasure": {
+                        "type": "string",
+                        "description": "Unit of measure",
+                        "example": "in"
+                    },
+                    "dimensionValue": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Dimension value",
+                        "example": 12.5
+                    }
+                }
+            },
+            "ProductDto": {
+                "type": "object",
+                "description": "Catalog product",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Product identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Product name",
+                        "example": "Heavy Duty Wrench"
+                    },
+                    "shortDescription": {
+                        "type": "string",
+                        "description": "Short product description"
+                    },
+                    "longDescription": {
+                        "type": "string",
+                        "description": "Long product description"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Product description"
+                    },
+                    "images": {
+                        "type": "array",
+                        "description": "Product image URLs",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "manufacturerPartNumber": {
+                        "type": "string",
+                        "description": "Manufacturer part number"
+                    },
+                    "manufacturerId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Manufacturer identifier"
+                    },
+                    "manufacturerName": {
+                        "type": "string",
+                        "description": "Manufacturer name"
+                    },
+                    "manufacturerWarranty": {
+                        "type": "string",
+                        "description": "Manufacturer warranty"
+                    },
+                    "manufacturerBrand": {
+                        "type": "string",
+                        "description": "Manufacturer brand"
+                    },
+                    "countryOfOrigin": {
+                        "type": "string",
+                        "description": "Country of origin"
+                    },
+                    "sku": {
+                        "type": "string",
+                        "description": "SKU"
+                    },
+                    "mpn": {
+                        "type": "string",
+                        "description": "Manufacturer part number"
+                    },
+                    "upc": {
+                        "type": "string",
+                        "description": "UPC"
+                    },
+                    "attributes": {
+                        "type": "string",
+                        "description": "Attributes JSON"
+                    },
+                    "unitOfMeasure": {
+                        "type": "string",
+                        "description": "Unit of measure"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Operational status",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE"
+                        ]
+                    },
+                    "productCode": {
+                        "type": "string",
+                        "description": "Product code"
+                    },
+                    "productCodeType": {
+                        "type": "string",
+                        "description": "Product code type",
+                        "enum": [
+                            "UPC",
+                            "EAN"
+                        ]
+                    },
+                    "category": {
+                        "$ref": "#/components/schemas/CategoryDto",
+                        "description": "Category detail"
+                    },
+                    "subcategory": {
+                        "$ref": "#/components/schemas/SubcategoryDto",
+                        "description": "Subcategory detail"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Product type"
+                    },
+                    "dimensions": {
+                        "type": "array",
+                        "description": "Product dimensions",
+                        "items": {
+                            "$ref": "#/components/schemas/DimensionDto"
+                        }
+                    },
+                    "material": {
+                        "type": "string",
+                        "description": "Material"
+                    },
+                    "color": {
+                        "type": "string",
+                        "description": "Color"
+                    },
+                    "warranty": {
+                        "type": "string",
+                        "description": "Warranty"
+                    },
+                    "specifications": {
+                        "type": "string",
+                        "description": "Detailed specifications JSON"
+                    },
+                    "lifecycleState": {
+                        "type": "string",
+                        "description": "Lifecycle state",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE",
+                            "DISCONTINUED"
+                        ]
+                    },
+                    "lifecycleStateEffectiveAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Lifecycle state effective instant"
+                    },
+                    "lastStateChangedBy": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "User that last changed lifecycle state"
+                    },
+                    "lastStateChangedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Last lifecycle state change instant"
+                    },
+                    "lifecycleOverrideReason": {
+                        "type": "string",
+                        "description": "Lifecycle override reason"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Created timestamp"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Updated timestamp"
+                    }
+                }
+            },
+            "SubcategoryDto": {
+                "type": "object",
+                "description": "Product subcategory",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Subcategory identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Subcategory name",
+                        "example": "Hand Tools"
+                    }
+                }
+            },
+            "UpdateMsrpRequestDto": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "createdByUserId",
+                    "currency",
+                    "effectiveStartDate"
+                ]
+            },
+            "ProductMsrpDto": {
+                "type": "object",
+                "properties": {
+                    "msrpId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedBy": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "ProductLifecycleUpdateRequest": {
+                "type": "object",
+                "description": "Product lifecycle update request",
+                "properties": {
+                    "lifecycleState": {
+                        "type": "string",
+                        "description": "Target lifecycle state",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE",
+                            "DISCONTINUED"
+                        ]
+                    },
+                    "effectiveAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Effective instant for lifecycle change"
+                    },
+                    "effectiveDate": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Effective date for lifecycle change (date-only)"
+                    },
+                    "changedBy": {
+                        "type": "string",
+                        "description": "Username performing the lifecycle change",
+                        "example": "jane.doe"
+                    },
+                    "overrideReason": {
+                        "type": "string",
+                        "description": "Reason for lifecycle override"
+                    }
+                }
+            },
+            "ProductLifecycleResponse": {
+                "type": "object",
+                "description": "Product lifecycle details and replacement options",
+                "properties": {
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Product identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "lifecycleState": {
+                        "type": "string",
+                        "description": "Current lifecycle state",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE",
+                            "DISCONTINUED"
+                        ]
+                    },
+                    "lifecycleStateEffectiveAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Lifecycle state effective instant"
+                    },
+                    "lastStateChangedBy": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "User that last changed lifecycle state",
+                        "example": "8b8df63e-18d8-4bde-a8f4-88bc36bc57d7"
+                    },
+                    "lastStateChangedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Last lifecycle state change instant"
+                    },
+                    "lifecycleOverrideReason": {
+                        "type": "string",
+                        "description": "Lifecycle override reason"
+                    },
+                    "replacementOptions": {
+                        "type": "array",
+                        "description": "Replacement options for this product lifecycle state",
+                        "items": {
+                            "$ref": "#/components/schemas/ReplacementOption"
+                        }
+                    }
+                }
+            },
+            "ReplacementOption": {
+                "type": "object",
+                "description": "Replacement option details",
+                "properties": {
+                    "replacementId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Replacement option identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "replacementProductId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Replacement product identifier",
+                        "example": "2c018664-dfea-46ef-a838-6b9dbf8f9b1d"
+                    },
+                    "priorityOrder": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Display priority order",
+                        "example": 1
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Replacement notes"
+                    },
+                    "effectiveAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Replacement option effective instant"
+                    }
+                }
+            },
+            "UomConversionUpdateRequestDto": {
+                "type": "object",
+                "properties": {
+                    "conversionFactor": {
+                        "type": "number"
+                    }
+                },
+                "required": [
+                    "conversionFactor"
+                ]
+            },
+            "UomConversionDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "fromUomCode": {
+                        "type": "string"
+                    },
+                    "toUomCode": {
+                        "type": "string"
+                    },
+                    "conversionFactor": {
+                        "type": "number"
+                    },
+                    "active": {
+                        "type": "boolean"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CostTierDto": {
+                "type": "object",
+                "description": "Supplier item cost tier",
+                "properties": {
+                    "minQuantity": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Inclusive minimum quantity",
+                        "example": 1,
+                        "minimum": 1
+                    },
+                    "maxQuantity": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Inclusive maximum quantity; null means and above",
+                        "example": 10
+                    },
+                    "unitCost": {
+                        "type": "number",
+                        "description": "Per-unit cost for this quantity range",
+                        "example": 5.0
+                    }
+                },
+                "required": [
+                    "minQuantity",
+                    "unitCost"
+                ]
+            },
+            "SupplierItemCostUpdateRequestDto": {
+                "type": "object",
+                "description": "Request payload for updating supplier-item cost tiers",
+                "properties": {
+                    "supplierId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier identifier"
+                    },
+                    "itemId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Inventory item identifier"
+                    },
+                    "currencyCode": {
+                        "type": "string",
+                        "description": "ISO 4217 currency code",
+                        "example": "USD"
+                    },
+                    "baseCost": {
+                        "type": "number",
+                        "description": "Optional fallback base cost when no tiers apply",
+                        "example": 6.25
+                    },
+                    "tiers": {
+                        "type": "array",
+                        "description": "Ordered quantity-based cost tiers",
+                        "items": {
+                            "$ref": "#/components/schemas/CostTierDto"
+                        }
+                    }
+                },
+                "required": [
+                    "currencyCode",
+                    "itemId",
+                    "supplierId"
+                ]
+            },
+            "SupplierItemCostDto": {
+                "type": "object",
+                "description": "Supplier-item cost structure with optional quantity-based tiers",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier-item cost identifier"
+                    },
+                    "supplierId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier identifier"
+                    },
+                    "itemId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Inventory item identifier"
+                    },
+                    "currencyCode": {
+                        "type": "string",
+                        "description": "ISO 4217 currency code",
+                        "example": "USD"
+                    },
+                    "baseCost": {
+                        "type": "number",
+                        "description": "Optional fallback base cost"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Entity created timestamp"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Entity updated timestamp"
+                    },
+                    "tiers": {
+                        "type": "array",
+                        "description": "Ordered quantity-based cost tiers",
+                        "items": {
+                            "$ref": "#/components/schemas/CostTierDto"
+                        }
+                    }
+                }
+            },
+            "PriceBookCreateRequestDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string",
+                        "enum": [
+                            "COMPANY_DEFAULT",
+                            "LOCATION",
+                            "CUSTOMER_TIER"
+                        ]
+                    },
+                    "scopeId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "isDefault": {
+                        "type": "boolean"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE"
+                        ]
+                    }
+                },
+                "required": [
+                    "name",
+                    "scope"
+                ]
+            },
+            "PriceBookDto": {
+                "type": "object",
+                "properties": {
+                    "priceBookId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string",
+                        "enum": [
+                            "COMPANY_DEFAULT",
+                            "LOCATION",
+                            "CUSTOMER_TIER"
+                        ]
+                    },
+                    "scopeId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE"
+                        ]
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "default": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PriceBookRuleCreateRequestDto": {
+                "type": "object",
+                "properties": {
+                    "targetType": {
+                        "type": "string",
+                        "enum": [
+                            "SKU",
+                            "CATEGORY",
+                            "GLOBAL"
+                        ]
+                    },
+                    "targetId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "pricingLogic": {
+                        "type": "string"
+                    },
+                    "conditionType": {
+                        "type": "string",
+                        "enum": [
+                            "CUSTOMER_TIER",
+                            "LOCATION",
+                            "NONE"
+                        ]
+                    },
+                    "conditionValue": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "effectiveStartAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "effectiveEndAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "required": [
+                    "createdByUserId",
+                    "effectiveStartAt",
+                    "pricingLogic",
+                    "targetType"
+                ]
+            },
+            "PriceBookRuleDto": {
+                "type": "object",
+                "properties": {
+                    "ruleId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "priceBookId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "targetType": {
+                        "type": "string",
+                        "enum": [
+                            "SKU",
+                            "CATEGORY",
+                            "GLOBAL"
+                        ]
+                    },
+                    "targetId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "pricingLogic": {
+                        "type": "string"
+                    },
+                    "conditionType": {
+                        "type": "string",
+                        "enum": [
+                            "CUSTOMER_TIER",
+                            "LOCATION",
+                            "NONE"
+                        ]
+                    },
+                    "conditionValue": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "effectiveStartAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "effectiveEndAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "INACTIVE",
+                            "NOT_APPLICABLE_MISSING_BASE"
+                        ]
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "UpdateStandardCostRequestDto": {
+                "type": "object",
+                "description": "Request payload to update standard cost",
+                "properties": {
+                    "newCost": {
+                        "type": "number",
+                        "description": "New standard cost"
+                    },
+                    "reasonCode": {
+                        "type": "string",
+                        "description": "Reason code for manual change"
+                    }
+                },
+                "required": [
+                    "newCost",
+                    "reasonCode"
+                ]
+            },
+            "ItemCostsDto": {
+                "type": "object",
+                "description": "Current item costs",
+                "properties": {
+                    "itemId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "standardCost": {
+                        "type": "number"
+                    },
+                    "lastCost": {
+                        "type": "number"
+                    },
+                    "averageCost": {
+                        "type": "number"
+                    }
+                }
+            },
+            "CatalogDto": {
+                "type": "object",
+                "description": "Catalog container",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Catalog identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Catalog name",
+                        "example": "Winter Catalog"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Catalog description"
+                    },
+                    "productIds": {
+                        "type": "array",
+                        "description": "Product IDs included in the catalog",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    "serviceIds": {
+                        "type": "array",
+                        "description": "Service IDs included in the catalog",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    "nonInventoryProductIds": {
+                        "type": "array",
+                        "description": "Non-inventory product IDs included in the catalog",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                }
+            },
+            "CatalogItemRequestDto": {
+                "type": "object",
+                "description": "Catalog item upsert request. Fields are type-dependent.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Item name",
+                        "example": "Heavy Duty Wrench"
+                    },
+                    "shortDescription": {
+                        "type": "string",
+                        "description": "Short description"
+                    },
+                    "longDescription": {
+                        "type": "string",
+                        "description": "Long description"
+                    },
+                    "images": {
+                        "type": "array",
+                        "description": "Product image URLs for product type",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "manufacturerPartNumber": {
+                        "type": "string",
+                        "description": "Manufacturer part number for product type"
+                    },
+                    "manufacturerId": {
+                        "type": "string",
+                        "description": "Manufacturer identifier for product type"
+                    },
+                    "manufacturerName": {
+                        "type": "string",
+                        "description": "Manufacturer name for product type"
+                    },
+                    "manufacturerWarranty": {
+                        "type": "string",
+                        "description": "Manufacturer warranty for product type"
+                    },
+                    "manufacturerBrand": {
+                        "type": "string",
+                        "description": "Manufacturer brand for product type"
+                    },
+                    "countryOfOrigin": {
+                        "type": "string",
+                        "description": "Country of origin for product type"
+                    },
+                    "sku": {
+                        "type": "string",
+                        "description": "SKU for product type"
+                    },
+                    "productCode": {
+                        "type": "string",
+                        "description": "Product code for product type"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Product type",
+                        "example": "PHYSICAL"
+                    },
+                    "material": {
+                        "type": "string",
+                        "description": "Material for product type"
+                    },
+                    "color": {
+                        "type": "string",
+                        "description": "Color for product type"
+                    },
+                    "warranty": {
+                        "type": "string",
+                        "description": "Warranty for product type"
+                    },
+                    "specifications": {
+                        "type": "string",
+                        "description": "Detailed specifications JSON for product type"
+                    }
+                }
+            },
+            "CatalogItemResponseDto": {
+                "type": "object",
+                "description": "Catalog item response",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Item identifier"
+                    },
+                    "itemType": {
+                        "type": "string",
+                        "description": "Item type",
+                        "example": "product"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Item name"
+                    },
+                    "shortDescription": {
+                        "type": "string",
+                        "description": "Short description"
+                    },
+                    "longDescription": {
+                        "type": "string",
+                        "description": "Long description"
+                    }
+                }
+            },
+            "ProductCreateRequestDto": {
+                "type": "object",
+                "description": "Create product request",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "unitOfMeasure": {
+                        "type": "string"
+                    },
+                    "manufacturerId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "categoryId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "sku": {
+                        "type": "string"
+                    },
+                    "mpn": {
+                        "type": "string"
+                    },
+                    "upc": {
+                        "type": "string"
+                    },
+                    "attributes": {
+                        "type": "string",
+                        "description": "JSON object represented as string"
+                    }
+                },
+                "required": [
+                    "description",
+                    "mpn",
+                    "name",
+                    "sku",
+                    "unitOfMeasure"
+                ]
+            },
+            "ProductReplacementRequest": {
+                "type": "object",
+                "description": "Product replacement option request",
+                "properties": {
+                    "replacementProductId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Replacement product identifier",
+                        "example": "2c018664-dfea-46ef-a838-6b9dbf8f9b1d"
+                    },
+                    "priorityOrder": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Display priority order",
+                        "example": 1
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Replacement notes"
+                    },
+                    "effectiveAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Replacement effective instant"
+                    }
+                }
+            },
+            "CreateMsrpRequestDto": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "effectiveStartDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveEndDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "createdByUserId",
+                    "currency",
+                    "effectiveStartDate"
+                ]
+            },
+            "UomConversionCreateRequestDto": {
+                "type": "object",
+                "properties": {
+                    "fromUomCode": {
+                        "type": "string"
+                    },
+                    "toUomCode": {
+                        "type": "string"
+                    },
+                    "conversionFactor": {
+                        "type": "number"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "conversionFactor",
+                    "fromUomCode",
+                    "toUomCode"
+                ]
+            },
+            "SupplierItemCostCreateRequestDto": {
+                "type": "object",
+                "description": "Request payload for creating supplier-item cost tiers",
+                "properties": {
+                    "supplierId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Supplier identifier"
+                    },
+                    "itemId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Inventory item identifier"
+                    },
+                    "currencyCode": {
+                        "type": "string",
+                        "description": "ISO 4217 currency code",
+                        "example": "USD"
+                    },
+                    "baseCost": {
+                        "type": "number",
+                        "description": "Optional fallback base cost when no tiers apply",
+                        "example": 6.25
+                    },
+                    "tiers": {
+                        "type": "array",
+                        "description": "Ordered quantity-based cost tiers",
+                        "items": {
+                            "$ref": "#/components/schemas/CostTierDto"
+                        }
+                    }
+                },
+                "required": [
+                    "currencyCode",
+                    "itemId",
+                    "supplierId"
+                ]
+            },
+            "LocationPriceOverrideCreateRequestDto": {
+                "type": "object",
+                "properties": {
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "basePrice": {
+                        "type": "number",
+                        "minimum": 0.0
+                    },
+                    "cost": {
+                        "type": "number",
+                        "minimum": 0.0
+                    },
+                    "overridePrice": {
+                        "type": "number",
+                        "minimum": 0.0
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "basePrice",
+                    "createdByUserId",
+                    "locationId",
+                    "overridePrice",
+                    "productId"
+                ]
+            },
+            "LocationPriceOverrideResponseDto": {
+                "type": "object",
+                "properties": {
+                    "overrideId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "basePrice": {
+                        "type": "number"
+                    },
+                    "cost": {
+                        "type": "number"
+                    },
+                    "overridePrice": {
+                        "type": "number"
+                    },
+                    "discountPercent": {
+                        "type": "number"
+                    },
+                    "marginPercent": {
+                        "type": "number"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "PENDING_APPROVAL",
+                            "REJECTED",
+                            "INACTIVE"
+                        ]
+                    },
+                    "createdByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "assignedApproverId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "assignmentStrategy": {
+                        "type": "string"
+                    },
+                    "approvedByUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "approvedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "rejectedBy": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "rejectedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "rejectionReasonCode": {
+                        "type": "string"
+                    },
+                    "rejectionNotes": {
+                        "type": "string"
+                    }
+                }
+            },
+            "LocationPriceOverrideDecisionRequestDto": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "actorUserId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "rejectionReasonCode": {
+                        "type": "string"
+                    },
+                    "rejectionNotes": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "actorUserId",
+                    "version"
+                ]
+            },
+            "GuardrailPolicyUpsertRequestDto": {
+                "type": "object",
+                "properties": {
+                    "scopeId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "minMarginPercent": {
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0
+                    },
+                    "maxDiscountPercent": {
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0
+                    },
+                    "autoApprovalThresholdPercent": {
+                        "type": "number",
+                        "maximum": 100.0,
+                        "minimum": 0.0
+                    }
+                },
+                "required": [
+                    "autoApprovalThresholdPercent",
+                    "maxDiscountPercent",
+                    "minMarginPercent",
+                    "scopeId"
+                ]
+            },
+            "ResolvePriceRequestDto": {
+                "type": "object",
+                "properties": {
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "priceBookId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "customerTier": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "asOf": {
+                        "type": "string",
+                        "format": "date"
+                    }
+                },
+                "required": [
+                    "productId"
+                ]
+            },
+            "ResolvePriceResponseDto": {
+                "type": "object",
+                "properties": {
+                    "resolvedAmount": {
+                        "type": "string"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "PRICE_BOOK_RULE",
+                            "MSRP",
+                            "UNAVAILABLE"
+                        ]
+                    },
+                    "sourceRuleId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "fallbackReason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "AvailabilityInfo": {
+                "type": "object",
+                "description": "Availability information with status indicator",
+                "properties": {
+                    "onHandQuantity": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "On-hand quantity at location",
+                        "example": 15
+                    },
+                    "availableToPromiseQuantity": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Available to promise quantity",
+                        "example": 12
+                    },
+                    "leadTime": {
+                        "$ref": "#/components/schemas/LeadTimeInfo",
+                        "description": "Lead time information"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Availability data status",
+                        "enum": [
+                            "OK",
+                            "UNAVAILABLE",
+                            "STALE",
+                            "ERROR"
+                        ],
+                        "example": "OK"
+                    },
+                    "asOf": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Timestamp of availability data"
+                    },
+                    "confidence": {
+                        "type": "string",
+                        "description": "Confidence level in availability data",
+                        "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH"
+                        ],
+                        "example": "MEDIUM"
+                    }
+                }
+            },
+            "LeadTimeInfo": {
+                "type": "object",
+                "description": "Lead time information with source indicator",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "description": "Source of lead time data",
+                        "enum": [
+                            "CATALOG",
+                            "INVENTORY",
+                            "SUPPLY_CHAIN"
+                        ],
+                        "example": "CATALOG"
+                    },
+                    "minDays": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Minimum days for delivery",
+                        "example": 2
+                    },
+                    "maxDays": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Maximum days for delivery",
+                        "example": 5
+                    },
+                    "displayText": {
+                        "type": "string",
+                        "description": "Human-readable lead time hint",
+                        "example": "3-5 business days"
+                    },
+                    "asOf": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Timestamp of lead time data"
+                    },
+                    "confidence": {
+                        "type": "string",
+                        "description": "Confidence in lead time estimate",
+                        "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH"
+                        ],
+                        "example": "LOW"
+                    }
+                }
+            },
+            "PricingInfo": {
+                "type": "object",
+                "description": "Pricing information with availability status",
+                "properties": {
+                    "msrp": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Manufacturer's suggested retail price",
+                        "example": 99.99
+                    },
+                    "storePrice": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Store-specific price",
+                        "example": 89.99
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "Currency code",
+                        "example": "USD"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Pricing data status",
+                        "enum": [
+                            "OK",
+                            "UNAVAILABLE",
+                            "STALE",
+                            "ERROR"
+                        ],
+                        "example": "OK"
+                    },
+                    "asOf": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Timestamp of pricing data"
+                    },
+                    "confidence": {
+                        "type": "string",
+                        "description": "Confidence level in pricing data",
+                        "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH"
+                        ],
+                        "example": "HIGH"
+                    }
+                }
+            },
+            "ProductDetailView": {
+                "type": "object",
+                "description": "Consolidated product detail view with pricing and availability",
+                "properties": {
+                    "productId": {
+                        "type": "string",
+                        "description": "Unique product identifier",
+                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Product description",
+                        "example": "Heavy Duty Wrench"
+                    },
+                    "specifications": {
+                        "type": "array",
+                        "description": "Product specifications",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductSpecification"
+                        }
+                    },
+                    "pricing": {
+                        "$ref": "#/components/schemas/PricingInfo",
+                        "description": "Pricing information with status indicator"
+                    },
+                    "availability": {
+                        "$ref": "#/components/schemas/AvailabilityInfo",
+                        "description": "Availability information with status indicator"
+                    },
+                    "substitutions": {
+                        "type": "array",
+                        "description": "Substitution product suggestions",
+                        "items": {
+                            "$ref": "#/components/schemas/SubstitutionHint"
+                        }
+                    },
+                    "generatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Timestamp when this response was generated"
+                    },
+                    "confidence": {
+                        "type": "string",
+                        "description": "Overall confidence in the data completeness",
+                        "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH"
+                        ],
+                        "example": "HIGH"
+                    }
+                }
+            },
+            "ProductSpecification": {
+                "type": "object",
+                "description": "Product specification entry",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Specification name",
+                        "example": "Material"
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Specification value",
+                        "example": "Steel"
+                    }
+                }
+            },
+            "SubstitutionHint": {
+                "type": "object",
+                "description": "Product substitution suggestion",
+                "properties": {
+                    "productId": {
+                        "type": "string",
+                        "description": "Substitute product ID",
+                        "example": "650e8400-e29b-41d4-a716-446655440001"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for substitution",
+                        "example": "Newer Model"
+                    }
+                }
+            },
+            "ServiceDto": {
+                "type": "object",
+                "description": "Catalog service item",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Service identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Service name",
+                        "example": "Standard installation"
+                    },
+                    "longDescription": {
+                        "type": "string",
+                        "description": "Long service description"
+                    },
+                    "shortDescription": {
+                        "type": "string",
+                        "description": "Short service description"
+                    }
+                }
+            },
+            "EffectiveLocationPriceResponseDto": {
+                "type": "object",
+                "properties": {
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "basePrice": {
+                        "type": "number"
+                    },
+                    "effectivePrice": {
+                        "type": "number"
+                    },
+                    "overrideStatus": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "PENDING_APPROVAL",
+                            "REJECTED",
+                            "INACTIVE"
+                        ]
+                    }
+                }
+            },
+            "NonInventoryProductDto": {
+                "type": "object",
+                "description": "Non-inventory product",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Non-inventory identifier",
+                        "example": "0196cf6f-c8dd-7ee0-93e7-f48a5698a535"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name"
+                    },
+                    "longDescription": {
+                        "type": "string",
+                        "description": "Long description"
+                    },
+                    "shortDescription": {
+                        "type": "string",
+                        "description": "Short description"
+                    }
+                }
+            },
+            "ItemCostAuditDto": {
+                "type": "object",
+                "description": "Item cost audit event",
+                "properties": {
+                    "auditId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "itemId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "costTypeChanged": {
+                        "type": "string",
+                        "enum": [
+                            "STANDARD",
+                            "LAST",
+                            "AVERAGE"
+                        ]
+                    },
+                    "oldValue": {
+                        "type": "number"
+                    },
+                    "newValue": {
+                        "type": "number"
+                    },
+                    "changeSourceType": {
+                        "type": "string",
+                        "enum": [
+                            "MANUAL",
+                            "PURCHASE_ORDER"
+                        ]
+                    },
+                    "changeSourceId": {
+                        "type": "string"
+                    },
+                    "actor": {
+                        "type": "string"
+                    },
+                    "reasonCode": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

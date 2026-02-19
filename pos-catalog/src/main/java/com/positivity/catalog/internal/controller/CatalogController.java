@@ -1,450 +1,93 @@
 package com.positivity.catalog.internal.controller;
 
-import com.positivity.catalog.internal.dao.CatalogDao;
-import com.positivity.catalog.internal.dto.ProductDetailView;
-import com.positivity.catalog.internal.model.ProductEntity;
-import com.positivity.catalog.internal.model.ServiceEntity;
-import com.positivity.catalog.internal.model.NonInventoryProductEntity;
-import com.positivity.catalog.internal.model.CatalogEntity;
-import com.positivity.catalog.internal.model.CatalogItem;
-import com.positivity.catalog.service.ProductDetailService;
+import com.positivity.catalog.internal.dto.CatalogDto;
+import com.positivity.catalog.service.CatalogService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-/**
- * Controller for managing catalog-related operations.
- * Provides endpoints for retrieving, adding, updating, and deleting catalog
- * items.
- */
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
-@Slf4j
 @RestController
-@RequestMapping("/v1/products")
-@Tag(name = "Catalog API", description = "API for managing catalog items")
+@RequestMapping("/v1/catalogs")
+@Tag(name = "Catalog API", description = "API for managing catalogs")
 public class CatalogController {
-    public static final String UNSUPPORTED_ITEM_TYPE = "Unsupported item type: {}";
-    public static final String PRODUCT = "product";
-    public static final String SERVICE = "service";
-    public static final String NONINVENTORY = "noninventory";
-    private final CatalogDao catalogDao;
-    private final ProductDetailService productDetailService;
 
-    /**
-     * Retrieves a product by its ID.
-     * 
-     * @param productId The ID of the product.
-     * @return ResponseEntity containing the product or a 404 status if not found.
-     */
+    private final CatalogService catalogService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/{productId}")
-    @Operation(summary = "Get a product by ID", description = "Retrieves a specific product by its unique ID.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved product", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductEntity.class))),
-            @ApiResponse(responseCode = "404", description = "Product not found")
-    })
-    public ResponseEntity<ProductEntity> getProductById(
-            @Parameter(description = "ID of the product to be obtained") @PathVariable UUID productId) {
-        Optional<ProductEntity> product = catalogDao.findProductById(productId);
-        return product.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    @GetMapping("/{catalogId}")
+    @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved catalog", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+    @ApiResponse(responseCode = "404", description = "Catalog not found")
+    public ResponseEntity<CatalogDto> getCatalogById(
+            @Parameter(description = "ID of the catalog to be obtained") @PathVariable UUID catalogId) {
+        return catalogService.getCatalogById(catalogId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /**
-     * Retrieves products by their name.
-     * 
-     * @param name The name of the products.
-     * @return List of products matching the name.
-     */
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
     @GetMapping("/name/{name}")
-    @Operation(summary = "Get products by name", description = "Retrieves a list of products matching the given name.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved products", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductEntity.class)))
-    })
-    public List<ProductEntity> getProductByName(
-            @Parameter(description = "Name of the products to be obtained") @PathVariable String name) {
-        return catalogDao.findProductByName(name);
-    }
-
-    /**
-     * Retrieves consolidated product detail view with pricing and availability.
-     * Implements Issue #16: Product Details with Price and Availability Signals.
-     * Implements graceful degradation with field-level status indicators.
-     * 
-     * @param productId  The ID of the product
-     * @param locationId The location/store ID for location-specific pricing and
-     *                   availability
-     * @return ResponseEntity containing the ProductDetailView or appropriate error
-     *         status
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("product/{productId}")
-    @Operation(summary = "Get product details with pricing and availability", description = "Retrieves a consolidated view of product information including catalog data, "
-            +
-            "location-specific pricing, and availability. Implements graceful degradation: " +
-            "returns partial data with status indicators if non-critical services are unavailable.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved product details (may be partial if some services unavailable)", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDetailView.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid location ID"),
-            @ApiResponse(responseCode = "404", description = "Product not found"),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error while retrieving product details")
-    })
-    public ResponseEntity<ProductDetailView> getProductDetailView(
-            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
-            @Parameter(description = "Location/store ID for location-specific data", required = true) @RequestParam(name = "location_id") UUID locationId) {
-
-        log.info("Product detail view requested: productId={}, locationId={}", productId, locationId);
-
-        // Validate location_id (basic validation)
-        if (locationId == null) {
-            log.warn("Invalid location_id provided: {}", locationId);
-            return ResponseEntity.badRequest().build();
-        }
-
-        // Fetch product detail with graceful degradation
-        ProductDetailView productDetail = productDetailService.getProductDetail(productId, locationId);
-
-        if (productDetail == null) {
-            log.warn("Product not found: productId={}", productId);
-            return ResponseEntity.notFound().build();
-        }
-
-        // Log latency for monitoring
-        log.debug("Product detail view generated with confidence={}", productDetail.getConfidence());
-
-        return ResponseEntity.ok(productDetail);
-    }
-
-    /**
-     * Retrieves a service by its ID.
-     * 
-     * @param serviceId The ID of the service.
-     * @return ResponseEntity containing the service or a 404 status if not found.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/service/{serviceId}")
-    @Operation(summary = "Get a service by ID", description = "Retrieves a specific service by its unique ID.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved service", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceEntity.class))),
-            @ApiResponse(responseCode = "404", description = "Service not found")
-    })
-    public ResponseEntity<ServiceEntity> getServiceById(
-            @Parameter(description = "ID of the service to be obtained") @PathVariable UUID serviceId) {
-        Optional<ServiceEntity> service = catalogDao.findServiceById(serviceId);
-        return service.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Retrieves services by their name.
-     * 
-     * @param name The name of the services.
-     * @return List of services matching the name.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/service/name/{name}")
-    @Operation(summary = "Get services by name", description = "Retrieves a list of services matching the given name.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved services", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ServiceEntity.class)))
-    })
-    public List<ServiceEntity> getServiceByName(
-            @Parameter(description = "Name of the services to be obtained") @PathVariable String name) {
-        return catalogDao.findServiceByName(name);
-    }
-
-    /**
-     * Retrieves a non-inventory product by its ID.
-     * 
-     * @param productId The ID of the non-inventory product.
-     * @return ResponseEntity containing the non-inventory product or a 404 status
-     *         if not found.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/noninventory/{productId}")
-    @Operation(summary = "Get a non-inventory product by ID", description = "Retrieves a specific non-inventory product by its unique ID.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved non-inventory product", content = @Content(mediaType = "application/json", schema = @Schema(implementation = NonInventoryProductEntity.class))),
-            @ApiResponse(responseCode = "404", description = "Non-inventory product not found")
-    })
-    public ResponseEntity<NonInventoryProductEntity> getNonInventoryProductById(
-            @Parameter(description = "ID of the non-inventory product to be obtained") @PathVariable UUID productId) {
-        Optional<NonInventoryProductEntity> item = catalogDao.findNonInventoryProductById(productId);
-        return item.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Retrieves non-inventory products by their name.
-     * 
-     * @param name The name of the non-inventory products.
-     * @return List of non-inventory products matching the name.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/noninventory/name/{name}")
-    @Operation(summary = "Get non-inventory products by name", description = "Retrieves a list of non-inventory products matching the given name.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved non-inventory products", content = @Content(mediaType = "application/json", schema = @Schema(implementation = NonInventoryProductEntity.class)))
-    })
-    public List<NonInventoryProductEntity> getNonInventoryProductByName(
-            @Parameter(description = "Name of the non-inventory products to be obtained") @PathVariable String name) {
-        return catalogDao.findNonInventoryProductByName(name);
-    }
-
-    /**
-     * Retrieves a catalog by its ID.
-     * 
-     * @param catalogId The ID of the catalog.
-     * @return ResponseEntity containing the catalog or a 404 status if not found.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/catalog/{catalogId}")
-    @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved catalog", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogEntity.class))),
-            @ApiResponse(responseCode = "404", description = "Catalog not found")
-    })
-    public ResponseEntity<CatalogEntity> getCatalogById(
-            @Parameter(description = "ID of the catalog to be obtained") @PathVariable UUID catalogId) {
-        Optional<CatalogEntity> catalog = catalogDao.findCatalogById(catalogId);
-        return catalog.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Retrieves catalogs by their name.
-     * 
-     * @param name The name of the catalogs.
-     * @return List of catalogs matching the name.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/catalog/name/{name}")
     @Operation(summary = "Get catalogs by name", description = "Retrieves a list of catalogs matching the given name.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved catalogs", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogEntity.class)))
-    })
-    public List<CatalogEntity> getCatalogByName(
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved catalogs", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+    public List<CatalogDto> getCatalogByName(
             @Parameter(description = "Name of the catalogs to be obtained") @PathVariable String name) {
-        return catalogDao.findCatalogByName(name);
+        return catalogService.getCatalogsByName(name);
     }
 
-    /**
-     * Adds a new catalog item.
-     * 
-     * @param item The catalog item to add.
-     * @param type The type of the catalog item (product, service, noninventory).
-     * @return ResponseEntity containing the created item or an error status.
-     */
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PostMapping("/{type}")
-    @Operation(summary = "Add a new catalog item", description = "Adds a new product, service, or non-inventory product to the catalog.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Catalog item created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid item type or request body")
-    })
-    @EmitEvent(id = "CATALOG_ITEM_CREATE", apiVersion = "1")
-    public ResponseEntity<?> addCatalogItem(
-            @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
-            @RequestBody CatalogItem item) { // Swapped order for clarity with @RequestBody
-        switch (type.toLowerCase()) {
-            case PRODUCT:
-                if (item instanceof ProductEntity productEntity) {
-                    ProductEntity createdProduct = catalogDao.saveProduct(productEntity);
-                    return ResponseEntity.status(201).body(createdProduct);
-                }
-                break;
-            case SERVICE:
-                if (item instanceof ServiceEntity serviceEntity) {
-                    ServiceEntity createdService = catalogDao.saveService(serviceEntity);
-                    return ResponseEntity.status(201).body(createdService);
-                }
-                break;
-            case NONINVENTORY:
-                if (item instanceof NonInventoryProductEntity nonInventoryProductEntity) {
-                    NonInventoryProductEntity createdNonInventoryProduct = catalogDao
-                            .saveNonInventoryProduct(nonInventoryProductEntity);
-                    return ResponseEntity.status(201).body(createdNonInventoryProduct);
-                }
-                break;
-            default:
-                log.error(UNSUPPORTED_ITEM_TYPE, type);
-                return ResponseEntity.badRequest().body(UNSUPPORTED_ITEM_TYPE);
-        }
-        return ResponseEntity.badRequest().body("Mismatched item type and payload");
-    }
-
-    /**
-     * Updates an existing catalog item.
-     * 
-     * @param catalogId The ID of the item to update.
-     * @param item      The updated catalog item details.
-     * @param type      The type of the catalog item.
-     * @return ResponseEntity containing the updated item or an error status.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PutMapping("/{type}/{catalogId}")
-    @Operation(summary = "Update an existing catalog item", description = "Updates an existing product, service, or non-inventory product in the catalog.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Catalog item updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid item type or request body"),
-            @ApiResponse(responseCode = "404", description = "Catalog item not found")
-    })
-    @EmitEvent(id = "CATALOG_ITEM_UPDATE", apiVersion = "1")
-    public ResponseEntity<?> updateCatalogItem(
-            @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
-            @Parameter(description = "ID of the catalog item to update") @PathVariable UUID catalogId, // Changed to
-                                                                                                       // UUID
-            @RequestBody CatalogItem item) { // Swapped order
-        switch (type.toLowerCase()) {
-            case PRODUCT:
-                if (item instanceof ProductEntity productEntity) {
-                    ProductEntity updatedProduct = catalogDao.updateProduct(catalogId, productEntity);
-                    return updatedProduct != null ? ResponseEntity.ok(updatedProduct)
-                            : ResponseEntity.notFound().build();
-                }
-                break;
-            case SERVICE:
-                if (item instanceof ServiceEntity serviceEntity) {
-                    ServiceEntity updatedService = catalogDao.updateService(catalogId, serviceEntity);
-                    return updatedService != null ? ResponseEntity.ok(updatedService)
-                            : ResponseEntity.notFound().build();
-                }
-                break;
-            case NONINVENTORY:
-                if (item instanceof NonInventoryProductEntity nonInventoryProductEntity) {
-                    NonInventoryProductEntity updatedNonInventory = catalogDao.updateNonInventoryProduct(catalogId,
-                            nonInventoryProductEntity);
-                    return updatedNonInventory != null ? ResponseEntity.ok(updatedNonInventory)
-                            : ResponseEntity.notFound().build();
-                }
-                break;
-            default:
-                log.error(UNSUPPORTED_ITEM_TYPE, type);
-                return ResponseEntity.badRequest().body(UNSUPPORTED_ITEM_TYPE);
-        }
-        return ResponseEntity.badRequest().body("Mismatched item type and payload");
-    }
-
-    /**
-     * Deletes a catalog item by its ID.
-     * 
-     * @param catalogId The ID of the item to delete.
-     * @param type      The type of the catalog item.
-     * @return ResponseEntity indicating success or failure.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
-    @DeleteMapping("/{type}/{catalogId}")
-    @Operation(summary = "Delete a catalog item", description = "Deletes a product, service, or non-inventory product from the catalog by its ID.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Catalog item deleted successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid item type"),
-            @ApiResponse(responseCode = "404", description = "Catalog item not found")
-    })
-    public ResponseEntity<Void> deleteCatalogItem(
-            @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
-            @Parameter(description = "ID of the catalog item to delete") @PathVariable UUID catalogId) { // Changed to
-                                                                                                         // UUID
-        boolean deleted;
-        switch (type.toLowerCase()) {
-            case PRODUCT:
-                deleted = catalogDao.deleteProduct(catalogId);
-                break;
-            case SERVICE:
-                deleted = catalogDao.deleteService(catalogId);
-                break;
-            case NONINVENTORY:
-                deleted = catalogDao.deleteNonInventoryProduct(catalogId);
-                break;
-            default:
-                log.error(UNSUPPORTED_ITEM_TYPE, type);
-                return ResponseEntity.badRequest().build();
-        }
-        return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
-    }
-
-    /**
-     * Adds a new catalog.
-     * 
-     * @param catalogEntity The catalog to add.
-     * @return ResponseEntity containing the created catalog or an error status.
-     */
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PostMapping("/catalog")
+    @PostMapping
     @Operation(summary = "Add a new catalog", description = "Adds a new catalog.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Catalog created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogEntity.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request body")
-    })
+    @ApiResponse(responseCode = "201", description = "Catalog created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request body")
     @EmitEvent(id = "CATALOG_CATALOG_CREATE", apiVersion = "1")
-    public ResponseEntity<CatalogEntity> addCatalog(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Catalog object to be added", required = true, content = @Content(schema = @Schema(implementation = CatalogEntity.class))) @RequestBody CatalogEntity catalogEntity) {
-        CatalogEntity createdCatalog = catalogDao.saveCatalog(catalogEntity);
-        return ResponseEntity.status(201).body(createdCatalog);
+    public ResponseEntity<CatalogDto> addCatalog(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Catalog object to be added", required = true, content = @Content(schema = @Schema(implementation = CatalogDto.class))) @RequestBody CatalogDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(catalogService.addCatalog(request));
     }
 
-    /**
-     * Updates an existing catalog.
-     * 
-     * @param id            The ID of the catalog to update.
-     * @param catalogEntity The updated catalog details.
-     * @return ResponseEntity containing the updated catalog or an error status.
-     */
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
-    @PutMapping("/catalog/{catalogId}")
+    @PutMapping("/{catalogId}")
     @Operation(summary = "Update an existing catalog", description = "Updates an existing catalog.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Catalog updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogEntity.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request body"),
-            @ApiResponse(responseCode = "404", description = "Catalog not found")
-    })
+    @ApiResponse(responseCode = "200", description = "Catalog updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = CatalogDto.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid request body")
+    @ApiResponse(responseCode = "404", description = "Catalog not found")
     @EmitEvent(id = "CATALOG_CATALOG_UPDATE", apiVersion = "1")
-    public ResponseEntity<CatalogEntity> updateCatalog(
+    public ResponseEntity<CatalogDto> updateCatalog(
             @Parameter(description = "ID of the catalog to update") @PathVariable UUID catalogId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated catalog object", required = true, content = @Content(schema = @Schema(implementation = CatalogEntity.class))) @RequestBody CatalogEntity catalogEntity) {
-        CatalogEntity updatedCatalog = catalogDao.updateCatalog(catalogId, catalogEntity);
-        return updatedCatalog != null ? ResponseEntity.ok(updatedCatalog) : ResponseEntity.notFound().build();
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Updated catalog object", required = true, content = @Content(schema = @Schema(implementation = CatalogDto.class))) @RequestBody CatalogDto request) {
+        return catalogService.updateCatalog(catalogId, request)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /**
-     * Deletes a catalog by its ID.
-     * 
-     * @param catalogId The ID of the catalog to delete.
-     * @return ResponseEntity indicating success or failure.
-     */
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
-    @DeleteMapping("/catalog/{catalogId}")
+    @DeleteMapping("/{catalogId}")
     @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Catalog deleted successfully"),
-            @ApiResponse(responseCode = "404", description = "Catalog not found")
-    })
+    @ApiResponse(responseCode = "204", description = "Catalog deleted successfully")
+    @ApiResponse(responseCode = "404", description = "Catalog not found")
     public ResponseEntity<Void> deleteCatalog(
             @Parameter(description = "ID of the catalog to delete") @PathVariable UUID catalogId) {
-        boolean deleted = catalogDao.deleteCatalog(catalogId);
-        return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
-    }
-
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
-    @GetMapping("/substitutes/{productId}")
-    @Operation(summary = "Get substitute parts", description = "Returns list of substitute parts for a given productId.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "501", description = "Not implemented")
-    })
-    public ResponseEntity<List<ProductEntity>> getPartSubstitutes(
-            @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
-        log.warn("Substitutes endpoint not implemented yet: productId={}", productId);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        return catalogService.deleteCatalog(catalogId)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
     }
 }

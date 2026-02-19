@@ -35,6 +35,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.util.UUID;
 
 /**
  * Controller implementing CRM account-tier endpoints from the API catalog.
@@ -68,7 +69,7 @@ public class CrmAccountsController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_GET", apiVersion = "1")
         public ResponseEntity<GetAccountTierResponse> getAccountTier(
-                        @Parameter(description = "Account ID", required = true) @PathVariable String accountId) {
+                        @Parameter(description = "Account ID", required = true) @PathVariable UUID accountId) {
                 log.info("Getting account tier for accountId={}", accountId);
                 try {
                         GetAccountTierResponse response = accountTierService.getAccountTier(accountId);
@@ -128,7 +129,7 @@ public class CrmAccountsController {
         @GetMapping("/parties/{partyId}")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
         public ResponseEntity<GetPartyResponse> getParty(
-                        @Parameter(description = "Party ID", required = true) @PathVariable String partyId) {
+                        @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId) {
                 log.info("getParty partyId={}", partyId);
                 GetPartyResponse response = partyService.getParty(partyId);
                 return ResponseEntity.ok(response);
@@ -163,7 +164,7 @@ public class CrmAccountsController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_MERGE + "')")
         @EmitEvent(id = "CUSTOMER_PARTY_MERGE", apiVersion = "1")
         public ResponseEntity<MergePartiesResponse> mergeParties(
-                        @Parameter(description = "Target party ID", required = true) @PathVariable String partyId,
+                        @Parameter(description = "Target party ID", required = true) @PathVariable UUID partyId,
                         @Parameter(description = "Merge request with source party IDs", required = false) @RequestBody(required = false) MergePartiesRequest body) {
                 log.info("mergeParties partyId={}", partyId);
                 MergePartiesResponse response = partyService.mergeParties(partyId, body);
@@ -181,7 +182,7 @@ public class CrmAccountsController {
         @GetMapping("/parties/{partyId}/contacts")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_VIEW + "')")
         public ResponseEntity<GetContactsWithRolesResponse> getContactsWithRoles(
-                        @Parameter(description = "Party ID", required = true) @PathVariable String partyId) {
+                        @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId) {
                 log.info("getContactsWithRoles partyId={}", partyId);
                 GetContactsWithRolesResponse response = partyService.getContactsWithRoles(partyId);
                 return ResponseEntity.ok(response);
@@ -198,8 +199,8 @@ public class CrmAccountsController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_ROLE_ASSIGN + "')")
         @EmitEvent(id = "CUSTOMER_CONTACT_ROLE_UPDATE", apiVersion = "1")
         public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
-                        @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
-                        @Parameter(description = "Contact ID", required = true) @PathVariable String contactId,
+                        @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId,
+                        @Parameter(description = "Contact ID", required = true) @PathVariable UUID contactId,
                         @Parameter(description = "Role update request", required = false) @RequestBody(required = false) UpdateContactRolesRequest body) {
                 log.info("updateContactRoles partyId={} contactId={}", partyId, contactId);
                 UpdateContactRolesResponse response = partyService.updateContactRoles(partyId, contactId, body);
@@ -217,7 +218,7 @@ public class CrmAccountsController {
         @GetMapping("/parties/{partyId}/communicationPreferences")
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_VIEW + "')")
         public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
-                        @Parameter(description = "Party ID", required = true) @PathVariable String partyId) {
+                        @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId) {
                 log.info("getCommunicationPreferences partyId={}", partyId);
                 GetCommunicationPreferencesResponse response = partyService.getCommunicationPreferences(partyId);
                 return ResponseEntity.ok(response);
@@ -234,7 +235,7 @@ public class CrmAccountsController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONTACT_PREFERENCE_EDIT + "')")
         @EmitEvent(id = "CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT", apiVersion = "1")
         public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
-                        @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
+                        @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId,
                         @Parameter(description = "Communication preferences to set", required = false) @RequestBody(required = false) UpsertCommunicationPreferencesRequest body) {
                 log.info("upsertCommunicationPreferences partyId={}", partyId);
                 UpsertCommunicationPreferencesResponse response = partyService.upsertCommunicationPreferences(partyId,
@@ -255,7 +256,7 @@ public class CrmAccountsController {
         @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.VEHICLE_CREATE + "')")
         @EmitEvent(id = "CUSTOMER_VEHICLE_CREATE", apiVersion = "1")
         public ResponseEntity<CreateVehicleForPartyResponse> createVehicleForParty(
-                        @Parameter(description = "Party ID", required = true) @PathVariable String partyId,
+                        @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId,
                         @Parameter(description = "Vehicle creation request", required = false) @RequestBody(required = false) CreateVehicleForPartyRequest body) {
                 log.info("createVehicleForParty partyId={}", partyId);
                 CreateVehicleForPartyResponse response = partyService.createVehicleForParty(partyId, body);

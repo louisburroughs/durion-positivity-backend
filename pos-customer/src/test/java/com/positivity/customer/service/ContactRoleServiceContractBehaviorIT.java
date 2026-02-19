@@ -103,7 +103,7 @@ class ContactRoleServiceContractBehaviorIT {
                 roleAssignmentRepository.save(assignment);
 
                 GetContactsWithRolesResponse response = contactRoleService
-                                .getContactsWithRoles(String.valueOf(testParty.getPartyId()));
+                                .getContactsWithRoles(testParty.getPartyId());
 
                 assertThat(response.getContacts()).hasSize(1);
                 var contact = response.getContacts().get(0);
@@ -117,7 +117,7 @@ class ContactRoleServiceContractBehaviorIT {
         @Test
         @DisplayName("getContactsWithRoles - Not Found: Party does not exist")
         void getContactsWithRoles_partyNotFound() {
-                assertThatThrownBy(() -> contactRoleService.getContactsWithRoles("999999"))
+                assertThatThrownBy(() -> contactRoleService.getContactsWithRoles(UUID.randomUUID()))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
         }
@@ -140,8 +140,8 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getPartyId()),
-                                testContactUuid.toString(),
+                                testParty.getPartyId(),
+                                testContactUuid,
                                 request);
 
                 // Verify database state
@@ -187,8 +187,8 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getPartyId()),
-                                testContactUuid.toString(),
+                                testParty.getPartyId(),
+                                testContactUuid,
                                 request);
 
                 // Verify old primary was demoted
@@ -215,8 +215,8 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getPartyId()),
-                                testContactUuid.toString(),
+                                testParty.getPartyId(),
+                                testContactUuid,
                                 request);
 
                 // Verify all roles removed
@@ -233,8 +233,8 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                "999999",
-                                testContactUuid.toString(),
+                                UUID.randomUUID(),
+                                testContactUuid,
                                 request))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Party not found");
@@ -250,8 +250,8 @@ class ContactRoleServiceContractBehaviorIT {
                 UUID nonExistentContactUuid = UUID.randomUUID();
 
                 assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getPartyId()),
-                                nonExistentContactUuid.toString(),
+                                testParty.getPartyId(),
+                                nonExistentContactUuid,
                                 request))
                                 .isInstanceOf(ResponseStatusException.class)
                                 .hasMessageContaining("Person not found");
@@ -269,8 +269,8 @@ class ContactRoleServiceContractBehaviorIT {
                                 .build();
 
                 assertThatThrownBy(() -> contactRoleService.updateContactRoles(
-                                String.valueOf(testParty.getPartyId()),
-                                testContactUuid.toString(),
+                                testParty.getPartyId(),
+                                testContactUuid,
                                 request))
                                 .isInstanceOf(IllegalArgumentException.class);
         }

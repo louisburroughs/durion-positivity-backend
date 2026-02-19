@@ -51,5 +51,13 @@ springdoc:
     path: /swagger-ui.html
 
 pos:
+  people:
+    reports:
+      threshold-cache:
+        max-resolution-cache-entries: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_MAX_ENTRIES:4096}
+        preload-location-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_LOCATION:true}
+        preload-global-policies: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_PRELOAD_GLOBAL:true}
+  location-service:
+    base-url: ${POS_LOCATION_SERVICE_BASE_URL:http://pos-location:8084}
   security-service:
     base-url: ${POS_SECURITY_SERVICE_BASE_URL:http://pos-security-service:8086}

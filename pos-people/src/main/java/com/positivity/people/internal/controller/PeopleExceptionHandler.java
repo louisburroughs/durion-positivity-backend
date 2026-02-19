@@ -1,8 +1,10 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.people.internal.client.SecurityServiceException;
+import com.positivity.people.internal.client.WorkexecClientException;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.UserAlreadyLinkedException;
 import com.positivity.people.internal.exception.UserPersonLinkNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
@@ -94,6 +96,15 @@ public class PeopleExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(SemanticValidationException.class)
+    public ProblemDetail handleSemanticValidation(SemanticValidationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                ex.getMessage());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ProblemDetail handleAccessDenied(AccessDeniedException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
@@ -122,8 +133,22 @@ public class PeopleExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(WorkexecClientException.class)
+    public ProblemDetail handleWorkexecClientException(WorkexecClientException ex) {
+        HttpStatus status = determineHttpStatus(ex.getHttpStatus());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
+        problem.setProperty("errorCode", ex.getErrorCode());
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
     private HttpStatus determineHttpStatus(SecurityServiceException ex) {
         int statusCode = ex.getHttpStatus();
+
+        return determineHttpStatus(statusCode);
+    }
+
+    private HttpStatus determineHttpStatus(int statusCode) {
 
         return switch (statusCode) {
             case 400 -> HttpStatus.BAD_REQUEST;
@@ -131,6 +156,7 @@ public class PeopleExceptionHandler {
             case 403 -> HttpStatus.FORBIDDEN;
             case 404 -> HttpStatus.NOT_FOUND;
             case 409 -> HttpStatus.CONFLICT;
+            case 503 -> HttpStatus.SERVICE_UNAVAILABLE;
             default -> {
                 if (statusCode >= 500 && statusCode < 600) {
                     yield HttpStatus.INTERNAL_SERVER_ERROR;

@@ -2,8 +2,8 @@ package com.positivity.catalog.service;
 
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDetailView.*;
-import com.positivity.catalog.internal.model.ProductEntity;
-import com.positivity.catalog.internal.dao.CatalogDao;
+import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -25,7 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductDetailService {
 
-    private final CatalogDao catalogDao;
+    private final ProductRepository productRepository;
     // TODO: Inject PricingService when available
     // TODO: Inject InventoryService when available
 
@@ -45,7 +45,7 @@ public class ProductDetailService {
         Instant requestTime = Instant.now();
 
         // Fetch product master data from catalog (this is required - fail if not found)
-        Optional<ProductEntity> productOpt = catalogDao.findProductById(productId);
+        Optional<ProductEntity> productOpt = productRepository.findById(productId);
         if (productOpt.isEmpty()) {
             log.warn("Product not found: productId={}", productId);
             return null; // Will result in 404 at controller level

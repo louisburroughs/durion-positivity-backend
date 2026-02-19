@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.UUID;
 
 /**
  * REST endpoints for CRM snapshot retrieval - CAP:092 Story #99
@@ -55,7 +56,7 @@ public class CrmSnapshotController {
     @EmitEvent(id = "CRM_SNAPSHOT_PARTY_RETRIEVE", apiVersion = "1")
     public ResponseEntity<CrmSnapshotDTO> fetchByParty(
             @Parameter(description = "Party ID", required = true) 
-            @PathVariable String partyId) {
+            @PathVariable UUID partyId) {
         
         log.info("Fetching snapshot by party: {}", partyId);
         
@@ -79,7 +80,7 @@ public class CrmSnapshotController {
     @EmitEvent(id = "CRM_SNAPSHOT_VEHICLE_RETRIEVE", apiVersion = "1")
     public ResponseEntity<CrmSnapshotDTO> fetchByVehicle(
             @Parameter(description = "Vehicle ID", required = true)
-            @PathVariable String vehicleId) {
+            @PathVariable UUID vehicleId) {
         
         log.info("Fetching snapshot by vehicle: {}", vehicleId);
         

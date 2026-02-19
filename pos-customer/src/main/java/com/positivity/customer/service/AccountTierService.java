@@ -60,11 +60,10 @@ public class AccountTierService {
      * @throws IllegalArgumentException if account not found
      */
     @Transactional(readOnly = true)
-    public GetAccountTierResponse getAccountTier(@NonNull String accountId) {
+    public GetAccountTierResponse getAccountTier(@NonNull UUID accountId) {
         log.debug("Getting tier for account: {}", accountId);
 
-        UUID partyId = parseAccountId(accountId);
-        CommercialParty party = commercialPartyRepository.findById(partyId)
+        CommercialParty party = commercialPartyRepository.findById(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
 
         return buildTierResponse(party);
@@ -83,7 +82,12 @@ public class AccountTierService {
     public ResolveAccountTierResponse resolveAccountTier(@NonNull ResolveAccountTierRequest request) {
         log.info("Resolving tier for account: {} (apply={})", request.getAccountId(), request.isApplyTier());
 
-        UUID partyId = parseAccountId(request.getAccountId());
+        UUID partyId;
+        try {
+            partyId = UUID.fromString(request.getAccountId());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid account ID format: " + request.getAccountId(), e);
+        }
         CommercialParty party = commercialPartyRepository.findById(partyId)
                 .orElseThrow(() -> new IllegalArgumentException("Account not found: " + request.getAccountId()));
 
@@ -216,17 +220,6 @@ public class AccountTierService {
                 .tierAssignedBy(party.getTierAssignedBy())
                 .manualOverride(party.isTierManualOverride())
                 .build();
-    }
-
-    /**
-     * Parse account ID string to UUID.
-     */
-    private UUID parseAccountId(String accountId) {
-        try {
-            return UUID.fromString(accountId);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid account ID format: " + accountId, e);
-        }
     }
 
     /**

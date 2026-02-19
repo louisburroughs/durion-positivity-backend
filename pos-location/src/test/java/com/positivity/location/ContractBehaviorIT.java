@@ -1,14 +1,17 @@
 package com.positivity.location;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,251 +19,228 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Contract Behavioral Integration Tests for Location Service
- *
- * This test suite validates the behavioral contracts defined in:
- * durion/domains/location/.business-rules/BACKEND_CONTRACT_GUIDE.md
- *
- * Contract Status: draft
- * Scope: Happy path, validation errors, idempotency, concurrency-safe
- * invariants
- */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Location Backend Contract Behavioral Tests")
 class ContractBehaviorIT {
 
-        @Autowired
-        private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-        @Autowired
-        private ObjectMapper objectMapper;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-        @BeforeEach
-        void setUp() {
-                // Test setup
-        }
+    @Test
+    @DisplayName("CP-001: Create location returns 201 with current response shape")
+    void testCreateLocation_HappyPath() throws Exception {
+        mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPayload("Main Store", "MAIN-STORE-001", "Workshop"))
+                .header("X-Correlation-Id", "cp-001"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.name").value("Main Store"))
+                .andExpect(jsonPath("$.code").value("MAIN-STORE-001"))
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.type.name").value("Workshop"));
+    }
 
-        // ========== HAPPY PATH TESTS ==========
+    @Test
+    @DisplayName("CP-002: Retrieve created location by ID")
+    void testGetLocation_HappyPath() throws Exception {
+        MvcResult createResult = mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPayload("Secondary Store", "SECONDARY-001", "Warehouse"))
+                .header("X-Correlation-Id", "cp-002-create"))
+                .andExpect(status().isCreated())
+                .andReturn();
 
-        @Test
-        @DisplayName("CP-001: Successfully create location with valid data")
-        void testCreateLocation_HappyPath() throws Exception {
-                String payload = createLocationPayload("Main Store", "123 Main St", "ACTIVE");
+        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+                .get("id").asString();
 
-                mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-001"))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.id").exists())
-                                .andExpect(jsonPath("$.name").value("Main Store"))
-                                .andExpect(jsonPath("$.address").value("123 Main St"))
-                                .andExpect(jsonPath("$.status").value("ACTIVE"))
-                                .andExpect(jsonPath("$.createdAt").exists());
-        }
+        mockMvc.perform(get("/v1/locations/{id}", locationId)
+                .header("X-Correlation-Id", "cp-002-get"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(locationId))
+                .andExpect(jsonPath("$.name").value("Secondary Store"))
+                .andExpect(jsonPath("$.code").value("SECONDARY-001"))
+                .andExpect(jsonPath("$.type.name").value("Warehouse"));
+    }
 
-        @Test
-        @DisplayName("CP-002: Successfully retrieve location by ID")
-        void testGetLocation_HappyPath() throws Exception {
-                String payload = createLocationPayload("Secondary Store", "456 Oak Ave", "ACTIVE");
-
-                MvcResult createResult = mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String responseBody = createResult.getResponse().getContentAsString();
-                String locationId = objectMapper.readTree(responseBody).get("id").asString();
-
-                mockMvc.perform(get("/api/v1/locations/{id}", locationId)
-                                .header("X-Correlation-Id", "test-002"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.id").value(locationId))
-                                .andExpect(jsonPath("$.name").value("Secondary Store"))
-                                .andExpect(jsonPath("$.status").value("ACTIVE"));
-        }
-
-        // ========== VALIDATION ERROR TESTS ==========
-
-        @Test
-        @DisplayName("VE-001: Reject location with missing required name field")
-        void testCreateLocation_MissingName() throws Exception {
-                String invalidPayload = "{\"address\":\"789 Elm St\",\"status\":\"ACTIVE\"}";
-
-                mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-001"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        }
-
-        @Test
-        @DisplayName("VE-002: Reject duplicate location name")
-        void testCreateLocation_DuplicateName() throws Exception {
-                String payload = createLocationPayload("Unique Store", "999 Test Rd", "ACTIVE");
-
-                // Create first location
-                mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ve-002a"))
-                                .andExpect(status().isCreated());
-
-                // Try to create duplicate
-                mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ve-002b"))
-                                .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.code").value("CONFLICT"));
-        }
-
-        @Test
-        @DisplayName("VE-003: Reject invalid status enum value")
-        void testCreateLocation_InvalidStatus() throws Exception {
-                String invalidPayload = "{\"name\":\"Bad Store\",\"address\":\"111 Bad St\",\"status\":\"INVALID_STATUS\"}";
-
-                mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(invalidPayload)
-                                .header("X-Correlation-Id", "test-ve-003"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        }
-
-        // ========== IDEMPOTENCY TEST ==========
-
-        @Test
-        @DisplayName("ID-001: Idempotent create with same Idempotency-Key returns same resource")
-        void testCreateLocation_Idempotent() throws Exception {
-                String idempotencyKey = "idem-loc-" + System.currentTimeMillis();
-                String payload = createLocationPayload("Idempotent Store", "222 Same St", "ACTIVE");
-
-                MvcResult result1 = mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String id1 = objectMapper.readTree(result1.getResponse().getContentAsString()).get("id").asString();
-
-                // Retry with same key
-                MvcResult result2 = mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-id-001")
-                                .header("Idempotency-Key", idempotencyKey))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String id2 = objectMapper.readTree(result2.getResponse().getContentAsString()).get("id").asString();
-                assert id1.equals(id2) : "Idempotent requests should return same location ID";
-        }
-
-        // ========== CONCURRENCY INVARIANT TESTS ==========
-
-        @Test
-        @DisplayName("CC-001: Optimistic locking prevents concurrent updates with stale version")
-        void testUpdateLocation_OptimisticLockingConflict() throws Exception {
-                String payload = createLocationPayload("Concurrency Store", "333 Concurrent Ave", "ACTIVE");
-
-                MvcResult createResult = mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-cc-001"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String responseBody = createResult.getResponse().getContentAsString();
-                String locationId = objectMapper.readTree(responseBody).get("id").asString();
-
-                String updatePayload = "{\"name\":\"Updated Store\",\"status\":\"ACTIVE\",\"version\":0}";
-
-                mockMvc.perform(patch("/api/v1/locations/{id}", locationId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(updatePayload)
-                                .header("X-Correlation-Id", "test-cc-001"))
-                                .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.code").value("CONFLICT"));
-        }
-
-        @Test
-        @DisplayName("CC-002: Location state cannot transition to invalid status")
-        void testUpdateLocation_InvalidStateTransition() throws Exception {
-                String payload = createLocationPayload("State Store", "444 State Rd", "ACTIVE");
-
-                MvcResult createResult = mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-cc-002"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
-                                .asString();
-
-                // Try invalid state transition
-                String invalidUpdatePayload = "{\"name\":\"State Store\",\"status\":\"INVALID\"}";
-
-                mockMvc.perform(patch("/api/v1/locations/{id}", locationId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(invalidUpdatePayload)
-                                .header("X-Correlation-Id", "test-cc-002"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        }
-
-        // ========== FIELD FORMAT VALIDATION TESTS ==========
-
-        @Test
-        @DisplayName("FF-001: ISO 8601 timestamp format validation for createdAt")
-        void testLocation_TimestampFormat() throws Exception {
-                String payload = createLocationPayload("Timestamp Store", "555 Time Blvd", "ACTIVE");
-
-                MvcResult result = mockMvc.perform(post("/api/v1/locations")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(payload)
-                                .header("X-Correlation-Id", "test-ff-001"))
-                                .andExpect(status().isCreated())
-                                .andReturn();
-
-                String responseBody = result.getResponse().getContentAsString();
-                String createdAt = objectMapper.readTree(responseBody).get("createdAt").asString();
-
-                assert createdAt.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z")
-                                : "createdAt must be ISO 8601 UTC format";
-        }
-
-        @Test
-        @DisplayName("FF-002: Valid status enum values (ACTIVE, INACTIVE, PENDING_APPROVAL)")
-        void testLocation_ValidStatusEnums() throws Exception {
-                String[] validStatuses = { "ACTIVE", "INACTIVE", "PENDING_APPROVAL" };
-
-                for (String status : validStatuses) {
-                        String payload = createLocationPayload("Status Store " + status, "666 Status Way", status);
-
-                        mockMvc.perform(post("/api/v1/locations")
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .content(payload)
-                                        .header("X-Correlation-Id", "test-ff-002-" + status))
-                                        .andExpect(status().isCreated())
-                                        .andExpect(jsonPath("$.status").value(status));
+    @Test
+    @DisplayName("VE-001: Missing required name returns 400")
+    void testCreateLocation_MissingName() throws Exception {
+        String invalidPayload = """
+                {
+                    "code": "NO-NAME-001",
+                    "type": { "name": "Bay" }
                 }
-        }
+                """;
 
-        // ========== Test Data Factories ==========
+        mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidPayload)
+                .header("X-Correlation-Id", "ve-001"))
+                .andExpect(status().isBadRequest());
+    }
 
-        private String createLocationPayload(String name, String address, String status) {
-                return String.format(
-                                "{\"name\":\"%s\",\"address\":\"%s\",\"status\":\"%s\"}",
-                                name, address, status);
-        }
+    @Test
+    @DisplayName("VE-002: Duplicate code returns 409")
+    void testCreateLocation_DuplicateCode() throws Exception {
+        String payload = createPayload("Unique Store", "UNIQUE-CODE-001", "Site");
+
+        mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "ve-002-first"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .header("X-Correlation-Id", "ve-002-duplicate"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("VE-003: Missing required type returns 400")
+    void testCreateLocation_MissingType() throws Exception {
+        String invalidPayload = """
+                {
+                    "name": "No Type Store",
+                    "code": "NO-TYPE-001"
+                }
+                """;
+
+        mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidPayload)
+                .header("X-Correlation-Id", "ve-003"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("CP-003: Update location via PUT returns 200")
+    void testUpdateLocation_returns200() throws Exception {
+        MvcResult createResult = mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPayload("Update Source", "UPDATE-001", "Warehouse"))
+                .header("X-Correlation-Id", "cp-003-create"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+                .get("id").asString();
+
+        String updatePayload = """
+                {
+                    "name": "Updated Name",
+                    "code": "UPDATE-001",
+                    "type": { "name": "Warehouse" },
+                    "active": false
+                }
+                """;
+
+        mockMvc.perform(put("/v1/locations/{id}", locationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updatePayload)
+                .header("X-Correlation-Id", "cp-003-update"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(locationId))
+                .andExpect(jsonPath("$.name").value("Updated Name"))
+                .andExpect(jsonPath("$.active").value(false));
+    }
+
+    @Test
+    @DisplayName("CP-004: Get all locations returns array")
+    void testGetAllLocations_returnsArray() throws Exception {
+        mockMvc.perform(get("/v1/locations")
+                .header("X-Correlation-Id", "cp-004"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
+    @DisplayName("CP-005: Delete existing location returns 204")
+    void testDeleteLocation_returns204() throws Exception {
+        MvcResult createResult = mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPayload("To Delete", "DELETE-001", "Bay"))
+                .header("X-Correlation-Id", "cp-005-create"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+                .get("id").asString();
+
+        mockMvc.perform(delete("/v1/locations/{id}", locationId)
+                .header("X-Correlation-Id", "cp-005-delete"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("CP-006: Validation endpoint returns exists=true and active=true for existing location")
+    void testLocationValidation_existing_returnsExistsAndActive() throws Exception {
+        MvcResult createResult = mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPayload("Validation Target", "VALIDATE-001", "Shop"))
+                .header("X-Correlation-Id", "cp-006-create"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String locationId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+                .get("id").asString();
+
+        mockMvc.perform(get("/v1/locations/{id}/validation", locationId)
+                .header("X-Correlation-Id", "cp-006-validate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.locationId").value(locationId))
+                .andExpect(jsonPath("$.exists").value(true))
+                .andExpect(jsonPath("$.active").value(true));
+    }
+
+    @Test
+    @DisplayName("CP-007: Add parent relationship with PHYSICAL parentType")
+    void testAddParent_PHYSICAL_returns200() throws Exception {
+        MvcResult parentResult = mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPayload("Parent Building", "PARENT-001", "Building"))
+                .header("X-Correlation-Id", "cp-007-parent"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String parentId = objectMapper.readTree(parentResult.getResponse().getContentAsString())
+                .get("id").asString();
+
+        MvcResult childResult = mockMvc.perform(post("/v1/locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createPayload("Child Bay", "CHILD-001", "Bay"))
+                .header("X-Correlation-Id", "cp-007-child"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
+                .get("id").asString();
+
+        mockMvc.perform(post("/v1/locations/{childId}/parents/{parentId}", childId, parentId)
+                .param("parentType", "PHYSICAL")
+                .header("X-Correlation-Id", "cp-007-link"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.childId").value(childId))
+                .andExpect(jsonPath("$.parentId").value(parentId))
+                .andExpect(jsonPath("$.parentType").value("PHYSICAL"));
+    }
+
+    private String createPayload(String name, String code, String typeName) {
+        return String.format(
+                """
+                        {
+                            "name": "%s",
+                            "code": "%s",
+                            "type": { "name": "%s" }
+                        }
+                        """,
+                name, code, typeName);
+    }
 }

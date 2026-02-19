@@ -38,11 +38,10 @@ public class CrmVehicleService {
      * Creates a new vehicle and associates it with a customer.
      */
     @Transactional
-    public VehicleResponse createVehicle(@NonNull String customerId, @NonNull CreateVehicleForPartyRequest request) {
+    public VehicleResponse createVehicle(@NonNull UUID customerId, @NonNull CreateVehicleForPartyRequest request) {
         log.debug("Creating vehicle for customer: {}", customerId);
 
-        UUID customerUuid = parseCustomerId(customerId);
-        AbstractParty party = findPartyOrThrow(customerUuid);
+        AbstractParty party = findPartyOrThrow(customerId);
 
         // Map to vehicle inventory request
         CreateVehicleRequest vehicleRequest = CreateVehicleRequest.builder()
@@ -70,17 +69,14 @@ public class CrmVehicleService {
      * Retrieves a vehicle for a specific customer.
      */
     @Transactional(readOnly = true)
-    public Optional<VehicleResponse> getVehicleForCustomer(@NonNull String customerId, @NonNull String vehicleId) {
+    public Optional<VehicleResponse> getVehicleForCustomer(@NonNull UUID customerId, @NonNull UUID vehicleId) {
         log.debug("Fetching vehicle {} for customer {}", vehicleId, customerId);
 
-        UUID customerUuid = parseCustomerId(customerId);
-        UUID vehicleUuid = parseVehicleId(vehicleId);
-
         // Verify the customer exists
-        AbstractParty party = findPartyOrThrow(customerUuid);
+        AbstractParty party = findPartyOrThrow(customerId);
 
         // Fetch the vehicle
-        Optional<VehicleResponse> vehicleOpt = vehicleInventoryClient.getVehicle(vehicleUuid);
+        Optional<VehicleResponse> vehicleOpt = vehicleInventoryClient.getVehicle(vehicleId);
 
         if (vehicleOpt.isPresent()) {
             VehicleResponse vehicle = vehicleOpt.get();
@@ -98,16 +94,14 @@ public class CrmVehicleService {
      * Updates a vehicle for a customer.
      */
     @Transactional
-    public VehicleResponse updateVehicle(@NonNull String customerId, @NonNull CreateVehicleForPartyRequest request,
-            @NonNull String vehicleId) {
+    public VehicleResponse updateVehicle(@NonNull UUID customerId, @NonNull CreateVehicleForPartyRequest request,
+            @NonNull UUID vehicleId) {
         log.debug("Updating vehicle {} for customer {}", vehicleId, customerId);
 
-        UUID customerUuid = parseCustomerId(customerId);
-        UUID vehicleUuid = parseVehicleId(vehicleId);
-        AbstractParty party = findPartyOrThrow(customerUuid);
+        AbstractParty party = findPartyOrThrow(customerId);
 
         // Fetch existing vehicle to verify ownership
-        VehicleResponse existing = vehicleInventoryClient.getVehicle(vehicleUuid)
+        VehicleResponse existing = vehicleInventoryClient.getVehicle(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
         if (!party.getVehicleVins().contains(existing.getVin())) {
@@ -127,22 +121,20 @@ public class CrmVehicleService {
                         : existing.getLicensePlateJurisdiction())
                 .build();
 
-        return vehicleInventoryClient.updateVehicle(vehicleUuid, vehicleRequest);
+        return vehicleInventoryClient.updateVehicle(vehicleId, vehicleRequest);
     }
 
     /**
      * Deletes (deactivates) a vehicle for a customer.
      */
     @Transactional
-    public void deleteVehicle(@NonNull String customerId, @NonNull String vehicleId) {
+    public void deleteVehicle(@NonNull UUID customerId, @NonNull UUID vehicleId) {
         log.debug("Deleting vehicle {} for customer {}", vehicleId, customerId);
 
-        UUID customerUuid = parseCustomerId(customerId);
-        UUID vehicleUuid = parseVehicleId(vehicleId);
-        AbstractParty party = findPartyOrThrow(customerUuid);
+        AbstractParty party = findPartyOrThrow(customerId);
 
         // Fetch vehicle to verify ownership
-        VehicleResponse vehicle = vehicleInventoryClient.getVehicle(vehicleUuid)
+        VehicleResponse vehicle = vehicleInventoryClient.getVehicle(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
         if (!party.getVehicleVins().contains(vehicle.getVin())) {
@@ -151,7 +143,7 @@ public class CrmVehicleService {
         }
 
         // Delete from vehicle inventory
-        vehicleInventoryClient.deleteVehicle(vehicleUuid);
+        vehicleInventoryClient.deleteVehicle(vehicleId);
 
         // Remove VIN association from party
         party.getVehicleVins().remove(vehicle.getVin());
@@ -164,19 +156,17 @@ public class CrmVehicleService {
      * Transfers a vehicle from one customer to another.
      */
     @Transactional
-    public VehicleResponse transferVehicle(@NonNull String sourceCustomerId, @NonNull String vehicleId,
+    public VehicleResponse transferVehicle(@NonNull UUID sourceCustomerId, @NonNull UUID vehicleId,
             @NonNull VehicleTransferRequest request) {
         log.debug("Transferring vehicle {} from {} to {}", vehicleId, sourceCustomerId, request.getTargetCustomerId());
 
-        UUID sourceUuid = parseCustomerId(sourceCustomerId);
         UUID targetUuid = parseCustomerId(request.getTargetCustomerId());
-        UUID vehicleUuid = parseVehicleId(vehicleId);
 
-        AbstractParty sourceParty = findPartyOrThrow(sourceUuid);
+        AbstractParty sourceParty = findPartyOrThrow(sourceCustomerId);
         AbstractParty targetParty = findPartyOrThrow(targetUuid);
 
         // Fetch vehicle to verify ownership
-        VehicleResponse vehicle = vehicleInventoryClient.getVehicle(vehicleUuid)
+        VehicleResponse vehicle = vehicleInventoryClient.getVehicle(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
         if (!sourceParty.getVehicleVins().contains(vehicle.getVin())) {
@@ -205,7 +195,7 @@ public class CrmVehicleService {
                 .trim(vehicle.getTrim())
                 .build();
 
-        VehicleResponse updated = vehicleInventoryClient.updateVehicle(vehicleUuid, updateRequest);
+        VehicleResponse updated = vehicleInventoryClient.updateVehicle(vehicleId, updateRequest);
 
         log.info("Transferred vehicle {} from customer {} to customer {}", vehicleId, sourceCustomerId,
                 request.getTargetCustomerId());
@@ -219,15 +209,6 @@ public class CrmVehicleService {
         } catch (IllegalArgumentException e) {
             log.warn("Invalid customer ID format: {}", customerId);
             throw new IllegalArgumentException("Invalid customer ID format: " + customerId);
-        }
-    }
-
-    private UUID parseVehicleId(String vehicleId) {
-        try {
-            return UUID.fromString(vehicleId);
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid vehicle ID format: {}", vehicleId);
-            throw new IllegalArgumentException("Invalid vehicle ID format: " + vehicleId);
         }
     }
 
@@ -248,10 +229,9 @@ public class CrmVehicleService {
     }
 
     @Transactional(readOnly = true)
-    public CommercialParty findPartyByVehicleId(@NonNull String vehicleId) {
+    public CommercialParty findPartyByVehicleId(@NonNull UUID vehicleId) {
         log.debug("Finding party for vehicle: {}", vehicleId);
-        UUID vehicleUuid = parseVehicleId(vehicleId);
-        VehicleResponse vehicleData = vehicleInventoryClient.getVehicle(vehicleUuid).orElse(null);
+        VehicleResponse vehicleData = vehicleInventoryClient.getVehicle(vehicleId).orElse(null);
 
         if (vehicleData == null || vehicleData.getVin() == null) {
             log.debug("Vehicle not found: {}", vehicleId);
@@ -306,7 +286,7 @@ public class CrmVehicleService {
     }
 
     @Transactional(readOnly = true)
-    public CrmSnapshotDTO buildSnapshotForVehicleOwner(@NonNull String vehicleId) {
+    public CrmSnapshotDTO buildSnapshotForVehicleOwner(@NonNull UUID vehicleId) {
         log.debug("Building snapshot via vehicle: {}", vehicleId);
         CommercialParty owner = findPartyByVehicleId(vehicleId);
 

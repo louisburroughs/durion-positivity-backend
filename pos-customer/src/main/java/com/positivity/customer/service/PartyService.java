@@ -86,7 +86,7 @@ public class PartyService {
     }
 
     @Transactional(readOnly = true)
-    public GetPartyResponse getParty(String partyId) {
+    public GetPartyResponse getParty(UUID partyId) {
         log.debug("Fetching party with id: {}", partyId);
         CommercialParty party = findPartyOrThrow(partyId);
         return GetPartyResponse.builder()
@@ -103,7 +103,7 @@ public class PartyService {
     }
 
     @Transactional(readOnly = true)
-    public GetContactsWithRolesResponse getContactsWithRoles(String partyId) {
+    public GetContactsWithRolesResponse getContactsWithRoles(UUID partyId) {
         log.debug("Fetching contacts with roles for party: {}", partyId);
         CommercialParty party = findPartyOrThrow(partyId);
         List<Contact> contacts = contactRepository.findByCommercialParty(party);
@@ -128,23 +128,13 @@ public class PartyService {
                 .build();
     }
 
-    private CommercialParty findPartyOrThrow(String partyId) {
-        UUID id = parseUuid(partyId);
-        CommercialParty party = partyRepository.findByPartyId(id);
+    private CommercialParty findPartyOrThrow(UUID partyId) {
+        CommercialParty party = partyRepository.findByPartyId(partyId);
         if (party == null) {
             log.warn("Party not found with id: {}", partyId);
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "party not found");
         }
         return party;
-    }
-
-    private UUID parseUuid(String raw) {
-        try {
-            return UUID.fromString(raw);
-        } catch (IllegalArgumentException ex) {
-            log.warn("Invalid UUID format: {}", raw);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid UUID format");
-        }
     }
 
     private Contact buildContactForParty(CreateCommercialAccountRequest request, CommercialParty party) {
@@ -198,7 +188,7 @@ public class PartyService {
     }
 
     @Transactional
-    public MergePartiesResponse mergeParties(String survivorPartyId, MergePartiesRequest request) {
+    public MergePartiesResponse mergeParties(UUID survivorPartyId, MergePartiesRequest request) {
         log.info("Merging parties - survivor: {}, loser: {}", survivorPartyId,
                 request != null ? request.getLosingPartyId() : null);
         if (request == null || !StringUtils.hasText(request.getLosingPartyId())) {
@@ -209,7 +199,13 @@ public class PartyService {
         }
 
         CommercialParty survivor = findPartyOrThrow(survivorPartyId);
-        CommercialParty loser = findPartyOrThrow(request.getLosingPartyId());
+        UUID losingPartyId;
+        try {
+            losingPartyId = UUID.fromString(request.getLosingPartyId());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid UUID format");
+        }
+        CommercialParty loser = findPartyOrThrow(losingPartyId);
 
         if (survivor.getPartyId().equals(loser.getPartyId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot merge party with itself");
@@ -243,13 +239,12 @@ public class PartyService {
     }
 
     @Transactional
-    public UpdateContactRolesResponse updateContactRoles(String partyId, String contactId,
+    public UpdateContactRolesResponse updateContactRoles(UUID partyId, UUID contactId,
             UpdateContactRolesRequest request) {
         log.debug("Updating contact roles for party: {}, contact: {}", partyId, contactId);
         CommercialParty party = findPartyOrThrow(partyId);
-        UUID contactIdUuid = parseUuid(contactId);
 
-        Contact contact = contactRepository.findById(contactIdUuid)
+        Contact contact = contactRepository.findById(contactId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "contact not found"));
 
         if (!contact.getCommercialParty().getPartyId().equals(party.getPartyId())) {
@@ -266,7 +261,7 @@ public class PartyService {
     }
 
     @Transactional(readOnly = true)
-    public GetCommunicationPreferencesResponse getCommunicationPreferences(String partyId) {
+    public GetCommunicationPreferencesResponse getCommunicationPreferences(UUID partyId) {
         log.debug("Fetching communication preferences for party: {}", partyId);
         CommercialParty party = findPartyOrThrow(partyId);
 
@@ -281,7 +276,7 @@ public class PartyService {
     }
 
     @Transactional
-    public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(String partyId,
+    public UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(UUID partyId,
             UpsertCommunicationPreferencesRequest request) {
         log.debug("Upserting communication preferences for party: {}", partyId);
         CommercialParty party = findPartyOrThrow(partyId);
@@ -298,7 +293,7 @@ public class PartyService {
     }
 
     @Transactional
-    public CreateVehicleForPartyResponse createVehicleForParty(String partyId, CreateVehicleForPartyRequest request) {
+    public CreateVehicleForPartyResponse createVehicleForParty(UUID partyId, CreateVehicleForPartyRequest request) {
         log.debug("Creating vehicle association for party: {}, VIN: {}", partyId,
                 request != null ? request.getVinNumber() : null);
         if (request == null || !StringUtils.hasText(request.getVinNumber())) {
@@ -363,10 +358,9 @@ public class PartyService {
     }
 
     @Transactional(readOnly = true)
-    public CommercialParty findPartyById(String partyId) {
+    public CommercialParty findPartyById(UUID partyId) {
         log.debug("Finding party by ID: {}", partyId);
-        UUID id = parseUuid(partyId);
-        return partyRepository.findByPartyId(id);
+        return partyRepository.findByPartyId(partyId);
     }
 
     @Transactional(readOnly = true)
@@ -376,7 +370,7 @@ public class PartyService {
     }
 
     @Transactional(readOnly = true)
-    public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO buildSnapshotForParty(String partyId) {
+    public com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO buildSnapshotForParty(UUID partyId) {
         log.debug("Building CRM snapshot for party: {}", partyId);
         CommercialParty party = findPartyById(partyId);
 

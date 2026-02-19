@@ -1,5 +1,28 @@
 package com.positivity.workorder.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
@@ -12,33 +35,12 @@ import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WorkorderInvoiceService Unit Tests")
 class WorkorderInvoiceServiceTest {
+
+        private static final String INV_KEY_1 = "inv-key-1";
 
         @Mock
         private WorkorderRepository workorderRepository;
@@ -71,6 +73,7 @@ class WorkorderInvoiceServiceTest {
 
         @Test
         @DisplayName("generateInvoice creates invoice from completed workorder and persists invoice link")
+        @SuppressWarnings("java:S100")
         void generateInvoice_FromCompletedWorkorder_CreatesInvoiceAndPersistsLink() {
                 Workorder workorder = completedWorkorder();
                 when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
@@ -79,7 +82,7 @@ class WorkorderInvoiceServiceTest {
                                 .thenReturn(List.of(partLine()));
                 when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
                                 .thenReturn(List.of());
-                when(idempotencyService.getExistingInvoiceId("inv-key-1")).thenReturn(Optional.empty());
+                when(idempotencyService.getExistingInvoiceId(INV_KEY_1)).thenReturn(Optional.empty());
 
                 UUID invoiceId = UUID.randomUUID();
                 InvoiceGenerationResponse generated = InvoiceGenerationResponse.builder()
@@ -98,12 +101,12 @@ class WorkorderInvoiceServiceTest {
                 when(workorderRepository.save(any(Workorder.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, "inv-key-1");
+                InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, INV_KEY_1);
 
                 assertThat(response.getInvoiceId()).isEqualTo(invoiceId);
                 assertThat(workorder.getInvoiceId()).isEqualTo(invoiceId);
                 verify(workorderRepository).save(workorder);
-                verify(idempotencyService).registerInvoiceKey("inv-key-1", invoiceId);
+                verify(idempotencyService).registerInvoiceKey(INV_KEY_1, invoiceId);
         }
 
         @Test
@@ -352,7 +355,7 @@ class WorkorderInvoiceServiceTest {
                 // Simulate race condition: registerInvoiceKey throws
                 // DataIntegrityViolationException
                 doThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"))
-                                .when(idempotencyService).registerInvoiceKey(eq("inv-key-race"), eq(newInvoiceId));
+                                .when(idempotencyService).registerInvoiceKey("inv-key-race", newInvoiceId);
 
                 // Mock the existing invoice that will be fetched when race condition is
                 // detected
@@ -453,8 +456,8 @@ class WorkorderInvoiceServiceTest {
                                 .map(InvoiceLineItem::getDescription)
                                 .toList();
                 // Verify only completed items are present (CANCELLED items should not appear)
-                assertThat(descriptions).containsExactlyInAnyOrder("Completed Service", "Completed Part");
-                assertThat(descriptions).doesNotContain("Cancelled Service", "Cancelled Part");
+                assertThat(descriptions).containsExactlyInAnyOrder("Completed Service", "Completed Part")
+                                .doesNotContain("Cancelled Service", "Cancelled Part");
 
                 // Verify amounts match only billable items (Completed Service $100 + Completed
                 // Part $50 = $150)

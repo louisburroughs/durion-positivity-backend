@@ -72,7 +72,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          */
         @Query("SELECT pr FROM PartyRelationship pr JOIN pr.roles r WHERE pr.fromParty.id = :partyId " +
                         "AND r = :role AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
-        List<PartyRelationship> findByFromPartyIdAndRole(@Param("partyId") @NonNull Long partyId,
+        List<PartyRelationship> findByFromPartyIdAndRole(@Param("partyId") @NonNull UUID partyId,
                         @Param("role") @NonNull PartyRelationshipRole role,
                         @Param("today") @NonNull LocalDate today);
 
