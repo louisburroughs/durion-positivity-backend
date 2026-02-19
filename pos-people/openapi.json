@@ -17,6 +17,10 @@
     ],
     "tags": [
         {
+            "name": "People - Staffing Assignments",
+            "description": "Person-to-location staffing assignment operations (CAP-119)"
+        },
+        {
             "name": "People Reports API",
             "description": "Reporting endpoints for people and attendance data"
         },
@@ -181,6 +185,144 @@
                     },
                     "204": {
                         "description": "Person deleted successfully."
+                    }
+                }
+            }
+        },
+        "/v1/people/staffing/assignments/{assignmentId}": {
+            "get": {
+                "tags": [
+                    "People - Staffing Assignments"
+                ],
+                "summary": "Get assignment by ID",
+                "operationId": "getAssignment",
+                "parameters": [
+                    {
+                        "name": "assignmentId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Assignment found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Assignment not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "People - Staffing Assignments"
+                ],
+                "summary": "Update staffing assignment",
+                "operationId": "updateAssignment",
+                "parameters": [
+                    {
+                        "name": "assignmentId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateStaffingAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Overlapping assignment exists.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Assignment updated.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Assignment not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "People - Staffing Assignments"
+                ],
+                "summary": "End (soft-delete) an assignment",
+                "operationId": "endAssignment",
+                "parameters": [
+                    {
+                        "name": "assignmentId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Assignment ended."
+                    },
+                    "404": {
+                        "description": "Assignment not found."
                     }
                 }
             }
@@ -443,6 +585,16 @@
                     "required": true
                 },
                 "responses": {
+                    "400": {
+                        "description": "Invalid request",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
                     "201": {
                         "description": "Role assignment created successfully",
                         "content": {
@@ -455,16 +607,6 @@
                     },
                     "404": {
                         "description": "Person or role not found",
-                        "content": {
-                            "application/problem+json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ProblemDetail"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -663,16 +805,6 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Link created successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
-                                }
-                            }
-                        }
-                    },
                     "404": {
                         "description": "Person not found",
                         "content": {
@@ -685,6 +817,16 @@
                     },
                     "409": {
                         "description": "User already linked to different person",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Link created successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -735,16 +877,6 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Link created successfully",
-                        "content": {
-                            "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
-                                }
-                            }
-                        }
-                    },
                     "404": {
                         "description": "Person not found",
                         "content": {
@@ -757,6 +889,16 @@
                     },
                     "409": {
                         "description": "User already linked to different person",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserPersonLinkResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Link created successfully",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1033,6 +1175,101 @@
                         "content": {
                             "application/json": {
                                 "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/people/staffing/assignments": {
+            "get": {
+                "tags": [
+                    "People - Staffing Assignments"
+                ],
+                "summary": "List assignments for person",
+                "operationId": "getAssignments_1",
+                "parameters": [
+                    {
+                        "name": "personId",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of assignments.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "People - Staffing Assignments"
+                ],
+                "summary": "Create staffing assignment",
+                "description": "Link a person to a location with role, effective dates, and primary flag.",
+                "operationId": "createAssignment_1",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateStaffingAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "409": {
+                        "description": "Overlapping assignment exists.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Assignment created.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Location or person not found.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StaffingAssignmentResponse"
+                                }
                             }
                         }
                     }
@@ -1827,8 +2064,8 @@
                     }
                 ],
                 "responses": {
-                    "404": {
-                        "description": "Person or role assignment not found",
+                    "400": {
+                        "description": "Invalid request for revoking role assignment",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -1837,8 +2074,8 @@
                             }
                         }
                     },
-                    "400": {
-                        "description": "Invalid request for revoking role assignment",
+                    "404": {
+                        "description": "Person or role assignment not found",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -1913,6 +2150,91 @@
                         }
                     },
                     "username": {
+                        "type": "string"
+                    }
+                }
+            },
+            "UpdateStaffingAssignmentRequest": {
+                "type": "object",
+                "properties": {
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "role": {
+                        "type": "string"
+                    },
+                    "isPrimary": {
+                        "type": "boolean"
+                    },
+                    "effectiveFrom": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveTo": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveDateRangeValid": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "effectiveFrom",
+                    "locationId",
+                    "personId",
+                    "role"
+                ]
+            },
+            "StaffingAssignmentResponse": {
+                "type": "object",
+                "properties": {
+                    "assignmentId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "role": {
+                        "type": "string"
+                    },
+                    "isPrimary": {
+                        "type": "boolean"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "ENDED"
+                        ]
+                    },
+                    "effectiveFrom": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveTo": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdBy": {
                         "type": "string"
                     }
                 }
@@ -2100,32 +2422,6 @@
                     "roleCode"
                 ]
             },
-            "UserRoleDto": {
-                "type": "object",
-                "properties": {
-                    "userId": {
-                        "type": "string"
-                    },
-                    "roleCode": {
-                        "type": "string"
-                    },
-                    "locationId": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "startDate": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "endDate": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "active": {
-                        "type": "boolean"
-                    }
-                }
-            },
             "ProblemDetail": {
                 "type": "object",
                 "properties": {
@@ -2150,6 +2446,32 @@
                     "properties": {
                         "type": "object",
                         "additionalProperties": {}
+                    }
+                }
+            },
+            "UserRoleDto": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string"
+                    },
+                    "roleCode": {
+                        "type": "string"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "startDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "active": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -2316,6 +2638,42 @@
                 },
                 "required": [
                     "success"
+                ]
+            },
+            "CreateStaffingAssignmentRequest": {
+                "type": "object",
+                "properties": {
+                    "personId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "locationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "role": {
+                        "type": "string"
+                    },
+                    "isPrimary": {
+                        "type": "boolean"
+                    },
+                    "effectiveFrom": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveTo": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "effectiveDateRangeValid": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "effectiveFrom",
+                    "locationId",
+                    "personId",
+                    "role"
                 ]
             },
             "TimeEntryExceptionRequest": {
