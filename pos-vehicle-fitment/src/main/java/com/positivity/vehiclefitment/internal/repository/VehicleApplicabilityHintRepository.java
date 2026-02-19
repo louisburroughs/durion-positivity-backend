@@ -7,17 +7,18 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Repository for VehicleApplicabilityHint entities.
  */
 @Repository
-public interface VehicleApplicabilityHintRepository extends JpaRepository<VehicleApplicabilityHint, Long> {
+public interface VehicleApplicabilityHintRepository extends JpaRepository<VehicleApplicabilityHint, UUID> {
     
     /**
      * Find all hints for a specific product.
      */
-    List<VehicleApplicabilityHint> findByProductId(Long productId);
+    List<VehicleApplicabilityHint> findByProductId(UUID productId);
     
     /**
      * Find all hints that contain tags matching the given tag type and value.

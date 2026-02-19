@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * DTO for creating a new vehicle applicability hint.
@@ -18,7 +19,7 @@ import java.util.List;
 public class CreateHintRequest {
     
     @NotNull(message = "Product ID is required")
-    private Long productId;
+    private UUID productId;
     
     @NotEmpty(message = "At least one fitment tag is required")
     @Valid

@@ -24,6 +24,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class VehicleApplicabilityHintServiceTest {
 
+    private static final UUID TEST_HINT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID TEST_PRODUCT_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID MATCHING_PRODUCT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+
     @Mock
     private VehicleApplicabilityHintRepository hintRepository;
 
@@ -41,11 +45,11 @@ class VehicleApplicabilityHintServiceTest {
                 new FitmentTagDto(TagType.MODEL, "Camry"),
                 new FitmentTagDto(TagType.YEAR_RANGE, "2018-2022"));
 
-        createRequest = new CreateHintRequest(1L, tags, "testUser");
+        createRequest = new CreateHintRequest(TEST_PRODUCT_ID, tags, "testUser");
 
         mockHint = new VehicleApplicabilityHint();
-        mockHint.setHintId(java.util.UUID.randomUUID());
-        mockHint.setProductId(1L);
+        mockHint.setHintId(TEST_HINT_ID);
+        mockHint.setProductId(TEST_PRODUCT_ID);
         mockHint.setCreatedBy("testUser");
         mockHint.setUpdatedBy("testUser");
     }
@@ -62,7 +66,7 @@ class VehicleApplicabilityHintServiceTest {
         // Then
         assertThat(response).isNotNull();
         assertThat(response.getHintId()).isEqualTo(mockHint.getHintId().toString());
-        assertThat(response.getProductId()).isEqualTo("1");
+        assertThat(response.getProductId()).isEqualTo(TEST_PRODUCT_ID.toString());
         verify(hintRepository, times(1)).save(any(VehicleApplicabilityHint.class));
     }
 
@@ -73,16 +77,16 @@ class VehicleApplicabilityHintServiceTest {
                 Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")),
                 "updater");
 
-        when(hintRepository.findById(1L)).thenReturn(Optional.of(mockHint));
+        when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.of(mockHint));
         when(hintRepository.save(any(VehicleApplicabilityHint.class)))
                 .thenReturn(mockHint);
 
         // When
-        HintResponse response = service.updateHint(1L, updateRequest);
+        HintResponse response = service.updateHint(TEST_HINT_ID, updateRequest);
 
         // Then
         assertThat(response).isNotNull();
-        verify(hintRepository, times(1)).findById(1L);
+        verify(hintRepository, times(1)).findById(TEST_HINT_ID);
         verify(hintRepository, times(1)).save(any(VehicleApplicabilityHint.class));
     }
 
@@ -93,10 +97,10 @@ class VehicleApplicabilityHintServiceTest {
                 Arrays.asList(new FitmentTagDto(TagType.MAKE, "Honda")),
                 "updater");
 
-        when(hintRepository.findById(1L)).thenReturn(Optional.empty());
+        when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.empty());
 
         // When/Then
-        assertThatThrownBy(() -> service.updateHint(1L, updateRequest))
+        assertThatThrownBy(() -> service.updateHint(TEST_HINT_ID, updateRequest))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Hint not found");
     }
@@ -104,24 +108,24 @@ class VehicleApplicabilityHintServiceTest {
     @Test
     void testDeleteHint_Success() {
         // Given
-        when(hintRepository.existsById(1L)).thenReturn(true);
-        doNothing().when(hintRepository).deleteById(1L);
+        when(hintRepository.existsById(TEST_HINT_ID)).thenReturn(true);
+        doNothing().when(hintRepository).deleteById(TEST_HINT_ID);
 
         // When
-        service.deleteHint(1L);
+        service.deleteHint(TEST_HINT_ID);
 
         // Then
-        verify(hintRepository, times(1)).existsById(1L);
-        verify(hintRepository, times(1)).deleteById(1L);
+        verify(hintRepository, times(1)).existsById(TEST_HINT_ID);
+        verify(hintRepository, times(1)).deleteById(TEST_HINT_ID);
     }
 
     @Test
     void testDeleteHint_NotFound() {
         // Given
-        when(hintRepository.existsById(1L)).thenReturn(false);
+        when(hintRepository.existsById(TEST_HINT_ID)).thenReturn(false);
 
         // When/Then
-        assertThatThrownBy(() -> service.deleteHint(1L))
+        assertThatThrownBy(() -> service.deleteHint(TEST_HINT_ID))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Hint not found");
     }
@@ -129,30 +133,30 @@ class VehicleApplicabilityHintServiceTest {
     @Test
     void testGetHint_Success() {
         // Given
-        when(hintRepository.findById(1L)).thenReturn(Optional.of(mockHint));
+        when(hintRepository.findById(TEST_HINT_ID)).thenReturn(Optional.of(mockHint));
 
         // When
-        HintResponse response = service.getHint(1L);
+        HintResponse response = service.getHint(TEST_HINT_ID);
 
         // Then
         assertThat(response).isNotNull();
         assertThat(response.getHintId()).isEqualTo(mockHint.getHintId().toString());
-        verify(hintRepository, times(1)).findById(1L);
+        verify(hintRepository, times(1)).findById(TEST_HINT_ID);
     }
 
     @Test
     void testGetHintsByProductId() {
         // Given
-        when(hintRepository.findByProductId(1L))
+        when(hintRepository.findByProductId(TEST_PRODUCT_ID))
                 .thenReturn(Arrays.asList(mockHint));
 
         // When
-        List<HintResponse> responses = service.getHintsByProductId(1L);
+        List<HintResponse> responses = service.getHintsByProductId(TEST_PRODUCT_ID);
 
         // Then
         assertThat(responses).isNotEmpty();
         assertThat(responses).hasSize(1);
-        verify(hintRepository, times(1)).findByProductId(1L);
+        verify(hintRepository, times(1)).findByProductId(TEST_PRODUCT_ID);
     }
 
     @Test
@@ -169,8 +173,8 @@ class VehicleApplicabilityHintServiceTest {
     void testFilterProductsByVehicleAttributes_WithMatches() {
         // Given
         VehicleApplicabilityHint hint1 = new VehicleApplicabilityHint();
-        hint1.setHintId(java.util.UUID.randomUUID());
-        hint1.setProductId(100L);
+        hint1.setHintId(UUID.fromString("44444444-4444-4444-4444-444444444444"));
+        hint1.setProductId(MATCHING_PRODUCT_ID);
 
         when(hintRepository.findAll()).thenReturn(Arrays.asList(hint1));
 

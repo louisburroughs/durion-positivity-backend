@@ -34,7 +34,7 @@ public class VehicleApplicabilityHint {
     }
     
     @Column(nullable = false)
-    private Long productId;
+    private UUID productId;
     
     @OneToMany(mappedBy = "hint", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<FitmentTag> fitmentTags = new ArrayList<>();

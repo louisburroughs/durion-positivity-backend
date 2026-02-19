@@ -1,5 +1,16 @@
 package com.positivity.catalog.internal.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.catalog.internal.dto.ItemCostAuditDto;
 import com.positivity.catalog.internal.dto.ItemCostsDto;
 import com.positivity.catalog.internal.dto.PurchaseOrderReceivedEventDto;
@@ -8,24 +19,16 @@ import com.positivity.catalog.internal.entity.ItemCostAuditEntity;
 import com.positivity.catalog.internal.entity.ItemCostEntity;
 import com.positivity.catalog.internal.enums.ChangeSourceType;
 import com.positivity.catalog.internal.enums.CostType;
-import com.positivity.catalog.internal.exception.CatalogForbiddenOperationException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ItemCostAuditRepository;
 import com.positivity.catalog.internal.repository.ItemCostRepository;
 import com.positivity.catalog.service.ItemCostService;
 import com.positivity.security.common.SecurityContextHelper;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.List;
-import java.util.UUID;
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ItemCostServiceImpl implements ItemCostService {
+
+    private static final String SYSTEM = "system";
 
     private static final Logger log = LoggerFactory.getLogger(ItemCostServiceImpl.class);
 
@@ -55,7 +58,7 @@ public class ItemCostServiceImpl implements ItemCostService {
         itemCost.setStandardCost(newValue);
         itemCostRepository.save(itemCost);
 
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         itemCostAuditRepository.save(buildAudit(itemId, CostType.STANDARD, oldValue, newValue,
                 new AuditSource(ChangeSourceType.MANUAL, "MANUAL"), actor, request.getReasonCode()));
 
@@ -119,9 +122,9 @@ public class ItemCostServiceImpl implements ItemCostService {
         itemCostRepository.save(itemCost);
 
         itemCostAuditRepository.save(buildAudit(event.getItemId(), CostType.LAST, oldLast, receivedUnitCost,
-                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), "system", null));
+                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), SYSTEM, null));
         itemCostAuditRepository.save(buildAudit(event.getItemId(), CostType.AVERAGE, oldAverage, newAverage,
-                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), "system", null));
+                new AuditSource(ChangeSourceType.PURCHASE_ORDER, event.getPurchaseOrderId()), SYSTEM, null));
     }
 
     private ItemCostEntity initializeItemCost(UUID itemId) {

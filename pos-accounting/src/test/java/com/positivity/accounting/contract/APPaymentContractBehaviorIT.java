@@ -51,7 +51,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
  *      #128</a>
  */
 @DisplayName("AP Payment Backend Contract Behavioral Tests (CAP-053)")
-public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
+ class APPaymentContractBehaviorIT extends BaseIntegrationTest {
 
         @Autowired
         private APPaymentRepository apPaymentRepository;
@@ -135,7 +135,7 @@ public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
                 request.setAllocations(List.of()); // Empty allocations triggers automatic
 
                 // Act: POST /v1/accounting/ap/payments
-                MvcResult result = mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
+                mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())
@@ -188,7 +188,7 @@ public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
                 request.setAllocations(List.of(allocation));
 
                 // Act: POST /v1/accounting/ap/payments
-                MvcResult result = mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
+              mockMvc.perform(withAuth(post(API_V1_AP_PAYMENTS))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andDo(print())

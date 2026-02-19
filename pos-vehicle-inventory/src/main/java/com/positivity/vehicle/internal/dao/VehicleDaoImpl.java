@@ -5,6 +5,7 @@ import com.positivity.vehicle.internal.repository.VehicleRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public class VehicleDaoImpl implements VehicleDao {
@@ -20,7 +21,7 @@ public class VehicleDaoImpl implements VehicleDao {
     }
 
     @Override
-    public Optional<VehicleEntity> findById(Long id) {
+    public Optional<VehicleEntity> findById(UUID id) {
         return vehicleRepository.findById(id);
     }
 
@@ -30,7 +31,7 @@ public class VehicleDaoImpl implements VehicleDao {
     }
 
     @Override
-    public void deleteById(Long id) {
+    public void deleteById(UUID id) {
         vehicleRepository.deleteById(id);
     }
 

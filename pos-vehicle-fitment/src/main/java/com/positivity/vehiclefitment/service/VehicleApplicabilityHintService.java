@@ -52,7 +52,7 @@ public class VehicleApplicabilityHintService {
      * Update an existing vehicle applicability hint.
      */
     @Transactional
-    public HintResponse updateHint(Long hintId, UpdateHintRequest request) {
+    public HintResponse updateHint(UUID hintId, UpdateHintRequest request) {
         log.info("Updating vehicle applicability hint {}", hintId);
 
         VehicleApplicabilityHint hint = hintRepository.findById(hintId)
@@ -79,7 +79,7 @@ public class VehicleApplicabilityHintService {
      * Delete a vehicle applicability hint.
      */
     @Transactional
-    public void deleteHint(Long hintId) {
+    public void deleteHint(UUID hintId) {
         log.info("Deleting vehicle applicability hint {}", hintId);
 
         if (!hintRepository.existsById(hintId)) {
@@ -94,7 +94,7 @@ public class VehicleApplicabilityHintService {
      * Get a vehicle applicability hint by ID.
      */
     @Transactional(readOnly = true)
-    public HintResponse getHint(Long hintId) {
+    public HintResponse getHint(UUID hintId) {
         log.info("Retrieving vehicle applicability hint {}", hintId);
 
         VehicleApplicabilityHint hint = hintRepository.findById(hintId)
@@ -107,7 +107,7 @@ public class VehicleApplicabilityHintService {
      * Get all hints for a specific product.
      */
     @Transactional(readOnly = true)
-    public List<HintResponse> getHintsByProductId(Long productId) {
+    public List<HintResponse> getHintsByProductId(UUID productId) {
         log.info("Retrieving hints for product {}", productId);
 
         List<VehicleApplicabilityHint> hints = hintRepository.findByProductId(productId);
@@ -134,7 +134,7 @@ public class VehicleApplicabilityHintService {
         List<VehicleApplicabilityHint> allHints = hintRepository.findAll();
 
         // Filter hints that match all provided attributes
-        Set<Long> matchingProductIds = new HashSet<>();
+        Set<UUID> matchingProductIds = new HashSet<>();
 
         for (VehicleApplicabilityHint hint : allHints) {
             if (hintMatchesAttributes(hint, vehicleAttributes)) {
@@ -142,10 +142,10 @@ public class VehicleApplicabilityHintService {
             }
         }
 
-        List<Long> productIdList = new ArrayList<>(matchingProductIds);
+        List<UUID> productIdList = new ArrayList<>(matchingProductIds);
         log.info("Found {} matching products", productIdList.size());
 
-        // Convert Long IDs to String for response
+        // Convert UUIDs to String for response
         List<String> productIdStrings = productIdList.stream()
                 .map(String::valueOf)
                 .toList();
