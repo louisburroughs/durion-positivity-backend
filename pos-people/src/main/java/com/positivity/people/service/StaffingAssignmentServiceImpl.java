@@ -2,6 +2,7 @@ package com.positivity.people.service;
 
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
+import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
 import com.positivity.people.internal.entity.PersonLocationAssignment;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
@@ -76,6 +77,53 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     @Override
     public @NonNull Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId) {
         return repository.findById(assignmentId).map(this::toResponse);
+    }
+
+    @Override
+    @Transactional
+    public @NonNull Optional<StaffingAssignmentResponse> update(
+            @NonNull UUID assignmentId,
+            @NonNull UpdateStaffingAssignmentRequest request,
+            @NonNull String actor) {
+        Optional<PersonLocationAssignment> existingAssignment = repository.findById(assignmentId);
+        if (existingAssignment.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (repository.existsOverlappingExcludingId(
+                assignmentId,
+                request.personId(),
+                request.locationId(),
+                request.role(),
+                request.effectiveFrom(),
+                request.effectiveTo())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "An overlapping assignment already exists for this person, location, and role");
+        }
+
+        PersonLocationAssignment assignment = existingAssignment.get();
+
+        if (request.isPrimary()) {
+            repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(
+                    request.personId(), AssignmentStatus.ACTIVE)
+                    .filter(existing -> !existing.getId().equals(assignmentId))
+                    .ifPresent(existing -> {
+                        existing.setEffectiveTo(request.effectiveFrom().minusDays(1));
+                        existing.setStatus(AssignmentStatus.ENDED);
+                        repository.save(existing);
+                    });
+        }
+
+        assignment.setPersonId(request.personId());
+        assignment.setLocationId(request.locationId());
+        assignment.setRole(request.role());
+        assignment.setPrimary(request.isPrimary());
+        assignment.setEffectiveFrom(request.effectiveFrom());
+        assignment.setEffectiveTo(request.effectiveTo());
+
+        PersonLocationAssignment saved = repository.save(assignment);
+        log.info("Updated staffing assignment {} by actor {}", saved.getId(), actor);
+        return Optional.of(toResponse(saved));
     }
 
     @Override
