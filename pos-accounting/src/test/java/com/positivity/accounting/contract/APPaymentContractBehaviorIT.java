@@ -233,7 +233,7 @@ public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
                                 .andReturn();
 
                 String paymentId1 = objectMapper.readTree(result1.getResponse().getContentAsString())
-                                .get("paymentId").asText();
+                                .get("paymentId").asString();
 
                 // Act: Second request with same paymentRef and same payload (200 OK, existing
                 // payment)
@@ -246,7 +246,7 @@ public class APPaymentContractBehaviorIT extends BaseIntegrationTest {
                                 .andReturn();
 
                 String paymentId2 = objectMapper.readTree(result2.getResponse().getContentAsString())
-                                .get("paymentId").asText();
+                                .get("paymentId").asString();
 
                 // Assert: Verify same payment instance returned (no duplicate created)
                 assertThat(paymentId1).isEqualTo(paymentId2);

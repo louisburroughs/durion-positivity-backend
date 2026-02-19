@@ -36,7 +36,9 @@ public class ArchitectureTest {
 
         @ArchTest
         static final ArchRule services_should_not_depend_on_controllers = noClasses()
-                        .that().resideInAPackage("..service..")
+                        .that().resideInAnyPackage(
+                                        "com.positivity.people.service..",
+                                        "com.positivity.people.internal.service..")
                         .should().dependOnClassesThat().resideInAPackage("..internal.controller..")
                         .allowEmptyShould(true)
                         .because("services should not depend on web layer");
@@ -51,7 +53,11 @@ public class ArchitectureTest {
         @ArchTest
         static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
                         .that()
-                        .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+                        .resideOutsideOfPackages(
+                                        "com.positivity.people.service..",
+                                        "com.positivity.people.internal.service..",
+                                        "..internal.repository..",
+                                        "..internal.config..")
                         .should().dependOnClassesThat().resideInAPackage("..internal.repository..")
                         .allowEmptyShould(true)
                         .because("repositories should only be accessed from service layer");
@@ -72,5 +78,17 @@ public class ArchitectureTest {
                         .should().bePublic()
                         .allowEmptyShould(true)
                         .because("service layer is the public API of this module");
+
+        @ArchTest
+        static final ArchRule classes_outside_internal_should_use_service_naming = classes()
+                        .that().resideInAPackage("com.positivity.people..")
+                        .and().resideOutsideOfPackages("..internal..", "com.positivity.people")
+                        .and().areNotAnonymousClasses()
+                        .and().areNotInnerClasses()
+                        .and().haveSimpleNameNotContaining("Dto")
+                        .and().haveSimpleNameNotContaining("Exception")
+                        .should().haveSimpleNameEndingWith("Service")
+                        .allowEmptyShould(true)
+                        .because("outside internal packages, exposed module types should be service contracts");
 
 }

@@ -9,6 +9,7 @@ import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.service.TimeEntryAdjustmentServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,7 +35,7 @@ class TimeEntryAdjustmentServiceTest {
         adjustmentRepository = mock(TimeEntryAdjustmentRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
         timeEntryRepository = mock(TimeEntryRepository.class);
-        service = new TimeEntryAdjustmentService(adjustmentRepository, auditRepository, timeEntryRepository);
+        service = new TimeEntryAdjustmentServiceImpl(adjustmentRepository, auditRepository, timeEntryRepository);
     }
 
     @Test

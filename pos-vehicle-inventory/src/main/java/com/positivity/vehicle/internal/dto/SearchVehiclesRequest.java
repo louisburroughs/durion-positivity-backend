@@ -1,10 +1,10 @@
 package com.positivity.vehicle.internal.dto;
 
-import lombok.AccessLevel;
+import org.jspecify.annotations.Nullable;
+
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Request DTO for searching vehicles (CAP:091 Story #103).
