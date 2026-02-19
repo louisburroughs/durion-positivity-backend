@@ -197,7 +197,6 @@
 		<module>pos-shared-dtos</module>
 		<module>pos-security-common</module>
 		<module>pos-archunit</module>
-		<module>pos-agent-framework</module>
 		<module>pos-catalog</module>
 		<module>pos-customer</module>
 		<module>pos-invoice</module>
