@@ -59,14 +59,21 @@ class WorkSessionContractIT extends BaseIntegrationTest {
     @Test
     @DisplayName("VE-120-001: starting a second active session returns 4xx")
     void VE_120_001_startWorkSession_whenAlreadyActive_returns4xx() throws Exception {
+        String isolatedPayload = """
+                {
+                  "personId": "person-2",
+                  "actor": "test-user"
+                }
+                """;
+
         mockMvc.perform(withAuth(post("/v1/people/workSessions/start")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(START_PAYLOAD)))
+                .content(isolatedPayload)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(withAuth(post("/v1/people/workSessions/start")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(START_PAYLOAD)))
+                .content(isolatedPayload)))
                 .andExpect(status().is4xxClientError());
     }
 
