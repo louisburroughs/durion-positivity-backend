@@ -4,6 +4,7 @@ import com.positivity.people.internal.dto.TimeEntryException;
 import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
 import com.positivity.people.service.TimeEntryExceptionService;
@@ -11,6 +12,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +31,8 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
 
     @Override
     @Transactional
-    public TimeEntryExceptionResponse createException(TimeEntryExceptionRequest request) {
+    @NonNull
+    public TimeEntryExceptionResponse createException(@NonNull TimeEntryExceptionRequest request) {
         com.positivity.people.internal.entity.TimeEntryException exception = new com.positivity.people.internal.entity.TimeEntryException();
         exception.setEmployeeId(request.getEmployeeId());
         exception.setExceptionCode(request.getExceptionCode());
@@ -55,6 +59,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
 
     @Override
     @Transactional(readOnly = true)
+    @NonNull
     public List<TimeEntryException> listByEmployee(String employeeId) {
         List<com.positivity.people.internal.entity.TimeEntryException> exceptions = employeeId == null
                 ? exceptionRepository.findAll()
@@ -64,9 +69,9 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
 
     @Override
     @Transactional
-    public boolean actionException(java.util.UUID exceptionId,
-            com.positivity.people.internal.enums.ExceptionStatus targetStatus,
-            String actionUserId, String actionNotes, String correlationId) {
+    public boolean actionException(@NonNull UUID exceptionId,
+            @NonNull ExceptionStatus targetStatus,
+            @NonNull String actionUserId, String actionNotes, String correlationId) {
         Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
                 .findById(exceptionId);
         if (opt.isEmpty()) {
@@ -108,7 +113,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
 
     @Override
     @Transactional
-    public boolean resolveException(java.util.UUID exceptionId, String resolverUserId, Set<String> permissions,
+    public boolean resolveException(@NonNull UUID exceptionId, @NonNull String resolverUserId, Set<String> permissions,
             String resolutionNotes, String resolutionAction, String correlationId) {
         Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
                 .findById(exceptionId);

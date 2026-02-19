@@ -36,28 +36,28 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     public @NonNull StaffingAssignmentResponse create(
             @NonNull CreateStaffingAssignmentRequest request,
             @NonNull String actor) {
-        validatePersonAndLocation(request.personId(), request.locationId());
+        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
 
         if (repository.existsOverlapping(
-                request.personId(), request.locationId(), request.role(),
-                request.effectiveFrom(), request.effectiveTo())) {
+                request.getPersonId(), request.getLocationId(), request.getRole(),
+                request.getEffectiveFrom(), request.getEffectiveTo())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "An overlapping assignment already exists for this person, location, and role");
         }
 
         if (request.isPrimary()) {
             repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(
-                    request.personId(), AssignmentStatus.ACTIVE)
+                    request.getPersonId(), AssignmentStatus.ACTIVE)
                     .ifPresent(existing -> {
                         if (!dateRangesOverlap(
                                 existing.getEffectiveFrom(),
                                 existing.getEffectiveTo(),
-                                request.effectiveFrom(),
-                                request.effectiveTo())) {
+                                request.getEffectiveFrom(),
+                                request.getEffectiveTo())) {
                             return;
                         }
 
-                        LocalDate demotionDate = request.effectiveFrom().minusDays(1);
+                        LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
                         if (demotionDate.isBefore(existing.getEffectiveFrom())) {
                             demotionDate = existing.getEffectiveFrom();
                         }
@@ -69,19 +69,19 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         }
 
         PersonLocationAssignment assignment = PersonLocationAssignment.builder()
-                .personId(request.personId())
-                .locationId(request.locationId())
-                .role(request.role())
+                .personId(request.getPersonId())
+                .locationId(request.getLocationId())
+                .role(request.getRole())
                 .isPrimary(request.isPrimary())
-                .effectiveFrom(request.effectiveFrom())
-                .effectiveTo(request.effectiveTo())
+                .effectiveFrom(request.getEffectiveFrom())
+                .effectiveTo(request.getEffectiveTo())
                 .status(AssignmentStatus.ACTIVE)
                 .createdBy(actor)
                 .build();
 
         PersonLocationAssignment saved = repository.save(assignment);
         log.info("Created staffing assignment {} for person {} at location {}",
-                saved.getId(), request.personId(), request.locationId());
+                saved.getId(), request.getPersonId(), request.getLocationId());
 
         return toResponse(saved);
     }
@@ -108,15 +108,15 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         if (existingAssignment.isEmpty()) {
             return Optional.empty();
         }
-        validatePersonAndLocation(request.personId(), request.locationId());
+        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
 
         if (repository.existsOverlappingExcludingId(
                 assignmentId,
-                request.personId(),
-                request.locationId(),
-                request.role(),
-                request.effectiveFrom(),
-                request.effectiveTo())) {
+                request.getPersonId(),
+                request.getLocationId(),
+                request.getRole(),
+                request.getEffectiveFrom(),
+                request.getEffectiveTo())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "An overlapping assignment already exists for this person, location, and role");
         }
@@ -125,18 +125,18 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
         if (request.isPrimary()) {
             repository.findFirstByPersonIdAndIsPrimaryTrueAndStatus(
-                    request.personId(), AssignmentStatus.ACTIVE)
+                    request.getPersonId(), AssignmentStatus.ACTIVE)
                     .filter(existing -> !existing.getId().equals(assignmentId))
                     .ifPresent(existing -> {
                         if (!dateRangesOverlap(
                                 existing.getEffectiveFrom(),
                                 existing.getEffectiveTo(),
-                                request.effectiveFrom(),
-                                request.effectiveTo())) {
+                                request.getEffectiveFrom(),
+                                request.getEffectiveTo())) {
                             return;
                         }
 
-                        LocalDate demotionDate = request.effectiveFrom().minusDays(1);
+                        LocalDate demotionDate = request.getEffectiveFrom().minusDays(1);
                         if (demotionDate.isBefore(existing.getEffectiveFrom())) {
                             demotionDate = existing.getEffectiveFrom();
                         }
@@ -147,12 +147,12 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                     });
         }
 
-        assignment.setPersonId(request.personId());
-        assignment.setLocationId(request.locationId());
-        assignment.setRole(request.role());
+        assignment.setPersonId(request.getPersonId());
+        assignment.setLocationId(request.getLocationId());
+        assignment.setRole(request.getRole());
         assignment.setPrimary(request.isPrimary());
-        assignment.setEffectiveFrom(request.effectiveFrom());
-        assignment.setEffectiveTo(request.effectiveTo());
+        assignment.setEffectiveFrom(request.getEffectiveFrom());
+        assignment.setEffectiveTo(request.getEffectiveTo());
 
         PersonLocationAssignment saved = repository.save(assignment);
         log.info("Updated staffing assignment {} by actor {}", saved.getId(), actor);

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +35,8 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
     @Override
     @Transactional
-    public TimeEntryAdjustmentResponse createAdjustment(TimeEntryAdjustmentRequest request) {
+    @NonNull
+    public TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request) {
         if (request.getReasonCode() == null || request.getReasonCode().isBlank()) {
             throw new IllegalArgumentException("reasonCode is required");
         }
@@ -94,7 +96,8 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
 
     @Override
     @Transactional(readOnly = true)
-    public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(String timeEntryId) {
+    @NonNull
+    public List<com.positivity.people.internal.dto.TimeEntryAdjustment> listForTimeEntry(@NonNull String timeEntryId) {
         return adjustmentRepository.findByTimeEntryId(timeEntryId).stream().map(this::toDto).toList();
     }
 

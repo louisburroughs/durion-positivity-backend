@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
 
     @Override
     @Transactional
+    @NonNull
     public List<TimeEntryDecisionResult> approveEntries(List<String> timeEntryIds, String approverUserId,
             java.util.Set<String> permissions, String correlationId) {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
@@ -122,6 +124,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
 
     @Override
     @Transactional
+    @NonNull
     public List<TimeEntryDecisionResult> rejectEntries(List<String> timeEntryIds, String rejectorUserId,
             Map<String, String> rejectionReasons, java.util.Set<String> permissions, String correlationId) {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
