@@ -3,6 +3,8 @@ package com.positivity.location.internal.controller;
 import java.util.List;
 import java.util.UUID;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -60,7 +62,7 @@ public class LocationController {
     @EmitEvent(id = "LOCATION_LOCATION_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<LocationResponseDTO> createLocation(
-            @Parameter(description = "Location object to be created") @RequestBody LocationRequestDTO location) {
+            @Parameter(description = "Location object to be created") @Valid @RequestBody LocationRequestDTO location) {
         LocationResponseDTO saved = locationService.createLocation(location);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
@@ -74,7 +76,7 @@ public class LocationController {
     @PutMapping("/{locationId}")
     public ResponseEntity<LocationResponseDTO> updateLocation(
             @Parameter(description = "ID of the location to update", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable UUID locationId,
-            @Parameter(description = "Updated location object") @RequestBody LocationRequestDTO location) {
+            @Parameter(description = "Updated location object") @Valid @RequestBody LocationRequestDTO location) {
         return locationService.updateLocation(locationId, location)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
