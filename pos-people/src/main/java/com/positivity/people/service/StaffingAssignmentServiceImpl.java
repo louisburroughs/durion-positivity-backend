@@ -128,7 +128,20 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                     request.personId(), AssignmentStatus.ACTIVE)
                     .filter(existing -> !existing.getId().equals(assignmentId))
                     .ifPresent(existing -> {
-                        existing.setEffectiveTo(request.effectiveFrom().minusDays(1));
+                        if (!dateRangesOverlap(
+                                existing.getEffectiveFrom(),
+                                existing.getEffectiveTo(),
+                                request.effectiveFrom(),
+                                request.effectiveTo())) {
+                            return;
+                        }
+
+                        LocalDate demotionDate = request.effectiveFrom().minusDays(1);
+                        if (demotionDate.isBefore(existing.getEffectiveFrom())) {
+                            demotionDate = existing.getEffectiveFrom();
+                        }
+
+                        existing.setEffectiveTo(demotionDate);
                         existing.setStatus(AssignmentStatus.ENDED);
                         repository.save(existing);
                     });
