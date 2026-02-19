@@ -1,6 +1,7 @@
 package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.people.internal.dto.WorkSessionStartRequest;
 import com.positivity.people.service.BreakDto;
 import com.positivity.people.service.WorkSessionDto;
 import com.positivity.people.service.WorkSessionService;
@@ -85,26 +86,5 @@ public class WorkSessionController {
             return actorFromRequest;
         }
         return "system";
-    }
-
-    public static class WorkSessionStartRequest {
-        private String personId;
-        private String actor;
-
-        public String getPersonId() {
-            return personId;
-        }
-
-        public void setPersonId(String personId) {
-            this.personId = personId;
-        }
-
-        public String getActor() {
-            return actor;
-        }
-
-        public void setActor(String actor) {
-            this.actor = actor;
-        }
     }
 }
