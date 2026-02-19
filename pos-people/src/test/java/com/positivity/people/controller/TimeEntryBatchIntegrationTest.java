@@ -5,6 +5,7 @@ import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
+import com.positivity.people.internal.service.TimeEntryServiceImpl;
 import com.positivity.people.service.TimeEntryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ class TimeEntryBatchIntegrationTest {
     void setup() {
         entryRepository = mock(TimeEntryRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
-        timeEntryService = new TimeEntryService(entryRepository, auditRepository);
+        timeEntryService = new TimeEntryServiceImpl(entryRepository, auditRepository);
         controller = new TimeEntryApprovalController(timeEntryService);
     }
 

@@ -21,6 +21,7 @@ import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.entity.TimeEntryException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
+import com.positivity.people.internal.service.TimeEntryExceptionServiceImpl;
 
 class TimeEntryExceptionServiceTest {
 
@@ -32,7 +33,7 @@ class TimeEntryExceptionServiceTest {
     void setup() {
         exceptionRepository = mock(TimeEntryExceptionRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
-        service = new TimeEntryExceptionService(exceptionRepository, auditRepository);
+        service = new TimeEntryExceptionServiceImpl(exceptionRepository, auditRepository);
     }
 
     @Test
