@@ -1,9 +1,10 @@
 package com.positivity.shared.id;
 
-import com.github.f4b6a3.uuid.UuidCreator;
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 
-import java.util.UUID;
+import com.github.f4b6a3.uuid.UuidCreator;
 
 /**
  * UUID v7 generator utility for platform entities.
@@ -63,15 +64,19 @@ public final class UUIDv7Generator {
      *
      * @return a new UUID v7 instance
      */
-    @NonNull
-    public static UUID generate() {
-        return UuidCreator.getTimeOrderedEpoch();
+
+    public static @NonNull UUID generate() {
+        UUID uuid = UuidCreator.getTimeOrderedEpoch();
+        if (uuid == null) {
+            throw new IllegalStateException("UuidCreator.getTimeOrderedEpoch() returned null");
+        }
+        return uuid;
     }
 
     /**
      * Checks if a UUID is version 7.
      *
-     * @param uuid the UUID to check
+     * @param uuid the UUID to checkO
      * @return true if the UUID is version 7, false otherwise
      */
     public static boolean isUUIDv7(@NonNull UUID uuid) {
@@ -87,6 +92,9 @@ public final class UUIDv7Generator {
     public static boolean isValidUUIDv7String(@NonNull String uuidString) {
         try {
             UUID uuid = UUID.fromString(uuidString);
+            if (uuid == null) {
+                throw new IllegalStateException("UuidCreator.getTimeOrderedEpoch() returned null");
+            }
             return isUUIDv7(uuid);
         } catch (IllegalArgumentException e) {
             return false;

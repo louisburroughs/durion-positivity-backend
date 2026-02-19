@@ -29,31 +29,31 @@ import java.util.UUID;
 public class WorkorderDetailResponse {
 
     // Core fields
-    @Schema(description = "Workorder ID", example = "550e8400-e29b-41d4-a716-446655440000", required = true)
+    @Schema(description = "Workorder ID", example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID workorderId;
 
     @Schema(description = "Workorder number (from sequence)", example = "WO-2024-5001")
     private String workorderNumber;
 
-    @Schema(description = "Workorder status", example = "WORK_IN_PROGRESS", required = true)
+    @Schema(description = "Workorder status", example = "WORK_IN_PROGRESS", requiredMode = Schema.RequiredMode.REQUIRED)
     private WorkorderStatus status;
 
-    @Schema(description = "Customer ID", example = "550e8400-e29b-41d4-a716-446655440001", required = true)
+    @Schema(description = "Customer ID", example = "550e8400-e29b-41d4-a716-446655440001", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID customerId;
 
     @Schema(description = "Customer name", example = "John Doe")
     private String customerName;
 
-    @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440002", required = true)
+    @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440002", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID vehicleId;
 
     @Schema(description = "Vehicle description", example = "2020 Toyota Camry (VIN: 1HGBH41JXMN109186)")
     private String vehicleDescription;
 
-    @Schema(description = "Creation timestamp", example = "2024-01-27T10:00:00Z", required = true)
+    @Schema(description = "Creation timestamp", example = "2024-01-27T10:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
     private Instant createdAt;
 
-    @Schema(description = "Created by user ID", example = "550e8400-e29b-41d4-a716-446655440003")
+    @Schema(description = "Created by user ID", example = "550e8400-e29b-41d4-a716-446655440003", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID createdBy;
 
     // Derived status fields
@@ -102,6 +102,6 @@ public class WorkorderDetailResponse {
     private BigDecimal taxTotal;
 
     // Capability flags
-    @Schema(description = "Capability flags indicating allowed actions", required = true)
+    @Schema(description = "Capability flags indicating allowed actions", requiredMode = Schema.RequiredMode.REQUIRED)
     private WorkorderCapabilities capabilities;
 }

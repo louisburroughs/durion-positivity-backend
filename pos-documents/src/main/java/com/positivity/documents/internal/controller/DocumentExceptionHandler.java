@@ -38,7 +38,7 @@ public class DocumentExceptionHandler {
     @ExceptionHandler(RenderingException.class)
     public ResponseEntity<ErrorResponse> handleRendering(RenderingException ex) {
         if (ex.isMalformedInput()) {
-            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                     .body(new ErrorResponse("MALFORMED_INPUT", ex.getMessage()));
         }
         log.error("Document rendering failure", ex);
