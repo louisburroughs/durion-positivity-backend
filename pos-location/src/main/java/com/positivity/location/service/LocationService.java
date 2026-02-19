@@ -120,7 +120,7 @@ public class LocationService {
 
     private Location saveLocationInternal(Location location) {
         try {
-            return locationRepository.save(location);
+            return locationRepository.saveAndFlush(location);
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Location code already exists", e);
         }

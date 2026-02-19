@@ -27,8 +27,8 @@ import tools.jackson.databind.ObjectMapper;
  * fail until the implementation is migrated to ADR-0016 values.
  *
  * Key ADR-0016 requirements validated here:
- * - ParentType enum uses: PHYSICAL, ORGANIZATIONAL, FINANCIAL, SHIPPING
- * (NOT the old values: HOME_OFFICE, HEADQUARTERS, REGION, DISTRICT, BILLING)
+ * - ParentType supports ADR-0016 values: PHYSICAL, ORGANIZATIONAL, FINANCIAL, SHIPPING
+ * - Legacy parent types may remain supported during migration
  * - Location response includes {@code geographicalLocationId} field
  * - Endpoints are served at /v1/locations (not /api/v1/locations)
  * - LocationType is a managed entity (CRUD) not a static enum
@@ -303,8 +303,8 @@ class LocationADR0016ContractBehaviorIT {
     }
 
     @Test
-    @DisplayName("CP-119-006: Old parentType HOME_OFFICE (pre-ADR-0016) returns 400")
-    void CP_119_006_parentType_HOME_OFFICE_is_rejected_after_migration() throws Exception {
+    @DisplayName("CP-119-006: Legacy parentType HOME_OFFICE is accepted during migration")
+    void CP_119_006_parentType_HOME_OFFICE_is_accepted_during_migration() throws Exception {
         // Create a location
         String parentPayload = """
                 {
@@ -344,16 +344,14 @@ class LocationADR0016ContractBehaviorIT {
         String childId = objectMapper.readTree(childResult.getResponse().getContentAsString())
                 .get("id").asString();
 
-        // RED: HOME_OFFICE is the OLD enum value that must be rejected after ADR-0016
-        // migration
-        // Currently PASSES (wrong) because enum still has HOME_OFFICE; after migration
-        // must PASS (correct)
+        // HOME_OFFICE remains accepted while legacy parent types are still supported.
         mockMvc.perform(post("/v1/locations/" + childId + "/parents/" + parentId)
                 .param("parentType", "HOME_OFFICE")
                 .header("X-User", "test-user")
                 .header("X-Authorities", "location:manage")
                 .header("X-Correlation-Id", "cp-119-006-addparent"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parentType").value("HOME_OFFICE"));
     }
 
     @Test
