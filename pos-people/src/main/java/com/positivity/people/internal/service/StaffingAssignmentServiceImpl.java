@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.client.LocationReferenceClient;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
@@ -9,6 +9,8 @@ import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.PersonLocationAssignmentRepository;
 import com.positivity.people.internal.repository.PersonRepository;
+import com.positivity.people.service.StaffingAssignmentService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -187,7 +189,8 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                 assignment.getCreatedBy());
     }
 
-    private boolean dateRangesOverlap(LocalDate leftStart, LocalDate leftEnd, LocalDate rightStart, LocalDate rightEnd) {
+    private boolean dateRangesOverlap(LocalDate leftStart, LocalDate leftEnd, LocalDate rightStart,
+            LocalDate rightEnd) {
         LocalDate normalizedLeftEnd = leftEnd != null ? leftEnd : LocalDate.MAX;
         LocalDate normalizedRightEnd = rightEnd != null ? rightEnd : LocalDate.MAX;
         return !normalizedLeftEnd.isBefore(rightStart) && !normalizedRightEnd.isBefore(leftStart);
