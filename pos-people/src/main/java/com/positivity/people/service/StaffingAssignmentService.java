@@ -1,0 +1,22 @@
+package com.positivity.people.service;
+
+import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
+import com.positivity.people.internal.dto.StaffingAssignmentResponse;
+import org.jspecify.annotations.NonNull;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface StaffingAssignmentService {
+    @NonNull
+    StaffingAssignmentResponse create(@NonNull CreateStaffingAssignmentRequest request, @NonNull String actor);
+
+    @NonNull
+    List<StaffingAssignmentResponse> findByPersonId(@NonNull UUID personId);
+
+    @NonNull
+    Optional<StaffingAssignmentResponse> findById(@NonNull UUID assignmentId);
+
+    void end(@NonNull UUID assignmentId);
+}

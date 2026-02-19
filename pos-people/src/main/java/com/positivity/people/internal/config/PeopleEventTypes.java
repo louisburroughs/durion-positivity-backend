@@ -27,6 +27,14 @@ public final class PeopleEventTypes {
                                 EventTypeRegistration.write("PEOPLE_PERSON_UPDATE",
                                                 "Update an existing person record").build(),
 
+                                // StaffingAssignmentController - 3 events
+                                EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_CREATE",
+                                                "Create a person-to-location staffing assignment").build(),
+                                EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_UPDATE",
+                                                "Update a staffing assignment").build(),
+                                EventTypeRegistration.write("PEOPLE_STAFFING_ASSIGNMENT_END",
+                                                "End a staffing assignment").build(),
+
                                 // EmployeeController - 4 events
                                 EventTypeRegistration.write("PEOPLE_EMPLOYEE_CREATE",
                                                 "Create employee profile").build(),

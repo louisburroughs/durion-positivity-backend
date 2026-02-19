@@ -25,6 +25,18 @@ public class Location {
     }
 
     private String name;
+    /** Unique immutable business code for this location (e.g. "MAIN-WS-001"). */
+    @Column(unique = true)
+    private String code;
+
+    /**
+     * Reference to the GeographicalLocation entity in pos-location (ADR-0016).
+     * Other services MUST NOT replicate address data; they store this ID and
+     * query pos-location for full address details.
+     */
+    @Column(name = "geographical_location_id")
+    private UUID geographicalLocationId;
+
     private String addressLine1;
     private String addressLine2;
     private String city;

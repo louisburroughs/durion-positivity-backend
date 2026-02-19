@@ -13,6 +13,8 @@ import java.util.UUID;
 public interface LocationTypeRepository extends JpaRepository<LocationType, UUID> {
     boolean existsByNameIgnoreCase(String name);
 
+        Optional<LocationType> findByNameIgnoreCase(String name);
+
     @Query("""
             select new LocationType(lt.id, lt.name, lt.description)
             from LocationType lt
