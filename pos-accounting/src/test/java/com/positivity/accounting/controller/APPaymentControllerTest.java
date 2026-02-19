@@ -24,7 +24,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.context.WebApplicationContext;
 
-import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.service.APPaymentService;
 
 /**
@@ -98,12 +97,15 @@ class APPaymentControllerTest {
                 @DisplayName("Should reject CRLF injection attempt with newline (security S5145) - blocked by Spring Security firewall")
                 void shouldRejectNewlineInjection() throws Exception {
                         // Given: Malicious reference with newline character (URL-encoded)
-                        // Note: Spring Security's StrictHttpFirewall will block this before it reaches our validation
+                        // Note: Spring Security's StrictHttpFirewall will block this before it reaches
+                        // our validation
                         String maliciousRef = "VALID_REF%0A[FAKE_LOG_ENTRY]";
 
                         // When: Request with CRLF injection
-                        // Then: Spring Security firewall blocks the request before it reaches controller
-                        // This is defense-in-depth: firewall + our validation both protect against log injection
+                        // Then: Spring Security firewall blocks the request before it reaches
+                        // controller
+                        // This is defense-in-depth: firewall + our validation both protect against log
+                        // injection
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maliciousRef)
                                         .header("X-Authorities", "ap:payment:view")
                                         .header("X-User", "test-user"))
