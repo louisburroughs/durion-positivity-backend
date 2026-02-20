@@ -167,6 +167,63 @@ If asked to validate GREEN, return:
 - If gaps are found, bring tests and related test documentation up to standard in the same change set.
 - If no gaps are found, explicitly report that the existing implementation was validated and meets standards.
 
+## Documentation and Issue Traceability (Mandatory)
+
+Use these rules to keep documentation consistent while avoiding unnecessary clutter.
+
+1. JavaDoc coverage
+- Add JavaDoc for test code elements where JavaDoc is supported and meaningful (test classes, shared fixtures/helpers, and non-obvious helper methods).
+- Keep JavaDoc concise and behavior-focused: intent, key inputs/outputs, side effects, and invariants.
+- Do not add placeholder JavaDoc that repeats the symbol name without useful information.
+
+2. Issue number traceability
+- Every test change must reference an issue number (for example: `#123`, `CAP-123`, or the team's canonical issue key format).
+- For new test classes/types: include the issue reference in class-level JavaDoc.
+- For modifications to existing test code: annotate only newly added or materially changed blocks with a short issue-tagged comment.
+- Keep issue comments scoped to the smallest meaningful block and remove them when no longer needed for review traceability.
+
+3. Low-clutter best practices
+- Prefer one issue reference per contiguous change block instead of repeating on every line.
+- Use neutral, review-oriented wording (what/why), not implementation noise.
+- Never wrap unchanged legacy code just to add issue comments.
+
+4. Templates
+
+Class JavaDoc template (new class/type):
+```java
+/**
+ * <One-line purpose of this type>.
+ *
+ * <Optional details: domain constraints, invariants, side effects>.
+ *
+ * Issue: <ISSUE-123>
+ */
+```
+
+Method JavaDoc template:
+```java
+/**
+ * <What this method does and why it exists>.
+ *
+ * @param <name> <meaning/business constraint>
+ * @return <result meaning>
+ * @throws <ExceptionType> <when/why thrown>
+ */
+```
+
+Issue-tagged change block template (existing code):
+```java
+// Issue <ISSUE-123>: <brief reason for this added/changed block>
+<new or modified code>
+```
+
+Multi-line block template (when a larger region is required):
+```java
+// Issue <ISSUE-123> start: <brief reason>
+<new or modified code block>
+// Issue <ISSUE-123> end
+```
+
 ## Orchestrator Template Compatibility
 
 This agent must be compatible with orchestrator prompt templates:
