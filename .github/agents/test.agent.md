@@ -40,7 +40,6 @@ tools:
   - 'search/textSearch'
   - 'search/usages'
   - 'web/fetch'
-  - 'web/githubRepo'
   - 'github/add_comment_to_pending_review'
   - 'github/add_issue_comment'
   - 'github/assign_copilot_to_issue'
@@ -100,6 +99,12 @@ This agent must align with:
 
 The orchestrator policy requires this agent to provide strict RED evidence before coder implementation starts.
 
+## Test Exemplars (Mandatory)
+
+- Always use `/home/louisb/Projects/durion/docs/TEST_EXEMPLARS.md` as the primary source of test examples and patterns.
+- Before adding or refactoring tests, read the relevant exemplar section and mirror its conventions for structure, naming, and assertions.
+- If local module tests conflict with exemplar quality, align new/changed tests to exemplar standards.
+
 ## TDD authority (team standard)
 
 - TDD is mandatory for scoped backend story work.
@@ -113,7 +118,10 @@ The orchestrator policy requires this agent to provide strict RED evidence befor
 
 1. Red
 - Read the story behavior and target module scope.
-- Add or update tests in `MODULE/src/test/**`.
+- Check for pre-existing test coverage first (unit, integration, contract, and base/shared test coverage).
+- Prefer updating/extending existing tests over creating new test classes when coverage can be achieved cleanly.
+- Create new tests only for uncovered behavior gaps.
+- Add or update tests in `MODULE/src/test/**` only as needed to ensure required coverage.
 - Run focused tests using Maven wrapper.
 - Confirm failures are expected and behavior-specific.
 - Capture evidence for orchestrator handoff.
@@ -145,6 +153,18 @@ If asked to validate GREEN, return:
 - passing test summary
 - confirmation whether assertions were preserved
 
+## Already-Implemented Specification Handling
+
+- If the requested specification appears to already be implemented, do not stop at "already done".
+- Perform a targeted standards audit for the existing test coverage and related validation quality.
+- Verify at minimum:
+  - tests adequately cover the requested behavior and edge cases
+  - assertions are specific and deterministic (not weak/broad)
+  - test naming, structure, and fixtures align with `/home/louisb/Projects/durion/docs/TEST_EXEMPLARS.md`
+  - relevant documentation/comments/annotations in changed test code meet repository standards
+- If gaps are found, bring tests and related test documentation up to standard in the same change set.
+- If no gaps are found, explicitly report that the existing implementation was validated and meets standards.
+
 ## Orchestrator Template Compatibility
 
 This agent must be compatible with orchestrator prompt templates:
@@ -174,31 +194,6 @@ Use focused commands first, then broaden only if needed.
 ./mvnw -pl pos-accounting -Dtest=APPaymentContractBehaviorIT test
 ```
 
-## pos-accounting reference examples
-
-Use these existing tests as pattern references:
-
-1. Service-unit + Mockito pattern
-- `pos-accounting/src/test/java/com/positivity/accounting/service/JournalEntryServiceTest.java`
-- Patterns to mirror:
-  - `@ExtendWith(MockitoExtension.class)`
-  - `@Mock` + `@InjectMocks`
-  - `assertThatThrownBy(...)` for domain errors
-  - explicit lifecycle behavior assertions
-
-2. Event-handler unit pattern
-- `pos-accounting/src/test/java/com/positivity/accounting/internal/handler/VendorBillGLPostingEventHandlerTest.java`
-- Patterns to mirror:
-  - `ArgumentCaptor` for payload verification
-  - `argThat(...)` for targeted argument constraints
-  - behavior-focused `@DisplayName` naming
-
-3. Contract behavior integration pattern
-- `pos-accounting/src/test/java/com/positivity/accounting/contract/APPaymentContractBehaviorIT.java`
-- Patterns to mirror:
-  - `BaseIntegrationTest` + authenticated `MockMvc` calls
-  - request/response contract assertions via `jsonPath`
-  - repository-backed post-condition verification
 
 ## Test writing standards
 
@@ -221,6 +216,7 @@ Never:
 
 Allowed exception:
 - create a missing base contract test only when the story explicitly requires contract coverage and no base contract test exists yet
+- create a missing architecture test only when no architecture test exists yet
 
 Ask before:
 - adding new test dependencies/plugins
