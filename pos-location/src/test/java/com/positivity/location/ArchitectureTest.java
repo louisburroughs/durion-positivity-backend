@@ -2,6 +2,7 @@ package com.positivity.location;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -69,4 +70,10 @@ public class ArchitectureTest {
                         .should().bePublic()
                         .allowEmptyShould(true)
                         .because("service layer is the public API of this module");
+
+    @ArchTest
+    static final ArchRule packages_should_be_free_of_cycles = slices()
+            .matching("com.positivity.location.(*)..")
+            .should().beFreeOfCycles()
+            .because("cyclic dependencies make modules harder to maintain and evolve");
 }

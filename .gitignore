@@ -62,6 +62,10 @@ Durion-Processing.md
 /logs/
 /logs/*.log
 
+# Agent-local temporary output (avoid /tmp approval prompts)
+.agent-tmp/*
+!.agent-tmp/.gitkeep
+
 
 ### guides that contain sensitive info ###
 /docs/SECRETS_UPDATE_SUMMARY.txt

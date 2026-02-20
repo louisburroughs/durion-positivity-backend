@@ -2,6 +2,7 @@ package com.positivity.people;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -91,4 +92,10 @@ public class ArchitectureTest {
                         .allowEmptyShould(true)
                         .because("outside internal packages, exposed module types should be service contracts");
 
+
+    @ArchTest
+    static final ArchRule packages_should_be_free_of_cycles = slices()
+            .matching("com.positivity.people.(*)..")
+            .should().beFreeOfCycles()
+            .because("cyclic dependencies make modules harder to maintain and evolve");
 }

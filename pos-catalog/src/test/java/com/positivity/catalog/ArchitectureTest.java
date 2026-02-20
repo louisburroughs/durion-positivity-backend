@@ -2,6 +2,7 @@ package com.positivity.catalog;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -68,4 +69,10 @@ public class ArchitectureTest {
             .should().bePublic()
             .allowEmptyShould(true)
             .because("service layer is the public API of this module");
+
+    @ArchTest
+    static final ArchRule packages_should_be_free_of_cycles = slices()
+            .matching("com.positivity.catalog.(*)..")
+            .should().beFreeOfCycles()
+            .because("cyclic dependencies make modules harder to maintain and evolve");
 }

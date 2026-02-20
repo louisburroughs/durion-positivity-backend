@@ -15,7 +15,7 @@ import java.util.Optional;
  */
 @Repository
 public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryLedgerEntry, Long> {
-    
+
     /**
      * Find all ledger entries for a specific stock item.
      * 
@@ -23,7 +23,17 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
      * @return list of ledger entries ordered by timestamp
      */
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampDesc(String stockItemId);
-    
+
+    /**
+     * Find all ledger entries for a specific stock item ordered oldest-to-newest.
+     *
+     * @param stockItemId the stock item ID
+     * @return list of ledger entries ordered by timestamp ascending
+     */
+    // Issue #48: Service-level location grouping requires deterministic
+    // chronological reads.
+    List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampAsc(String stockItemId);
+
     /**
      * Find ledger entry by adjustment ID.
      * 
@@ -31,9 +41,10 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
      * @return optional ledger entry
      */
     Optional<InventoryLedgerEntry> findByAdjustmentId(Long adjustmentId);
-    
+
     /**
-     * Calculate current on-hand quantity for a stock item by summing all ledger entries.
+     * Calculate current on-hand quantity for a stock item by summing all ledger
+     * entries.
      * 
      * @param stockItemId the stock item ID
      * @return current on-hand quantity
