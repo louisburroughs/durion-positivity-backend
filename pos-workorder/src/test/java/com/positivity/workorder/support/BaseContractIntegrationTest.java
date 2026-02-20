@@ -5,7 +5,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+
+import com.positivity.workorder.config.TestSecurityConfig;
+import com.positivity.workorder.contract.ContractTestConfiguration;
 
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
@@ -16,6 +20,7 @@ import io.restassured.specification.RequestSpecification;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@Import({ TestSecurityConfig.class, ContractTestConfiguration.class })
 public abstract class BaseContractIntegrationTest {
 
     protected static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -53,6 +58,7 @@ public abstract class BaseContractIntegrationTest {
             "workorder:workorder:approve",
             "workorder:workorder:start",
             "workorder:workorder:complete",
+            "workorder:workorder:generate_invoice",
             "workorder:workorder:reopen_completed",
             "workorder:workorder:assign-technician",
             "workorder:invoice:view",

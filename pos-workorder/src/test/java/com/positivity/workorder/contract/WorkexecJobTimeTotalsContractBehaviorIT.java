@@ -3,97 +3,30 @@ package com.positivity.workorder.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.UUID;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.context.WebApplicationContext;
-import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
-import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
-import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 @DisplayName("CAP-121 Workexec Job Time Totals Contract Behavior Tests")
 @SpringBootTest
 @ActiveProfiles("test")
 @Import({ ContractTestConfiguration.class, TestSecurityConfig.class })
-class WorkexecJobTimeTotalsContractBehaviorIT {
-
-    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
-            new SimpleGrantedAuthority("workorder:labor:view"),
-            new SimpleGrantedAuthority("workorder:labor:add"));
-
-    private MockMvc mockMvc;
-
-    @Autowired
-    private WebApplicationContext webApplicationContext;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private WorkorderRepository workorderRepository;
-
-    @Autowired
-    private WorkorderLaborEntryRepository laborEntryRepository;
-
-    @Autowired
-    private TechnicianAssignmentRepository technicianAssignmentRepository;
-
-    @BeforeEach
-    void setUp() {
-        mockMvc = webAppContextSetup(webApplicationContext)
-                .addFilters(new OncePerRequestFilter() {
-                    @Override
-                    protected void doFilterInternal(
-                            HttpServletRequest request,
-                            HttpServletResponse response,
-                            FilterChain filterChain) throws ServletException, IOException {
-                        var authentication = new UsernamePasswordAuthenticationToken(
-                                "workorder-test-user", null, TEST_AUTHORITIES);
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
-                        filterChain.doFilter(request, response);
-                    }
-                })
-                .build();
-    }
-
-    @AfterEach
-    void tearDown() {
-        laborEntryRepository.deleteAll();
-        technicianAssignmentRepository.deleteAll();
-        workorderRepository.deleteAll();
-    }
+class WorkexecJobTimeTotalsContractBehaviorIT extends AbstractWorkexecContractBehaviorIT {
 
     @Test
     @DisplayName("AC1: GET job-time-totals with valid params returns grouped totals by technicianId, locationId, localDate")
@@ -185,17 +118,6 @@ class WorkexecJobTimeTotalsContractBehaviorIT {
         assertThat(json.get(0).path("locationId").asText()).isEqualTo(sharedLocation.toString());
         assertThat(LocalDate.parse(json.get(0).path("localDate").asText())).isEqualTo(LocalDate.of(2026, 2, 15));
         assertThat(json.get(0).path("totalJobMinutes").asInt()).isEqualTo(60);
-    }
-
-    private Workorder seedWorkorder(UUID locationId, WorkorderStatus status) {
-        Workorder workorder = Workorder.builder()
-                .shopId(locationId)
-                .customerId(UUID.randomUUID())
-                .vehicleId(UUID.randomUUID())
-                .status(status)
-                .isReopened(false)
-                .build();
-        return workorderRepository.save(workorder);
     }
 
     private WorkorderLaborEntry seedLaborEntry(
