@@ -1,5 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.positivity</groupId>
@@ -228,11 +229,14 @@
                                 </goals>
                                 <configuration>
                                     <arguments>
-                                        <argument>--server.port=8085</argument>
+                                        <argument>--server.port=8086</argument>
                                         <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
-                                        <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
-                                        <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
-                                        <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>
+                                            --spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
+                                        <argument>
+                                            --spring.datasource.driver-class-name=org.h2.Driver</argument>
+                                        <argument>
+                                            --spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
@@ -256,6 +260,11 @@
                         <groupId>org.springdoc</groupId>
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
+                        <configuration>
+                            <apiDocsUrl>http://localhost:8086/v3/api-docs</apiDocsUrl>
+                            <outputFileName>openapi.yaml</outputFileName>
+                            <outputDir>${project.basedir}</outputDir>
+                        </configuration>
                         <executions>
                             <execution>
                                 <id>generate-openapi-profile</id>
@@ -263,9 +272,6 @@
                                 <goals>
                                     <goal>generate</goal>
                                 </goals>
-                                <configuration>
-                                    <apiDocsUrl>http://localhost:8085/v3/api-docs</apiDocsUrl>
-                                </configuration>
                             </execution>
                         </executions>
                     </plugin>
