@@ -3,6 +3,7 @@ package com.positivity.workorder.contract;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -11,11 +12,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.entity.IdempotencyKey;
+import com.positivity.workorder.internal.entity.ApprovalStatus;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
@@ -42,6 +49,15 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
     private WorkorderRepository workorderRepository;
 
     @Autowired
+    private EstimateItemRepository estimateItemRepository;
+
+    @Autowired
+    private WorkorderServiceRepository workorderServiceRepository;
+
+    @Autowired
+    private WorkorderPartRepository workorderPartRepository;
+
+    @Autowired
     private IdempotencyKeyRepository idempotencyKeyRepository;
 
     private UUID testCustomerId;
@@ -51,7 +67,10 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
     @AfterEach
     void tearDown() {
         idempotencyKeyRepository.deleteAll();
+        workorderServiceRepository.deleteAll();
+        workorderPartRepository.deleteAll();
         workorderRepository.deleteAll();
+        estimateItemRepository.deleteAll();
         estimateRepository.deleteAll();
     }
 
@@ -209,18 +228,26 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
     @DisplayName("WO-IDM-004: Missing idempotency key allows duplicate creation")
     void testCreateWorkorder_WithoutIdempotencyKey_AllowsDuplicates() {
         UUID estimateId = seedApprovedEstimate();
+        UUID secondEstimateId = seedApprovedEstimate();
 
-        String requestBody = String.format("""
+        String firstRequestBody = String.format("""
                 {
                     "estimateId": "%s",
                     "customerId": "%s"
                 }
                 """, estimateId, testCustomerId);
 
+        String secondRequestBody = String.format("""
+                {
+                    "estimateId": "%s",
+                    "customerId": "%s"
+                }
+                """, secondEstimateId, testCustomerId);
+
         // First request without key
         Response firstResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
-                .body(requestBody)
+                .body(firstRequestBody)
                 .when()
                 .post("/v1/workorders")
                 .then()
@@ -234,7 +261,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
         // Second request without key - should create new workorder
         Response secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
-                .body(requestBody)
+                .body(secondRequestBody)
                 .when()
                 .post("/v1/workorders")
                 .then()
@@ -257,19 +284,27 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
     @DisplayName("WO-IDM-005: Whitespace-only idempotency key treated as missing")
     void testCreateWorkorder_WithWhitespaceIdempotencyKey_TreatedAsMissing() {
         UUID estimateId = seedApprovedEstimate();
+        UUID secondEstimateId = seedApprovedEstimate();
 
-        String requestBody = String.format("""
+        String firstRequestBody = String.format("""
                 {
                     "estimateId": "%s",
                     "customerId": "%s"
                 }
                 """, estimateId, testCustomerId);
 
+        String secondRequestBody = String.format("""
+                {
+                    "estimateId": "%s",
+                    "customerId": "%s"
+                }
+                """, secondEstimateId, testCustomerId);
+
         // First request with whitespace-only key (spaces)
         Response firstResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", "   ")
-                .body(requestBody)
+                .body(firstRequestBody)
                 .when()
                 .post("/v1/workorders")
                 .then()
@@ -284,7 +319,7 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
         Response secondResponse = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .header("Idempotency-Key", " \t ")
-                .body(requestBody)
+                .body(secondRequestBody)
                 .when()
                 .post("/v1/workorders")
                 .then()
@@ -326,6 +361,19 @@ class WorkorderIdempotentPromotionContractBehaviorIT extends BaseContractIntegra
                 .build();
 
         Estimate saved = estimateRepository.save(estimate);
+
+        EstimateItem approvedItem = EstimateItem.builder()
+                .estimateId(saved.getId())
+                .itemType(EstimateItemType.LABOR)
+                .description("Test labor")
+                .quantity(new BigDecimal("1.0000"))
+                .unitPrice(new BigDecimal("100.00"))
+                .lineTotal(new BigDecimal("100.00"))
+                .approvalStatus(ApprovalStatus.APPROVED)
+                .createdById(SYSTEM_USER_ID.toString())
+                .build();
+        estimateItemRepository.save(approvedItem);
+
         return saved.getId();
     }
 }

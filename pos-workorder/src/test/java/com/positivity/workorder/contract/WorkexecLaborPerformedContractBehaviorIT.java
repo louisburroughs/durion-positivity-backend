@@ -5,96 +5,27 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.context.WebApplicationContext;
-import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
-import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
-import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
-import com.positivity.workorder.internal.repository.WorkorderRepository;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
-import java.io.IOException;
 
 @DisplayName("CAP-121 Workexec Labor Performed Contract Behavior Tests")
 @SpringBootTest
 @ActiveProfiles("test")
 @Import({ ContractTestConfiguration.class, TestSecurityConfig.class })
-class WorkexecLaborPerformedContractBehaviorIT {
-
-    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
-            new SimpleGrantedAuthority("workorder:labor:view"),
-            new SimpleGrantedAuthority("workorder:labor:add"));
-
-    private MockMvc mockMvc;
-
-    @Autowired
-    private WebApplicationContext webApplicationContext;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private WorkorderRepository workorderRepository;
-
-    @Autowired
-    private WorkorderLaborEntryRepository laborEntryRepository;
-
-    @Autowired
-    private TechnicianAssignmentRepository technicianAssignmentRepository;
-
-    @BeforeEach
-    void setUp() {
-        mockMvc = webAppContextSetup(webApplicationContext)
-                .addFilters(new OncePerRequestFilter() {
-                    @Override
-                    protected void doFilterInternal(
-                            HttpServletRequest request,
-                            HttpServletResponse response,
-                            FilterChain filterChain) throws ServletException, IOException {
-                        var authentication = new UsernamePasswordAuthenticationToken(
-                                "workorder-test-user", null, TEST_AUTHORITIES);
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
-                        filterChain.doFilter(request, response);
-                    }
-                })
-                .build();
-    }
-
-    @AfterEach
-    void tearDown() {
-        laborEntryRepository.deleteAll();
-        technicianAssignmentRepository.deleteAll();
-        workorderRepository.deleteAll();
-    }
+class WorkexecLaborPerformedContractBehaviorIT extends AbstractWorkexecContractBehaviorIT {
 
     @Test
     @DisplayName("AC1: POST labor-performed returns 201 and creates labor record")
@@ -179,22 +110,10 @@ class WorkexecLaborPerformedContractBehaviorIT {
     }
 
     private Map<String, Object> buildLaborPerformedPayload(UUID workorderId, UUID technicianId, String timeEntryId) {
-        return Map.of(
-                "workorderId", workorderId.toString(),
-                "technicianId", technicianId.toString(),
-                "performedAt", "2026-02-16T15:00:00Z",
-                "labor", Map.of("quantity", BigDecimal.valueOf(1.5), "unit", "HOURS"),
-                "source", Map.of("system", "people", "sourceReferenceId", timeEntryId));
-    }
-
-    private Workorder seedWorkorderInProgress() {
-        Workorder workorder = Workorder.builder()
-                .shopId(UUID.randomUUID())
-                .customerId(UUID.randomUUID())
-                .vehicleId(UUID.randomUUID())
-                .status(WorkorderStatus.WORK_IN_PROGRESS)
-                .isReopened(false)
-                .build();
-        return workorderRepository.save(workorder);
+        return WorkexecContractPayloads.laborPerformedPayload(
+                workorderId,
+                technicianId,
+                BigDecimal.valueOf(1.5),
+                timeEntryId);
     }
 }

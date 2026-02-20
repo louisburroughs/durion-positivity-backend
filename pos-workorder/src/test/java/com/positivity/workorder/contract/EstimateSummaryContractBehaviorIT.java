@@ -7,34 +7,45 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
+import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 /**
  * Contract behavioral tests for Estimate Summary endpoints.
  * Story #18 (Present Estimate Summary)
- * 
- * Verifies:
- * - Happy path: Get summary with grouped line items
- * - Snapshot creation: Immutable historical record
- * - Customer-facing format: Parts and labor grouped
- * - Note: PDF generation not implemented (requires document service)
  */
 class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
+
+    @Autowired
+    private EstimateRepository estimateRepository;
+
+    @Autowired
+    private EstimateItemRepository estimateItemRepository;
+
+    @AfterEach
+    void tearDown() {
+        estimateItemRepository.deleteAll();
+        estimateRepository.deleteAll();
+    }
 
     @Test
     @DisplayName("Contract: Get customer-facing estimate summary - Happy Path")
     void shouldGetEstimateSummary() {
-        // Given: An estimate with line items
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
-        // When: Retrieving summary
-        // Assumes test fixture seeds this estimate with at least one PART and one LABOR
-        // line item.
         givenWithGatewayAuth()
                 .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
@@ -55,11 +66,8 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Contract: Summary groups line items by type (parts and labor)")
     void shouldGroupLineItemsByType() {
-        // Given: An estimate with both part and labor items
-        // Assumes test fixture seeds this estimate with line items
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
-        // When: Retrieving summary
         givenWithGatewayAuth()
                 .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
@@ -74,11 +82,8 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Contract: Summary includes financial breakdown")
     void shouldIncludeFinancialBreakdown() {
-        // Given: An estimate with calculated totals
-        // Assumes test fixture seeds this estimate
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
-        // When: Retrieving summary
         givenWithGatewayAuth()
                 .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
@@ -94,18 +99,16 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Contract: Create historical snapshot - Happy Path")
     void shouldCreateEstimateSnapshot() {
-        // Given: An estimate to snapshot
-        // Assumes test fixture seeds this estimate
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
-        // When: Creating snapshot with notes
         givenWithGatewayAuth()
                 .queryParam("notes", "Pre-approval snapshot")
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
                 .statusCode(200)
-                .body("snapshotId", notNullValue())
+                .body("id", notNullValue())
+                .body("estimateId", equalTo(estimateId.toString()))
                 .body("capturedAt", notNullValue())
                 .log().ifValidationFails();
     }
@@ -113,11 +116,8 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Contract: Snapshot captures complete estimate state as JSON")
     void shouldCaptureCompleteEstimateState() {
-        // Given: An estimate with items and calculated totals
-        // Assumes test fixture seeds this estimate with line items
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
-        // When: Creating snapshot
         givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
@@ -130,18 +130,7 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("Contract: Snapshot is immutable - Captured timestamp never changes")
     void shouldCreateImmutableSnapshot() {
-        // Given: An estimate
-        // Assumes test fixture seeds this estimate
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
-
-        // When: Creating snapshot twice, subsequent snapshot should not mutate the
-        // first capture
-        givenWithGatewayAuth()
-                .when()
-                .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
-                .then()
-                .statusCode(200)
-                .log().ifValidationFails();
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
         givenWithGatewayAuth()
                 .when()
@@ -150,20 +139,19 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(200)
                 .log().ifValidationFails();
 
-        // Then: Snapshot should have capturedAt timestamp that never changes
-        // Future modifications to estimate should not affect this snapshot
+        givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
+                .then()
+                .statusCode(200)
+                .log().ifValidationFails();
     }
 
     @Test
     @DisplayName("Contract: PDF generation not implemented - Documented limitation")
     void shouldDocumentPDFGenerationLimitation() {
-        // This test documents that PDF generation is not yet implemented
-        // NOTE: When document service is integrated, add PDF generation tests
-        // Assumes test fixture seeds this estimate
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
-
-        // Current behavior: Summary returns JSON only
         givenWithGatewayAuth()
                 .when()
                 .get("/v1/workorders/estimates/{estimateId}/summary", estimateId)
@@ -171,19 +159,13 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(200)
                 .contentType(anyOf(is("application/json"), is("application/json;charset=UTF-8")))
                 .log().ifValidationFails();
-
-        // Future: Add Accept: application/pdf header support
-        // and verify PDF document is returned with proper MIME type
     }
 
     @Test
     @DisplayName("Contract: Multiple snapshots can be created for audit trail")
     void shouldAllowMultipleSnapshots() {
-        // Given: An estimate
-        // Assumes test fixture seeds this estimate
-        UUID estimateId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        UUID estimateId = seedEstimateWithPartAndLaborItems();
 
-        // When: Creating multiple snapshots at different points in time
         givenWithGatewayAuth()
                 .queryParam("notes", "First snapshot")
                 .when()
@@ -197,8 +179,46 @@ class EstimateSummaryContractBehaviorIT extends BaseContractIntegrationTest {
                 .post("/v1/workorders/estimates/{estimateId}/snapshots", estimateId)
                 .then()
                 .statusCode(200);
+    }
 
-        // Then: Both snapshots should exist with different timestamps
-        // This provides full version history for compliance
+    private UUID seedEstimateWithPartAndLaborItems() {
+        Estimate estimate = Estimate.builder()
+                .id(UUID.randomUUID())
+                .estimateNumber("EST-" + System.nanoTime())
+                .locationId(UUID.randomUUID())
+                .vehicleId(UUID.randomUUID())
+                .customerId(UUID.randomUUID())
+                .currencyUomId("USD")
+                .taxRegionId(UUID.randomUUID())
+                .status(EstimateStatus.DRAFT)
+                .subtotal(new BigDecimal("200.00"))
+                .taxAmount(new BigDecimal("16.50"))
+                .total(new BigDecimal("216.50"))
+                .createdByUserId(SYSTEM_USER_ID.toString())
+                .createdById(SYSTEM_USER_ID.toString())
+                .build();
+
+        Estimate savedEstimate = estimateRepository.save(estimate);
+
+        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.PART, "Front brake pads",
+                new BigDecimal("2"), new BigDecimal("50.00")));
+        estimateItemRepository.save(buildItem(savedEstimate.getId(), EstimateItemType.LABOR, "Brake labor",
+                new BigDecimal("5"), new BigDecimal("20.00")));
+
+        return savedEstimate.getId();
+    }
+
+    private EstimateItem buildItem(UUID estimateId, EstimateItemType type, String description,
+            BigDecimal quantity, BigDecimal unitPrice) {
+        return EstimateItem.builder()
+                .id(UUID.randomUUID())
+                .estimateId(estimateId)
+                .itemType(type)
+                .description(description)
+                .quantity(quantity)
+                .unitPrice(unitPrice)
+                .taxCode("STD")
+                .createdById(SYSTEM_USER_ID.toString())
+                .build();
     }
 }

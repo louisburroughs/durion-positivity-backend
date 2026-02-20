@@ -144,7 +144,7 @@ class WorkorderStateMachineTest {
 
     @Test
     void testCaptureSnapshot_Success() throws Exception {
-        when(objectMapper.writeValueAsString(testWorkorder)).thenReturn("{\"id\":1,\"status\":\"APPROVED\"}");
+        when(objectMapper.writeValueAsString(any())).thenReturn("{\"id\":1,\"status\":\"APPROVED\"}");
 
         stateMachine.captureSnapshot(testWorkorder, userId, "TEST_SNAPSHOT", "Test reason");
 

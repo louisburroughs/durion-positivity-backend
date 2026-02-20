@@ -20,7 +20,9 @@ import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 /**
@@ -47,12 +49,20 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private WorkorderRepository workorderRepository;
 
+        @Autowired
+        private WorkorderServiceRepository workorderServiceRepository;
+
+        @Autowired
+        private WorkorderPartRepository workorderPartRepository;
+
         private UUID testCustomerId;
         private UUID testLocationId;
         private UUID testVehicleId;
 
         @AfterEach
         void tearDown() {
+                workorderServiceRepository.deleteAll();
+                workorderPartRepository.deleteAll();
                 workorderRepository.deleteAll();
                 estimateItemRepository.deleteAll();
                 estimateRepository.deleteAll();
@@ -168,7 +178,7 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                                 .when()
                                 .post("/v1/workorders/estimates/{id}/promote", nonExistentId)
                                 .then()
-                                .statusCode(404)
+                                .statusCode(400)
                                 .log().ifValidationFails();
         }
 

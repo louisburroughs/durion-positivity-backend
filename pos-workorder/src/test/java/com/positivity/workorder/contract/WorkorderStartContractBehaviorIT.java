@@ -310,12 +310,32 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimate.getId())
                 .then()
-                .log().all()
                 .statusCode(200)
                 .extract()
                 .path("id");
 
-        return UUID.fromString(workorderIdStr);
+        UUID workorderId = UUID.fromString(workorderIdStr);
+
+        // Transition DRAFT -> APPROVED so start-workorder contract preconditions hold.
+        String approvalBody = String.format("""
+                {
+                  "customerId": "%s",
+                  "signatureData": "test-signature",
+                  "signatureMimeType": "image/png",
+                  "signerName": "Test Customer",
+                  "notes": "Approved for execution"
+                }
+                """, testCustomerId);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(approvalBody)
+                .when()
+                .post("/v1/workorders/{workorderId}/approval", workorderId)
+                .then()
+                .statusCode(200);
+
+        return workorderId;
     }
 
     /**
