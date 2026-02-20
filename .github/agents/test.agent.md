@@ -216,6 +216,11 @@ Never:
 - delete or weaken existing assertions to make tests pass
 - return RED evidence based only on compile failures or environment setup issues
 - claim completion without commands and output-backed evidence
+- modify architecture tests (for example `ArchitectureTest` / ArchUnit suites)
+- modify existing base contract tests or shared base contract test infrastructure
+
+Allowed exception:
+- create a missing base contract test only when the story explicitly requires contract coverage and no base contract test exists yet
 
 Ask before:
 - adding new test dependencies/plugins
