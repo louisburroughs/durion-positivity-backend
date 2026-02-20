@@ -15,9 +15,9 @@ import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  * Implements the business logic for Issue #111: Party: Create Individual Person
  * Record.
  * <p>
- * Domain Authority: CRM domain is the system of record for Party/Person
+ * Domain Authority: CRM domain is the system of record for Party/PersonParty
  * entities.
  * </p>
  *
@@ -40,7 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PersonService {
 
-    private final PersonRepository personRepository;
+    private final PersonPartyRepository personRepository;
     private final ContactPointRepository contactPointRepository;
 
     /**
@@ -48,7 +48,7 @@ public class PersonService {
      * <p>
      * Acceptance Criteria (from Issue #111):
      * - AC1: Minimal create (name + preferred method) returns 201 and persists a
-     * Person.
+     * PersonParty.
      * - AC2: Create with two emails and two phone numbers persists four
      * ContactPoints.
      * - AC3: Missing lastName returns 400 and persists nothing.
@@ -70,13 +70,13 @@ public class PersonService {
         validateCreateRequest(request);
 
         // Create person entity
-        Person person = new Person();
+        PersonParty person = new PersonParty();
         person.setFirstName(request.getFirstName().trim());
         person.setLastName(request.getLastName().trim());
         person.setPreferredContactMethod(request.getPreferredContactMethod());
 
         // Save person first to get ID
-        Person savedPerson = personRepository.save(person);
+        PersonParty savedPerson = personRepository.save(person);
         log.debug("Person created with ID: {}", savedPerson.getPersonId());
 
         // Create contact points
@@ -135,14 +135,14 @@ public class PersonService {
     public GetPersonResponse getPerson(@NonNull UUID personId) {
         log.debug("Getting person: {}", personId);
 
-        Person person = personRepository.findById(personId)
+        PersonParty person = personRepository.findById(personId)
                 .orElseThrow(() -> {
                     log.warn("Person not found: {}", personId);
                     return new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found");
                 });
 
         // Load contact points
-        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPersonId(personId);
+        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(personId);
         person.getContactPoints().addAll(contactPoints);
 
         return toGetPersonResponse(person);
@@ -163,7 +163,7 @@ public class PersonService {
         log.debug("Searching persons: name={}, email={}, phone={}, limit={}, offset={}",
                 name, email, phone, limit, offset);
 
-        List<Person> persons;
+        List<PersonParty> persons;
 
         // Search by different criteria
         if (name != null && !name.trim().isEmpty()) {
@@ -189,7 +189,7 @@ public class PersonService {
         return persons.stream()
                 .map(person -> {
                     List<ContactPoint> contactPoints = contactPointRepository
-                            .findByPersonPersonId(person.getPersonId());
+                            .findByPersonPartyId(person.getPersonId());
                     person.getContactPoints().addAll(contactPoints);
                     return toGetPersonResponse(person);
                 })
@@ -230,12 +230,12 @@ public class PersonService {
     }
 
     /**
-     * Converts a Person entity to a GetPersonResponse DTO.
+     * Converts a PersonParty entity to a GetPersonResponse DTO.
      *
-     * @param person the person entity
+     * @param person the person-party entity
      * @return the response DTO
      */
-    private GetPersonResponse toGetPersonResponse(Person person) {
+    private GetPersonResponse toGetPersonResponse(PersonParty person) {
         List<GetPersonResponse.ContactPointDto> contactPointDtos = person.getContactPoints().stream()
                 .map(cp -> GetPersonResponse.ContactPointDto.builder()
                         .contactPointId(cp.getContactPointId())

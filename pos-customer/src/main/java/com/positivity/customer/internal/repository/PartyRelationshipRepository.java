@@ -26,7 +26,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          * @param partyId the party ID
          * @return list of relationships
          */
-        List<PartyRelationship> findByFromPartyId(@NonNull UUID partyId);
+        List<PartyRelationship> findByFromPartyPartyId(@NonNull UUID partyId);
 
         /**
          * Find all active relationships for a commercial account.
@@ -36,7 +36,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          * @param today   the current date
          * @return list of active relationships
          */
-        @Query("SELECT pr FROM PartyRelationship pr WHERE pr.fromParty.id = :partyId " +
+        @Query("SELECT pr FROM PartyRelationship pr WHERE pr.fromParty.partyId = :partyId " +
                         "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
         List<PartyRelationship> findActiveByFromPartyId(@Param("partyId") @NonNull UUID partyId,
                         @Param("today") @NonNull LocalDate today);
@@ -47,7 +47,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          * @param personId the person ID
          * @return list of relationships
          */
-        List<PartyRelationship> findByToPersonPersonId(@NonNull UUID personId);
+        List<PartyRelationship> findByToPersonPartyId(@NonNull UUID personId);
 
         /**
          * Find the primary billing contact relationship for a party.
@@ -56,7 +56,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          * @param today   the current date
          * @return the primary billing contact relationship, if exists
          */
-        @Query("SELECT pr FROM PartyRelationship pr WHERE pr.fromParty.id = :partyId " +
+        @Query("SELECT pr FROM PartyRelationship pr WHERE pr.fromParty.partyId = :partyId " +
                         "AND pr.isPrimaryBillingContact = true " +
                         "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
         Optional<PartyRelationship> findPrimaryBillingContact(@Param("partyId") @NonNull UUID partyId,
@@ -70,7 +70,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          * @param today   the current date
          * @return list of matching relationships
          */
-        @Query("SELECT pr FROM PartyRelationship pr JOIN pr.roles r WHERE pr.fromParty.id = :partyId " +
+        @Query("SELECT pr FROM PartyRelationship pr JOIN pr.roles r WHERE pr.fromParty.partyId = :partyId " +
                         "AND r = :role AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
         List<PartyRelationship> findByFromPartyIdAndRole(@Param("partyId") @NonNull UUID partyId,
                         @Param("role") @NonNull PartyRelationshipRole role,
@@ -88,7 +88,7 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          */
         @Modifying
         @Query("UPDATE PartyRelationship pr SET pr.isPrimaryBillingContact = false " +
-                        "WHERE pr.fromParty.id = :partyId AND pr.isPrimaryBillingContact = true " +
+                        "WHERE pr.fromParty.partyId = :partyId AND pr.isPrimaryBillingContact = true " +
                         "AND pr.partyRelationshipId != :excludeRelationId")
         int demoteExistingPrimaryBillingContact(@Param("partyId") @NonNull UUID partyId,
                         @Param("excludeRelationId") @NonNull UUID excludeRelationId);
@@ -102,8 +102,8 @@ public interface PartyRelationshipRepository extends JpaRepository<PartyRelation
          * @param today    the current date
          * @return list of overlapping relationships
          */
-        @Query("SELECT pr FROM PartyRelationship pr JOIN pr.roles r WHERE pr.fromParty.id = :partyId " +
-                        "AND pr.toPerson.personId = :personId AND r = :role " +
+        @Query("SELECT pr FROM PartyRelationship pr JOIN pr.roles r WHERE pr.fromParty.partyId = :partyId " +
+                        "AND pr.toPerson.partyId = :personId AND r = :role " +
                         "AND (pr.effectiveEndDate IS NULL OR pr.effectiveEndDate >= :today)")
         List<PartyRelationship> findOverlappingRelationships(@Param("partyId") @NonNull UUID partyId,
                         @Param("personId") @NonNull UUID personId,

@@ -35,7 +35,7 @@ import lombok.ToString;
 /**
  * Party relationship entity representing the association between a commercial
  * account (Party)
- * and an individual (Person) with specific roles and effective dates.
+ * and an individual person-party with specific roles and effective dates.
  * <p>
  * Key business rules:
  * - Exactly one primary billing contact per commercial account at a time
@@ -84,7 +84,7 @@ public class PartyRelationship {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Schema(description = "The individual person in this relationship")
-    private Person toPerson;
+    private PersonParty toPerson;
 
     @ElementCollection(targetClass = PartyRelationshipRole.class, fetch = FetchType.EAGER)
     @CollectionTable(name = "party_relationship_role", joinColumns = @JoinColumn(name = "party_relationship_id"))

@@ -25,13 +25,6 @@ public class BillingRules {
     @Column(name = "id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID id;
 
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
-
     @Column(name = "party_id", nullable = false, unique = true, length = 36)
     private String partyId;
 
@@ -64,6 +57,10 @@ public class BillingRules {
 
     @PrePersist
     protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+
         Instant now = Instant.now();
         createdAt = now;
         updatedAt = now;

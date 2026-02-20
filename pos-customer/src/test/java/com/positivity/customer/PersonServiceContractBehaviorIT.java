@@ -23,16 +23,16 @@ import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.dto.PreferredContactMethod;
 import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.service.PersonService;
 
 /**
  * Contract behavior integration tests for Party Management services.
  * <p>
  * Tests acceptance criteria from:
- * - Issue #111: Create Individual Person Record
+ * - Issue #111: Create Individual PersonParty Record
  * - Issue #110: Associate Individuals to Commercial Account
  * </p>
  * <p>
@@ -50,7 +50,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         private PersonService personService;
 
         @Autowired
-        private PersonRepository personRepository;
+        private PersonPartyRepository personRepository;
 
         @Autowired
         private ContactPointRepository contactPointRepository;
@@ -63,12 +63,12 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         }
 
         // ==========================================================================
-        // Issue #111: Create Individual Person Record - Acceptance Criteria Tests
+        // Issue #111: Create Individual PersonParty Record - Acceptance Criteria Tests
         // ==========================================================================
 
         /**
          * AC1: Minimal create (name + preferred method) returns 201 and persists a
-         * Person.
+         * PersonParty.
          */
         @Test
         @Order(1)
@@ -90,7 +90,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(response.getPreferredContactMethod()).isEqualTo(PreferredContactMethod.EMAIL);
 
                 // Verify in database
-                Person savedPerson = personRepository.findById(response.getPersonId()).orElse(null);
+                PersonParty savedPerson = personRepository.findById(response.getPersonId()).orElse(null);
                 assertThat(savedPerson).isNotNull();
                 assertThat(savedPerson.getFirstName()).isEqualTo("John");
                 assertThat(savedPerson.getLastName()).isEqualTo("Doe");
@@ -137,7 +137,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 assertThat(response.getContactPointsCreated()).isEqualTo(4);
 
                 // Verify in database
-                List<ContactPoint> contactPoints = contactPointRepository.findByPersonPersonId(response.getPersonId());
+                List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(response.getPersonId());
                 assertThat(contactPoints).hasSize(4);
 
                 // Verify email contact points
@@ -308,7 +308,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 CreatePersonResponse response = personService.createPerson(request, UUID.randomUUID());
 
                 // Then: email stored in lowercase
-                List<ContactPoint> contacts = contactPointRepository.findByPersonPersonId(response.getPersonId());
+                List<ContactPoint> contacts = contactPointRepository.findByPersonPartyId(response.getPersonId());
                 assertThat(contacts).hasSize(1);
                 assertThat(contacts.get(0).getValue()).isEqualTo("test.user@example.com");
         }

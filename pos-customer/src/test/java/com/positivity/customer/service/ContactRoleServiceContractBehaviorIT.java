@@ -25,12 +25,12 @@ import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.Contact;
 import com.positivity.customer.internal.entity.ContactRole;
 import com.positivity.customer.internal.entity.ContactRoleAssignment;
-import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 
 /**
  * Contract behavior integration tests for Contact Role Management (CAP-090).
@@ -53,7 +53,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         private CommercialPartyRepository partyRepository;
 
         @Autowired
-        private PersonRepository personRepository;
+        private PersonPartyRepository personRepository;
 
         @Autowired
         private ContactRoleAssignmentRepository roleAssignmentRepository;
@@ -83,7 +83,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 testPartyUuid = UUID.nameUUIDFromBytes(("party-" + testParty.getPartyId()).getBytes());
 
                 // Create test person (independent entity for contact role assignments)
-                Person contactPerson = new Person();
+                PersonParty contactPerson = new PersonParty();
                 contactPerson.setFirstName("John");
                 contactPerson.setLastName("Doe");
                 contactPerson.setPreferredContactMethod(
@@ -163,7 +163,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("updateContactRoles - Success: Demotes existing primary when new primary assigned")
         void updateContactRoles_demotesExistingPrimary() {
                 // Create another contact
-                Person contact2 = new Person();
+                PersonParty contact2 = new PersonParty();
                 contact2.setFirstName("Jane");
                 contact2.setLastName("Smith");
                 contact2.setPreferredContactMethod(com.positivity.customer.internal.dto.PreferredContactMethod.EMAIL);
@@ -256,7 +256,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                                 nonExistentContactUuid,
                                 request))
                                 .isInstanceOf(ResponseStatusException.class)
-                                .hasMessageContaining("Person not found");
+                                .hasMessageContaining("PersonParty not found");
         }
 
         @Test

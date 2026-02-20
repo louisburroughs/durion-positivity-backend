@@ -3,9 +3,7 @@ package com.positivity.customer.internal.entity;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import java.util.UUID;
 
 import com.positivity.customer.internal.dto.PreferredContactMethod;
 import com.positivity.customer.internal.enums.PartyType;
@@ -20,18 +18,17 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 /**
- * Person entity representing an individual in the CRM system.
+ * PersonParty entity representing an individual in the CRM system.
  * Distinct from Party (which represents organizations) and Contact (which links
  * persons to parties).
  * <p>
- * This entity is the System of Record for individual person master data per
+ * This entity is the system of record for individual person master data per
  * domain:crm decisions.
  * </p>
  *
@@ -47,16 +44,6 @@ import lombok.ToString;
 @Schema(description = "Individual person party in the CRM system")
 public class PersonParty extends AbstractParty {
 
-    @NotBlank
-    @Column(name = "first_name", nullable = false, length = 100)
-    @Schema(description = "First name of the person", example = "John", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String firstName;
-
-    @NotBlank
-    @Column(name = "last_name", nullable = false, length = 100)
-    @Schema(description = "Last name of the person", example = "Doe", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String lastName;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "preferred_contact_method", nullable = false, length = 20)
     @Schema(description = "Preferred method of contact", example = "EMAIL", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -68,16 +55,6 @@ public class PersonParty extends AbstractParty {
     @Schema(description = "Contact points (emails, phones) for this person")
     private List<ContactPoint> contactPoints = new ArrayList<>();
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false, nullable = false)
-    @Schema(description = "Timestamp when the person was created")
-    private Instant createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    @Schema(description = "Timestamp when the person was last updated")
-    private Instant updatedAt;
-
     /**
      * Returns the full display name of the person.
      *
@@ -86,12 +63,41 @@ public class PersonParty extends AbstractParty {
     @Transient
     @Schema(description = "Full display name", example = "John Doe")
     public String getDisplayName() {
-        return (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "");
+        return (getFirstName() != null ? getFirstName() : "") + " " + (getLastName() != null ? getLastName() : "");
     }
 
     @Override
     public PartyType getPartyType() {
         return PartyType.PERSON;
+    }
+
+    /**
+     * Compatibility accessor for person APIs that use personId naming.
+     *
+     * @return the party ID used as person ID
+     */
+    @Transient
+    public UUID getPersonId() {
+        return getPartyId();
+    }
+
+    /**
+     * Compatibility mutator for person APIs that use personId naming.
+     *
+     * @param personId the ID value to set
+     */
+    public void setPersonId(UUID personId) {
+        setPartyId(personId);
+    }
+
+    /**
+     * Compatibility accessor for APIs expecting updatedAt.
+     *
+     * @return last modified timestamp
+     */
+    @Transient
+    public Instant getUpdatedAt() {
+        return getModifiedAt();
     }
 
 }

@@ -21,7 +21,7 @@ public interface ContactPointRepository extends JpaRepository<ContactPoint, UUID
      * @param personId the person ID
      * @return list of contact points
      */
-    List<ContactPoint> findByPersonPersonId(@NonNull UUID personId);
+    List<ContactPoint> findByPersonPartyId(@NonNull UUID personId);
 
     /**
      * Find contact points by type for a person.
@@ -30,7 +30,7 @@ public interface ContactPointRepository extends JpaRepository<ContactPoint, UUID
      * @param contactType the contact type
      * @return list of matching contact points
      */
-    List<ContactPoint> findByPersonPersonIdAndContactType(@NonNull UUID personId,
+    List<ContactPoint> findByPersonPartyIdAndContactType(@NonNull UUID personId,
             @NonNull ContactPointType contactType);
 
     /**
@@ -40,7 +40,7 @@ public interface ContactPointRepository extends JpaRepository<ContactPoint, UUID
      * @param contactType the contact type
      * @return the primary contact point, if exists
      */
-    ContactPoint findByPersonPersonIdAndContactTypeAndIsPrimaryTrue(@NonNull UUID personId,
+    ContactPoint findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(@NonNull UUID personId,
             @NonNull ContactPointType contactType);
 
     /**

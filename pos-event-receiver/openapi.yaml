@@ -1,0 +1,309 @@
+openapi: 3.1.0
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Event Types
+  description: Manage EventTypes for PreregisteredEvents
+paths:
+  /v1/eventTypes/{id}:
+    get:
+      tags:
+      - Event Types
+      summary: Get event type by ID
+      description: Retrieve a specific event type by its unique ID
+      operationId: getEventTypeById
+      parameters:
+      - name: id
+        in: path
+        description: EventType ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      responses:
+        "404":
+          description: Event type not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+        "200":
+          description: Event type found and returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+    put:
+      tags:
+      - Event Types
+      summary: Update event type
+      description: Update an existing event type
+      operationId: updateEventType
+      parameters:
+      - name: id
+        in: path
+        description: EventType ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      requestBody:
+        description: Updated event type details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventTypeRequest"
+        required: true
+      responses:
+        "404":
+          description: Event type not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+        "200":
+          description: Event type updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+    delete:
+      tags:
+      - Event Types
+      summary: Delete event type
+      description: Delete an event type by its ID
+      operationId: deleteEventType
+      parameters:
+      - name: id
+        in: path
+        description: EventType ID to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      responses:
+        "404":
+          description: Event type not found
+        "204":
+          description: Event type deleted successfully
+  /v1/eventTypes/code/{typeCode}:
+    get:
+      tags:
+      - Event Types
+      summary: Get event type by code
+      description: Retrieve a specific event type by its unique type code
+      operationId: getEventTypeByCode
+      parameters:
+      - name: typeCode
+        in: path
+        description: Event type code
+        required: true
+        schema:
+          type: string
+        example: ORDER_CREATED
+      responses:
+        "404":
+          description: Event type not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+        "200":
+          description: Event type found and returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+    put:
+      tags:
+      - Event Types
+      summary: Upsert event type
+      description: "Create or update an event type by its type code. Creates if not\
+        \ exists, updates if exists."
+      operationId: upsertEventType
+      parameters:
+      - name: typeCode
+        in: path
+        description: Event type code
+        required: true
+        schema:
+          type: string
+        example: ORDER_ORDER_CREATE
+      requestBody:
+        description: Event type details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventTypeRequest"
+        required: true
+      responses:
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+        "200":
+          description: Event type created or updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+  /v1/events:
+    post:
+      tags:
+      - emit-event-controller
+      operationId: receiveEvent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmitEventRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+  /v1/eventTypes:
+    get:
+      tags:
+      - Event Types
+      summary: Get all event types
+      description: Retrieve all available event types
+      operationId: getAllEventTypes
+      responses:
+        "200":
+          description: List of event types returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+    post:
+      tags:
+      - Event Types
+      summary: Create event type
+      description: Create a new event type for PreregisteredEvents
+      operationId: createEventType
+      requestBody:
+        description: Event type details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventTypeRequest"
+        required: true
+      responses:
+        "201":
+          description: Event type created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+  /v1/eventTypes/active:
+    get:
+      tags:
+      - Event Types
+      summary: Get active event types
+      description: Retrieve only active event types
+      operationId: getActiveEventTypes
+      responses:
+        "200":
+          description: List of active event types returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventType"
+components:
+  schemas:
+    EventTypeRequest:
+      type: object
+      description: Request body for creating or updating an EventType
+      properties:
+        typeCode:
+          type: string
+          description: Unique code identifying the event type
+          example: ORDER_CREATED
+        description:
+          type: string
+          description: Human-readable description of the event type
+          example: Triggered when an order is created
+        active:
+          type: boolean
+          description: Whether the event type is active
+          example: true
+        apiVersion:
+          type: string
+          description: API version for this event type
+          example: 1
+        p50Micros:
+          type: integer
+          format: int64
+          description: "50th percentile latency threshold in microseconds (default:\
+            \ 10,000,000 = 10s)"
+          example: 500000
+        p95Micros:
+          type: integer
+          format: int64
+          description: "95th percentile latency threshold in microseconds (default:\
+            \ 10,000,000 = 10s)"
+          example: 1000000
+        p99Micros:
+          type: integer
+          format: int64
+          description: "99th percentile latency threshold in microseconds (default:\
+            \ 10,000,000 = 10s)"
+          example: 2000000
+    EventType:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        typeCode:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+        apiVersion:
+          type: string
+        p50Micros:
+          type: integer
+          format: int64
+        p95Micros:
+          type: integer
+          format: int64
+        p99Micros:
+          type: integer
+          format: int64
+    EmitEventRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        apiVersion:
+          type: string
+        timestamp:
+          type: integer
+          format: int64
+        elapsedMs:
+          type: integer
+          format: int64
+        publishedAt:
+          type: string
+          format: date-time

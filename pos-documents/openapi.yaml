@@ -1,0 +1,48 @@
+openapi: 3.1.0
+info:
+  title: POS Documents Service API
+  description: Document rendering service with multi-format PDF output
+  version: "1.0"
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+paths:
+  /api/documents/render:
+    post:
+      tags:
+      - document-render-controller
+      operationId: renderDocument
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenderRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: byte
+components:
+  schemas:
+    RenderRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          enum:
+          - JSON
+          - XML
+          - MARKDOWN
+          - TEXT
+          - CSV
+        templateId:
+          type: string
+        content:
+          type: string
+      required:
+      - content
+      - format

@@ -82,7 +82,8 @@ public class GatewaySecurityConfig {
                                                 .requestMatchers("/actuator/**").permitAll()
                                                 .requestMatchers("/swagger-ui/**").permitAll()
                                                 .requestMatchers("/swagger-ui.html").permitAll()
-                                                .requestMatchers("/v3/api-docs", "/v3/api-docs/**").permitAll()
+                                                .requestMatchers("/v3/api-docs", "/v3/api-docs/**",
+                                                                "/v3/api-docs.yaml").permitAll()
                                                 .requestMatchers("/api-docs/**").permitAll()
                                                 .requestMatchers("/webjars/**").permitAll()
                                                 .requestMatchers("/error", "/error/**").permitAll()

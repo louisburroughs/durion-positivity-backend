@@ -27,14 +27,11 @@ public class ImageController {
     private final ImageDao imageDao;
 
     @Operation(summary = "Get image by ID", description = "Retrieve an image file by its unique database ID.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Image file returned successfully."),
-            @ApiResponse(responseCode = "404", description = "Image not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Image file returned successfully.")
+    @ApiResponse(responseCode = "404", description = "Image not found.")
     @GetMapping("/id/{id}")
     public ResponseEntity<Resource> getImageById(
-            @Parameter(description = "ID of the image to retrieve", example = "1")
-            @PathVariable Long id) {
+            @Parameter(description = "ID of the image to retrieve", example = "1") @PathVariable Long id) {
         Optional<ImageEntity> imageOpt = imageDao.findById(id);
         if (imageOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -44,14 +41,11 @@ public class ImageController {
     }
 
     @Operation(summary = "Get image by filename", description = "Retrieve an image file by its filename.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Image file returned successfully."),
-            @ApiResponse(responseCode = "404", description = "Image not found.")
-    })
+    @ApiResponse(responseCode = "200", description = "Image file returned successfully.")
+    @ApiResponse(responseCode = "404", description = "Image not found.")
     @GetMapping("/filename/{filename}")
     public ResponseEntity<Resource> getImageByFilename(
-            @Parameter(description = "Filename of the image to retrieve", example = "logo.png")
-            @PathVariable String filename) {
+            @Parameter(description = "Filename of the image to retrieve", example = "logo.png") @PathVariable String filename) {
         Optional<ImageEntity> imageOpt = imageDao.findByFilename(filename);
         if (imageOpt.isEmpty()) {
             return ResponseEntity.notFound().build();

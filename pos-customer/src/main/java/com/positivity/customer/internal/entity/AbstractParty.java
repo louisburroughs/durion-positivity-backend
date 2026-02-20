@@ -26,20 +26,12 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @Entity
-@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
-@DiscriminatorColumn(name = "customer_type")
+@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
 @Schema(description = "Abstract base class for an individual customer (person). Use CommercialParty for organizations.")
 public abstract class AbstractParty implements Party {
     @Id
     @Column(name = "customer_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID partyId;
-
-    @PrePersist
-    public void generateId() {
-        if (partyId == null) {
-            partyId = UUIDv7Generator.generate();
-        }
-    }
 
     @Column(unique = true, nullable = false)
     @Schema(description = "Unique customer number", example = "CUST-1001")
@@ -94,8 +86,20 @@ public abstract class AbstractParty implements Party {
     private Instant modifiedAt;
 
     @PrePersist
+    public void generateId() {
+        if (partyId == null) {
+            partyId = UUIDv7Generator.generate();
+        }
+        validateNames();
+    }
+
     @PreUpdate
     private void validateCustomer() {
+        validateNames();
+    }
+
+    /** Helper method to validate customer names */
+    private void validateNames() {
         if (firstName == null || firstName.isBlank()) {
             throw new IllegalStateException("firstName is required for a customer");
         }

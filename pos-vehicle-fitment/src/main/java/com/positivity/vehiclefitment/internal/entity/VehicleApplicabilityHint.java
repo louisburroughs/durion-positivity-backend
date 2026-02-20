@@ -21,47 +21,43 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class VehicleApplicabilityHint {
-    
+
     @Id
     @Column(columnDefinition = "UUID")
     private UUID hintId;
 
+    @Column(nullable = false)
+    private UUID productId;
+
+    @OneToMany(mappedBy = "hint", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    private List<FitmentTag> fitmentTags = new ArrayList<>();
+
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Column
+    private String createdBy;
+
+    @Column
+    private String updatedBy;
+
     @PrePersist
-    public void generateId() {
+    protected void onCreate() {
         if (hintId == null) {
             hintId = UUIDv7Generator.generate();
         }
-    }
-    
-    @Column(nullable = false)
-    private UUID productId;
-    
-    @OneToMany(mappedBy = "hint", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
-    private List<FitmentTag> fitmentTags = new ArrayList<>();
-    
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-    
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
-    
-    @Column
-    private String createdBy;
-    
-    @Column
-    private String updatedBy;
-    
-    @PrePersist
-    protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }
-    
+
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
-    
+
     /**
      * Helper method to add a fitment tag to this hint.
      */
@@ -69,7 +65,7 @@ public class VehicleApplicabilityHint {
         fitmentTags.add(tag);
         tag.setHint(this);
     }
-    
+
     /**
      * Helper method to remove a fitment tag from this hint.
      */
