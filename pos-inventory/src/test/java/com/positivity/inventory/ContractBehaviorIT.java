@@ -46,7 +46,7 @@ class ContractBehaviorIT {
         private String existingInventoryId;
 
         @BeforeEach
-        void setUp() throws Exception {
+        void setUp() {
                 existingInventoryId = "inv-" + System.currentTimeMillis();
                 inventoryPayload = createInventoryPayload("PROD-001", "LOC-001", 100, 20, 80);
         }
