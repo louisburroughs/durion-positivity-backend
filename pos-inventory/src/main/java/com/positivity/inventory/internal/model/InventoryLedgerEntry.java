@@ -84,6 +84,14 @@ public class InventoryLedgerEntry {
     /**
      * Optional notes or context for this transaction.
      */
+    // Issue #48: Add location-level inventory tracking for per-location
+    // availability.
+    @Column(nullable = true)
+    private String locationId;
+
+    /**
+     * Optional notes or context for this transaction.
+     */
     @Column(length = 2000)
     private String notes;
 
