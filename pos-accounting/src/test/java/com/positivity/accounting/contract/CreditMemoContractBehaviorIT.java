@@ -25,7 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.client.InvoiceServiceClient;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoRequest;
 import com.positivity.accounting.internal.dto.ApplyCreditMemoResponse;
@@ -53,7 +53,7 @@ import com.positivity.accounting.service.GLPostingService;
  *      #131</a>
  */
 @DisplayName("Credit Memo Backend Contract Behavioral Tests (CAP-052)")
-public class CreditMemoContractBehaviorIT extends BaseIntegrationTest {
+public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private CreditMemoRepository creditMemoRepository;

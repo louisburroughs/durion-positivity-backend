@@ -44,7 +44,7 @@ import com.positivity.customer.service.PersonService;
 @ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class PersonServiceContractBehaviorIT {
+class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private PersonService personService;

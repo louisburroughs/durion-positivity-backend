@@ -1,6 +1,6 @@
 package com.positivity.people.contract;
 
-import com.positivity.people.BaseIntegrationTest;
+import com.positivity.people.BaseContractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @DisplayName("Employee Profile ContractBehaviorIT")
-class EmployeeProfileContractBehaviorIT extends BaseIntegrationTest {
+class EmployeeProfileContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("CP-117-001: Create employee profile -> 201 Created")

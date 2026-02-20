@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseIntegrationTest;
+import com.positivity.catalog.BaseContractIntegrationTest;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.service.CatalogService;
 import java.time.LocalDate;
@@ -19,7 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 @DisplayName("MSRP Contract Behavioral Tests")
-class MsrpContractBehaviorIT extends BaseIntegrationTest {
+class MsrpContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private CatalogService catalogService;

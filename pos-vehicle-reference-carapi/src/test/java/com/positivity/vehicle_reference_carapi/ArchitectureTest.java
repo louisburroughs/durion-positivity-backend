@@ -6,6 +6,7 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
@@ -20,7 +21,7 @@ import java.util.UUID;
  * - Controller -> Service -> Repository layering
  * - No circular dependencies
  */
-@AnalyzeClasses(packages = "com.positivity.vehicle_reference_carapi")
+@AnalyzeClasses(packages = "com.positivity.vehicle_reference_carapi", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(

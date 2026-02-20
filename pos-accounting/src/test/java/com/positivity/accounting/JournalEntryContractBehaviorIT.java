@@ -46,7 +46,7 @@ import com.positivity.accounting.internal.repository.JournalEntryRepository;
  * - Pagination and sorting
  */
 @DisplayName("Journal Entry Backend Contract Behavioral Tests")
-class JournalEntryContractBehaviorIT extends BaseIntegrationTest {
+class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private JournalEntryRepository journalEntryRepository;

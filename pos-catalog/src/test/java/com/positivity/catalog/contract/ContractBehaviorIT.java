@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseIntegrationTest;
+import com.positivity.catalog.BaseContractIntegrationTest;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
@@ -19,7 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 @DisplayName("Catalog Backend Contract Behavioral Tests")
-class ContractBehaviorIT extends BaseIntegrationTest {
+class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         // ===============================================
         // HAPPY PATH SCENARIOS

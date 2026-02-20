@@ -21,7 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
@@ -51,7 +51,7 @@ import com.positivity.accounting.internal.repository.VendorBillRepository;
  *      #128</a>
  */
 @DisplayName("AP Payment Backend Contract Behavioral Tests (CAP-053)")
- class APPaymentContractBehaviorIT extends BaseIntegrationTest {
+ class APPaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private APPaymentRepository apPaymentRepository;

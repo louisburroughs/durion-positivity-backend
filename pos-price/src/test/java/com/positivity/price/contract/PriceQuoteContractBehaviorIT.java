@@ -1,4 +1,6 @@
-package com.positivity.price.internal.contract;
+package com.positivity.price.contract;
+
+import com.positivity.price.BaseContractIntegrationTest;
 
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
@@ -36,7 +38,7 @@ import tools.jackson.databind.node.ObjectNode;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Price Quote Contract Behavior")
-class PriceQuoteContractBehaviorIT {
+class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -122,7 +124,8 @@ class PriceQuoteContractBehaviorIT {
         return request;
     }
 
-    private MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
+    @Override
+    protected MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder
                 .header("X-User", "contract-test-user")
                 .header("X-Authorities", "price:quotes:read,price:quotes:write")

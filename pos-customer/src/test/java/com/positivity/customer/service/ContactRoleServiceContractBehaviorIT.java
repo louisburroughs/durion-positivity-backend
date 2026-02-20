@@ -1,5 +1,7 @@
 package com.positivity.customer.service;
 
+import com.positivity.customer.BaseContractIntegrationTest;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -42,7 +44,7 @@ import com.positivity.customer.internal.repository.PersonRepository;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class ContactRoleServiceContractBehaviorIT {
+class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private ContactRoleService contactRoleService;

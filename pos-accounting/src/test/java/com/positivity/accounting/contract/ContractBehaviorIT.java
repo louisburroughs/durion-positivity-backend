@@ -1,5 +1,7 @@
 package com.positivity.accounting.contract;
 
+import com.positivity.accounting.BaseContractIntegrationTest;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -44,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @DisplayName("Accounting Backend Contract Behavioral Tests")
-public class ContractBehaviorIT {
+public class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private MockMvc mockMvc;
@@ -77,7 +79,7 @@ public class ContractBehaviorIT {
          * Adds gateway authentication headers to a request builder.
          * Mirrors the headers injected by pos-api-gateway after JWT validation.
          */
-        private MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
+        protected MockHttpServletRequestBuilder withAuth(MockHttpServletRequestBuilder builder) {
                 return builder
                                 .header("X-User", TEST_USER)
                                 .header("X-Authorities", TEST_AUTHORITIES);

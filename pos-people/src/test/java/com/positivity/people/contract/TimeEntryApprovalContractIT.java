@@ -3,7 +3,7 @@ package com.positivity.people.contract;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.people.BaseIntegrationTest;
+import com.positivity.people.BaseContractIntegrationTest;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -14,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 @DisplayName("Time Entry Approval ContractIT")
-class TimeEntryApprovalContractIT extends BaseIntegrationTest {
+class TimeEntryApprovalContractIT extends BaseContractIntegrationTest {
 
     @Autowired
     private TimeEntryRepository timeEntryRepository;

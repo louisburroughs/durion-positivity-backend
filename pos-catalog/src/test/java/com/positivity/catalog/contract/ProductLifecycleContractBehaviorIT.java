@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseIntegrationTest;
+import com.positivity.catalog.BaseContractIntegrationTest;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.service.CatalogService;
 import java.time.Instant;
@@ -35,7 +35,7 @@ import org.springframework.http.MediaType;
  * coverage.
  */
 @DisplayName("Product Lifecycle Contract Behavioral Tests")
-class ProductLifecycleContractBehaviorIT extends BaseIntegrationTest {
+class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
 
         private static final String LIFECYCLE_STATE = "lifecycleState";
         @Autowired

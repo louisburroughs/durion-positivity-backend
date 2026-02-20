@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryResponse;
@@ -28,7 +28,7 @@ import com.positivity.accounting.service.PostingCategoryService;
  * - Pagination and filtering
  */
 @Transactional
-public class PostingCategoryContractBehaviorIT extends BaseIntegrationTest {
+public class PostingCategoryContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private PostingCategoryService postingCategoryService;

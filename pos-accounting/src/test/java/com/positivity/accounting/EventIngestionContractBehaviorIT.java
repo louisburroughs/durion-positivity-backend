@@ -43,7 +43,7 @@ import com.positivity.accounting.internal.repository.AccountingEventRepository;
  * - Error handling (404, 409)
  */
 @DisplayName("Event Ingestion Backend Contract Behavioral Tests")
-class EventIngestionContractBehaviorIT extends BaseIntegrationTest {
+class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private AccountingEventRepository accountingEventRepository;

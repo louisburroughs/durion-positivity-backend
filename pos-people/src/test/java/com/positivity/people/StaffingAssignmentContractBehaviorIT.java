@@ -45,7 +45,7 @@ import com.positivity.people.internal.repository.PersonRepository;
  * exist.
  */
 @DisplayName("CAP-119 Staffing Assignment ContractBehaviorIT")
-class StaffingAssignmentContractBehaviorIT extends BaseIntegrationTest {
+class StaffingAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
 
         private static final String STAFFING_BASE = "/v1/people/staffing/assignments";
         private static final String VALID_PERSON_ID = "018e1c9f-0000-7000-8000-100000000001";

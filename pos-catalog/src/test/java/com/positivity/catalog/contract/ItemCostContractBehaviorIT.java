@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseIntegrationTest;
+import com.positivity.catalog.BaseContractIntegrationTest;
 import com.positivity.catalog.internal.dto.PurchaseOrderReceivedEventDto;
 import com.positivity.catalog.service.ItemCostService;
 import java.math.BigDecimal;
@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 @DisplayName("Item Cost Contract Behavioral Tests")
-class ItemCostContractBehaviorIT extends BaseIntegrationTest {
+class ItemCostContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private ItemCostService itemCostService;

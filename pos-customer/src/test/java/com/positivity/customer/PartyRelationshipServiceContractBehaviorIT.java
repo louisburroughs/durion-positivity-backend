@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.*;
 @ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class PartyRelationshipServiceContractBehaviorIT {
+class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private PartyRelationshipService partyRelationshipService;

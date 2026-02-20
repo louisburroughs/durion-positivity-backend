@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.service;
+package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.DistributorFeedItemDto;
 import com.positivity.inventory.internal.model.DistributorExceptionReason;
@@ -6,6 +6,8 @@ import com.positivity.inventory.internal.model.DistributorFeedException;
 import com.positivity.inventory.internal.model.DistributorNormalizedInventory;
 import com.positivity.inventory.internal.repository.DistributorFeedExceptionRepository;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
+import com.positivity.inventory.internal.service.DistributorFeedServiceImpl;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

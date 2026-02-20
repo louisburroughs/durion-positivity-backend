@@ -41,7 +41,7 @@ import com.positivity.accounting.internal.audit.repository.AuditTrailEntryReposi
  * - Error handling (400, 403, 404)
  */
 @DisplayName("Audit Trail Backend Contract Behavioral Tests")
-class AuditTrailContractBehaviorIT extends BaseIntegrationTest {
+class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private AuditTrailEntryRepository auditTrailRepository;

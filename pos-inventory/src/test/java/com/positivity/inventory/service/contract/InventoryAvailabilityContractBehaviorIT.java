@@ -13,24 +13,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.positivity.inventory.internal.model.InventoryLedgerEntry;
 import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
 // Issue CAP-170: Place contract behavior test in ..service.. namespace to
 // satisfy repository access architecture rule for test seeding.
 @DisplayName("Inventory Availability Contract Behavior")
-class InventoryAvailabilityContractBehaviorIT {
+class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -112,12 +105,6 @@ class InventoryAvailabilityContractBehaviorIT {
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].onHandQuantity").value(100))
                 .andExpect(jsonPath("$[0].availableToPromiseQuantity").value(70));
-    }
-
-    private MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
-        return requestBuilder
-                .header("X-User", "contract-test-user")
-                .header("X-Authorities", "inventory:availability:read");
     }
 
     private void seedOnHand(UUID productId, String locationId, int quantity) {

@@ -17,7 +17,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
@@ -39,7 +39,7 @@ import com.positivity.accounting.internal.repository.StatementLineMappingReposit
  * @since 2025-01-01
  */
 @Transactional
-class FinancialReportingContractBehaviorIT extends BaseIntegrationTest {
+class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private StatementLineMappingRepository statementLineMappingRepository;

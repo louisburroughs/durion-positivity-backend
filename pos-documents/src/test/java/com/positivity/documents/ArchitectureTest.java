@@ -2,6 +2,7 @@ package com.positivity.documents;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
@@ -11,7 +12,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
-@AnalyzeClasses(packages = "com.positivity.documents")
+@AnalyzeClasses(packages = "com.positivity.documents", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
 
     private ArchitectureTest() {

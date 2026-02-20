@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseIntegrationTest;
+import com.positivity.catalog.BaseContractIntegrationTest;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.service.CatalogService;
 import java.util.Map;
@@ -19,7 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 @DisplayName("Location Pricing Contract Behavioral Tests")
-class LocationPricingContractBehaviorIT extends BaseIntegrationTest {
+class LocationPricingContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private CatalogService catalogService;

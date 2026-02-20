@@ -1,5 +1,7 @@
 package com.positivity.customer.service;
 
+import com.positivity.customer.BaseContractIntegrationTest;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -38,7 +40,7 @@ import com.positivity.customer.internal.repository.CommunicationPreferenceReposi
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class CommunicationPreferenceServiceContractBehaviorIT {
+class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private CommunicationPreferenceService preferenceService;

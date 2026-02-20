@@ -4,7 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.people.BaseIntegrationTest;
+import com.positivity.people.BaseContractIntegrationTest;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 @DisplayName("Work Session ContractIT")
-class WorkSessionContractIT extends BaseIntegrationTest {
+class WorkSessionContractIT extends BaseContractIntegrationTest {
 
     @Autowired
     private WorkSessionRepository workSessionRepository;

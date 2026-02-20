@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 
@@ -31,7 +31,7 @@ import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
  * Tests run against the actual service in test mode (not mocked).
  */
 @DisplayName("Posting Category and Mapping Key Contract Behavioral Tests")
-class PostingCategoryMappingKeyContractBehaviorIT extends BaseIntegrationTest {
+class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegrationTest {
 
         private static final String API_V1 = "/v1/accounting";
 
