@@ -1,5 +1,6 @@
-package com.positivity.price.internal.model;
+package com.positivity.price.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -47,7 +48,7 @@ public class PricingSnapshot {
     @PrePersist
     public void prePersist() {
         if (snapshotId == null) {
-            snapshotId = UUID.randomUUID();
+            snapshotId = UUIDv7Generator.generate();
         }
         if (createdAt == null) {
             createdAt = Instant.now();

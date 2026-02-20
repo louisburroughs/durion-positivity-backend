@@ -1,8 +1,9 @@
 package com.positivity.price.internal.repository;
 
-import com.positivity.price.internal.model.PricingSnapshot;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.positivity.price.internal.entity.PricingSnapshot;
 
 /**
  * Repository for immutable pricing snapshots.

@@ -1,7 +1,7 @@
 package com.positivity.price.service;
 
 import com.positivity.price.internal.dto.PricingSnapshotCreateRequest;
-import com.positivity.price.internal.model.PricingSnapshot;
+import com.positivity.price.internal.dto.PricingSnapshotResponse;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
@@ -16,10 +16,10 @@ public interface PricingSnapshotService {
      * Retrieves an immutable pricing snapshot.
      *
      * @param snapshotId snapshot identifier
-     * @return snapshot entity
+     * @return snapshot response
      */
     @NonNull
-    PricingSnapshot getSnapshot(@NonNull UUID snapshotId);
+    PricingSnapshotResponse getSnapshot(@NonNull UUID snapshotId);
 
     /**
      * Creates a new immutable pricing snapshot.

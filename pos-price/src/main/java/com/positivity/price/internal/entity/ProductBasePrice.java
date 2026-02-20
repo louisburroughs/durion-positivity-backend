@@ -1,8 +1,10 @@
-package com.positivity.price.internal.model;
+package com.positivity.price.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -32,6 +34,13 @@ public class ProductBasePrice {
 
     @Nullable
     private Instant effectiveTo;
+
+    @PrePersist
+    public void prePersist() {
+        if (productId == null) {
+            productId = UUIDv7Generator.generate();
+        }
+    }
 
     public UUID getProductId() {
         return productId;

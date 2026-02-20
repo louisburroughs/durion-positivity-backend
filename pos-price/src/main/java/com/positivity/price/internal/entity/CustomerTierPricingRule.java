@@ -1,8 +1,8 @@
-package com.positivity.price.internal.model;
+package com.positivity.price.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -23,7 +23,6 @@ import org.jspecify.annotations.Nullable;
 public class CustomerTierPricingRule {
 
     @Id
-    @GeneratedValue
     private UUID id;
 
     @Column(nullable = false)
@@ -44,7 +43,7 @@ public class CustomerTierPricingRule {
     @PrePersist
     public void prePersist() {
         if (id == null) {
-            id = UUID.randomUUID();
+            id = UUIDv7Generator.generate();
         }
     }
 

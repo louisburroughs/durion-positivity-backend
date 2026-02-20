@@ -1,6 +1,6 @@
 package com.positivity.price.internal.controller;
 
-import com.positivity.price.internal.model.PricingSnapshot;
+import com.positivity.price.internal.dto.PricingSnapshotResponse;
 import com.positivity.price.service.PricingSnapshotService;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +31,7 @@ public class PricingSnapshotController {
      * @return persisted snapshot
      */
     @GetMapping("/{snapshotId}")
-    public ResponseEntity<PricingSnapshot> getSnapshot(@PathVariable UUID snapshotId) {
+    public ResponseEntity<PricingSnapshotResponse> getSnapshot(@PathVariable UUID snapshotId) {
         return ResponseEntity.ok(pricingSnapshotService.getSnapshot(snapshotId));
     }
 }
