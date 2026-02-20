@@ -1,9 +1,15 @@
 package com.positivity.documents;
 
+import com.positivity.shared.id.UUIDv7Generator;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import jakarta.persistence.Entity;
+import java.util.UUID;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
@@ -12,6 +18,15 @@ class ArchitectureTest {
 
     private ArchitectureTest() {
     }
+
+    private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
+            "call UUID.randomUUID()") {
+        @Override
+        public boolean test(JavaCall<?> input) {
+            return input.getTargetOwner().isEquivalentTo(UUID.class)
+                    && "randomUUID".equals(input.getName());
+        }
+    };
 
     @ArchTest
     static final ArchRule controllersShouldNotDependOnRepositoryLayer = noClasses()
@@ -23,4 +38,18 @@ class ArchitectureTest {
             .matching("com.positivity.documents.(*)..")
             .should().beFreeOfCycles()
             .because("cyclic dependencies make modules harder to maintain and evolve");
+    @ArchTest
+    static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
+            .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+            .and().areAnnotatedWith(Entity.class)
+            .should().dependOnClassesThat().belongToAnyOf(UUIDv7Generator.class)
+            .allowEmptyShould(true)
+            .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
+    @ArchTest
+    static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
+            .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+            .and().areAnnotatedWith(Entity.class)
+            .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
+            .allowEmptyShould(true)
+            .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
 }

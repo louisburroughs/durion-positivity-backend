@@ -88,7 +88,8 @@ public class ArchitectureTest {
                         .because("service layer is the public API of this module (test classes excluded)");
 
         @ArchTest
-        static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
+    @ArchTest
+    static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
                         .that().resideInAPackage("..internal.entity..")
                         .and().areAnnotatedWith(Entity.class)
                         .should().dependOnClassesThat().belongToAnyOf(UUIDv7Generator.class)
@@ -96,7 +97,8 @@ public class ArchitectureTest {
                         .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
 
         @ArchTest
-        static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
+    @ArchTest
+    static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
                         .that().resideInAPackage("..internal.entity..")
                         .and().areAnnotatedWith(Entity.class)
                         .should().callMethodWhere(UUID_RANDOM_UUID_CALL)

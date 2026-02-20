@@ -108,6 +108,12 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- UUIDv7 generator -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- pos-security-common for gateway authentication -->
         <dependency>
             <groupId>com.positivity</groupId>

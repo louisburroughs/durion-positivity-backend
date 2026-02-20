@@ -1,12 +1,13 @@
 package com.positivity.price.internal.repository;
 
-import com.positivity.price.internal.model.LocationPriceOverride;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import com.positivity.price.internal.entity.LocationPriceOverride;
 
 /**
  * Location override repository.

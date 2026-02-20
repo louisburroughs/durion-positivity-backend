@@ -1,8 +1,9 @@
 package com.positivity.price.internal.service;
 
 import com.positivity.price.internal.dto.PricingSnapshotCreateRequest;
+import com.positivity.price.internal.dto.PricingSnapshotResponse;
+import com.positivity.price.internal.entity.PricingSnapshot;
 import com.positivity.price.internal.exception.SnapshotNotFoundException;
-import com.positivity.price.internal.model.PricingSnapshot;
 import com.positivity.price.internal.repository.PricingSnapshotRepository;
 import com.positivity.price.service.PricingSnapshotService;
 import java.util.UUID;
@@ -27,9 +28,20 @@ public class PricingSnapshotServiceImpl implements PricingSnapshotService {
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public PricingSnapshot getSnapshot(@NonNull UUID snapshotId) {
-        return pricingSnapshotRepository.findById(snapshotId)
+    public PricingSnapshotResponse getSnapshot(@NonNull UUID snapshotId) {
+        PricingSnapshot snapshot = pricingSnapshotRepository.findById(snapshotId)
                 .orElseThrow(() -> new SnapshotNotFoundException(snapshotId));
+
+        PricingSnapshotResponse response = new PricingSnapshotResponse();
+        response.setSnapshotId(snapshot.getSnapshotId());
+        response.setCreatedAt(snapshot.getCreatedAt());
+        response.setSourceContext(snapshot.getSourceContext());
+        response.setItemIdentifier(snapshot.getItemIdentifier());
+        response.setQuantity(snapshot.getQuantity());
+        response.setPrices(snapshot.getPrices());
+        response.setAppliedRules(snapshot.getAppliedRules());
+        response.setPolicyVersion(snapshot.getPolicyVersion());
+        return response;
     }
 
     @Override

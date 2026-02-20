@@ -4,9 +4,14 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.positivity.shared.id.UUIDv7Generator;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import jakarta.persistence.Entity;
+import java.util.UUID;
 
 /**
  * ArchUnit tests enforcing architecture rules for pos-price module.
@@ -19,6 +24,15 @@ import com.tngtech.archunit.lang.ArchRule;
  */
 @AnalyzeClasses(packages = "com.positivity.price")
 public class ArchitectureTest {
+
+        private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL = new DescribedPredicate<>(
+                        "call UUID.randomUUID()") {
+                @Override
+                public boolean test(JavaCall<?> input) {
+                        return input.getTargetOwner().isEquivalentTo(UUID.class)
+                                        && "randomUUID".equals(input.getName());
+                }
+        };
 
         @ArchTest
         static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
@@ -69,6 +83,24 @@ public class ArchitectureTest {
                         .should().bePublic()
                         .allowEmptyShould(true)
                         .because("service layer is the public API of this module");
+
+        @ArchTest
+    @ArchTest
+    static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
+                        .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+                        .and().areAnnotatedWith(Entity.class)
+                        .should().dependOnClassesThat().belongToAnyOf(UUIDv7Generator.class)
+                        .allowEmptyShould(true)
+                        .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
+
+        @ArchTest
+    @ArchTest
+    static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
+                        .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
+                        .and().areAnnotatedWith(Entity.class)
+                        .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
+                        .allowEmptyShould(true)
+                        .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
 
         // Issue CAP-169: Restrict cycle checks to internal implementation slices to
         // avoid expected service contract coupling noise.
