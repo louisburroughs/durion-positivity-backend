@@ -1,0 +1,164 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Price API",
+        "description": "API for managing pricing and price restrictions in the POS system",
+        "version": "1.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8086",
+            "description": "Generated server url"
+        }
+    ],
+    "tags": [
+        {
+            "name": "Price Normalization",
+            "description": "Price normalization and standardization operations"
+        },
+        {
+            "name": "Price Restrictions",
+            "description": "Price restriction evaluation and override operations"
+        }
+    ],
+    "paths": {
+        "/v1/price/restrictions:override": {
+            "post": {
+                "tags": [
+                    "Price Restrictions"
+                ],
+                "summary": "Override price restrictions",
+                "description": "Override price restrictions for a specific context or condition.",
+                "operationId": "overrideRestrictions",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request body.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "501": {
+                        "description": "Not yet implemented.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Insufficient permissions to override restrictions.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/price/restrictions:evaluate": {
+            "post": {
+                "tags": [
+                    "Price Restrictions"
+                ],
+                "summary": "Evaluate price restrictions",
+                "description": "Evaluate whether a price is within allowed restrictions.",
+                "operationId": "evaluateRestrictions",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request body.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "501": {
+                        "description": "Not yet implemented.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/price/normalize": {
+            "post": {
+                "tags": [
+                    "Price Normalization"
+                ],
+                "summary": "Normalize pricing",
+                "description": "Normalize and standardize pricing data across the system.",
+                "operationId": "normalizePricing",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "400": {
+                        "description": "Invalid request body.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "501": {
+                        "description": "Not yet implemented.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error.",
+                        "content": {
+                            "*/*": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {}
+}

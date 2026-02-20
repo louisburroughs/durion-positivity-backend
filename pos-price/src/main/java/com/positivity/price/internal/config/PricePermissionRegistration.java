@@ -1,4 +1,4 @@
-package com.positivity.price.config;
+package com.positivity.price.internal.config;
 
 import com.positivity.security.common.PermissionDefinition;
 import com.positivity.security.common.PermissionRegistrationSupport;

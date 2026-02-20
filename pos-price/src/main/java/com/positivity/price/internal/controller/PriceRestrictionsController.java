@@ -1,9 +1,8 @@
-package com.positivity.price.controller;
+package com.positivity.price.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,11 +18,9 @@ public class PriceRestrictionsController {
     private static final Logger log = LoggerFactory.getLogger(PriceRestrictionsController.class);
 
     @Operation(summary = "Evaluate price restrictions", description = "Evaluate whether a price is within allowed restrictions.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "501", description = "Not yet implemented."),
-            @ApiResponse(responseCode = "400", description = "Invalid request body."),
-            @ApiResponse(responseCode = "500", description = "Internal server error.")
-    })
+    @ApiResponse(responseCode = "501", description = "Not yet implemented.")
+    @ApiResponse(responseCode = "400", description = "Invalid request body.")
+    @ApiResponse(responseCode = "500", description = "Internal server error.")
     @EmitEvent(id = "PRICE_RESTRICTIONS_EVALUATE", apiVersion = "1")
     @PostMapping("/restrictions:evaluate")
     public ResponseEntity<Object> evaluateRestrictions(@RequestBody(required = false) Object requestBody) {
@@ -32,12 +29,10 @@ public class PriceRestrictionsController {
     }
 
     @Operation(summary = "Override price restrictions", description = "Override price restrictions for a specific context or condition.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "501", description = "Not yet implemented."),
-            @ApiResponse(responseCode = "400", description = "Invalid request body."),
-            @ApiResponse(responseCode = "403", description = "Insufficient permissions to override restrictions."),
-            @ApiResponse(responseCode = "500", description = "Internal server error.")
-    })
+    @ApiResponse(responseCode = "501", description = "Not yet implemented.")
+    @ApiResponse(responseCode = "400", description = "Invalid request body.")
+    @ApiResponse(responseCode = "403", description = "Insufficient permissions to override restrictions.")
+    @ApiResponse(responseCode = "500", description = "Internal server error.")
     @EmitEvent(id = "PRICE_RESTRICTIONS_OVERRIDE", apiVersion = "1")
     @PostMapping("/restrictions:override")
     public ResponseEntity<Object> overrideRestrictions(@RequestBody(required = false) Object requestBody) {
