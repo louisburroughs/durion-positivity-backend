@@ -1,4 +1,4 @@
-package com.positivity.documents.internal.controller;
+package com.positivity.documents.controller;
 
 import com.positivity.documents.internal.dto.RenderRequest;
 import com.positivity.documents.internal.enums.DocumentFormat;
@@ -48,8 +48,8 @@ class DocumentRenderControllerIT {
         request.setContent("hello");
 
         mockMvc.perform(post("/api/documents/render")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Type", MediaType.APPLICATION_PDF_VALUE));
     }

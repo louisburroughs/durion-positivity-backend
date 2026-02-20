@@ -5,7 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseIntegrationTest;
+import com.positivity.catalog.BaseContractIntegrationTest;
 import com.positivity.catalog.internal.dto.SupplierItemCostDto;
 import java.util.Map;
 import java.util.UUID;
@@ -15,7 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 @DisplayName("Supplier Item Cost Contract Behavioral Tests")
-class SupplierItemCostContractBehaviorIT extends BaseIntegrationTest {
+class SupplierItemCostContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("CP-166-001: Create valid cost tier structure -> 201 Created")

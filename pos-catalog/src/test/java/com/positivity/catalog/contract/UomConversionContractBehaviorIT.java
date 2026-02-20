@@ -5,7 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.catalog.BaseIntegrationTest;
+import com.positivity.catalog.BaseContractIntegrationTest;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 @DisplayName("UOM Conversion Contract Behavioral Tests")
-class UomConversionContractBehaviorIT extends BaseIntegrationTest {
+class UomConversionContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("CP-165-020: Create valid UOM conversion returns 201")

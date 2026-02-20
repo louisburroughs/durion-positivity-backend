@@ -44,7 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @DisplayName("People Access Control ContractBehaviorIT")
-class ContractBehaviorIT extends BaseIntegrationTest {
+class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         @MockitoBean
         private PeopleAccessControlService peopleAccessControlService;

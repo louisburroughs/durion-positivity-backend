@@ -1,6 +1,8 @@
-package com.positivity.documents.internal.service.format;
+package com.positivity.documents.service;
 
 import org.junit.jupiter.api.Test;
+
+import com.positivity.documents.internal.service.format.TextFormatHandler;
 
 import java.util.HashMap;
 

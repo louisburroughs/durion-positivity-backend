@@ -1,4 +1,6 @@
-package com.positivity.price.internal.contract;
+package com.positivity.price.contract;
+
+import com.positivity.price.BaseContractIntegrationTest;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -27,7 +29,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Pricing Snapshot Contract Behavior")
-class PricingSnapshotContractBehaviorIT {
+class PricingSnapshotContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -74,7 +76,8 @@ class PricingSnapshotContractBehaviorIT {
                 .andExpect(jsonPath("$.message").value("Pricing snapshot not found: " + missingSnapshotId));
     }
 
-    private MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
+    @Override
+    protected MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder
                 .header("X-User", "contract-test-user")
                 .header("X-Authorities", "price:snapshots:read")

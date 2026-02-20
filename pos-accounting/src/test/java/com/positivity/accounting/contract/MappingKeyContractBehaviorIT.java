@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.MappingKeyListResponse;
 import com.positivity.accounting.internal.dto.MappingKeyResponse;
@@ -32,7 +32,7 @@ import com.positivity.accounting.service.PostingCategoryService;
  * - Deactivation rules (no active mappings check)
  */
 @Transactional
-public class MappingKeyContractBehaviorIT extends BaseIntegrationTest {
+public class MappingKeyContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private MappingKeyService mappingKeyService;

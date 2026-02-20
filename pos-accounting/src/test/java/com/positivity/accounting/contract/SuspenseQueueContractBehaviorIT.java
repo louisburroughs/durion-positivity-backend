@@ -1,6 +1,6 @@
 package com.positivity.accounting.contract;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -38,7 +38,7 @@ import java.time.Instant;
  * Each test maps to an acceptance criterion defined in issue #122.
  */
 @DisplayName("Suspense Queue Reprocessing Contract Behavioral Tests (CAP:055)")
-public class SuspenseQueueContractBehaviorIT extends BaseIntegrationTest {
+public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private AccountingEventRepository accountingEventRepository;

@@ -1,7 +1,9 @@
-package com.positivity.documents.internal.service.format;
+package com.positivity.documents.service;
 
 import com.positivity.documents.internal.config.PdfConfiguration;
 import com.positivity.documents.internal.exception.RenderingException;
+import com.positivity.documents.internal.service.format.CsvFormatHandler;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -10,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CsvFormatHandlerTest {
 
-    private final CsvFormatHandler handler =
-            new CsvFormatHandler(new PdfConfiguration(1_000_000, "classpath:/templates", 200));
+    private final CsvFormatHandler handler = new CsvFormatHandler(
+            new PdfConfiguration(1_000_000, "classpath:/templates", 200));
 
     @Test
     void shouldConvertCsvToHtmlTable() {
@@ -24,7 +26,8 @@ class CsvFormatHandlerTest {
 
     @Test
     void shouldFailOnEmptyCsv() {
+        var context = new HashMap<String, Object>();
         assertThrows(RenderingException.class,
-                () -> handler.processContent("", new HashMap<>()));
+                () -> handler.processContent("", context));
     }
 }

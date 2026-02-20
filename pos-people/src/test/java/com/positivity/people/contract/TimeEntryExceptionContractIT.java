@@ -5,14 +5,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.people.BaseIntegrationTest;
+import com.positivity.people.BaseContractIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
 @DisplayName("Time Entry Exception ContractIT")
-class TimeEntryExceptionContractIT extends BaseIntegrationTest {
+class TimeEntryExceptionContractIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("CP-120-030: create exception returns 200")

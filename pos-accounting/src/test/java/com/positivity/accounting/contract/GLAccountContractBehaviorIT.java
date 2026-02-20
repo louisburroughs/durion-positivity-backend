@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.GLAccountBalanceResponse;
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
@@ -36,7 +36,7 @@ import com.positivity.accounting.service.GLAccountService;
  * - Balance queries
  */
 @Transactional
-public class GLAccountContractBehaviorIT extends BaseIntegrationTest {
+public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Autowired
         private GLAccountService glAccountService;

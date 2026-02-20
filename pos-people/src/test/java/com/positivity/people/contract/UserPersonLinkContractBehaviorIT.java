@@ -1,6 +1,6 @@
 package com.positivity.people.contract;
 
-import com.positivity.people.BaseIntegrationTest;
+import com.positivity.people.BaseContractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @DisplayName("User Person Link ContractBehaviorIT")
-class UserPersonLinkContractBehaviorIT extends BaseIntegrationTest {
+class UserPersonLinkContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Test
     @DisplayName("CP-117-020: Create user-person link -> 201")

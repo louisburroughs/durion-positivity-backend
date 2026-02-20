@@ -43,7 +43,7 @@ import com.positivity.accounting.internal.repository.PaymentAppliedEventReposito
  * Both endpoints are tested for backward compatibility.
  */
 @DisplayName("Invoice Payment Backend Contract Behavioral Tests")
-class InvoicePaymentContractBehaviorIT extends BaseIntegrationTest {
+class InvoicePaymentContractBehaviorIT extends BaseContractIntegrationTest {
 
     private static final String API_V1_INVOICES = "/v1/accounting/invoices";
     private static final String API_V1_INVOICE = "/v1/accounting/invoice";

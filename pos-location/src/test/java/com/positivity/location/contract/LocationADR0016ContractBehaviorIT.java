@@ -1,5 +1,7 @@
 package com.positivity.location.contract;
 
+import com.positivity.location.BaseContractIntegrationTest;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -39,7 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("CAP-119 / ADR-0016 Location Contract Compliance Tests")
-class LocationADR0016ContractBehaviorIT {
+class LocationADR0016ContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

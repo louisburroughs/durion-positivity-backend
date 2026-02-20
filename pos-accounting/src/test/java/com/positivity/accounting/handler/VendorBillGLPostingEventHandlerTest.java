@@ -1,4 +1,4 @@
-package com.positivity.accounting.internal.handler;
+package com.positivity.accounting.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.handler.VendorBillGLPostingEventHandler;
 import com.positivity.accounting.service.EventIngestionService;
 
 /**

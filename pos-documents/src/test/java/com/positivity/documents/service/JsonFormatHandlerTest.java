@@ -1,6 +1,8 @@
-package com.positivity.documents.internal.service.format;
+package com.positivity.documents.service;
 
 import com.positivity.documents.internal.exception.RenderingException;
+import com.positivity.documents.internal.service.format.JsonFormatHandler;
+
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 

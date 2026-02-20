@@ -81,7 +81,7 @@ import io.jsonwebtoken.Jwts;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @DisplayName("Security Service Contract Behavior Integration Tests")
-class ContractBehaviorIT extends BaseIntegrationTest {
+class ContractBehaviorIT extends BaseContractIntegrationTest {
 
         private static final String TEST_SUBJECT = "john.doe";
         private static final Set<String> TEST_ROLES = Set.of("SHOP_MGR", "INVENTORY_MGR");

@@ -23,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @DisplayName("Location Backend Contract Behavioral Tests")
-class ContractBehaviorIT {
+class ContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
