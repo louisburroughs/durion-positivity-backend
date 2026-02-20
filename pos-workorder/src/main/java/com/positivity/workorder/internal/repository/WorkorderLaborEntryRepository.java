@@ -1,8 +1,11 @@
 package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.entity.WorkorderStatus;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -55,4 +58,19 @@ public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLa
     List<WorkorderLaborEntry> findByEndTimeIsNotNullAndEndTimeBetween(
             @NonNull LocalDateTime startInclusive,
             @NonNull LocalDateTime endExclusive);
+
+    @Query("""
+            SELECT e
+            FROM WorkorderLaborEntry e
+            JOIN e.workorder w
+            WHERE e.endTime IS NOT NULL
+              AND e.endTime BETWEEN :startInclusive AND :endExclusive
+              AND w.status = :finalizedStatus
+              AND (w.isReopened IS NULL OR w.isReopened = false)
+            """)
+    @NonNull
+    List<WorkorderLaborEntry> findFinalizedByEndTimeBetween(
+            @NonNull @Param("startInclusive") LocalDateTime startInclusive,
+            @NonNull @Param("endExclusive") LocalDateTime endExclusive,
+            @NonNull @Param("finalizedStatus") WorkorderStatus finalizedStatus);
 }
