@@ -30,7 +30,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 // Issue CAP-170: Place contract behavior test in ..service.. namespace to
 // satisfy repository access architecture rule for test seeding.
 @DisplayName("Inventory Availability Contract Behavior")
-public class InventoryAvailabilityContractBehaviorIT {
+class InventoryAvailabilityContractBehaviorIT {
 
     @Autowired
     private MockMvc mockMvc;
