@@ -69,7 +69,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .mapToInt(this::reservationDelta)
                 .sum();
 
-        int atpQuantity = Math.max(onHandQuantity - activeReservations, 0);
+        int atpQuantity = onHandQuantity - activeReservations;
 
         return LocationAvailabilityDto.builder()
                 .locationId(locationId)

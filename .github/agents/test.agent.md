@@ -121,6 +121,8 @@ The orchestrator policy requires this agent to provide strict RED evidence befor
 - Check for pre-existing test coverage first (unit, integration, contract, and base/shared test coverage).
 - Prefer updating/extending existing tests over creating new test classes when coverage can be achieved cleanly.
 - Create new tests only for uncovered behavior gaps.
+- For any new or changed class in `src/main/java/**/internal/service/**`, create or update corresponding service-layer unit tests.
+- Do not stop at contract/integration coverage when service behavior changed; service-layer tests are required.
 - Add or update tests in `MODULE/src/test/**` only as needed to ensure required coverage.
 - Run focused tests using Maven wrapper.
 - Confirm failures are expected and behavior-specific.
@@ -203,6 +205,20 @@ Use focused commands first, then broaden only if needed.
 - Prefer deterministic assertions (avoid broad/non-specific checks).
 - Do not rely on external systems unless using module testcontainers setup.
 - Keep tests isolated and order-independent.
+- Service-layer unit tests must cover happy path, edge cases, and failure/exception routing where applicable.
+- When existing service tests are present, extend them first; add a new test class only if no suitable class exists.
+
+## Service-Layer Checklist (Required Before RED Completion)
+
+- Identify all changed classes under `src/main/java/**/internal/service/**`.
+- For each changed service class, map behavior branches:
+  - happy path
+  - input/normalization edge cases
+  - failure paths (exceptions, queue routing, fallback behavior)
+- Verify whether existing unit tests already cover each branch.
+- Add/update only the minimum tests needed to close uncovered branches.
+- Run focused service test command(s) proving RED for newly added assertions.
+- Include branch-to-test mapping in RED evidence so coverage is auditable.
 
 ## Guardrails
 
@@ -213,6 +229,7 @@ Never:
 - claim completion without commands and output-backed evidence
 - modify architecture tests (for example `ArchitectureTest` / ArchUnit suites)
 - modify existing base contract tests or shared base contract test infrastructure
+- skip service-layer test updates when `internal/service` logic was added or modified
 
 Allowed exception:
 - create a missing base contract test only when the story explicitly requires contract coverage and no base contract test exists yet
