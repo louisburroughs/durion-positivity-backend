@@ -65,7 +65,7 @@ public class ContactPoint {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Schema(description = "Person this contact point belongs to")
-    private Person person;
+    private PersonParty person;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "contact_type", nullable = false, length = 20)

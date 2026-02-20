@@ -166,28 +166,29 @@
                         <artifactId>spring-boot-maven-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>start-app</id>
+                                <id>start-for-openapi</id>
                                 <phase>pre-integration-test</phase>
                                 <goals>
                                     <goal>start</goal>
                                 </goals>
                                 <configuration>
                                     <arguments>
-                                        <argument>--server.port=8087</argument>
-                                        <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
-                                        <argument>--spring.datasource.driverClassName=org.h2.Driver</argument>
+                                        <argument>--server.port=8086</argument>
+                                        <argument>--spring.profiles.active=local</argument>
                                         <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
-                                        <argument>--spring.jpa.properties.hibernate.orm.batch_size=20</argument>
+                                        <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
+                                        <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
+                                        <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
-                                        <argument>--server.ssl.enabled=false</argument>
                                         <argument>--logging.level.root=WARN</argument>
+                                        <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
                             <execution>
-                                <id>stop-app</id>
+                                <id>stop-after-openapi</id>
                                 <phase>post-integration-test</phase>
                                 <goals>
                                     <goal>stop</goal>
@@ -200,7 +201,9 @@
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
                         <configuration>
-                            <apiDocsUrl>http://localhost:8087/v3/api-docs</apiDocsUrl>
+                            <apiDocsUrl>http://localhost:8086/v3/api-docs.yaml</apiDocsUrl>
+                            <outputFileName>openapi.yaml</outputFileName>
+                            <outputDir>${project.basedir}</outputDir>
                         </configuration>
                         <executions>
                             <execution>

@@ -20,7 +20,7 @@ import com.positivity.customer.internal.entity.ContactRoleAssignment;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 
 /**
  * Service for managing contact role assignments.
@@ -46,13 +46,13 @@ public class ContactRoleService {
 
         private final ContactRoleAssignmentRepository roleAssignmentRepository;
         private final CommercialPartyRepository partyRepository;
-        private final PersonRepository personRepository;
+        private final PersonPartyRepository personRepository;
         private final ContactPointRepository contactPointRepository;
 
         public ContactRoleService(
                         ContactRoleAssignmentRepository roleAssignmentRepository,
                         CommercialPartyRepository partyRepository,
-                        PersonRepository personRepository,
+                        PersonPartyRepository personRepository,
                         ContactPointRepository contactPointRepository) {
                 this.roleAssignmentRepository = roleAssignmentRepository;
                 this.partyRepository = partyRepository;
@@ -96,14 +96,14 @@ public class ContactRoleService {
 
                                 // Get email and phone from contact points
                                 var emailOpt = Optional.ofNullable(contactPointRepository
-                                                .findByPersonPersonIdAndContactTypeAndIsPrimaryTrue(
+                                                .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
                                                                 contactId,
                                                                 com.positivity.customer.internal.dto.ContactPointType.EMAIL));
                                 emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
                                 contactDto.setHasPrimaryEmail(emailOpt.isPresent());
 
                                 var phoneOpt = Optional.ofNullable(contactPointRepository
-                                                .findByPersonPersonIdAndContactTypeAndIsPrimaryTrue(
+                                                .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
                                                                 contactId,
                                                                 com.positivity.customer.internal.dto.ContactPointType.PHONE_MOBILE));
                                 phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));

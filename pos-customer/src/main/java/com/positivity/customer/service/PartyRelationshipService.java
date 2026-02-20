@@ -18,11 +18,11 @@ import com.positivity.customer.internal.dto.PartyRelationshipRole;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PartyRelationship;
-import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactPointRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
-import com.positivity.customer.internal.repository.PersonRepository;
+import com.positivity.customer.internal.repository.PersonPartyRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +54,7 @@ public class PartyRelationshipService {
 
         private final PartyRelationshipRepository partyRelationshipRepository;
         private final CommercialPartyRepository partyRepository;
-        private final PersonRepository personRepository;
+        private final PersonPartyRepository personRepository;
         private final ContactPointRepository contactPointRepository;
 
         /**
@@ -88,7 +88,7 @@ public class PartyRelationshipService {
                                                 "Party not found"));
 
                 // Validate person exists
-                Person person = personRepository.findById(request.getPersonId())
+                PersonParty person = personRepository.findById(request.getPersonId())
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Person not found"));
 
@@ -186,7 +186,7 @@ public class PartyRelationshipService {
                 if ("ACTIVE".equalsIgnoreCase(status) || status == null) {
                         relationships = partyRelationshipRepository.findActiveByFromPartyId(partyId, today);
                 } else {
-                        relationships = partyRelationshipRepository.findByFromPartyId(partyId);
+                        relationships = partyRelationshipRepository.findByFromPartyPartyId(partyId);
                 }
 
                 // Filter by roles if specified
@@ -199,7 +199,7 @@ public class PartyRelationshipService {
                 // Map to response DTOs
                 List<GetCommercialAccountContactsResponse.ContactWithRole> contacts = relationships.stream()
                                 .map(rel -> {
-                                        Person person = rel.getToPerson();
+                                        PersonParty person = rel.getToPerson();
                                         // Get primary contact points for the person
                                         String email = getPrimaryContactValue(person.getPersonId(),
                                                         ContactPointType.EMAIL);
@@ -303,14 +303,14 @@ public class PartyRelationshipService {
         }
 
         private String getPrimaryContactValue(UUID personId, ContactPointType type) {
-                ContactPoint primary = contactPointRepository.findByPersonPersonIdAndContactTypeAndIsPrimaryTrue(
+                ContactPoint primary = contactPointRepository.findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
                                 personId,
                                 type);
                 if (primary != null) {
                         return primary.getValue();
                 }
                 // Fall back to first of that type
-                List<ContactPoint> contacts = contactPointRepository.findByPersonPersonIdAndContactType(personId, type);
+                List<ContactPoint> contacts = contactPointRepository.findByPersonPartyIdAndContactType(personId, type);
                 return contacts.isEmpty() ? null : contacts.get(0).getValue();
         }
 }

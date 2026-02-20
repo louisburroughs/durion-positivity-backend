@@ -69,12 +69,12 @@ public class CommercialParty extends AbstractParty {
     @JoinColumn(name = "parent_party_id")
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Party parentParty;
+    private CommercialParty parentParty;
 
     @OneToMany(mappedBy = "parentParty", cascade = CascadeType.ALL)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Set<Party> childParties = new HashSet<>();
+    private Set<CommercialParty> childParties = new HashSet<>();
 
     @ElementCollection
     @CollectionTable(name = "party_external_identifier", joinColumns = @JoinColumn(name = "party_id"))
@@ -86,7 +86,7 @@ public class CommercialParty extends AbstractParty {
     @Schema(description = "Primary address label or identifier for the organization", example = "123 Main St, Springfield")
     private String primaryAddress;
 
-    @OneToMany(mappedBy = "party", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "commercialParty", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @NotEmpty
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

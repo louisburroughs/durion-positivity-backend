@@ -3,7 +3,7 @@ package com.positivity.customer.internal.dto;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.positivity.customer.internal.entity.Person;
+import com.positivity.customer.internal.entity.PersonParty;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -44,13 +44,13 @@ public class CreatePersonResponse {
     private Instant createdAt;
 
     /**
-     * Creates a response from a Person entity.
+     * Creates a response from a PersonParty entity.
      *
-     * @param person             the created person
+     * @param person             the created person-party
      * @param contactPointsCount number of contact points created
      * @return the response DTO
      */
-    public static CreatePersonResponse from(Person person, int contactPointsCount) {
+    public static CreatePersonResponse from(PersonParty person, int contactPointsCount) {
         return CreatePersonResponse.builder()
                 .personId(person.getPersonId())
                 .firstName(person.getFirstName())

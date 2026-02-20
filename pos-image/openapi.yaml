@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: Image API
+  description: API for managing and serving images in the POS system
+  version: "1.0"
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Image API
+  description: Operations related to image retrieval and serving
+paths:
+  /api/images/id/{id}:
+    get:
+      tags:
+      - Image API
+      summary: Get image by ID
+      description: Retrieve an image file by its unique database ID.
+      operationId: getImageById
+      parameters:
+      - name: id
+        in: path
+        description: ID of the image to retrieve
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "200":
+          description: Image file returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Image not found.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+  /api/images/filename/{filename}:
+    get:
+      tags:
+      - Image API
+      summary: Get image by filename
+      description: Retrieve an image file by its filename.
+      operationId: getImageByFilename
+      parameters:
+      - name: filename
+        in: path
+        description: Filename of the image to retrieve
+        required: true
+        schema:
+          type: string
+        example: logo.png
+      responses:
+        "200":
+          description: Image file returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Image not found.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+components: {}

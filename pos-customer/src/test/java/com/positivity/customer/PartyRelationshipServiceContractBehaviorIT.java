@@ -53,7 +53,7 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
         private CommercialPartyRepository partyRepository;
 
         @Autowired
-        private PersonRepository personRepository;
+        private PersonPartyRepository personRepository;
 
         @Autowired
         private PartyRelationshipRepository partyRelationshipRepository;
@@ -62,8 +62,8 @@ class PartyRelationshipServiceContractBehaviorIT extends BaseContractIntegration
         private ContactPointRepository contactPointRepository;
 
         private CommercialParty testParty;
-        private Person testPerson1;
-        private Person testPerson2;
+        private PersonParty testPerson1;
+        private PersonParty testPerson2;
 
         @BeforeEach
         void setUp() {

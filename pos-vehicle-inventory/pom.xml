@@ -120,17 +120,89 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <skip>false</skip>
-                    <classifier>exec</classifier>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
                 </configuration>
                 <executions>
                     <execution>
+                        <id>repackage</id>
                         <goals>
                             <goal>repackage</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-maven-plugin</artifactId>
+                <version>${springdoc-openapi-maven-plugin.version}</version>
+            </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>local</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>start-for-openapi</id>
+                                <phase>pre-integration-test</phase>
+                                <goals>
+                                    <goal>start</goal>
+                                </goals>
+                                <configuration>
+                                    <arguments>
+                                        <argument>--server.port=8086</argument>
+                                        <argument>--spring.profiles.active=local</argument>
+                                        <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
+                                        <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
+                                        <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
+                                        <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
+                                        <argument>--spring.flyway.enabled=false</argument>
+                                        <argument>--eureka.client.enabled=false</argument>
+                                        <argument>--spring.boot.admin.client.enabled=false</argument>
+                                        <argument>--logging.level.root=WARN</argument>
+                                        <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>stop-after-openapi</id>
+                                <phase>post-integration-test</phase>
+                                <goals>
+                                    <goal>stop</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.springdoc</groupId>
+                        <artifactId>springdoc-openapi-maven-plugin</artifactId>
+                        <version>${springdoc-openapi-maven-plugin.version}</version>
+                        <configuration>
+                            <apiDocsUrl>http://localhost:8086/v3/api-docs.yaml</apiDocsUrl>
+                            <outputFileName>openapi.yaml</outputFileName>
+                            <outputDir>${project.basedir}</outputDir>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -152,7 +152,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
      * Map Stripe charge status to PaymentGatewayProvider status enum.
      */
     private GatewayPaymentStatus mapChargeStatus(@NonNull Charge charge) {
-        if (charge.getPaid()) {
+        if (Boolean.TRUE.equals(charge.getPaid())) {
             return switch (charge.getStatus()) {
                 case "succeeded" -> GatewayPaymentStatus.SUCCEEDED;
                 case "authorized" -> GatewayPaymentStatus.AUTHORIZED;
