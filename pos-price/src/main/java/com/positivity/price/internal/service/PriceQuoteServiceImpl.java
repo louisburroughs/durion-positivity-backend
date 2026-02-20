@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Default price quote service implementation for contextual pricing.
@@ -44,6 +45,7 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
 
     @Override
     @NonNull
+    @Transactional(readOnly = true)
     public PriceQuoteResponse calculatePrice(@NonNull PriceQuoteRequest request) {
         Instant effectiveAt = request.getEffectiveTimestamp() != null ? request.getEffectiveTimestamp() : Instant.now();
 

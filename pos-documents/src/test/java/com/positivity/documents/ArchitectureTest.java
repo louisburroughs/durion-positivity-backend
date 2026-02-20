@@ -1,12 +1,10 @@
 package com.positivity.documents;
 
-import com.positivity.shared.id.UUIDv7Generator;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
-import jakarta.persistence.Entity;
 import java.util.UUID;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
@@ -41,14 +39,14 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
             .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
-            .and().areAnnotatedWith(Entity.class)
-            .should().dependOnClassesThat().belongToAnyOf(UUIDv7Generator.class)
+            .and().areAnnotatedWith("jakarta.persistence.Entity")
+            .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
             .allowEmptyShould(true)
             .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
     @ArchTest
     static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
             .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
-            .and().areAnnotatedWith(Entity.class)
+            .and().areAnnotatedWith("jakarta.persistence.Entity")
             .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
             .allowEmptyShould(true)
             .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");

@@ -4,9 +4,9 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -18,8 +18,9 @@ import org.jspecify.annotations.Nullable;
  * Issue: #51
  */
 @Entity
-@Table(name = "customer_tier_pricing_rule", uniqueConstraints = @UniqueConstraint(columnNames = { "product_id",
-        "customer_tier_id" }))
+@Table(name = "customer_tier_pricing_rule", indexes = {
+        @Index(name = "idx_tier_rule_product_tier_effective", columnList = "product_id,customer_tier_id,effective_from,effective_to")
+})
 public class CustomerTierPricingRule {
 
     @Id
