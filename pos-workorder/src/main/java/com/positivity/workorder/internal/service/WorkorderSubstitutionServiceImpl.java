@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
+import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.entity.SubstitutionStatus;
 import com.positivity.workorder.internal.entity.WorkOrderPartSubstitution;
 import com.positivity.workorder.internal.entity.WorkorderPart;
@@ -11,6 +12,7 @@ import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.service.WorkorderSubstitutionService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -19,6 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Internal implementation of workorder substitution service.
@@ -29,19 +33,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkorderSubstitutionServiceImpl.class);
-    private static final String LOCKED = "LOCKED";
 
     private final WorkorderPartRepository workorderPartRepository;
     private final WorkOrderPartSubstitutionRepository substitutionRepository;
     private final WorkorderPartAdjustmentEventRepository adjustmentEventRepository;
+    private final ObjectMapper objectMapper;
 
     public WorkorderSubstitutionServiceImpl(
             WorkorderPartRepository workorderPartRepository,
             WorkOrderPartSubstitutionRepository substitutionRepository,
-            WorkorderPartAdjustmentEventRepository adjustmentEventRepository) {
+            WorkorderPartAdjustmentEventRepository adjustmentEventRepository,
+            ObjectMapper objectMapper) {
         this.workorderPartRepository = workorderPartRepository;
         this.substitutionRepository = substitutionRepository;
         this.adjustmentEventRepository = adjustmentEventRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -79,7 +85,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
 
         // Issue #49: lock original part pricing and mark substitution metadata.
         originalPart.setIsSubstituted(true);
-        originalPart.setPriceLockStatus(LOCKED);
+        originalPart.setPriceLockStatus(PriceLockStatus.LOCKED);
         if (originalPart.getOriginalProductId() == null) {
             originalPart.setOriginalProductId(originalProductReference);
         }
@@ -99,7 +105,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 .quantityConsumed(BigDecimal.ZERO)
                 .quantityReturned(BigDecimal.ZERO)
                 .isSubstituted(true)
-                .priceLockStatus(LOCKED)
+                .priceLockStatus(PriceLockStatus.LOCKED)
                 .originalProductId(originalProductReference)
                 .build();
 
@@ -150,7 +156,13 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
     }
 
     private String buildPricingSnapshot(WorkorderPart part) {
-        return "{\"unitPrice\":\"" + part.getUnitPrice() + "\",\"lineTotal\":\"" + part.getLineTotal() + "\"}";
+        try {
+            return objectMapper.writeValueAsString(Map.of(
+                    "unitPrice", part.getUnitPrice(),
+                    "lineTotal", part.getLineTotal()));
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("Failed to serialize pricing snapshot", exception);
+        }
     }
 
     private WorkorderPartAdjustmentEventResponse toResponse(WorkorderPartAdjustmentEvent event) {
