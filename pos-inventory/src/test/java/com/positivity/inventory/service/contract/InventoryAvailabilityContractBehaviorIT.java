@@ -1,4 +1,4 @@
-package com.positivity.inventory.contract;
+package com.positivity.inventory.service.contract;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -27,8 +27,10 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+// Issue CAP-170: Place contract behavior test in ..service.. namespace to
+// satisfy repository access architecture rule for test seeding.
 @DisplayName("Inventory Availability Contract Behavior")
-class InventoryAvailabilityContractBehaviorIT {
+public class InventoryAvailabilityContractBehaviorIT {
 
     @Autowired
     private MockMvc mockMvc;
