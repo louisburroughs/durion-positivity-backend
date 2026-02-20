@@ -81,6 +81,11 @@ public class InventoryLedgerEntry {
     @Column(nullable = false, updatable = false)
     private Instant timestamp;
 
+    // Issue #48: Add location-level inventory tracking for per-location
+    // availability.
+    @Column
+    private String locationId;
+
     /**
      * Optional notes or context for this transaction.
      */

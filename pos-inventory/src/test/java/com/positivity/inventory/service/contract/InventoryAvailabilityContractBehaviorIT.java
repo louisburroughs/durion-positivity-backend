@@ -1,0 +1,161 @@
+package com.positivity.inventory.service.contract;
+
+import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.Instant;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+import com.positivity.inventory.internal.model.InventoryLedgerEntry;
+import com.positivity.inventory.internal.model.InventoryLedgerEventType;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+// Issue CAP-170: Place contract behavior test in ..service.. namespace to
+// satisfy repository access architecture rule for test seeding.
+@DisplayName("Inventory Availability Contract Behavior")
+class InventoryAvailabilityContractBehaviorIT {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+
+    @BeforeEach
+    void setUp() {
+        inventoryLedgerEntryRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("AC-1: getAvailability_returnsPerLocationList_whenProductHasStock")
+    void getAvailability_returnsPerLocationList_whenProductHasStock() throws Exception {
+        UUID productId = UUID.randomUUID();
+
+        seedOnHand(productId, "LOC-1", 40);
+        seedOnHand(productId, "LOC-2", 60);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].locationId").exists())
+                .andExpect(jsonPath("$[0].locationName").exists())
+                .andExpect(jsonPath("$[0].onHandQuantity").exists())
+                .andExpect(jsonPath("$[0].availableToPromiseQuantity").exists())
+                .andExpect(jsonPath("$[1].locationId").exists())
+                .andExpect(jsonPath("$[1].locationName").exists())
+                .andExpect(jsonPath("$[1].onHandQuantity").exists())
+                .andExpect(jsonPath("$[1].availableToPromiseQuantity").exists());
+    }
+
+    @Test
+    @DisplayName("AC-2: getAvailability_returnsEmptyList_whenProductHasNoStock")
+    void getAvailability_returnsEmptyList_whenProductHasNoStock() throws Exception {
+        UUID productId = UUID.randomUUID();
+
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("AC-3: getAvailability_returnsEmptyList_whenProductNotFoundInLedger")
+    void getAvailability_returnsEmptyList_whenProductNotFoundInLedger() throws Exception {
+        UUID nonExistentProductId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", nonExistentProductId)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("AC-4: getAvailability_returns400_whenProductIdMalformed")
+    void getAvailability_returns400_whenProductIdMalformed() throws Exception {
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", "not-a-uuid")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("AC-5: getAvailability_calculatesAtp_excludingInactiveReservations")
+    void getAvailability_calculatesAtp_excludingInactiveReservations() throws Exception {
+        UUID productId = UUID.randomUUID();
+
+        seedOnHand(productId, "LOC-ATP", 100);
+
+        seedReservationCreated(productId, "LOC-ATP", 30);
+
+        seedReservationCreated(productId, "LOC-ATP", 20);
+        seedReservationReleased(productId, "LOC-ATP", 20);
+
+        mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].onHandQuantity").value(100))
+                .andExpect(jsonPath("$[0].availableToPromiseQuantity").value(70));
+    }
+
+    private MockHttpServletRequestBuilder withGatewayAuth(MockHttpServletRequestBuilder requestBuilder) {
+        return requestBuilder
+                .header("X-User", "contract-test-user")
+                .header("X-Authorities", "inventory:availability:read");
+    }
+
+    private void seedOnHand(UUID productId, String locationId, int quantity) {
+        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+                .stockItemId(productId.toString())
+                .locationId(locationId)
+                .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
+                .changeInQuantity(quantity)
+                .quantityAfter(quantity)
+                .transactionUserId("contract-seed")
+                .timestamp(Instant.now())
+                .notes("seed on-hand for " + locationId)
+                .build());
+    }
+
+    private void seedReservationCreated(UUID productId, String locationId, int quantity) {
+        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+                .stockItemId(productId.toString())
+                .locationId(locationId)
+                .eventType(InventoryLedgerEventType.RESERVATION_CREATED)
+                .changeInQuantity(quantity)
+                .quantityAfter(0)
+                .transactionUserId("contract-seed")
+                .timestamp(Instant.now())
+                .notes("seed active reservation")
+                .build());
+    }
+
+    private void seedReservationReleased(UUID productId, String locationId, int quantity) {
+        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+                .stockItemId(productId.toString())
+                .locationId(locationId)
+                .eventType(InventoryLedgerEventType.RESERVATION_RELEASED)
+                .changeInQuantity(quantity)
+                .quantityAfter(0)
+                .transactionUserId("contract-seed")
+                .timestamp(Instant.now())
+                .notes("seed released reservation")
+                .build());
+    }
+}
