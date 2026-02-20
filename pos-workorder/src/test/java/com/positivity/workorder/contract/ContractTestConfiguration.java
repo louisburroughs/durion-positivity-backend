@@ -15,7 +15,7 @@ public class ContractTestConfiguration {
 
     @Bean
     @Primary
-    public RestClient restClient() {
+    public RestClient contractTestRestClient() {
         RestClient mockRestClient = Mockito.mock(RestClient.class, Mockito.RETURNS_DEEP_STUBS);
 
         // Mock the RestClient chain for customer requirements check

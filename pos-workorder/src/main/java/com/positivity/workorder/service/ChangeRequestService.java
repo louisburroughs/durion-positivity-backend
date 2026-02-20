@@ -85,7 +85,7 @@ public class ChangeRequestService {
         // Create associated work order parts
         if (dto.getParts() != null) {
             for (CreateChangeRequestDTO.WorkorderItemDTO partDto : dto.getParts()) {
-                WorkorderPart part = createWorkorderPart(changeRequest, partDto);
+                WorkorderPart part = createWorkorderPart(workOrder, changeRequest, partDto);
                 workOrderPartRepository.save(part);
             }
         }
@@ -466,9 +466,10 @@ public class ChangeRequestService {
                 .build();
     }
 
-    private WorkorderPart createWorkorderPart(ChangeRequest changeRequest,
+    private WorkorderPart createWorkorderPart(Workorder workOrder, ChangeRequest changeRequest,
             CreateChangeRequestDTO.WorkorderItemDTO dto) {
         return WorkorderPart.builder()
+                .workorder(workOrder)
                 .productEntityId(dto.getProductEntityId())
                 .nonInventoryProductEntityId(dto.getNonInventoryProductEntityId())
                 // Convert Integer quantity to BigDecimal for WorkorderPart entity

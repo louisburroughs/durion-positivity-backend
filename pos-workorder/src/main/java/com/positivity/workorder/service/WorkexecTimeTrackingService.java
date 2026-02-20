@@ -67,7 +67,7 @@ public class WorkexecTimeTrackingService {
         LocalDateTime queryStartUtc = startDate.minusDays(1).atStartOfDay();
         LocalDateTime queryEndUtc = endDate.plusDays(2).atStartOfDay();
         List<WorkorderLaborEntry> entries = laborEntryRepository
-                .findByEndTimeIsNotNullAndEndTimeBetween(queryStartUtc, queryEndUtc);
+                .findFinalizedByEndTimeBetween(queryStartUtc, queryEndUtc, WorkorderStatus.COMPLETED);
 
         Map<String, WorkexecJobTimeTotalResponse> grouped = new LinkedHashMap<>();
 

@@ -108,10 +108,12 @@ public class WorkorderController {
             @Parameter(description = "ID of the work order to start", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
             @RequestBody StartWorkorderRequest request) {
         try {
+            String previousStatus = workorderService.getCurrentWorkorderStatus(workorderId);
             workorderService.startWorkorder(workorderId, request.getUserId(), request.getReason());
 
             StartWorkorderResponse response = StartWorkorderResponse.builder()
                     .workorderId(workorderId)
+                    .previousStatus(previousStatus)
                     .currentStatus("WORK_IN_PROGRESS")
                     .transitionedAt(Instant.now())
                     .message("Work order started successfully")

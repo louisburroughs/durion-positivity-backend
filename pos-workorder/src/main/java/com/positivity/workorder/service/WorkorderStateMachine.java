@@ -395,26 +395,14 @@ public class WorkorderStateMachine {
     }
 
     public void captureSnapshot(Workorder workorder, UUID userId, String snapshotType, String reason) {
-        try {
-            String snapshotData = objectMapper.writeValueAsString(workorder);
-
-            WorkorderSnapshot snapshot = WorkorderSnapshot.builder()
-                    .workorderId(workorder.getId())
-                    .status(workorder.getStatus())
-                    .capturedBy(userId)
-                    .snapshotType(snapshotType)
-                    .snapshotData(snapshotData)
-                    .reason(reason)
-                    .capturedAt(Instant.now())
-                    .build();
-
-            snapshotRepository.save(snapshot);
-
-            log.info("Captured snapshot {} for Workorder {}", snapshotType, workorder.getId());
-        } catch (Exception e) {
-            log.error("Failed to capture snapshot for Workorder " + workorder.getId(), e);
-            throw new IllegalStateException("Failed to capture workorder snapshot", e);
-        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("workorderId", workorder.getId());
+        payload.put("estimateId", workorder.getEstimateId());
+        payload.put("customerId", workorder.getCustomerId());
+        payload.put(STATUS_FIELD, workorder.getStatus());
+        payload.put("capturedAt", Instant.now());
+        payload.put("reason", reason);
+        captureStructuredSnapshot(workorder, userId, snapshotType, payload, reason);
     }
 
     private void recordTransition(UUID workorderId, WorkorderStatus fromStatus, WorkorderStatus toStatus,

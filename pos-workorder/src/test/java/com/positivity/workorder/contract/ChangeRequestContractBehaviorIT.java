@@ -18,7 +18,9 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 
 import io.restassured.http.ContentType;
@@ -53,6 +55,12 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private EstimateRepository estimateRepository;
 
+    @Autowired
+    private WorkorderServiceRepository workorderServiceRepository;
+
+    @Autowired
+    private WorkorderPartRepository workorderPartRepository;
+
     private UUID testCustomerId;
     private UUID testLocationId;
     private UUID testVehicleId;
@@ -63,6 +71,8 @@ class ChangeRequestContractBehaviorIT extends BaseContractIntegrationTest {
     @AfterEach
     void tearDown() {
         changeRequestRepository.deleteAll();
+        workorderServiceRepository.deleteAll();
+        workorderPartRepository.deleteAll();
         workorderRepository.deleteAll();
         estimateRepository.deleteAll();
     }

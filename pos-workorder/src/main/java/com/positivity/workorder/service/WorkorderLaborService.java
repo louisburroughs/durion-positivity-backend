@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -114,6 +115,7 @@ public class WorkorderLaborService {
                 .hoursWorked(BigDecimal.ZERO)
                 .notes(notes)
                 .createdBy(createdBy)
+                .createdAt(Instant.now())
                 .build();
 
         WorkorderLaborEntry saved = laborRepository.save(entry);
