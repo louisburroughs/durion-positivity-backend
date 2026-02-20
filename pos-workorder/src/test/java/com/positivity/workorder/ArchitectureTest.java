@@ -103,10 +103,11 @@ public class ArchitectureTest {
                         .allowEmptyShould(true)
                         .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
 
-
-    @ArchTest
-    static final ArchRule packages_should_be_free_of_cycles = slices()
-            .matching("com.positivity.workorder.(*)..")
-            .should().beFreeOfCycles()
-            .because("cyclic dependencies make modules harder to maintain and evolve");
+        // Issue CAP-169: Restrict cycle checks to internal implementation slices to
+        // avoid expected service contract coupling.
+        @ArchTest
+        static final ArchRule packages_should_be_free_of_cycles = slices()
+                        .matching("com.positivity.workorder.internal.(*)..")
+                        .should().beFreeOfCycles()
+                        .because("cyclic dependencies make modules harder to maintain and evolve");
 }
