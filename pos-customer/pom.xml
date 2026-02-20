@@ -181,7 +181,7 @@
                                 </goals>
                                 <configuration>
                                     <arguments>
-                                        <argument>--server.port=8082</argument>
+                                        <argument>--server.port=8086</argument>
                                         <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
                                         <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
                                         <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
@@ -210,7 +210,9 @@
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
                         <configuration>
-                            <apiDocsUrl>http://localhost:8082/v3/api-docs</apiDocsUrl>
+                            <apiDocsUrl>http://localhost:8086/v3/api-docs</apiDocsUrl>
+                            <outputFileName>openapi.yaml</outputFileName>
+                            <outputDir>${project.basedir}</outputDir>
                         </configuration>
                         <executions>
                             <execution>

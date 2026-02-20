@@ -169,10 +169,10 @@
                                 <configuration>
                                     <arguments>
                                         <argument>--server.port=8086</argument>
+                                        <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
                                         <argument>--spring.datasource.url=jdbc:h2:mem:openapi;MODE=PostgreSQL;DB_CLOSE_DELAY=-1</argument>
                                         <argument>--spring.datasource.driver-class-name=org.h2.Driver</argument>
                                         <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
-                                        <argument>--spring.jpa.hibernate.ddl-auto=update</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
@@ -197,9 +197,9 @@
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
                         <configuration>
-                            <apiDocsUrl>http://localhost:8086/v3/api-docs</apiDocsUrl>
-                            <outputFileName>openapi.json</outputFileName>
-                            <outputDir>${project.build.directory}</outputDir>
+                            <apiDocsUrl>http://localhost:8086/v3/api-docs.yaml</apiDocsUrl>
+                            <outputFileName>openapi.yaml</outputFileName>
+                            <outputDir>${project.basedir}</outputDir>
                         </configuration>
                         <executions>
                             <execution>
