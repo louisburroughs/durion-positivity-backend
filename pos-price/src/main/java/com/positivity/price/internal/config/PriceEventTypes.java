@@ -11,24 +11,30 @@ import java.util.List;
  */
 public final class PriceEventTypes {
 
-    private PriceEventTypes() {
-        // Utility class
-    }
+        private PriceEventTypes() {
+                // Utility class
+        }
 
-    /**
-     * All event type registrations for the price module.
-     * Total: 3 event types.
-     */
-    public static List<EventTypeRegistration> all() {
-        return List.of(
-                // PriceNormalizationController - 1 event
-                EventTypeRegistration.write("PRICE_NORMALIZATION_NORMALIZE",
-                        "Normalize and standardize pricing data across the system").build(),
+        /**
+         * All event type registrations for the price module.
+         * Total: 3 event types.
+         */
+        public static List<EventTypeRegistration> all() {
+                return List.of(
+                                // PriceNormalizationController - 1 event
+                                EventTypeRegistration.write("PRICE_NORMALIZATION_NORMALIZE",
+                                                "Normalize and standardize pricing data across the system").build(),
 
-                // PriceRestrictionsController - 2 events
-                EventTypeRegistration.search("PRICE_RESTRICTIONS_EVALUATE",
-                        "Evaluate whether a price is within allowed restrictions").build(),
-                EventTypeRegistration.write("PRICE_RESTRICTIONS_OVERRIDE",
-                        "Override price restrictions for a specific context or condition").build());
-    }
+                                // PriceRestrictionsController - 2 events
+                                EventTypeRegistration.search("PRICE_RESTRICTIONS_EVALUATE",
+                                                "Evaluate whether a price is within allowed restrictions").build(),
+                                EventTypeRegistration.write("PRICE_RESTRICTIONS_OVERRIDE",
+                                                "Override price restrictions for a specific context or condition")
+                                                .build(),
+
+                                // PriceQuoteController - 1 event
+                                EventTypeRegistration.search("PRICE_QUOTE_CALCULATE",
+                                                "Calculate contextual quote pricing for product, location, and customer tier")
+                                                .build());
+        }
 }

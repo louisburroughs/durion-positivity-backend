@@ -1,0 +1,120 @@
+package com.positivity.price.internal.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+
+/**
+ * Immutable pricing snapshot persisted for pricing audit and replay.
+ *
+ * Issue: #50
+ */
+@Entity
+@Table(name = "pricing_snapshot")
+public class PricingSnapshot {
+
+    @Id
+    private UUID snapshotId;
+
+    @Column(nullable = false)
+    private Instant createdAt;
+
+    @Column(columnDefinition = "TEXT")
+    @Nullable
+    private String sourceContext;
+
+    @Column(nullable = false)
+    private String itemIdentifier;
+
+    @Column(nullable = false)
+    private Integer quantity;
+
+    @Column(columnDefinition = "TEXT", nullable = false)
+    private String prices;
+
+    @Column(columnDefinition = "TEXT")
+    @Nullable
+    private String appliedRules;
+
+    @Column(nullable = false)
+    private String policyVersion;
+
+    @PrePersist
+    public void prePersist() {
+        if (snapshotId == null) {
+            snapshotId = UUID.randomUUID();
+        }
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+    }
+
+    public UUID getSnapshotId() {
+        return snapshotId;
+    }
+
+    public void setSnapshotId(UUID snapshotId) {
+        this.snapshotId = snapshotId;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public String getSourceContext() {
+        return sourceContext;
+    }
+
+    public void setSourceContext(String sourceContext) {
+        this.sourceContext = sourceContext;
+    }
+
+    public String getItemIdentifier() {
+        return itemIdentifier;
+    }
+
+    public void setItemIdentifier(String itemIdentifier) {
+        this.itemIdentifier = itemIdentifier;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+    public String getPrices() {
+        return prices;
+    }
+
+    public void setPrices(String prices) {
+        this.prices = prices;
+    }
+
+    public String getAppliedRules() {
+        return appliedRules;
+    }
+
+    public void setAppliedRules(String appliedRules) {
+        this.appliedRules = appliedRules;
+    }
+
+    public String getPolicyVersion() {
+        return policyVersion;
+    }
+
+    public void setPolicyVersion(String policyVersion) {
+        this.policyVersion = policyVersion;
+    }
+}
