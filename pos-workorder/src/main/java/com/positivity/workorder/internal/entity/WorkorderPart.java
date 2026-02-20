@@ -81,6 +81,21 @@ public class WorkorderPart {
     @Nullable
     private UUID originEstimateItemId; // Traceability link to source EstimateItem
 
+    // Issue #49: Track substitution metadata for immutable substitution history.
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean isSubstituted = false;
+
+    // Issue #49: Price lock status after substitution pricing snapshot is captured.
+    @Builder.Default
+    @Column(nullable = false, length = 20)
+    private String priceLockStatus = "UNLOCKED";
+
+    // Issue #49: Original product ID prior to substitution for traceability.
+    @Column(columnDefinition = "UUID")
+    @Nullable
+    private UUID originalProductId;
+
     // Flag to indicate this part was declined by customer during estimate approval
     @Builder.Default
     private Boolean declined = false;
