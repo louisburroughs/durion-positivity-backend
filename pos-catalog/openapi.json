@@ -71,20 +71,20 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Successfully retrieved product",
+                    "404": {
+                        "description": "Product not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductDto"
                                 }
                             }
                         }
                     },
-                    "404": {
-                        "description": "Product not found",
+                    "200": {
+                        "description": "Successfully retrieved product",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductDto"
                                 }
@@ -225,6 +225,16 @@
                             }
                         }
                     },
+                    "200": {
+                        "description": "MSRP updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProductMsrpDto"
+                                }
+                            }
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "content": {
@@ -239,16 +249,6 @@
                         "description": "Temporal overlap or optimistic locking conflict",
                         "content": {
                             "*/*": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ProductMsrpDto"
-                                }
-                            }
-                        }
-                    },
-                    "200": {
-                        "description": "MSRP updated",
-                        "content": {
-                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductMsrpDto"
                                 }
@@ -279,20 +279,20 @@
                     }
                 ],
                 "responses": {
-                    "404": {
-                        "description": "Product not found",
+                    "200": {
+                        "description": "Successfully retrieved lifecycle state",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductLifecycleResponse"
                                 }
                             }
                         }
                     },
-                    "200": {
-                        "description": "Successfully retrieved lifecycle state",
+                    "404": {
+                        "description": "Product not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductLifecycleResponse"
                                 }
@@ -331,20 +331,20 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "Lifecycle state updated successfully",
+                    "400": {
+                        "description": "Validation error",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductLifecycleResponse"
                                 }
                             }
                         }
                     },
-                    "400": {
-                        "description": "Validation error",
+                    "200": {
+                        "description": "Lifecycle state updated successfully",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductLifecycleResponse"
                                 }
@@ -548,20 +548,20 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "Updated",
+                    "404": {
+                        "description": "Not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/SupplierItemCostDto"
                                 }
                             }
                         }
                     },
-                    "404": {
-                        "description": "Not found",
+                    "200": {
+                        "description": "Updated",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/SupplierItemCostDto"
                                 }
@@ -616,20 +616,20 @@
                     }
                 ],
                 "responses": {
-                    "404": {
-                        "description": "Price book not found",
+                    "200": {
+                        "description": "Price book returned",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PriceBookDto"
                                 }
                             }
                         }
                     },
-                    "200": {
-                        "description": "Price book returned",
+                    "404": {
+                        "description": "Price book not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PriceBookDto"
                                 }
@@ -1304,20 +1304,20 @@
                             }
                         }
                     },
-                    "400": {
-                        "description": "Invalid payload",
+                    "201": {
+                        "description": "MSRP created",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductMsrpDto"
                                 }
                             }
                         }
                     },
-                    "201": {
-                        "description": "MSRP created",
+                    "400": {
+                        "description": "Invalid payload",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductMsrpDto"
                                 }
@@ -1460,16 +1460,6 @@
                     "required": true
                 },
                 "responses": {
-                    "201": {
-                        "description": "Override created",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "description": "Guardrail validation failed",
                         "content": {
@@ -1484,6 +1474,16 @@
                         "description": "Forbidden",
                         "content": {
                             "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Override created",
+                        "content": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/LocationPriceOverrideResponseDto"
                                 }
@@ -1783,20 +1783,20 @@
                     "required": true
                 },
                 "responses": {
-                    "409": {
-                        "description": "Rule conflict",
+                    "201": {
+                        "description": "Price book rule created",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PriceBookRuleDto"
                                 }
                             }
                         }
                     },
-                    "201": {
-                        "description": "Price book rule created",
+                    "409": {
+                        "description": "Rule conflict",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/PriceBookRuleDto"
                                 }
@@ -1999,20 +1999,20 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Active MSRP returned",
+                    "404": {
+                        "description": "No active MSRP for date",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductMsrpDto"
                                 }
                             }
                         }
                     },
-                    "404": {
-                        "description": "No active MSRP for date",
+                    "200": {
+                        "description": "Active MSRP returned",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ProductMsrpDto"
                                 }
@@ -2117,20 +2117,20 @@
                     }
                 ],
                 "responses": {
-                    "404": {
-                        "description": "Service not found",
+                    "200": {
+                        "description": "Successfully retrieved service",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ServiceDto"
                                 }
                             }
                         }
                     },
-                    "200": {
-                        "description": "Successfully retrieved service",
+                    "404": {
+                        "description": "Service not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ServiceDto"
                                 }
@@ -2248,20 +2248,20 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "Successfully retrieved non-inventory product",
+                    "404": {
+                        "description": "Non-inventory product not found",
                         "content": {
-                            "application/json": {
+                            "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/NonInventoryProductDto"
                                 }
                             }
                         }
                     },
-                    "404": {
-                        "description": "Non-inventory product not found",
+                    "200": {
+                        "description": "Successfully retrieved non-inventory product",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/NonInventoryProductDto"
                                 }
