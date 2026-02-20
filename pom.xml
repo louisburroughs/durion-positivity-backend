@@ -256,7 +256,7 @@
 		<!-- Test Dependencies - JUnit managed by Spring Boot 4.0.2 (6.0.2) -->
 		<mockito.version>5.9.0</mockito.version>
 		<assertj.version>3.25.1</assertj.version>
-		<rest-assured.version>5.5.0</rest-assured.version>
+		<rest-assured.version>4.5.1</rest-assured.version>
 		<!-- Utility Libraries -->
 		<lombok.version>1.18.32</lombok.version>
 		<slf4j.version>2.0.13</slf4j.version>

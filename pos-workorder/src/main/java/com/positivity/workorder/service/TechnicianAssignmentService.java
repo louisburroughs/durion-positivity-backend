@@ -84,13 +84,16 @@ public class TechnicianAssignmentService {
         }
 
         // Create new assignment
+        LocalDateTime now = LocalDateTime.now();
         TechnicianAssignment assignment = TechnicianAssignment.builder()
                 .workorderId(workorderId)
                 .technicianId(technicianId)
                 .assignedBy(assignedBy)
-                .assignedAt(LocalDateTime.now())
+                .assignedAt(now)
                 .notes(notes)
                 .current(true)
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
 
         TechnicianAssignment saved = assignmentRepository.save(assignment);
@@ -154,14 +157,17 @@ public class TechnicianAssignmentService {
         assignmentRepository.save(currentAssignment);
 
         // Create new assignment
+        LocalDateTime now = LocalDateTime.now();
         TechnicianAssignment newAssignment = TechnicianAssignment.builder()
                 .workorderId(workorderId)
                 .technicianId(newTechnicianId)
                 .assignedBy(reassignedBy)
-                .assignedAt(LocalDateTime.now())
+                .assignedAt(now)
                 .notes(notes)
                 .reassignmentReason(reason)
                 .current(true)
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
 
         TechnicianAssignment saved = assignmentRepository.save(newAssignment);

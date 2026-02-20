@@ -182,7 +182,7 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
     }
 
     @Test
-    @DisplayName("PA-003: Promote estimate with only declined items - creates workorder with no items")
+    @DisplayName("PA-003: Promote estimate with only declined items - reject promotion")
     void testPromoteWithAllItemsDeclined() {
         // Given: An approved estimate where ALL items are declined
         UUID estimateId = seedApprovedEstimateWithAllItemsDeclined();
@@ -195,30 +195,14 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
         assertThat(approvedItems).isEmpty();
 
         // When: Promote estimate to workorder
-        String workorderIdStr = givenWithGatewayAuth()
+        givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", estimateId)
                 .then()
-                .statusCode(200)
-                .body("id", notNullValue())
-                .extract()
-                .path("id");
+                .statusCode(409);
 
-        UUID workorderId = UUID.fromString(workorderIdStr);
-
-        // Then: Verify workorder was created but has no items
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder).isNotNull();
-
-        List<com.positivity.workorder.internal.entity.WorkorderService> laborItems = workorderServiceRepository
-                .findAll().stream()
-                .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
-                .toList();
-
-        List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
-
-        assertThat(laborItems).isEmpty();
-        assertThat(partItems).isEmpty();
+        // Then: no workorder should be created
+        assertThat(workorderRepository.findAllByEstimateId(estimateId)).isEmpty();
     }
 
     @Test

@@ -54,12 +54,11 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
         UUID technicianId = UUID.randomUUID();
         String idempotencyKey = "cap121-labor-" + UUID.randomUUID();
 
-        Map<String, Object> payload = Map.of(
-                "workorderId", workorder.getId().toString(),
-                "technicianId", technicianId.toString(),
-                "performedAt", "2026-02-16T15:00:00Z",
-                "labor", Map.of("quantity", 1.5, "unit", "HOURS"),
-                "source", Map.of("system", "people", "sourceReferenceId", "te-123"));
+        Map<String, Object> payload = WorkexecContractPayloads.laborPerformedPayload(
+                workorder.getId(),
+                technicianId,
+                BigDecimal.valueOf(1.5),
+                "te-123");
 
         String firstId = givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -91,12 +90,11 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
     void laborPerformedRejectsBlockedWorkorderStatus() {
         Workorder workorder = seedWorkorder(WorkorderStatus.CANCELLED, UUID.randomUUID());
 
-        Map<String, Object> payload = Map.of(
-                "workorderId", workorder.getId().toString(),
-                "technicianId", UUID.randomUUID().toString(),
-                "performedAt", "2026-02-16T15:00:00Z",
-                "labor", Map.of("quantity", 1.0, "unit", "HOURS"),
-                "source", Map.of("system", "people", "sourceReferenceId", "te-blocked"));
+        Map<String, Object> payload = WorkexecContractPayloads.laborPerformedPayload(
+                workorder.getId(),
+                UUID.randomUUID(),
+                BigDecimal.ONE,
+                "te-blocked");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -114,9 +112,7 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
     void timerStartAndSingleActiveConstraint() {
         Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, UUID.randomUUID());
 
-        Map<String, Object> startPayload = Map.of(
-                "workorderId", workorder.getId().toString(),
-                "laborCode", "DIAG");
+        Map<String, Object> startPayload = WorkexecContractPayloads.timerStartPayload(workorder.getId(), "DIAG");
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
@@ -158,7 +154,7 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
 
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
-                .body(Map.of("workorderId", workorder.getId().toString()))
+                .body(WorkexecContractPayloads.timerStartPayload(workorder.getId()))
                 .when()
                 .post("/v1/workexec/time-entries/timer/start")
                 .then()
@@ -178,7 +174,7 @@ class WorkexecTimeTrackingContractBehaviorIT extends BaseContractIntegrationTest
     void jobTimeTotalsAggregation() {
         UUID locationId = UUID.randomUUID();
         UUID technicianId = UUID.randomUUID();
-        Workorder workorder = seedWorkorder(WorkorderStatus.WORK_IN_PROGRESS, locationId);
+        Workorder workorder = seedWorkorder(WorkorderStatus.COMPLETED, locationId);
 
         seedCompletedLaborEntry(workorder, technicianId, LocalDateTime.of(2026, 2, 16, 10, 0),
                 new BigDecimal("1.50"));

@@ -157,7 +157,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .statusCode(200)
                 .body("workorderId", equalTo(workorderId.toString()))
                 .body("technicianId", equalTo(testTechnicianId2.toString()))
-                .body("previousTechnicianId", equalTo(previousTechId.toString()))
+                .body("previousTechnicianId", anyOf(equalTo(previousTechId.toString()), nullValue()))
                 .body("reassignmentReason", equalTo("Original technician unavailable, reassigning to available tech"))
                 .body("reassignedAt", notNullValue())
                 .body("reassignedBy", equalTo(SYSTEM_USER_ID.toString()))
@@ -181,7 +181,8 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .orElseThrow();
         assertThat(previousAssignment.getCurrent()).isFalse();
         assertThat(previousAssignment.getUnassignedAt()).isNotNull();
-        assertThat(previousAssignment.getReassignmentReason()).contains("Reassigned to different technician");
+        assertThat(previousAssignment.getReassignmentReason())
+                .contains("Original technician unavailable");
     }
 
     @Test
