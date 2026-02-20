@@ -2,6 +2,7 @@ package com.positivity.workorder;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -102,4 +103,10 @@ public class ArchitectureTest {
                         .allowEmptyShould(true)
                         .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
 
+
+    @ArchTest
+    static final ArchRule packages_should_be_free_of_cycles = slices()
+            .matching("com.positivity.workorder.(*)..")
+            .should().beFreeOfCycles()
+            .because("cyclic dependencies make modules harder to maintain and evolve");
 }
