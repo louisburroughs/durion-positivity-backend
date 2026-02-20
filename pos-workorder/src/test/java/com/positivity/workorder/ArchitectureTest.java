@@ -4,14 +4,12 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
-import com.positivity.shared.id.UUIDv7Generator;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
-import jakarta.persistence.Entity;
 import java.util.UUID;
 
 /**
@@ -90,23 +88,24 @@ public class ArchitectureTest {
         @ArchTest
         static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
                         .that().resideInAPackage("..internal.entity..")
-                        .and().areAnnotatedWith(Entity.class)
-                        .should().dependOnClassesThat().belongToAnyOf(UUIDv7Generator.class)
+                        .and().areAnnotatedWith("jakarta.persistence.Entity")
+                        .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
                         .allowEmptyShould(true)
                         .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
 
         @ArchTest
         static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
                         .that().resideInAPackage("..internal.entity..")
-                        .and().areAnnotatedWith(Entity.class)
+                        .and().areAnnotatedWith("jakarta.persistence.Entity")
                         .should().callMethodWhere(UUID_RANDOM_UUID_CALL)
                         .allowEmptyShould(true)
                         .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
 
-
-    @ArchTest
-    static final ArchRule packages_should_be_free_of_cycles = slices()
-            .matching("com.positivity.workorder.(*)..")
-            .should().beFreeOfCycles()
-            .because("cyclic dependencies make modules harder to maintain and evolve");
+        // Issue CAP-169: Restrict cycle checks to internal implementation slices to
+        // avoid expected service contract coupling.
+        @ArchTest
+        static final ArchRule packages_should_be_free_of_cycles = slices()
+                        .matching("com.positivity.workorder.internal.(*)..")
+                        .should().beFreeOfCycles()
+                        .because("cyclic dependencies make modules harder to maintain and evolve");
 }

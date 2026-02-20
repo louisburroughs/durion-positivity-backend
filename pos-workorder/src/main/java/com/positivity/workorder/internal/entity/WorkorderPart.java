@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
@@ -80,6 +81,22 @@ public class WorkorderPart {
     @Column(columnDefinition = "UUID")
     @Nullable
     private UUID originEstimateItemId; // Traceability link to source EstimateItem
+
+    // Issue #49: Track substitution metadata for immutable substitution history.
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean isSubstituted = false;
+
+    // Issue #49: Price lock status after substitution pricing snapshot is captured.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private PriceLockStatus priceLockStatus = PriceLockStatus.UNLOCKED;
+
+    // Issue #49: Original product ID prior to substitution for traceability.
+    @Column(columnDefinition = "UUID")
+    @Nullable
+    private UUID originalProductId;
 
     // Flag to indicate this part was declined by customer during estimate approval
     @Builder.Default
