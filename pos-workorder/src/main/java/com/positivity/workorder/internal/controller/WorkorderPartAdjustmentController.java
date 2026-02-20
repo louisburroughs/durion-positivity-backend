@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.*;
 import com.positivity.workorder.service.WorkorderPartAdjustmentService;
+import com.positivity.workorder.service.WorkorderSubstitutionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -40,9 +41,13 @@ import java.util.UUID;
 public class WorkorderPartAdjustmentController {
 
     private final WorkorderPartAdjustmentService adjustmentService;
+    private final WorkorderSubstitutionService substitutionService;
 
-    public WorkorderPartAdjustmentController(WorkorderPartAdjustmentService adjustmentService) {
+    public WorkorderPartAdjustmentController(
+            WorkorderPartAdjustmentService adjustmentService,
+            WorkorderSubstitutionService substitutionService) {
         this.adjustmentService = adjustmentService;
+        this.substitutionService = substitutionService;
     }
 
     /**
@@ -64,7 +69,8 @@ public class WorkorderPartAdjustmentController {
             @RequestHeader(value = "X-User-Id", required = true) @NonNull UUID userId) {
 
         try {
-            WorkorderPartAdjustmentEventResponse response = adjustmentService.substitutePartLine(
+            // Issue #49: Delegate substitute flow to dedicated substitution service.
+            WorkorderPartAdjustmentEventResponse response = substitutionService.substitutePartLine(
                     workorderId,
                     request.getOriginalPartId(),
                     request.getSubstitutePartId(),
