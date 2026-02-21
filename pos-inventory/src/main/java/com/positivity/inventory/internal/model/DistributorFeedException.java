@@ -4,16 +4,18 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.positivity.shared.id.UUIDv7Generator;
+
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Exception queue entry for distributor feed records that cannot be normalized.
@@ -29,8 +31,7 @@ import java.time.Instant;
 public class DistributorFeedException {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private UUID id;
 
     @Column(nullable = false)
     private String distributorId;
@@ -46,4 +47,14 @@ public class DistributorFeedException {
 
     @Column(nullable = false)
     private Instant createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+    }
 }

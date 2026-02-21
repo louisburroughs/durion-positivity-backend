@@ -65,7 +65,7 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
     @Test
     @DisplayName("AC-22-1: approving cycle count adjustment publishes MovementAdjusted to movements topic")
     void approvingCycleCountAdjustment_publishesMovementAdjustedEventToMovementsTopic() throws Exception {
-        Long adjustmentId = createPendingApprovalAdjustment();
+        UUID adjustmentId = createPendingApprovalAdjustment();
 
         approveAdjustment(adjustmentId);
 
@@ -80,7 +80,7 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
     @Test
     @DisplayName("AC-22-2: MovementAdjusted event contains required envelope fields and UUID eventId")
     void movementAdjustedEvent_containsRequiredEnvelopeAndUuidEventId() throws Exception {
-        Long adjustmentId = createPendingApprovalAdjustment();
+        UUID adjustmentId = createPendingApprovalAdjustment();
 
         approveAdjustment(adjustmentId);
 
@@ -101,7 +101,7 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
         assertThatCode(() -> UUID.fromString(eventEnvelope.get("eventId").asString())).doesNotThrowAnyException();
     }
 
-    private Long createPendingApprovalAdjustment() throws Exception {
+    private UUID createPendingApprovalAdjustment() throws Exception {
         JsonNode createRequest = objectMapper.createObjectNode()
                 .put("stockItemId", "SKU-ISSUE-22")
                 .put("reasonCode", "CYCLE_COUNT_RECONCILIATION")
@@ -122,10 +122,10 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
                 .getResponse()
                 .getContentAsString();
 
-        return objectMapper.readTree(createResponse).path("adjustmentId").asLong();
+        return UUID.fromString(objectMapper.readTree(createResponse).path("adjustmentId").asText());
     }
 
-    private void approveAdjustment(@NonNull Long adjustmentId) throws Exception {
+    private void approveAdjustment(@NonNull UUID adjustmentId) throws Exception {
         JsonNode approveRequest = objectMapper.createObjectNode()
                 .put("approverUserId", "user-approver")
                 .put("notes", "approve adjustment for audit event contract test");

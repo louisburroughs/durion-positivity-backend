@@ -6,8 +6,11 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
+import com.positivity.shared.id.UUIDv7Generator;
+
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Configuration for approval thresholds used to evaluate cycle count adjustments.
@@ -24,8 +27,7 @@ import java.time.Instant;
 public class ApprovalThresholdConfig {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long configId;
+    private UUID configId;
     
     /**
      * Approval tier this configuration applies to.
@@ -79,6 +81,9 @@ public class ApprovalThresholdConfig {
     
     @PrePersist
     protected void onCreate() {
+        if (configId == null) {
+            configId = UUIDv7Generator.generate();
+        }
         Instant now = Instant.now();
         createdAt = now;
         updatedAt = now;

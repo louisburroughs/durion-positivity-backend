@@ -11,23 +11,22 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
-import com.positivity.inventory.internal.exception.InsufficientPermissionException;
-import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
-import com.positivity.inventory.internal.exception.RecountLimitExceededException;
-import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.service.CycleCountService;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -47,8 +46,6 @@ import java.util.UUID;
 @RequestMapping("/api/inventory/cycleCount")
 @Tag(name = "Cycle Count API", description = "API for cycle count operations and variance tracking")
 public class CycleCountController {
-
-        private static final String ERROR = "error";
         private final CycleCountService cycleCountService;
 
         /**
@@ -147,49 +144,4 @@ public class CycleCountController {
                 return ResponseEntity.ok(tasks);
         }
 
-        // Exception Handlers
-
-        @ExceptionHandler(TaskNotFoundException.class)
-        public ResponseEntity<Map<String, String>> handleTaskNotFound(TaskNotFoundException ex) {
-                log.error("Task not found: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.NOT_FOUND)
-                                .body(Map.of(ERROR, ex.getMessage()));
-        }
-
-        @ExceptionHandler(InvalidCountQuantityException.class)
-        public ResponseEntity<Map<String, String>> handleInvalidQuantity(InvalidCountQuantityException ex) {
-                log.error("Invalid quantity: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.BAD_REQUEST)
-                                .body(Map.of(ERROR, ex.getMessage()));
-        }
-
-        @ExceptionHandler(RecountLimitExceededException.class)
-        public ResponseEntity<Map<String, Object>> handleRecountLimitExceeded(RecountLimitExceededException ex) {
-                log.error("Recount limit exceeded: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.BAD_REQUEST)
-                                .body(Map.of(
-                                                ERROR, ex.getMessage(),
-                                                "taskId", ex.getTaskId().toString(),
-                                                "currentCount", ex.getCurrentCount(),
-                                                "maxAllowed", ex.getMaxAllowed()));
-        }
-
-        @ExceptionHandler(InsufficientPermissionException.class)
-        public ResponseEntity<Map<String, String>> handleInsufficientPermission(InsufficientPermissionException ex) {
-                log.error("Insufficient permission: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.FORBIDDEN)
-                                .body(Map.of(ERROR, ex.getMessage()));
-        }
-
-        @ExceptionHandler(IllegalStateException.class)
-        public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
-                log.error("Illegal state: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.BAD_REQUEST)
-                                .body(Map.of(ERROR, ex.getMessage()));
-        }
 }
