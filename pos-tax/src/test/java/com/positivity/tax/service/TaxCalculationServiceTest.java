@@ -109,7 +109,7 @@ class TaxCalculationServiceTest {
         // Given
         TaxCalculationRequest request = TaxCalculationRequest.builder()
             .lineItems(List.of())
-            .postalCode(TEST_POSTAL_CODE)
+            .destinationAddress(createDestinationAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
             .build();
         
         // When & Then
@@ -124,7 +124,7 @@ class TaxCalculationServiceTest {
         // Given
         TaxCalculationRequest request = TaxCalculationRequest.builder()
             .lineItems(List.of(createLineItem("1", "Item", "1", "100")))
-            .postalCode("")
+            .destinationAddress(createDestinationAddress("", "CA", "Los Angeles", "US"))
             .build();
         
         // When & Then
@@ -146,7 +146,7 @@ class TaxCalculationServiceTest {
         
         TaxCalculationRequest request = TaxCalculationRequest.builder()
             .lineItems(List.of(invalidItem))
-            .postalCode(TEST_POSTAL_CODE)
+            .destinationAddress(createDestinationAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
             .build();
         
         // When & Then
@@ -165,9 +165,7 @@ class TaxCalculationServiceTest {
         
         TaxCalculationRequest request = TaxCalculationRequest.builder()
             .lineItems(List.of(taxableItem, exemptItem))
-            .postalCode(TEST_POSTAL_CODE)
-            .stateCode("CA")
-            .city("Los Angeles")
+            .destinationAddress(createDestinationAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
             .build();
         
         // When
@@ -212,10 +210,20 @@ class TaxCalculationServiceTest {
                 createLineItem("1", "Part A", "2", "50"),
                 createLineItem("2", "Part B", "1", "50")
             ))
-            .postalCode(TEST_POSTAL_CODE)
-            .stateCode("CA")
-            .city("Los Angeles")
-            .countryCode("US")
+            .destinationAddress(createDestinationAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
+            .build();
+    }
+
+    private TaxCalculationRequest.TaxAddress createDestinationAddress(
+            String postalCode,
+            String regionCode,
+            String city,
+            String countryCode) {
+        return TaxCalculationRequest.TaxAddress.builder()
+            .postalCode(postalCode)
+            .regionCode(regionCode)
+            .city(city)
+            .countryCode(countryCode)
             .build();
     }
 

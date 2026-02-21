@@ -1,6 +1,5 @@
 package com.positivity.vehicle.internal.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.vehicle.internal.dto.VehicleUpdatedEvent;
 import com.positivity.vehicle.service.VehicleEventIngestionService;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Message listener configuration for vehicle events (CAP:091 Story #101).

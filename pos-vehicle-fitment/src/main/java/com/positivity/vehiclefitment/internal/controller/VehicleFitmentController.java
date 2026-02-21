@@ -41,7 +41,7 @@ public class VehicleFitmentController {
     @ApiResponse(responseCode = "200", description = "List of makes returned successfully.")
     @GetMapping("/makes/{manufacturerId}")
     public List<Make> getMakesByManufacturer(
-            @Parameter(description = "ID of the manufacturer", example = "1") @PathVariable UUID manufacturerId) {
+            @Parameter(description = "ID of the manufacturer", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable UUID manufacturerId) {
         return vehicleFitmentService.getMakesByManufacturer(manufacturerId);
     }
 
@@ -49,7 +49,7 @@ public class VehicleFitmentController {
     @ApiResponse(responseCode = "200", description = "List of models returned successfully.")
     @GetMapping("/models/{makeId}")
     public List<Model> getModelsByMake(
-            @Parameter(description = "ID of the make", example = "1") @PathVariable UUID makeId) {
+            @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable UUID makeId) {
         return vehicleFitmentService.getModelsByMake(makeId);
     }
 
@@ -57,7 +57,7 @@ public class VehicleFitmentController {
     @ApiResponse(responseCode = "200", description = "List of vehicle types returned successfully.")
     @GetMapping("/vehicle-types/{makeId}")
     public List<VehicleType> getVehicleTypesForMake(
-            @Parameter(description = "ID of the make", example = "1") @PathVariable UUID makeId) {
+            @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable UUID makeId) {
         return vehicleFitmentService.getVehicleTypesForMake(makeId);
     }
 }

@@ -1,0 +1,405 @@
+openapi: 3.1.0
+info:
+  title: Vehicle Fitment API
+  description: API for vehicle fitment data in the POS system
+  contact:
+    name: Durion Team
+    email: platform@durion.com
+  version: "1.0"
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Vehicle Applicability Hints
+  description: Endpoints for managing product fitment hints and filtering products
+    by vehicle attributes
+- name: Vehicle Fitment API
+  description: "Endpoints for vehicle manufacturers, makes, models, and types"
+paths:
+  /v1/vehicle-fitment/hints/{hintId}:
+    get:
+      tags:
+      - Vehicle Applicability Hints
+      summary: Get a vehicle applicability hint
+      description: Retrieve a hint by its ID
+      operationId: getHint
+      parameters:
+      - name: hintId
+        in: path
+        description: ID of the hint to retrieve
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Hint retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+        "404":
+          description: Hint not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+    put:
+      tags:
+      - Vehicle Applicability Hints
+      summary: Update a vehicle applicability hint
+      description: Update the fitment tags for an existing hint
+      operationId: updateHint
+      parameters:
+      - name: hintId
+        in: path
+        description: ID of the hint to update
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHintRequest"
+        required: true
+      responses:
+        "200":
+          description: Hint updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+        "404":
+          description: Hint not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+        "400":
+          description: Invalid request data
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+    delete:
+      tags:
+      - Vehicle Applicability Hints
+      summary: Delete a vehicle applicability hint
+      description: Remove a hint and all its associated tags
+      operationId: deleteHint
+      parameters:
+      - name: hintId
+        in: path
+        description: ID of the hint to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Hint not found
+        "204":
+          description: Hint deleted successfully
+  /v1/vehicle-fitment/hints:
+    post:
+      tags:
+      - Vehicle Applicability Hints
+      summary: Create a vehicle applicability hint
+      description: Create a new hint with fitment tags for a product
+      operationId: createHint
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHintRequest"
+        required: true
+      responses:
+        "201":
+          description: Hint created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+        "400":
+          description: Invalid request data
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+        "404":
+          description: Product not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/HintResponse"
+  /v1/vehicle-fitment/hints/filter-products:
+    post:
+      tags:
+      - Vehicle Applicability Hints
+      summary: Filter products by vehicle attributes
+      description: Find products that match the provided vehicle attributes
+      operationId: filterProducts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+        required: true
+      responses:
+        "200":
+          description: Products filtered successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FilterProductsResponse"
+        "400":
+          description: Invalid request data
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FilterProductsResponse"
+  /v1/vehicle-fitment/vehicle-types/{makeId}:
+    get:
+      tags:
+      - Vehicle Fitment API
+      summary: Get vehicle types for make
+      description: Retrieve all vehicle types for a given make.
+      operationId: getVehicleTypesForMake
+      parameters:
+      - name: makeId
+        in: path
+        description: ID of the make
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "200":
+          description: List of vehicle types returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VehicleType"
+  /v1/vehicle-fitment/models/{makeId}:
+    get:
+      tags:
+      - Vehicle Fitment API
+      summary: Get models by make
+      description: Retrieve all models for a given make.
+      operationId: getModelsByMake
+      parameters:
+      - name: makeId
+        in: path
+        description: ID of the make
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "200":
+          description: List of models returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Model"
+  /v1/vehicle-fitment/manufacturers:
+    get:
+      tags:
+      - Vehicle Fitment API
+      summary: Get all manufacturers
+      description: Retrieve a list of all vehicle manufacturers.
+      operationId: getManufacturers
+      responses:
+        "200":
+          description: List of manufacturers returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Manufacturer"
+  /v1/vehicle-fitment/makes/{manufacturerId}:
+    get:
+      tags:
+      - Vehicle Fitment API
+      summary: Get makes by manufacturer
+      description: Retrieve all makes for a given manufacturer.
+      operationId: getMakesByManufacturer
+      parameters:
+      - name: manufacturerId
+        in: path
+        description: ID of the manufacturer
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "200":
+          description: List of makes returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Make"
+  /v1/vehicle-fitment/hints/product/{productId}:
+    get:
+      tags:
+      - Vehicle Applicability Hints
+      summary: Get hints by product ID
+      description: Retrieve all hints associated with a specific product
+      operationId: getHintsByProductId
+      parameters:
+      - name: productId
+        in: path
+        description: ID of the product
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Hints retrieved successfully
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HintResponse"
+components:
+  schemas:
+    FitmentTagDto:
+      type: object
+      properties:
+        tagType:
+          type: string
+          enum:
+          - MAKE
+          - MODEL
+          - YEAR_RANGE
+          - TIRE_SIZE
+          - AXLE_POSITION
+          - ENGINE_SIZE
+          - TRIM_LEVEL
+        tagValue:
+          type: string
+    UpdateHintRequest:
+      type: object
+      properties:
+        fitmentTags:
+          type: array
+          items:
+            $ref: "#/components/schemas/FitmentTagDto"
+        updatedBy:
+          type: string
+      required:
+      - fitmentTags
+    HintResponse:
+      type: object
+      properties:
+        hintId:
+          type: string
+        productId:
+          type: string
+        fitmentTags:
+          type: array
+          items:
+            $ref: "#/components/schemas/FitmentTagDto"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+    CreateHintRequest:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        fitmentTags:
+          type: array
+          items:
+            $ref: "#/components/schemas/FitmentTagDto"
+        createdBy:
+          type: string
+      required:
+      - fitmentTags
+      - productId
+    FilterProductsResponse:
+      type: object
+      properties:
+        productIds:
+          type: array
+          items:
+            type: string
+        count:
+          type: integer
+          format: int32
+    Make:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        manufacturer:
+          $ref: "#/components/schemas/Manufacturer"
+        cacheTimestamp:
+          type: string
+          format: date-time
+    Manufacturer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        cacheTimestamp:
+          type: string
+          format: date-time
+    VehicleType:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        make:
+          $ref: "#/components/schemas/Make"
+        vehicleTypeName:
+          type: string
+        vehicleTypeId:
+          type: string
+        cacheTimestamp:
+          type: string
+          format: date-time
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        make:
+          $ref: "#/components/schemas/Make"
+        cacheTimestamp:
+          type: string
+          format: date-time

@@ -113,6 +113,8 @@ fi
 echo "Modules: ${MODULES[*]}"
 echo
 
+FAILED_MODULES=()
+
 for module in "${MODULES[@]}"; do
   if ! module_has_openapi "$module"; then
     echo "Skipping $module (no openapi.yaml output configured in pom.xml)"
@@ -123,25 +125,38 @@ for module in "${MODULES[@]}"; do
   echo "==> $module"
   echo "${cmd[*]}"
   if [[ "$DRY_RUN" == false ]]; then
+    module_status=0
     if [[ "$MODULE_TIMEOUT_SECONDS" -gt 0 ]]; then
       if command -v timeout >/dev/null 2>&1; then
-        if ! timeout --foreground "${MODULE_TIMEOUT_SECONDS}" "${cmd[@]}"; then
-          status=$?
-          if [[ "$status" -eq 124 ]]; then
-            echo "ERROR: Timed out after ${MODULE_TIMEOUT_SECONDS}s while generating OpenAPI for $module." >&2
-            echo "This usually indicates Spring Boot failed to start or startup never reached readiness." >&2
-          fi
-          exit "$status"
+        timeout --foreground "${MODULE_TIMEOUT_SECONDS}" "${cmd[@]}" || module_status=$?
+        if [[ "$module_status" -eq 124 ]]; then
+          echo "ERROR: Timed out after ${MODULE_TIMEOUT_SECONDS}s while generating OpenAPI for $module." >&2
+          echo "This usually indicates Spring Boot failed to start or startup never reached readiness." >&2
+        elif [[ "$module_status" -ne 0 ]]; then
+          echo "ERROR: OpenAPI generation failed for $module (exit code: $module_status)." >&2
         fi
       else
         echo "WARN: 'timeout' command not found; running without timeout for $module." >&2
-        "${cmd[@]}"
+        "${cmd[@]}" || module_status=$?
       fi
     else
-      "${cmd[@]}"
+      "${cmd[@]}" || module_status=$?
+    fi
+
+    if [[ "$module_status" -ne 0 ]]; then
+      FAILED_MODULES+=("$module:$module_status")
+      echo "Continuing to next module..." >&2
     fi
   fi
   echo
 done
 
-echo "OpenAPI generation completed."
+if [[ ${#FAILED_MODULES[@]} -gt 0 ]]; then
+  echo "OpenAPI generation completed with failures:"
+  for failed in "${FAILED_MODULES[@]}"; do
+    echo "  - $failed"
+  done
+  exit 1
+fi
+
+echo "OpenAPI generation completed successfully."

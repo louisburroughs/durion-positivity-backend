@@ -23,6 +23,7 @@ public abstract class VehicleEntity implements Vehicle {
 
     private String make;
     private String model;
+    @Column(name = "model_year")
     private int year;
     private String vin;
 

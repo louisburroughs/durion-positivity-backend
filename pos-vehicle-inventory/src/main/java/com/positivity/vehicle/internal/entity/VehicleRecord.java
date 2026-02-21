@@ -10,7 +10,12 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.vehicle.internal.enums.OdometerUnit;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -81,7 +86,7 @@ public class VehicleRecord {
     @Column(name = "license_plate_jurisdiction", length = 50)
     private String licensePlateJurisdiction;
 
-    @Column(name = "year")
+    @Column(name = "model_year")
     private Integer year;
 
     @Column(name = "make")
@@ -119,10 +124,26 @@ public class VehicleRecord {
     @Data
     @Builder
     @NoArgsConstructor
-    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class OdometerReading {
+        @JsonProperty("value")
         private Long value;
-        private String unit; // MILES or KILOMETERS
+
+        @JsonProperty("unit")
+        private OdometerUnit unit;
+
+        @JsonProperty("asOfDateTime")
         private Instant asOfDateTime;
+
+        @JsonCreator
+        public OdometerReading(
+                @JsonProperty("value") Long value,
+                @JsonProperty("unit") OdometerUnit unit,
+                @JsonProperty("asOfDateTime") Instant asOfDateTime) {
+            this.value = value;
+            this.unit = unit;
+            this.asOfDateTime = asOfDateTime;
+        }
     }
 }

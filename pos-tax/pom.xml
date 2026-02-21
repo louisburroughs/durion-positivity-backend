@@ -71,6 +71,16 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.meeuw.i18n</groupId>
+            <artifactId>i18n-subdivision-enums</artifactId>
+            <version>0.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.neovisionaries</groupId>
+            <artifactId>nv-i18n</artifactId>
+            <version>1.29</version>
+        </dependency>
 
         <!-- Test Dependencies -->
         <dependency>
@@ -168,7 +178,8 @@
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
                         <configuration>
-                            <apiDocsUrl>http://localhost:8086/v3/api-docs.yaml</apiDocsUrl>
+                            <apiDocsUrl>http://localhost:8086/api-docs.yaml</apiDocsUrl>
+                            <failOnError>true</failOnError>
                             <outputFileName>openapi.yaml</outputFileName>
                             <outputDir>${project.basedir}</outputDir>
                         </configuration>

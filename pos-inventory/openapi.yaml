@@ -164,16 +164,16 @@ paths:
           application/json:
             schema: {}
       responses:
-        "501":
-          description: Not implemented
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InventoryAvailabilityResponse"
         "200":
           description: Availability updated
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAvailabilityResponse"
+        "501":
+          description: Not implemented
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/InventoryAvailabilityResponse"
   /api/v1/inventory/cycleCountAdjustments:
@@ -510,16 +510,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Task retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CycleCountTaskResponse"
         "404":
           description: Task not found
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountTaskResponse"
+        "200":
+          description: Task retrieved successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
   /api/inventory/cycleCount/task/{taskId}/history:

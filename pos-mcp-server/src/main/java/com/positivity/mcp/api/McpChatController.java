@@ -39,9 +39,9 @@ public class McpChatController {
     private final McpSyncClient mcpSyncClient;
     private final ObjectMapper objectMapper;
 
-    public McpChatController(McpSyncClient mcpSyncClient, ObjectMapper objectMapper) {
+    public McpChatController(McpSyncClient mcpSyncClient) {
         this.mcpSyncClient = mcpSyncClient;
-        this.objectMapper = objectMapper;
+        this.objectMapper = new ObjectMapper();
     }
 
     @Operation(summary = "Execute MCP Tool", description = "Synchronously execute an MCP tool with the provided arguments and return the result")

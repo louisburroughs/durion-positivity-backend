@@ -5,6 +5,9 @@ import com.positivity.tax.internal.dto.TaxCalculationRequest;
 import com.positivity.tax.internal.dto.TaxCalculationResponse;
 import com.positivity.tax.service.TaxCalculationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/tax")
+@RequestMapping("/v1/tax")
 @Tag(name = "Tax", description = "Tax calculation API")
 public class TaxController {
 
@@ -34,20 +37,19 @@ public class TaxController {
      */
     @PostMapping("/calculate")
     @EmitEvent(id = "TAX_CALCULATE", apiVersion = "1")
-    @Operation(
-        summary = "Calculate tax",
-        description = "Calculate tax for line items based on location. Routes to external service in production or test calculator in test mode."
-    )
+    @Operation(summary = "Calculate tax", description = "Calculate tax for line items based on location. Routes to external service in production or test calculator in test mode.")
+    @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid tax calculation request")
+    @ApiResponse(responseCode = "500", description = "Tax calculation failed")
     public ResponseEntity<TaxCalculationResponse> calculateTax(
-        @Valid @RequestBody TaxCalculationRequest request
-    ) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "International tax calculation request", content = @Content(mediaType = "application/json", examples = @ExampleObject(name = "US destination example", value = "{\"lineItems\":[{\"lineItemId\":\"1\",\"description\":\"Oil Change Service\",\"quantity\":1,\"unitPrice\":89.99,\"taxExempt\":false}],\"destinationAddress\":{\"countryCode\":\"US\",\"regionCode\":\"CA\",\"city\":\"Los Angeles\",\"postalCode\":\"90001\",\"line1\":\"123 Main St\"},\"currencyCode\":\"USD\",\"locale\":\"en-US\",\"referenceId\":\"550e8400-e29b-41d4-a716-446655440000\",\"referenceType\":\"ESTIMATE\"}"))) @Valid @RequestBody TaxCalculationRequest request) {
         log.info("Received tax calculation request for {} line items, postal code: {}",
-            request.getLineItems().size(), request.getPostalCode());
+                request.getLineItems().size(), request.getPostalCode());
 
         TaxCalculationResponse response = taxCalculationService.calculateTax(request);
 
         log.info("Tax calculation completed. Total tax: {}, Test mode: {}",
-            response.getTotalTax(), response.isTestMode());
+                response.getTotalTax(), response.isTestMode());
 
         return ResponseEntity.ok(response);
     }
@@ -58,20 +60,18 @@ public class TaxController {
      * @return response indicating test mode status
      */
     @GetMapping("/mode")
-    @Operation(
-        summary = "Get tax service mode",
-        description = "Check if the tax service is currently in test mode or production mode"
-    )
+    @Operation(summary = "Get tax service mode", description = "Check if the tax service is currently in test mode or production mode")
+    @ApiResponse(responseCode = "200", description = "Tax service mode retrieved successfully")
     public ResponseEntity<ModeResponse> getMode() {
         boolean testMode = taxCalculationService.isTestMode();
         return ResponseEntity.ok(new ModeResponse(
-            testMode ? "test" : "production",
-            testMode
-        ));
+                testMode ? "test" : "production",
+                testMode));
     }
 
     /**
      * Response DTO for mode endpoint.
      */
-    public record ModeResponse(String mode, boolean testMode) {}
+    public record ModeResponse(String mode, boolean testMode) {
+    }
 }
