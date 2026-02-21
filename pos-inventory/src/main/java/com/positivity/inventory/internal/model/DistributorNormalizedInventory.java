@@ -2,15 +2,16 @@ package com.positivity.inventory.internal.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import com.positivity.shared.id.UUIDv7Generator;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -30,8 +31,7 @@ import java.util.UUID;
 public class DistributorNormalizedInventory {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private UUID id;
 
     @Column(nullable = false)
     private UUID productId;
@@ -60,4 +60,11 @@ public class DistributorNormalizedInventory {
 
     @Column(nullable = false)
     private Instant lastUpdatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 }

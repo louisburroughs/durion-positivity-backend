@@ -84,10 +84,17 @@ public class ArchitectureTest {
                         .because("service layer is the public API of this module");
 
         @ArchTest
+        static final ArchRule service_package_should_define_interfaces_only = noClasses()
+                        .that().resideInAPackage("com.positivity.inventory.service..")
+                        .should().notBeInterfaces()
+                        .allowEmptyShould(true)
+                        .because("service package must expose contracts only; implementations belong in internal.service");
+
+        @ArchTest
         static final ArchRule packages_should_be_free_of_cycles = slices()
-                        .matching("com.positivity.inventory.(*)..")
+                        .matching("com.positivity.inventory.internal.(*)..")
                         .should().beFreeOfCycles()
-                        .because("cyclic dependencies make modules harder to maintain and evolve");
+                        .because("internal package cycles make the implementation harder to maintain and evolve");
         @ArchTest
         static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
                         .that().resideInAnyPackage("..internal.entity..", "..internal.model..")

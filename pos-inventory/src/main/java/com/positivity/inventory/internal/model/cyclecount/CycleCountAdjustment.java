@@ -6,8 +6,11 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
+import com.positivity.shared.id.UUIDv7Generator;
+
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Represents an inventory adjustment proposed from a cycle count.
@@ -24,8 +27,7 @@ import java.time.Instant;
 public class CycleCountAdjustment {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long adjustmentId;
+    private UUID adjustmentId;
     
     /**
      * SKU identifier for the stock item being adjusted.
@@ -134,7 +136,7 @@ public class CycleCountAdjustment {
      * Reference to the inventory ledger entry created when posted.
      * Null until adjustment is posted.
      */
-    private Long ledgerEntryId;
+    private UUID ledgerEntryId;
     
     /**
      * Error message if status is FAILED.
@@ -144,6 +146,9 @@ public class CycleCountAdjustment {
     
     @PrePersist
     protected void onCreate() {
+        if (adjustmentId == null) {
+            adjustmentId = UUIDv7Generator.generate();
+        }
         Instant now = Instant.now();
         createdAt = now;
         updatedAt = now;
