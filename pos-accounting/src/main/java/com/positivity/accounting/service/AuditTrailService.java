@@ -351,7 +351,7 @@ public class AuditTrailService {
         }
 
         private String resolveActorId() {
-                return SecurityContextHelper.getCurrentUserIdOrDefault("system");
+                return SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         }
 
         /**

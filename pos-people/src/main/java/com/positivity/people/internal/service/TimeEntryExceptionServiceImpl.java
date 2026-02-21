@@ -20,8 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService {
-    private static final String SYSTEM_ACTOR = "system";
-
     private final TimeEntryExceptionRepository exceptionRepository;
     private final TimeEntryAuditRepository auditRepository;
 
@@ -74,7 +72,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
     public boolean actionException(@NonNull UUID exceptionId,
             @NonNull ExceptionStatus targetStatus,
             @NonNull String actionUserId, String actionNotes, String correlationId) {
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
                 .findById(exceptionId);
         if (opt.isEmpty()) {
@@ -118,7 +116,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
     @Transactional
     public boolean resolveException(@NonNull UUID exceptionId, @NonNull String resolverUserId, Set<String> permissions,
             String resolutionNotes, String resolutionAction, String correlationId) {
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
                 .findById(exceptionId);
         if (opt.isEmpty()) {

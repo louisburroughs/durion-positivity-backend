@@ -102,7 +102,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                         @NonNull UUID adjustmentId,
                         @NonNull ApproveAdjustmentRequest request,
                         @Nullable String correlationId) {
-                String actorUserId = SecurityContextHelper.getCurrentUserIdOrDefault("system");
+                String actorUserId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
                 String actorUsername = SecurityContextHelper.getCurrentUsernameOrDefault("system");
                 log.info("Approving adjustment {} by authenticated actor {}", adjustmentId, actorUsername);
 
@@ -236,7 +236,6 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                                 occurredAt,
                                 Instant.now(),
                                 "inventory",
-                                "",
                                 new AuditActorRef(actorPersonId, actorUsername),
                                 resolvedCorrelationId,
                                 new AuditAggregateRef(adjustment.getAdjustmentId(), "CycleCountAdjustment"),

@@ -42,8 +42,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkorderService {
-    private static final String SYSTEM_ACTOR = "system";
-
     public record ReopenResult(UUID workorderId, String currentStatus, Boolean isReopened, Instant reopenedAt) {
     }
 
@@ -520,7 +518,7 @@ public class WorkorderService {
     private void createApprovalInvalidationAudit(Workorder workorder,
             WorkorderStatus oldStatus,
             EstimateRevisedEvent event) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         AuditEvent audit = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorder.getId())

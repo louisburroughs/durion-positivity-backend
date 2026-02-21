@@ -38,8 +38,6 @@ import java.util.stream.Collectors;
  */
 @Service
 public class WorkorderPartUsageService {
-    private static final String SYSTEM_ACTOR = "system";
-
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartUsageService.class);
 
     private final WorkorderRepository workorderRepository;
@@ -79,7 +77,7 @@ public class WorkorderPartUsageService {
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -155,7 +153,7 @@ public class WorkorderPartUsageService {
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -241,7 +239,7 @@ public class WorkorderPartUsageService {
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {

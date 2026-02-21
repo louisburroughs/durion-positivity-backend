@@ -65,6 +65,19 @@ public final class SecurityContextHelper {
 
     /**
      * Get the current authenticated stable person identifier.
+     *
+     * @return stable person identifier
+     * @throws MissingPersonIdException if no authenticated person identifier is
+     *                                  available
+     */
+    public static String getCurrentUserIdOrThrowIllegalStateException() throws MissingPersonIdException {
+        return getCurrentUserId()
+                .orElseThrow(() -> new MissingPersonIdException(
+                        "Missing authenticated personId for flow requiring audit identity"));
+    }
+
+    /**
+     * Get the current authenticated stable person identifier.
      * <p>
      * Resolves from gateway-injected authentication details (`X-User-Id`) when
      * available. Falls back to principal/username for compatibility.
