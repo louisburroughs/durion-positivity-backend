@@ -9,11 +9,14 @@ import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.repository.WorkOrderPartSubstitutionRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderSubstitutionService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -31,22 +34,24 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionService {
-
     private static final Logger log = LoggerFactory.getLogger(WorkorderSubstitutionServiceImpl.class);
 
     private final WorkorderPartRepository workorderPartRepository;
     private final WorkOrderPartSubstitutionRepository substitutionRepository;
     private final WorkorderPartAdjustmentEventRepository adjustmentEventRepository;
+    private final IdempotencyService idempotencyService;
     private final ObjectMapper objectMapper;
 
     public WorkorderSubstitutionServiceImpl(
             WorkorderPartRepository workorderPartRepository,
             WorkOrderPartSubstitutionRepository substitutionRepository,
             WorkorderPartAdjustmentEventRepository adjustmentEventRepository,
+            IdempotencyService idempotencyService,
             ObjectMapper objectMapper) {
         this.workorderPartRepository = workorderPartRepository;
         this.substitutionRepository = substitutionRepository;
         this.adjustmentEventRepository = adjustmentEventRepository;
+        this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
     }
 
@@ -61,6 +66,19 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);
+            if (existingEventId.isPresent()) {
+                log.info("Idempotency key {} already processed, returning adjustment event {}", idempotencyKey,
+                        existingEventId.get());
+                return adjustmentEventRepository.findById(existingEventId.get())
+                        .map(this::toResponse)
+                        .orElseThrow(
+                                () -> new IllegalStateException("Adjustment event not found: " + existingEventId.get()));
+            }
+        }
 
         WorkorderPart originalPart = workorderPartRepository.findById(originalPartId)
                 .orElseThrow(() -> new NoSuchElementException("Original part not found: " + originalPartId));
@@ -119,7 +137,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 .originalPartNumberSnapshot(originalPart.getDescription())
                 .substituteProductId(substitutePartId)
                 .substitutePartNumberSnapshot(substitutePart.getDescription())
-                .selectedBy(performedBy.toString())
+                .selectedBy(actorId)
                 .selectedAt(Instant.now())
                 .reasonCode(reason)
                 .pricingSnapshot(buildPricingSnapshot(originalPart))
@@ -134,12 +152,15 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 .substitutedWithPartId(substitutePart.getId())
                 .quantityAdjustment(BigDecimal.ZERO)
                 .reason(reason)
-                .performedBy(performedBy)
+                .performedBy(actorId)
                 .performedAt(Instant.now())
                 .notes(notes)
                 .build();
 
         event = adjustmentEventRepository.save(event);
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            idempotencyService.markKeyProcessedForPartAdjustment(idempotencyKey, event.getId());
+        }
 
         log.info("Substituted part {} with {} on workorder {}", originalPartId, substitutePart.getId(), workorderId);
         return toResponse(event);

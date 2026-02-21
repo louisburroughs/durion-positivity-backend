@@ -8,6 +8,7 @@ import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
 import com.positivity.people.service.TimeEntryExceptionService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -19,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService {
-
     private final TimeEntryExceptionRepository exceptionRepository;
     private final TimeEntryAuditRepository auditRepository;
 
@@ -72,6 +72,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
     public boolean actionException(@NonNull UUID exceptionId,
             @NonNull ExceptionStatus targetStatus,
             @NonNull String actionUserId, String actionNotes, String correlationId) {
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
                 .findById(exceptionId);
         if (opt.isEmpty()) {
@@ -99,7 +100,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
             TimeEntryAudit audit = new TimeEntryAudit();
             audit.setTimeEntryId(ex.getTimeEntryId() != null ? ex.getTimeEntryId() : "");
             audit.setAction("EXCEPTION_" + targetStatus.toString());
-            audit.setActorId(actionUserId);
+            audit.setActorId(auditActorId);
             audit.setCorrelationId(correlationId);
             audit.setDetails("Exception " + targetStatus.toString().toLowerCase() + ": "
                     + (actionNotes != null ? actionNotes : ""));
@@ -115,6 +116,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
     @Transactional
     public boolean resolveException(@NonNull UUID exceptionId, @NonNull String resolverUserId, Set<String> permissions,
             String resolutionNotes, String resolutionAction, String correlationId) {
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         Optional<com.positivity.people.internal.entity.TimeEntryException> opt = exceptionRepository
                 .findById(exceptionId);
         if (opt.isEmpty()) {
@@ -129,7 +131,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
                 TimeEntryAudit audit = new TimeEntryAudit();
                 audit.setTimeEntryId(ex.getTimeEntryId() != null ? ex.getTimeEntryId() : "");
                 audit.setAction("EXCEPTION_RESOLVE_FORBIDDEN");
-                audit.setActorId(resolverUserId);
+                audit.setActorId(auditActorId);
                 audit.setCorrelationId(correlationId);
                 audit.setDetails("Permission denied for exception resolve");
                 auditRepository.save(audit);
@@ -159,7 +161,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
             TimeEntryAudit audit = new TimeEntryAudit();
             audit.setTimeEntryId(ex.getTimeEntryId() != null ? ex.getTimeEntryId() : "");
             audit.setAction("EXCEPTION_RESOLVED");
-            audit.setActorId(resolverUserId);
+            audit.setActorId(auditActorId);
             audit.setCorrelationId(correlationId);
             audit.setDetails("Exception resolved: " + (resolutionNotes != null ? resolutionNotes : ""));
             auditRepository.save(audit);

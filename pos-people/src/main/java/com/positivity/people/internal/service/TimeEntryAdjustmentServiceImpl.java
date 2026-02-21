@@ -8,6 +8,7 @@ import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.TimeEntryAdjustmentService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -20,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentService {
-
     private final TimeEntryAdjustmentRepository adjustmentRepository;
     private final TimeEntryAuditRepository auditRepository;
     private final TimeEntryRepository timeEntryRepository;
@@ -105,6 +105,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
     @Transactional
     public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, Set<String> permissions,
             String correlationId) {
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
                 .findById(adjustmentId);
         if (opt.isEmpty()) {
@@ -119,7 +120,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
                 TimeEntryAudit audit = new TimeEntryAudit();
                 audit.setTimeEntryId(adj.getTimeEntryId());
                 audit.setAction("ADJUSTMENT_APPROVE_FORBIDDEN");
-                audit.setActorId(approverUserId);
+                audit.setActorId(auditActorId);
                 audit.setCorrelationId(correlationId);
                 audit.setDetails("Permission denied for adjustment approval");
                 auditRepository.save(audit);
@@ -138,7 +139,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
             TimeEntryAudit audit = new TimeEntryAudit();
             audit.setTimeEntryId(adj.getTimeEntryId());
             audit.setAction("ADJUSTMENT_APPROVED");
-            audit.setActorId(approverUserId);
+            audit.setActorId(auditActorId);
             audit.setCorrelationId(correlationId);
             audit.setDetails("Adjustment approved");
             auditRepository.save(audit);

@@ -9,12 +9,13 @@ import com.positivity.inventory.internal.model.InventoryLedgerEntry;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for {@link InventoryLedgerEntry} entities.
  */
 @Repository
-public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryLedgerEntry, Long> {
+public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryLedgerEntry, UUID> {
 
     /**
      * Find all ledger entries for a specific stock item.
@@ -40,7 +41,7 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
      * @param adjustmentId the adjustment ID
      * @return optional ledger entry
      */
-    Optional<InventoryLedgerEntry> findByAdjustmentId(Long adjustmentId);
+    Optional<InventoryLedgerEntry> findByAdjustmentId(UUID adjustmentId);
 
     /**
      * Calculate current on-hand quantity for a stock item by summing all ledger

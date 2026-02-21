@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.security.common.SecurityContextHelper;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -37,7 +38,6 @@ import java.util.stream.Collectors;
  */
 @Service
 public class WorkorderPartUsageService {
-
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartUsageService.class);
 
     private final WorkorderRepository workorderRepository;
@@ -77,6 +77,7 @@ public class WorkorderPartUsageService {
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -112,7 +113,7 @@ public class WorkorderPartUsageService {
                 .workorderId(workorderId)
                 .eventType("ISSUE")
                 .quantity(quantity)
-                .performedBy(performedBy)
+                .performedBy(actorId)
                 .performedAt(Instant.now())
                 .notes(null)
                 .build();
@@ -152,6 +153,7 @@ public class WorkorderPartUsageService {
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -196,7 +198,7 @@ public class WorkorderPartUsageService {
                 .workorderId(workorderId)
                 .eventType("CONSUME")
                 .quantity(quantity)
-                .performedBy(performedBy)
+                .performedBy(actorId)
                 .performedAt(Instant.now())
                 .notes(null)
                 .build();
@@ -237,6 +239,7 @@ public class WorkorderPartUsageService {
             @NonNull BigDecimal quantity,
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -286,7 +289,7 @@ public class WorkorderPartUsageService {
                 .workorderId(workorderId)
                 .eventType("RETURN")
                 .quantity(quantity)
-                .performedBy(performedBy)
+                .performedBy(actorId)
                 .performedAt(Instant.now())
                 .notes(null)
                 .build();

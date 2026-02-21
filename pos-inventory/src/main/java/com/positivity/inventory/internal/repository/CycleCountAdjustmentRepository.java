@@ -7,12 +7,13 @@ import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
 import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Repository for {@link CycleCountAdjustment} entities.
  */
 @Repository
-public interface CycleCountAdjustmentRepository extends JpaRepository<CycleCountAdjustment, Long> {
+public interface CycleCountAdjustmentRepository extends JpaRepository<CycleCountAdjustment, UUID> {
     
     /**
      * Find all adjustments with a specific status.

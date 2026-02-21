@@ -27,7 +27,7 @@ public class RefundCreated {
     private UUID paymentId;
     private RefundType refundType;
     private BigDecimal refundAmount;
-    private UUID actorId;
+    private String actorId;
     private String actorRole;
     private String authorizationLevel;
     private String policyVersion;

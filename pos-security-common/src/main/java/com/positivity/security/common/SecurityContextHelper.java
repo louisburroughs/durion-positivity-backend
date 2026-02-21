@@ -7,6 +7,7 @@ import org.jspecify.annotations.NonNull;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -63,6 +64,55 @@ public final class SecurityContextHelper {
     }
 
     /**
+     * Get the current authenticated stable person identifier.
+     *
+     * @return stable person identifier
+     * @throws MissingPersonIdException if no authenticated person identifier is
+     *                                  available
+     */
+    public static String getCurrentUserIdOrThrowIllegalStateException() throws MissingPersonIdException {
+        return getCurrentUserId()
+                .orElseThrow(() -> new MissingPersonIdException(
+                        "Missing authenticated personId for flow requiring audit identity"));
+    }
+
+    /**
+     * Get the current authenticated stable person identifier.
+     * <p>
+     * Resolves from gateway-injected authentication details (`X-User-Id`) when
+     * available. Falls back to principal/username for compatibility.
+     *
+     * @return Optional containing stable user ID/person ID, or empty if
+     *         unauthenticated
+     */
+    public static Optional<String> getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return Optional.empty();
+        }
+
+        Object details = authentication.getDetails();
+        if (details instanceof Map<?, ?> detailsMap) {
+            Object userId = detailsMap.get(GatewaySecurityConstants.DETAIL_USER_ID);
+            if (userId instanceof String userIdStr && !userIdStr.isBlank()) {
+                return Optional.of(userIdStr);
+            }
+        }
+
+        return getCurrentUsername();
+    }
+
+    /**
+     * Get the current authenticated stable person identifier or a default value.
+     *
+     * @param defaultValue value to return if unauthenticated
+     * @return stable user ID/person ID or default value
+     */
+    public static String getCurrentUserIdOrDefault(@NonNull String defaultValue) {
+        return getCurrentUserId().orElse(defaultValue);
+    }
+
+    /**
      * Get all authorities for the current user.
      *
      * @return Set of authority strings, or empty set if not authenticated
@@ -73,7 +123,7 @@ public final class SecurityContextHelper {
             return Collections.emptySet();
         }
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
-        if (authorities == null) {
+        if (authorities.isEmpty()) {
             return Collections.emptySet();
         }
         return authorities.stream()

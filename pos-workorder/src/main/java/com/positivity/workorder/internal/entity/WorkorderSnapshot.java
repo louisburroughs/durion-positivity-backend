@@ -32,7 +32,7 @@ public class WorkorderSnapshot {
     private LocalDateTime updatedAt;
 
     @Column(nullable = false)
-    private UUID capturedBy;
+    private String capturedBy;
 
     @Column(nullable = false)
     private String snapshotType;

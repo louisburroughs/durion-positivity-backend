@@ -1,6 +1,7 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
+import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.model.InventoryLedgerEntry;
 import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,7 +68,7 @@ class InventoryAvailabilityServiceImplTest {
         }
 
         @Test
-        void getAvailabilityByProduct_allowsNegativeAtpWhenReservationsExceedOnHand() {
+    void getAvailabilityByProduct_allowsNegativeAtpWhenReservationsExceedOnHand() {
                 UUID productId = UUID.randomUUID();
                 InventoryLedgerEntry onHandEntry = ledgerEntry(
                                 productId,
@@ -88,6 +90,38 @@ class InventoryAvailabilityServiceImplTest {
                 assertThat(result.getFirst().getLocationId()).isEqualTo("LOC-1");
                 assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(2);
                 assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(-3);
+        }
+
+        @Test
+        void getAvailabilityByProduct_throwsWhenProductIdIsNull() {
+                assertThatThrownBy(() -> service.getAvailabilityByProduct(null))
+                                .isInstanceOf(InvalidInventoryAvailabilityRequestException.class)
+                                .hasMessage("Product ID is required");
+        }
+
+        @Test
+        void getAvailabilityByProduct_wrapsRepositoryErrors() {
+                UUID productId = UUID.randomUUID();
+                when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
+                                .thenThrow(new RuntimeException("db down"));
+
+                assertThatThrownBy(() -> service.getAvailabilityByProduct(productId))
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessage("Unable to retrieve inventory availability at this time");
+        }
+
+        @Test
+        void getAvailabilityByProduct_skipsNullQuantityEntries() {
+                UUID productId = UUID.randomUUID();
+                InventoryLedgerEntry invalidEntry = ledgerEntry(productId, InventoryLedgerEventType.GOODS_RECEIPT, 1,
+                                "LOC-1");
+                invalidEntry.setChangeInQuantity(null);
+
+                when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
+                                .thenReturn(List.of(invalidEntry));
+
+                List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
+                assertThat(result).isEmpty();
         }
 
         private InventoryLedgerEntry ledgerEntry(UUID productId, InventoryLedgerEventType eventType,

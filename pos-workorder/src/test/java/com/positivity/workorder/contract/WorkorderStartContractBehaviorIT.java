@@ -124,7 +124,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
         assertThat(startTransition.getFromStatus()).isEqualTo(WorkorderStatus.APPROVED);
         assertThat(startTransition.getToStatus()).isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
-        assertThat(startTransition.getTransitionedBy()).isEqualTo(SYSTEM_USER_ID);
+        assertThat(startTransition.getTransitionedBy()).isEqualTo(SYSTEM_USER_ID.toString());
         assertThat(startTransition.getReason()).isEqualTo("Customer arrived and dropped off vehicle");
         assertThat(startTransition.getTransitionedAt()).isNotNull();
     }

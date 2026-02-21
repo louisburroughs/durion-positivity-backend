@@ -76,8 +76,8 @@ public class AuditTrailEntry {
     /**
      * User who performed the action.
      */
-    @Column(name = "actor_id", nullable = false)
-    private UUID actorId;
+    @Column(name = "actor_id", nullable = false, length = 255)
+    private String actorId;
 
     /**
      * Role of the actor.

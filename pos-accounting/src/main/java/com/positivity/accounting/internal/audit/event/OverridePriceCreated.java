@@ -26,7 +26,7 @@ public class OverridePriceCreated {
     private UUID lineItemId;
     private BigDecimal originalPrice;
     private BigDecimal adjustedPrice;
-    private UUID actorId;
+    private String actorId;
     private String actorRole;
     private String authorizationLevel;
     private String policyVersion;

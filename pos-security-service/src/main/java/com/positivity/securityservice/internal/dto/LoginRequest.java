@@ -19,7 +19,14 @@ import java.util.Set;
 public record LoginRequest(
         @JsonProperty("subject") @Schema(description = "User identifier (subject claim)", example = "user123", requiredMode = Schema.RequiredMode.REQUIRED) String subject,
 
+        @JsonProperty("personId") @Schema(description = "Stable person identifier for audit lineage", example = "01HZX3T7X6C4Z8N8R8R7H6K5J4", requiredMode = Schema.RequiredMode.NOT_REQUIRED) String personId,
+
         @JsonProperty("roles") @Schema(description = "Optional set of role names to include in token", example = "[\"SHOP_MGR\", \"ACCOUNTING_CLERK\"]") Set<String> roles) {
+
+    public LoginRequest(String subject, Set<String> roles) {
+        this(subject, null, roles);
+    }
+
     /**
      * Validates request constraints.
      * 
