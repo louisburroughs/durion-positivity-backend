@@ -1,0 +1,525 @@
+openapi: 3.1.0
+info:
+  title: POS Shop Manager Service API
+  description: Shop Manager service for managing shop operations and staff
+  contact:
+    name: Durion Team
+    email: louis.burroughs@gmail.com
+  version: v1
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Appointments API
+  description: Operations for creating and loading appointments in shop management
+- name: Shop API
+  description: "Endpoints for shop management, technicians, and services"
+- name: Workorder Operational Context API
+  description: Read-only operational context view for workorders
+- name: Shop Mobile Unit API
+  description: Operations for managing mobile units within shop locations
+- name: Schedule API
+  description: Read-only schedule view operations for shop management UI
+- name: Shop Bay API
+  description: Operations for managing bays within shop locations
+paths:
+  /v1/shop-manager/mobileUnit:
+    get:
+      tags:
+      - Shop Mobile Unit API
+      summary: Get mobile units
+      description: List all mobile units or get a specific mobile unit detail by locationId
+        and bayId.
+      operationId: getMobileUnits
+      parameters: []
+      responses:
+        "200":
+          description: Mobile units retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    put:
+      tags:
+      - Shop Mobile Unit API
+      summary: Manage mobile units
+      description: Create or update mobile units in bulk.
+      operationId: manageMobileUnits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Mobile unit management request body
+      responses:
+        "200":
+          description: Mobile units managed successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/shop-manager/bays:
+    get:
+      tags:
+      - Shop Bay API
+      summary: Get bays
+      description: List all bays or get a specific bay detail by locationId and bayId.
+      operationId: getBays
+      parameters: []
+      responses:
+        "200":
+          description: Bays retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    put:
+      tags:
+      - Shop Bay API
+      summary: Manage bays
+      description: Create or update bays in bulk.
+      operationId: manageBays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Bay management request body
+      responses:
+        "200":
+          description: Bays managed successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/shop-manager/{locationId}/mobileUnit:
+    post:
+      tags:
+      - Shop Mobile Unit API
+      summary: Create mobile unit
+      description: Create a new mobile unit for a specific shop location. Validate
+        baseLocationId and capabilities.
+      operationId: createMobileUnit
+      parameters:
+      - name: locationId
+        in: path
+        description: Shop location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Mobile unit creation request body
+      responses:
+        "200":
+          description: Mobile unit created successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/shop-manager/{locationId}/bays:
+    post:
+      tags:
+      - Shop Bay API
+      summary: Create bay
+      description: Create a new bay for a specific shop location.
+      operationId: createBay
+      parameters:
+      - name: locationId
+        in: path
+        description: Shop location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Bay creation request body
+      responses:
+        "200":
+          description: Bay created successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/shop-manager/appointments:
+    post:
+      tags:
+      - Appointments API
+      summary: Create appointment
+      description: Create a new appointment (idempotent via Idempotency-Key header)
+      operationId: createAppointment
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Idempotency key for safe retries
+        required: false
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: Correlation ID for request tracing
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentCreateRequest"
+      responses:
+        "501":
+          description: Not implemented.
+          content:
+            '*/*':
+              schema: {}
+        "409":
+          description: Scheduling conflict detected.
+          content:
+            '*/*':
+              schema: {}
+        "201":
+          description: Appointment created successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/shop-manager/{locationId}/workorders/{workorderId}/operationalContext:
+    get:
+      tags:
+      - Workorder Operational Context API
+      summary: View workorder operational context
+      description: Read-only operational context view for workorders used by UI with
+        optional filters.
+      operationId: viewOpenWorkordersByShop
+      parameters:
+      - name: locationId
+        in: path
+        description: Shop location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      - name: workorderId
+        in: path
+        description: Workorder ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      - name: filters
+        in: query
+        description: Optional filter parameters
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Operational context retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/shop-manager/{locationId}/technicians/{personId}/person:
+    get:
+      tags:
+      - Shop API
+      summary: Get technician's person details
+      description: Retrieve the person details for a technician by technician ID.
+      operationId: getTechnicianPerson
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the shop
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      - name: personId
+        in: path
+        description: ID of the technician
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "404":
+          description: Technician or person not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PersonDTO"
+        "200":
+          description: Person details returned successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PersonDTO"
+  /v1/shop-manager/{locationId}/services/{serviceId}/details:
+    get:
+      tags:
+      - Shop API
+      summary: Get shop service details
+      description: Retrieve the details of a shop service by service ID.
+      operationId: getShopServiceDetails
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the shop
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      - name: serviceId
+        in: path
+        description: ID of the service
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "404":
+          description: Service not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceEntityDTO"
+        "200":
+          description: Service details returned successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceEntityDTO"
+  /v1/shop-manager/{locationId}/schedules/view:
+    get:
+      tags:
+      - Schedule API
+      summary: View schedules
+      description: Read-only schedule view used by UI with optional filters.
+      operationId: viewSchedules
+      parameters:
+      - name: locationId
+        in: path
+        description: Shop location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      - name: filters
+        in: query
+        description: Optional filter parameters
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Schedules retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/shop-manager/{locationId}/mobileUnit/{bayId}:
+    get:
+      tags:
+      - Shop Mobile Unit API
+      summary: Get mobile units
+      description: List all mobile units or get a specific mobile unit detail by locationId
+        and bayId.
+      operationId: getMobileUnits_1
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID (optional for specific mobile unit)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: bayId
+        in: path
+        description: Bay ID (optional for specific mobile unit)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: Mobile units retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    delete:
+      tags:
+      - Shop Mobile Unit API
+      summary: Delete mobile unit
+      description: Delete a specific mobile unit by locationId and bayId.
+      operationId: deleteMobileUnit
+      parameters:
+      - name: locationId
+        in: path
+        description: Shop location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      - name: bayId
+        in: path
+        description: Bay ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "204":
+          description: Mobile unit deleted successfully.
+        "404":
+          description: Mobile unit not found.
+  /v1/shop-manager/{locationId}/bays/{bayId}:
+    get:
+      tags:
+      - Shop Bay API
+      summary: Get bays
+      description: List all bays or get a specific bay detail by locationId and bayId.
+      operationId: getBays_1
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID (optional for specific bay)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: bayId
+        in: path
+        description: Bay ID (optional for specific bay)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: Bays retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    delete:
+      tags:
+      - Shop Bay API
+      summary: Delete bay
+      description: Delete a specific bay by locationId and bayId.
+      operationId: deleteBay
+      parameters:
+      - name: locationId
+        in: path
+        description: Shop location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      - name: bayId
+        in: path
+        description: Bay ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "404":
+          description: Bay not found.
+        "204":
+          description: Bay deleted successfully.
+  /v1/shop-manager/appointments/{appointmentId}:
+    get:
+      tags:
+      - Appointments API
+      summary: Load appointment
+      description: Retrieve an appointment by ID
+      operationId: getAppointment
+      parameters:
+      - name: appointmentId
+        in: path
+        description: Appointment ID
+        required: true
+        schema:
+          type: string
+        example: appt-123
+      - name: X-Correlation-Id
+        in: header
+        description: Correlation ID for request tracing
+        required: false
+        schema:
+          type: string
+      responses:
+        "501":
+          description: Not implemented.
+          content:
+            '*/*':
+              schema: {}
+        "404":
+          description: Appointment not found.
+          content:
+            '*/*':
+              schema: {}
+        "200":
+          description: Appointment retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+components:
+  schemas:
+    AppointmentCreateRequest:
+      type: object
+      description: Appointment creation request body
+      properties:
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+        facilityId:
+          type: string
+        scheduledStartDateTime:
+          type: string
+        scheduledEndDateTime:
+          type: string
+        clientRequestId:
+          type: string
+        overrideSoftConflicts:
+          type: boolean
+        overrideReason:
+          type: string
+    PersonDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        firstName:
+          type: string
+        lastName:
+          type: string
+        primaryEmail:
+          type: string
+        secondaryEmail:
+          type: string
+        phoneNumbers:
+          type: array
+          items:
+            type: string
+        username:
+          type: string
+    ServiceEntityDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        description:
+          type: string
