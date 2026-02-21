@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.event.AuditActorRef;
 import com.positivity.inventory.internal.event.AuditAggregateRef;
 import com.positivity.inventory.internal.event.InventoryAuditEvent;
+import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.model.InventoryLedgerEntry;
 import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
@@ -164,14 +165,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
 
     @Override
     @Transactional(readOnly = true)
-    public List<AdjustmentResponse> listPendingApprovals() {
-        return listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public long countPendingApprovals() {
-        return adjustmentRepository.countByStatus(AdjustmentStatus.PENDING_APPROVAL);
+    public long countAdjustmentsByStatus(AdjustmentStatus status) {
+        return adjustmentRepository.countByStatus(status);
     }
 
     private void postAdjustmentToLedger(CycleCountAdjustment adjustment) {
@@ -212,7 +207,10 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             adjustment.setStatus(AdjustmentStatus.FAILED);
             adjustment.setErrorMessage(e.getMessage());
             adjustmentRepository.save(adjustment);
-            throw new RuntimeException("Failed to post adjustment to ledger", e);
+            throw new AdjustmentLedgerPostingException(
+                    adjustment.getAdjustmentId(),
+                    "Failed to post adjustment to ledger",
+                    e);
         }
     }
 

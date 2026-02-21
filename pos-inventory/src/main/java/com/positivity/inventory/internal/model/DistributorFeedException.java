@@ -28,6 +28,12 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@SuppressWarnings("java:S2166")
+/**
+ * The business process sees this as an exception, but it's really just a record
+ * of a failed normalization attempt, so it should not be treated as a true
+ * exception in the code logic.
+ */
 public class DistributorFeedException {
 
     @Id

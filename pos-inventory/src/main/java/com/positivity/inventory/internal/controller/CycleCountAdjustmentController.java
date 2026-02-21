@@ -172,7 +172,8 @@ public class CycleCountAdjustmentController {
     @Operation(summary = "List pending approvals", description = "Lists all adjustments awaiting approval")
     @ApiResponse(responseCode = "200", description = "Pending adjustments retrieved")
     public ResponseEntity<List<AdjustmentResponse>> listPendingApprovals() {
-        List<AdjustmentResponse> response = adjustmentService.listPendingApprovals();
+        List<AdjustmentResponse> response = adjustmentService
+                .listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
         return ResponseEntity.ok(response);
     }
 
@@ -185,7 +186,7 @@ public class CycleCountAdjustmentController {
     @Operation(summary = "Count pending approvals", description = "Returns the count of adjustments awaiting approval")
     @ApiResponse(responseCode = "200", description = "Count retrieved")
     public ResponseEntity<Long> countPendingApprovals() {
-        long count = adjustmentService.countPendingApprovals();
+        long count = adjustmentService.countAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
         return ResponseEntity.ok(count);
     }
 }

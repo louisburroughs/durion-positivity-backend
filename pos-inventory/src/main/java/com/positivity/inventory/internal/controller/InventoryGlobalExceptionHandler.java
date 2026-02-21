@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
+import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
@@ -88,6 +89,15 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(InsufficientPermissionException.class)
     public ResponseEntity<Map<String, String>> handleInsufficientPermission(InsufficientPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage());
+    }
+
+    @ExceptionHandler(AdjustmentLedgerPostingException.class)
+    public ResponseEntity<Map<String, Object>> handleAdjustmentLedgerPosting(AdjustmentLedgerPostingException ex) {
+        return build(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "ADJUSTMENT_LEDGER_POST_FAILED",
+                ex.getMessage(),
+                Map.of("adjustmentId", ex.getAdjustmentId() != null ? ex.getAdjustmentId().toString() : ""));
     }
 
     @ExceptionHandler({

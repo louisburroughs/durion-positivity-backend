@@ -88,16 +88,10 @@ public interface CycleCountAdjustmentService {
     List<AdjustmentResponse> listAdjustmentsByStatus(AdjustmentStatus status);
 
     /**
-     * Lists all pending approvals.
+     * Gets the count of adjustments with a specific status.
      * 
-     * @return list of adjustments awaiting approval
+     * @param status the adjustment status
+     * @return count of adjustments with the specified status
      */
-    List<AdjustmentResponse> listPendingApprovals();
-
-    /**
-     * Gets the count of pending approvals.
-     * 
-     * @return count of adjustments awaiting approval
-     */
-    long countPendingApprovals();
+    long countAdjustmentsByStatus(AdjustmentStatus status);
 }
