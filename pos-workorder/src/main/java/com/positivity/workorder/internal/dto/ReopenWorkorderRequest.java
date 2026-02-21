@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request payload for controlled workorder reopen")
 public class ReopenWorkorderRequest {
 
-    @Schema(description = "User initiating reopen action", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(description = "Deprecated. Actor identity is resolved from authenticated security context.", example = "550e8400-e29b-41d4-a716-446655440000", deprecated = true)
     private UUID userId;
 
     @Schema(description = "Mandatory reason for reopening completed workorder", example = "Corrected labor hours")

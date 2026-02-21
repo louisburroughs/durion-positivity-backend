@@ -3986,12 +3986,13 @@ components:
         actorId:
           type: string
           format: uuid
+          description: Deprecated. Ignored for writes; actor ID is resolved from authenticated security context.
+          deprecated: true
         actorRole:
           type: string
         reason:
           type: string
       required:
-      - actorId
       - actorRole
       - invoiceId
       - originalPaymentStatus
@@ -4127,12 +4128,13 @@ components:
         actorId:
           type: string
           format: uuid
+          description: Deprecated. Ignored for writes; actor ID is resolved from authenticated security context.
+          deprecated: true
         actorRole:
           type: string
         reason:
           type: string
       required:
-      - actorId
       - actorRole
       - adjustedPrice
       - lineItemId
@@ -4163,12 +4165,13 @@ components:
         actorId:
           type: string
           format: uuid
+          description: Deprecated. Ignored for writes; actor ID is resolved from authenticated security context.
+          deprecated: true
         actorRole:
           type: string
         reason:
           type: string
       required:
-      - actorId
       - actorRole
       - afterSnapshot
       - beforeSnapshot

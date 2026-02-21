@@ -438,7 +438,6 @@ paths:
               startWorkorder:
                 description: startWorkorder
                 value:
-                  userId: 550e8400-e29b-41d4-a716-446655440100
                   reason: Technician started work
         required: true
       responses:
@@ -570,7 +569,6 @@ paths:
               reopenWorkorder:
                 description: reopenWorkorder
                 value:
-                  userId: 550e8400-e29b-41d4-a716-446655440100
                   reopenReason: Customer requested additional work
         required: true
       responses:
@@ -1082,7 +1080,6 @@ paths:
               completeWorkorder:
                 description: completeWorkorder
                 value:
-                  userId: 550e8400-e29b-41d4-a716-446655440100
                   completionNotes: Completed and verified
         required: true
       responses:
@@ -3035,6 +3032,8 @@ components:
         userId:
           type: string
           format: uuid
+          description: Deprecated. Actor identity is resolved from authenticated security context.
+          deprecated: true
         reason:
           type: string
     StartWorkorderResponse:
@@ -3074,8 +3073,9 @@ components:
         userId:
           type: string
           format: uuid
-          description: User initiating reopen action
+          description: Deprecated. Actor identity is resolved from authenticated security context.
           example: 550e8400-e29b-41d4-a716-446655440000
+          deprecated: true
         reopenReason:
           type: string
           description: Mandatory reason for reopening completed workorder
@@ -3283,6 +3283,8 @@ components:
         userId:
           type: string
           format: uuid
+          description: Deprecated. Actor identity is resolved from authenticated security context.
+          deprecated: true
         completionNotes:
           type: string
     CompleteWorkorderResponse:

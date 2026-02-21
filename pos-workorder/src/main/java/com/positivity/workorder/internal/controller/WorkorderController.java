@@ -20,6 +20,7 @@ import com.positivity.workorder.internal.entity.WorkorderSnapshot;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
 import com.positivity.workorder.service.WorkorderStateMachine;
+import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -29,6 +30,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -40,7 +42,10 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/workorders")
 @RequiredArgsConstructor
+@Slf4j
 public class WorkorderController {
+    private static final UUID SYSTEM_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+
     private final WorkorderService workorderService;
     private final WorkorderInvoiceService workorderInvoiceService;
 
@@ -100,7 +105,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Work order started successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid state transition or pending change requests.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Start workorder request", required = true, content = @Content(schema = @Schema(implementation = StartWorkorderRequest.class), examples = @ExampleObject(name = "startWorkorder", value = "{\"userId\":\"550e8400-e29b-41d4-a716-446655440100\",\"reason\":\"Technician started work\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Start workorder request", required = true, content = @Content(schema = @Schema(implementation = StartWorkorderRequest.class), examples = @ExampleObject(name = "startWorkorder", value = "{\"reason\":\"Technician started work\"}")))
     @PostMapping("/{workorderId}/start")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:start')")
@@ -109,7 +114,7 @@ public class WorkorderController {
             @RequestBody StartWorkorderRequest request) {
         try {
             String previousStatus = workorderService.getCurrentWorkorderStatus(workorderId);
-            workorderService.startWorkorder(workorderId, request.getUserId(), request.getReason());
+            workorderService.startWorkorder(workorderId, resolveCurrentActorUserId(), request.getReason());
 
             StartWorkorderResponse response = StartWorkorderResponse.builder()
                     .workorderId(workorderId)
@@ -183,7 +188,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Work order completed successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid state transition or work order already completed.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Complete workorder request", required = true, content = @Content(schema = @Schema(implementation = CompleteWorkorderRequest.class), examples = @ExampleObject(name = "completeWorkorder", value = "{\"userId\":\"550e8400-e29b-41d4-a716-446655440100\",\"completionNotes\":\"Completed and verified\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Complete workorder request", required = true, content = @Content(schema = @Schema(implementation = CompleteWorkorderRequest.class), examples = @ExampleObject(name = "completeWorkorder", value = "{\"completionNotes\":\"Completed and verified\"}")))
     @PostMapping("/{workorderId}/complete")
     @EmitEvent(id = "WORKORDER_COMPLETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:complete')")
@@ -194,7 +199,7 @@ public class WorkorderController {
             String previousStatus = workorderService.getCurrentWorkorderStatus(workorderId);
 
             // Complete the work order (this will also emit the event)
-            workorderService.completeWorkorder(workorderId, request.getUserId(), request.getCompletionNotes());
+            workorderService.completeWorkorder(workorderId, resolveCurrentActorUserId(), request.getCompletionNotes());
 
             CompleteWorkorderResponse response = CompleteWorkorderResponse.builder()
                     .workorderId(workorderId)
@@ -267,7 +272,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "200", description = "Workorder reopened successfully.")
     @ApiResponse(responseCode = "400", description = "Workorder cannot be reopened or reason missing.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Reopen workorder request", required = true, content = @Content(schema = @Schema(implementation = ReopenWorkorderRequest.class), examples = @ExampleObject(name = "reopenWorkorder", value = "{\"userId\":\"550e8400-e29b-41d4-a716-446655440100\",\"reopenReason\":\"Customer requested additional work\"}")))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Reopen workorder request", required = true, content = @Content(schema = @Schema(implementation = ReopenWorkorderRequest.class), examples = @ExampleObject(name = "reopenWorkorder", value = "{\"reopenReason\":\"Customer requested additional work\"}")))
     @PostMapping("/{workorderId}/reopen")
     @EmitEvent(id = "WORKORDER_REOPEN", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:reopen_completed')")
@@ -277,7 +282,7 @@ public class WorkorderController {
         try {
             WorkorderService.ReopenResult reopened = workorderService.reopenCompletedWorkorder(
                     workorderId,
-                    request.getUserId(),
+                    resolveCurrentActorUserId(),
                     request.getReopenReason());
 
             ReopenWorkorderResponse response = ReopenWorkorderResponse.builder()
@@ -297,6 +302,16 @@ public class WorkorderController {
                             .workorderId(workorderId)
                             .message(e.getMessage())
                             .build());
+        }
+    }
+
+    private UUID resolveCurrentActorUserId() {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_USER_ID.toString());
+        try {
+            return UUID.fromString(actorId);
+        } catch (IllegalArgumentException ex) {
+            log.warn("Current actor id '{}' is not a UUID; using system fallback", actorId);
+            return SYSTEM_USER_ID;
         }
     }
 }
