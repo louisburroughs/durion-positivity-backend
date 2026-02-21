@@ -3,11 +3,13 @@ package com.positivity.securityservice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RolePermissionGrantRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.service.RoleManagementService;
+import com.positivity.securityservice.service.RolePermissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -34,13 +36,14 @@ import java.util.UUID;
  * user role assignments.
  */
 @RestController
-@RequestMapping("/v1/roles")
+@RequestMapping({ "/v1/roles", "/v1/users/roles" })
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Role Management", description = "Manage roles, permissions, and user assignments")
 public class RoleController {
 
     private final RoleManagementService roleManagementService;
+    private final RolePermissionService rolePermissionService;
 
     /**
      * Create a new role
@@ -59,6 +62,35 @@ public class RoleController {
 
         Role role = roleManagementService.createRole(name, description);
         return ResponseEntity.status(HttpStatus.CREATED).body(role);
+    }
+
+    /**
+     * Issue #42: Grant permission to role and emit audit event.
+     */
+    @EmitEvent(id = "SECURITY_ROLE_PERMISSION_GRANT", apiVersion = "1")
+    @PutMapping("/{roleId}/permissions/grant")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Grant permission to a role")
+    public ResponseEntity<Role> grantPermissionToRole(
+            @PathVariable UUID roleId,
+            @RequestBody RolePermissionGrantRequest request) {
+        if (request == null || request.getPermission() == null || request.getPermission().isBlank()) {
+            throw new IllegalArgumentException("permission is required");
+        }
+        return ResponseEntity.ok(rolePermissionService.grantPermission(roleId, request.getPermission()));
+    }
+
+    /**
+     * Issue #42: Revoke permission from role.
+     */
+    @EmitEvent(id = "SECURITY_ROLE_PERMISSION_REVOKE", apiVersion = "1")
+    @DeleteMapping("/{roleId}/permissions/{permissionKey}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Revoke permission from a role")
+    public ResponseEntity<Role> revokePermissionFromRole(
+            @PathVariable UUID roleId,
+            @PathVariable String permissionKey) {
+        return ResponseEntity.ok(rolePermissionService.revokePermission(roleId, permissionKey));
     }
 
     /**
