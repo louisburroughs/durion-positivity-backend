@@ -1,32 +1,67 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.service.PermissionService;
 import com.positivity.securityservice.service.PermissionRegistryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * REST controller for the central permission registry.
  * Provides endpoints for services to register their permissions.
  */
 @RestController
-@RequestMapping("/v1/permissions")
+@RequestMapping({ "/v1/permissions", "/v1/users/permissions" })
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Permission Registry", description = "Central permission registry for all services")
 public class PermissionController {
 
     private final PermissionRegistryService permissionRegistryService;
+    private final PermissionService permissionService;
+
+    /**
+     * Issue #42: Idempotent bulk permission registration endpoint for user RBAC
+     * API.
+     */
+    @EmitEvent(id = "SECURITY_PERMISSION_REGISTER", apiVersion = "1")
+    @PostMapping("/registerPermissions")
+    @Operation(summary = "Register permissions (RBAC contract endpoint)")
+    public ResponseEntity<List<PermissionDto>> registerPermissionsContract(
+            @RequestBody @NonNull PermissionRegistrationRequest request) {
+        return ResponseEntity.ok(permissionService.registerPermissions(request));
+    }
+
+    /**
+     * Issue #42: Get a permission by UUID identifier.
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "Get permission by identifier")
+    public ResponseEntity<PermissionDto> getPermissionById(@PathVariable @NonNull UUID id) {
+        return ResponseEntity.ok(permissionService.getPermission(id));
+    }
+
+    /**
+     * Issue #42: Query permissions by domain.
+     */
+    @GetMapping(params = "domain")
+    @Operation(summary = "Query permissions by domain")
+    public ResponseEntity<List<PermissionDto>> getPermissionsByDomainQuery(@RequestParam @NonNull String domain) {
+        return ResponseEntity.ok(permissionService.getByDomain(domain));
+    }
 
     /**
      * Register or update permissions from a service

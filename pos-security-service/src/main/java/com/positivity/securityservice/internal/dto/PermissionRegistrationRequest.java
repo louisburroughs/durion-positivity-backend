@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,17 +18,17 @@ public class PermissionRegistrationRequest {
      * The domain/service name registering these permissions
      */
     private String domain;
-    
+
     /**
      * The service identifier
      */
     private String serviceName;
-    
+
     /**
      * List of permissions to register
      */
     private List<PermissionDefinition> permissions;
-    
+
     /**
      * Version of the manifest schema
      */
@@ -40,8 +41,9 @@ public class PermissionRegistrationRequest {
         /**
          * Permission name in format domain:resource:action
          */
+        @JsonAlias({ "id" })
         private String name;
-        
+
         /**
          * Human-readable description
          */
