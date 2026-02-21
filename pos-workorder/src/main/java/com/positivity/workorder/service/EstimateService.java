@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.tax.internal.dto.TaxCalculationRequest;
 import com.positivity.tax.internal.dto.TaxCalculationResponse;
 import com.positivity.tax.internal.dto.TaxLineItem;
+import com.positivity.tax.internal.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.tax.internal.enums.TaxReferenceType;
 import com.positivity.tax.service.TaxCalculationService;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -833,10 +835,17 @@ public class EstimateService {
 
                 TaxCalculationRequest taxRequest = TaxCalculationRequest.builder()
                                 .lineItems(taxLineItems)
-                                .postalCode(postalCode)
-                                .countryCode("US")
+                                .locale("en-US")
+                                .currencyCode("USD")
+                                .destinationAddress(TaxAddress.builder()
+                                                .countryCode("US")
+                                                .regionCode("CA")
+                                                .postalCode(postalCode)
+                                                .build())
+
                                 .customerId(estimate.getCustomerId().toString())
-                                .referenceId(estimateId.toString())
+                                .referenceId(estimateId)
+                                .referenceType(TaxReferenceType.ESTIMATE)
                                 .build();
 
                 // Call tax service

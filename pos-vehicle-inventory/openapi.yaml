@@ -1,0 +1,746 @@
+openapi: 3.1.0
+info:
+  title: Vehicle Inventory API
+  description: API for managing vehicle inventory in the POS system
+  contact:
+    name: Durion Team
+    email: platform@durion.com
+  version: "1.0"
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Vehicle Registry
+  description: Vehicle CRUD and management operations for CAP:091
+- name: Vehicle API
+  description: Endpoints for vehicle CRUD and VIN-based operations
+- name: Vehicle Preferences
+  description: Manage vehicle care preferences with flexible schema support
+- name: Vehicle Search
+  description: Search and discover vehicles with ranking-based results
+paths:
+  /v1/vehicles/{vehicleId}:
+    get:
+      tags:
+      - Vehicle Registry
+      summary: Get vehicle by ID
+      description: "Retrieves a vehicle by its unique ID. Story #105."
+      operationId: getVehicle
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Vehicle found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "404":
+          description: Vehicle not found
+    put:
+      tags:
+      - Vehicle Registry
+      summary: Update vehicle
+      description: "Updates an existing vehicle's details. VIN cannot be changed.\
+        \ Story #105."
+      operationId: updateVehicle
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleRequest"
+        required: true
+      responses:
+        "200":
+          description: Vehicle updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "400":
+          description: Invalid request
+        "404":
+          description: Vehicle not found
+    delete:
+      tags:
+      - Vehicle Registry
+      summary: Delete vehicle
+      description: "Soft-deletes (deactivates) a vehicle. Story #105."
+      operationId: deleteVehicle
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Vehicle deleted successfully
+        "404":
+          description: Vehicle not found
+  /v1/vehicles/{vehicleId}/preferences:
+    get:
+      tags:
+      - Vehicle Preferences
+      summary: Get vehicle care preferences
+      description: Retrieves the care preferences for a vehicle. Returns 404 if no
+        preferences exist.
+      operationId: getPreferences
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Preferences found and returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+        "404":
+          description: No preferences found for this vehicle
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+    put:
+      tags:
+      - Vehicle Preferences
+      summary: Create or update vehicle care preferences
+      description: "Upserts preferences for a vehicle. If preferences exist, replaces\
+        \ them entirely. Use PATCH for partial updates."
+      operationId: upsertPreferences
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesUpsertDto"
+        required: true
+      responses:
+        "200":
+          description: Preferences updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+        "400":
+          description: Invalid preference data
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+        "201":
+          description: Preferences created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+        "404":
+          description: Vehicle not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+    delete:
+      tags:
+      - Vehicle Preferences
+      summary: Delete vehicle care preferences
+      description: Removes all preferences for a vehicle
+      operationId: deletePreferences
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: No preferences found to delete
+        "204":
+          description: Preferences deleted successfully
+    patch:
+      tags:
+      - Vehicle Preferences
+      summary: Partially update vehicle care preferences
+      description: Merges provided preference fields into existing preferences without
+        replacing the entire map
+      operationId: mergePreferences
+      parameters:
+      - name: vehicleId
+        in: path
+        description: Vehicle ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesMergeDto"
+        required: true
+      responses:
+        "404":
+          description: No existing preferences to merge into
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+        "200":
+          description: Preferences merged successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
+  /v1/vehicles-legacy/{id}:
+    get:
+      tags:
+      - Vehicle API
+      summary: Get vehicle by ID
+      description: Retrieve a vehicle by its unique ID.
+      operationId: getVehicle_1
+      parameters:
+      - name: id
+        in: path
+        description: ID of the vehicle to retrieve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "200":
+          description: Vehicle found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+        "404":
+          description: Vehicle not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+    put:
+      tags:
+      - Vehicle API
+      summary: Update vehicle by ID
+      description: Update an existing vehicle's details by its ID.
+      operationId: updateVehicle_1
+      parameters:
+      - name: id
+        in: path
+        description: ID of the vehicle to update
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleEntity"
+        required: true
+      responses:
+        "200":
+          description: Vehicle updated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+        "404":
+          description: Vehicle not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+    delete:
+      tags:
+      - Vehicle API
+      summary: Delete vehicle by ID
+      description: Delete a vehicle from the inventory by its ID.
+      operationId: deleteVehicle_1
+      parameters:
+      - name: id
+        in: path
+        description: ID of the vehicle to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "204":
+          description: Vehicle deleted successfully.
+        "404":
+          description: Vehicle not found.
+  /v1/vehicles-legacy/vin/{vin}:
+    get:
+      tags:
+      - Vehicle API
+      summary: Get vehicle by VIN
+      description: Retrieve a vehicle by its VIN.
+      operationId: getVehicleByVIN
+      parameters:
+      - name: vin
+        in: path
+        description: VIN of the vehicle to retrieve
+        required: true
+        schema:
+          type: string
+        example: 1HGCM82633A004352
+      responses:
+        "200":
+          description: Vehicle found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+        "404":
+          description: Vehicle not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+    put:
+      tags:
+      - Vehicle API
+      summary: Update vehicle by VIN
+      description: Update an existing vehicle's details by its VIN.
+      operationId: updateVehicleByVIN
+      parameters:
+      - name: vin
+        in: path
+        description: VIN of the vehicle to update
+        required: true
+        schema:
+          type: string
+        example: 1HGCM82633A004352
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleEntity"
+        required: true
+      responses:
+        "200":
+          description: Vehicle updated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+        "404":
+          description: Vehicle not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+    delete:
+      tags:
+      - Vehicle API
+      summary: Delete vehicle by VIN
+      description: Delete a vehicle from the inventory by its VIN.
+      operationId: deleteVehicleByVIN
+      parameters:
+      - name: vin
+        in: path
+        description: VIN of the vehicle to delete
+        required: true
+        schema:
+          type: string
+        example: 1HGCM82633A004352
+      responses:
+        "204":
+          description: Vehicle deleted successfully.
+        "404":
+          description: Vehicle not found.
+  /v1/vehicles:
+    post:
+      tags:
+      - Vehicle Registry
+      summary: Create a new vehicle
+      description: "Creates a new vehicle record with VIN validation and normalization.\
+        \ VIN must be globally unique across all active vehicles. Story #105 / Issue\
+        \ #105."
+      operationId: createVehicle
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleRequest"
+        required: true
+      responses:
+        "201":
+          description: Vehicle created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "409":
+          description: Conflict - VIN already exists for another active vehicle
+        "400":
+          description: "Invalid request - VIN format invalid, missing required fields,\
+            \ or duplicate VIN"
+  /v1/vehicles/search:
+    get:
+      tags:
+      - Vehicle Search
+      summary: Search vehicles (query parameter)
+      description: Alternative search endpoint using query parameters. Useful for
+        browser-based queries.
+      operationId: searchByQuery
+      parameters:
+      - name: q
+        in: query
+        description: "Search query (VIN, license plate, unit number, or description)"
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: "Result limit (default 25, max 50)"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+      - name: enableContains
+        in: query
+        description: Enable contains matching (default false)
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        "400":
+          description: Invalid search query
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SearchVehiclesResponse"
+        "200":
+          description: Search results returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SearchVehiclesResponse"
+    post:
+      tags:
+      - Vehicle Search
+      summary: Search vehicles
+      description: "Search for vehicles by VIN, license plate, unit number, or description.\
+        \ Results are ranked by relevance: exact match > prefix match > contains match."
+      operationId: search
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchVehiclesRequest"
+        required: true
+      responses:
+        "400":
+          description: Invalid search query
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SearchVehiclesResponse"
+        "200":
+          description: Search results returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SearchVehiclesResponse"
+  /v1/vehicles-legacy:
+    get:
+      tags:
+      - Vehicle API
+      summary: Get all vehicles
+      description: Retrieve a list of all vehicles in the inventory.
+      operationId: getAllVehicles
+      responses:
+        "200":
+          description: List of vehicles returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VehicleEntity"
+    post:
+      tags:
+      - Vehicle API
+      summary: Create a new vehicle
+      description: Add a new vehicle to the inventory.
+      operationId: createVehicle_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleEntity"
+        required: true
+      responses:
+        "200":
+          description: Vehicle created successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+  /v1/vehicles-legacy/vin:
+    post:
+      tags:
+      - Vehicle API
+      summary: Create vehicle by VIN
+      description: Add a new vehicle to the inventory using its VIN.
+      operationId: createVehicleByVIN
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleEntity"
+        required: true
+      responses:
+        "200":
+          description: Vehicle created successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleEntity"
+  /v1/vehicles/vin/{vin}:
+    get:
+      tags:
+      - Vehicle Registry
+      summary: Get vehicle by VIN
+      description: "Retrieves a vehicle by its VIN (normalized lookup). Story #105."
+      operationId: getVehicleByVin
+      parameters:
+      - name: vin
+        in: path
+        description: Vehicle VIN (17 characters)
+        required: true
+        schema:
+          type: string
+        example: 1HGCM82633A004352
+      responses:
+        "200":
+          description: Vehicle found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleResponse"
+        "404":
+          description: Vehicle not found
+components:
+  schemas:
+    CreateVehicleRequest:
+      type: object
+      description: "Vehicle creation request with VIN, unit number, and description"
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+        unitNumber:
+          type: string
+        description:
+          type: string
+        licensePlate:
+          type: string
+        licensePlateJurisdiction:
+          type: string
+        year:
+          type: integer
+          format: int32
+        make:
+          type: string
+        model:
+          type: string
+        trim:
+          type: string
+    VehicleResponse:
+      type: object
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+        vinNormalized:
+          type: string
+        unitNumber:
+          type: string
+        description:
+          type: string
+        licensePlate:
+          type: string
+        licensePlateJurisdiction:
+          type: string
+        year:
+          type: integer
+          format: int32
+        make:
+          type: string
+        model:
+          type: string
+        trim:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    PreferencesUpsertDto:
+      type: object
+      properties:
+        preferences:
+          type: object
+          additionalProperties: {}
+        serviceNotes:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        updatedByUserId:
+          type: string
+          format: uuid
+    VehicleCarePreference:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        preferences:
+          type: object
+          additionalProperties: {}
+        serviceNotes:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        updatedByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    VehicleEntity:
+      type: object
+      description: Vehicle object to be created
+      properties:
+        id:
+          type: string
+          format: uuid
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
+          format: int32
+        vin:
+          type: string
+    SearchVehiclesRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        limit:
+          type: integer
+          format: int32
+        cursor:
+          type: string
+        enableContainsMatching:
+          type: boolean
+    SearchVehiclesResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleSummary"
+        totalCount:
+          type: integer
+          format: int32
+        hasMore:
+          type: boolean
+        query:
+          type: string
+    VehicleSummary:
+      type: object
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+        unitNumber:
+          type: string
+        licensePlate:
+          type: string
+        description:
+          type: string
+        year:
+          type: integer
+          format: int32
+        make:
+          type: string
+        model:
+          type: string
+    PreferencesMergeDto:
+      type: object
+      properties:
+        partialPreferences:
+          type: object
+          additionalProperties: {}
+        updatedByUserId:
+          type: string
+          format: uuid

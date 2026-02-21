@@ -20,10 +20,11 @@ public class VehicleVariableValue {
             id = UUIDv7Generator.generate();
         }
     }
+
     private UUID variableId;
+    @Column(name = "variable_value")
     private String value;
     private String valueId;
     private LocalDateTime cacheTimestamp;
 
 }
-

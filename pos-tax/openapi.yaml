@@ -1,0 +1,378 @@
+openapi: 3.1.0
+info:
+  title: POS Tax Service API
+  description: Tax calculation service with external API passthrough and test mode
+    support
+  contact:
+    name: Durion Team
+    email: platform@durion.com
+  version: "1.0"
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Tax
+  description: Tax calculation API
+paths:
+  /v1/tax/calculate:
+    post:
+      tags:
+      - Tax
+      summary: Calculate tax
+      description: Calculate tax for line items based on location. Routes to external
+        service in production or test calculator in test mode.
+      operationId: calculateTax
+      requestBody:
+        description: International tax calculation request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaxCalculationRequest"
+            examples:
+              US destination example:
+                description: US destination example
+                value:
+                  lineItems:
+                  - lineItemId: "1"
+                    description: Oil Change Service
+                    quantity: 1
+                    unitPrice: 89.99
+                    taxExempt: false
+                  destinationAddress:
+                    countryCode: US
+                    regionCode: CA
+                    city: Los Angeles
+                    postalCode: "90001"
+                    line1: 123 Main St
+                  currencyCode: USD
+                  locale: en-US
+                  referenceId: 550e8400-e29b-41d4-a716-446655440000
+                  referenceType: ESTIMATE
+        required: true
+      responses:
+        "500":
+          description: Tax calculation failed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaxCalculationResponse"
+        "200":
+          description: Tax calculated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaxCalculationResponse"
+        "400":
+          description: Invalid tax calculation request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaxCalculationResponse"
+  /v1/tax/mode:
+    get:
+      tags:
+      - Tax
+      summary: Get tax service mode
+      description: Check if the tax service is currently in test mode or production
+        mode
+      operationId: getMode
+      responses:
+        "200":
+          description: Tax service mode retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ModeResponse"
+components:
+  schemas:
+    TaxAddress:
+      type: object
+      description: International destination address
+      properties:
+        countryCode:
+          type: string
+          description: Country code in ISO 3166-1 alpha-2 format
+          example: US
+        regionCode:
+          type: string
+          description: Region/subdivision code (typically ISO 3166-2 subdivision part)
+          example: CA
+        city:
+          type: string
+          description: Locality/city/municipality name
+          example: Los Angeles
+        postalCode:
+          type: string
+          description: Postal/ZIP code
+          example: "90001"
+        line1:
+          type: string
+          description: Primary street address line
+          example: 123 Main St
+        line2:
+          type: string
+          description: Secondary address line
+          example: Suite 200
+      required:
+      - countryCode
+      - postalCode
+    TaxCalculationRequest:
+      type: object
+      description: International tax calculation request payload
+      example:
+        lineItems:
+        - lineItemId: "1"
+          description: Oil Change Service
+          quantity: 1
+          unitPrice: 89.99
+          taxExempt: false
+        destinationAddress:
+          countryCode: US
+          regionCode: CA
+          city: Los Angeles
+          postalCode: "90001"
+          line1: 123 Main St
+        currencyCode: USD
+        locale: en-US
+        referenceId: 550e8400-e29b-41d4-a716-446655440000
+        referenceType: ESTIMATE
+      properties:
+        lineItems:
+          type: array
+          description: Line items to calculate tax for
+          items:
+            $ref: "#/components/schemas/TaxLineItem"
+        destinationAddress:
+          $ref: "#/components/schemas/TaxAddress"
+          description: Destination address used to determine applicable tax jurisdictions
+        currencyCode:
+          type: string
+          description: Transaction currency in ISO 4217 alpha-3 format
+          example: USD
+        locale:
+          type: string
+          description: BCP 47 locale tag for localization preferences
+          example: en-US
+        customerId:
+          type: string
+          description: Optional customer identifier for exemption and tax profile
+            lookups
+          example: CUST-100234
+        transactionDate:
+          type: string
+          description: Optional transaction date/time in ISO 8601 format
+          example: 2026-02-21T09:30:00Z
+        referenceId:
+          type: string
+          format: uuid
+          description: Optional reference identifier for the source transaction
+          example: 550e8400-e29b-41d4-a716-446655440000
+        referenceType:
+          type: string
+          description: Optional source transaction type associated with referenceId
+          enum:
+          - ESTIMATE
+          - INVOICE
+          - WORKORDER
+          - ORDER
+          - PURCHASE_ORDER
+          - OTHER
+          example: ESTIMATE
+        address:
+          type: string
+        countryCode:
+          type: string
+        postalCode:
+          type: string
+        stateCode:
+          type: string
+        city:
+          type: string
+      required:
+      - destinationAddress
+      - lineItems
+    TaxLineItem:
+      type: object
+      properties:
+        lineItemId:
+          type: string
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        subtotal:
+          type: number
+        taxCategory:
+          type: string
+        taxExempt:
+          type: boolean
+      required:
+      - description
+      - lineItemId
+      - quantity
+      - unitPrice
+    LineItemTax:
+      type: object
+      description: Tax breakdown for a single line item
+      properties:
+        lineItemId:
+          type: string
+          description: Line item identifier
+          example: 1
+        subtotal:
+          type: number
+          description: Line subtotal before tax
+          example: 100.0
+        taxAmount:
+          type: number
+          description: Line tax amount
+          example: 10.0
+        total:
+          type: number
+          description: Line total including tax
+          example: 110.0
+        taxExempt:
+          type: boolean
+          description: Whether this line item is tax exempt
+          example: false
+      required:
+      - lineItemId
+      - subtotal
+      - taxAmount
+      - total
+    TaxCalculationResponse:
+      type: object
+      description: Tax calculation response containing totals and jurisdiction/line-level
+        tax breakdown
+      properties:
+        subtotal:
+          type: number
+          description: Total amount before tax
+          example: 150.0
+        totalTax:
+          type: number
+          description: Total tax amount
+          example: 15.0
+        total:
+          type: number
+          description: Total amount including tax
+          example: 165.0
+        effectiveTaxRate:
+          type: number
+          description: Effective tax rate as percentage
+          example: 10.0
+        jurisdictions:
+          type: array
+          description: Applied tax jurisdictions with per-jurisdiction tax amounts
+          items:
+            $ref: "#/components/schemas/TaxJurisdiction"
+        lineItemTaxes:
+          type: array
+          description: Per-line-item tax breakdown
+          items:
+            $ref: "#/components/schemas/LineItemTax"
+        testMode:
+          type: boolean
+          description: Whether calculation was performed in test mode
+          example: false
+        calculatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when calculation completed
+          example: 2026-02-21T09:18:40Z
+        referenceId:
+          type: string
+          format: uuid
+          description: Reference ID echoed from request
+          example: 550e8400-e29b-41d4-a716-446655440000
+        referenceType:
+          type: string
+          description: Optional source transaction type associated with referenceId
+          enum:
+          - ESTIMATE
+          - INVOICE
+          - WORKORDER
+          - ORDER
+          - PURCHASE_ORDER
+          - OTHER
+          example: ESTIMATE
+        externalTransactionId:
+          type: string
+          description: External tax provider transaction identifier
+          example: tx_9f0d2c
+      required:
+      - calculatedAt
+      - effectiveTaxRate
+      - jurisdictions
+      - lineItemTaxes
+      - subtotal
+      - total
+      - totalTax
+    TaxJurisdiction:
+      type: object
+      description: Tax jurisdiction entry with normalized international location fields
+        and calculated tax values
+      properties:
+        countryCode:
+          type: string
+          description: Country code in ISO 3166-1 alpha-2 format
+          example: US
+          pattern: "^[A-Z]{2}$"
+        regionCode:
+          type: string
+          description: Region/subdivision code (ISO 3166-2 subdivision part)
+          example: CA
+        city:
+          type: string
+          description: Locality/city/municipality name
+          example: Los Angeles
+        postalCode:
+          type: string
+          description: Postal/ZIP code
+          example: "90001"
+        line1:
+          type: string
+          description: Primary street address line
+          example: 123 Main St
+        line2:
+          type: string
+          description: Secondary address line
+          example: Suite 200
+        taxRate:
+          type: number
+          description: Tax rate as percentage points
+          example: 7.25
+        jurisdictionType:
+          type: string
+          description: Jurisdiction type
+          enum:
+          - COUNTRY
+          - STATE
+          - PROVINCE
+          - COUNTY
+          - CITY
+          - DISTRICT
+          - SPECIAL
+          example: STATE
+        taxAmount:
+          type: number
+          description: Calculated tax amount for this jurisdiction
+          example: 6.53
+        jurisdictionTypeI18nKey:
+          type: string
+          description: I18n key for localized jurisdiction type labels
+          example: tax.jurisdiction.type.state
+      required:
+      - countryCode
+      - jurisdictionType
+      - taxAmount
+      - taxRate
+    ModeResponse:
+      type: object
+      properties:
+        mode:
+          type: string
+        testMode:
+          type: boolean

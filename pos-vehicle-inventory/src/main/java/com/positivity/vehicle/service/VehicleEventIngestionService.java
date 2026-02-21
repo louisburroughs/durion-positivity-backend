@@ -6,6 +6,7 @@ import com.positivity.vehicle.internal.entity.EventProcessingLog.ConflictPolicy;
 import com.positivity.vehicle.internal.entity.EventProcessingLog.ProcessingStatus;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.entity.VehicleRecord.OdometerReading;
+import com.positivity.vehicle.internal.enums.OdometerUnit;
 import com.positivity.vehicle.internal.repository.EventProcessingLogRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -135,7 +136,7 @@ public class VehicleEventIngestionService {
         if (event.getCurrentMileage() != null) {
             OdometerReading reading = OdometerReading.builder()
                     .value(event.getCurrentMileage())
-                    .unit("MILES")
+                    .unit(OdometerUnit.MILES)
                     .asOfDateTime(Instant.now())
                     .build();
             vehicle.setOdometer(reading);

@@ -1,0 +1,46 @@
+openapi: 3.1.0
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: MCP Chat API
+  description: Model Context Protocol (MCP) chatbot endpoint for invoking MCP tools
+paths:
+  /v1/mcp/chat:
+    post:
+      tags:
+      - MCP Chat API
+      summary: Execute MCP Tool
+      description: Synchronously execute an MCP tool with the provided arguments and
+        return the result
+      operationId: chat
+      requestBody:
+        content:
+          application/json: {}
+        required: true
+      responses:
+        "200":
+          description: Tool execution succeeded
+          content:
+            application/json:
+              schema:
+                description: MCP CallToolResult containing tool output
+              example:
+                content:
+                - type: text
+                  text: Pong from positivity-ping
+                isError: false
+        "500":
+          description: Tool execution failed
+          content:
+            text/plain:
+              example: "Failed to execute MCP tool: Tool not found"
+        "400":
+          description: Invalid request - missing or empty toolName
+          content:
+            text/plain:
+              example: '''toolName'' is required'
+components: {}

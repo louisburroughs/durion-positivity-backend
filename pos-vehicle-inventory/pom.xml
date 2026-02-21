@@ -45,6 +45,10 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc-openapi.version}</version>
@@ -96,12 +100,6 @@
         </dependency>
         <!-- Shared DTOs -->
 
-        <!-- Hypersistence Utils for JSONB support -->
-        <dependency>
-            <groupId>io.hypersistence</groupId>
-            <artifactId>hypersistence-utils-hibernate-63</artifactId>
-            <version>3.7.0</version>
-        </dependency>
         <!-- JSpecify for null safety annotations -->
         <dependency>
             <groupId>org.jspecify</groupId>
