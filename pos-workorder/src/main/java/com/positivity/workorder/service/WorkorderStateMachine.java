@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepo
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.security.common.SecurityContextHelper;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +54,7 @@ public class WorkorderStateMachine {
 
     private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
     private static final String STATUS_FIELD = "status";
+    private static final String SYSTEM_ACTOR = "system";
 
     public record CompletionPreconditions(
             UUID workorderId,
@@ -251,7 +253,7 @@ public class WorkorderStateMachine {
         transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, userId, "Work Order Completed");
 
         // Create audit event
-        createAuditEvent(workorderId, userId.toString(), "StateTransition",
+        createAuditEvent(workorderId, "StateTransition",
                 String.format("{\"fromState\":\"%s\",\"toState\":\"COMPLETED\"}", currentStatus));
 
         log.info("Workorder {} completed successfully by user {} at {}", workorderId, userId, completedAt);
@@ -293,11 +295,7 @@ public class WorkorderStateMachine {
             throw new IllegalStateException("Failed to serialize workorder reopen audit details", e);
         }
 
-        createAuditEvent(
-                workorderId,
-                userId.toString(),
-                "WORKORDER_REOPENED",
-                auditDetailsJson);
+        createAuditEvent(workorderId, "WORKORDER_REOPENED", auditDetailsJson);
 
         log.info("Workorder {} reopened by user {} at {}", workorderId, userId, reopenedAt);
         return saved;
@@ -375,11 +373,12 @@ public class WorkorderStateMachine {
             String reason) {
         try {
             String snapshotData = objectMapper.writeValueAsString(snapshotPayload);
+            String actorId = resolveActorId(userId);
 
             WorkorderSnapshot snapshot = WorkorderSnapshot.builder()
                     .workorderId(workorder.getId())
                     .status(workorder.getStatus())
-                    .capturedBy(userId)
+                    .capturedBy(actorId)
                     .snapshotType(snapshotType)
                     .snapshotData(snapshotData)
                     .reason(reason)
@@ -407,11 +406,12 @@ public class WorkorderStateMachine {
 
     private void recordTransition(UUID workorderId, WorkorderStatus fromStatus, WorkorderStatus toStatus,
             UUID userId, String reason) {
+        String actorId = resolveActorId(userId);
         WorkorderStateTransition transition = WorkorderStateTransition.builder()
                 .workorderId(workorderId)
                 .fromStatus(fromStatus)
                 .toStatus(toStatus)
-                .transitionedBy(userId)
+                .transitionedBy(actorId)
                 .reason(reason)
                 .transitionedAt(Instant.now())
                 .build();
@@ -482,12 +482,13 @@ public class WorkorderStateMachine {
         return snapshotRepository.findByWorkorderIdOrderByCapturedAtDesc(workorderId);
     }
 
-    private void createAuditEvent(UUID workorderId, String username, String eventType, String details) {
+    private void createAuditEvent(UUID workorderId, String eventType, String details) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
         AuditEvent auditEvent = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorderId)
                 .eventType(eventType)
-                .userId(username)
+                .userId(actorId)
                 .details(details)
                 .eventTimestamp(Instant.now())
                 .build();
@@ -498,5 +499,10 @@ public class WorkorderStateMachine {
 
     public List<AuditEvent> getAuditHistory(UUID workorderId) {
         return auditEventRepository.findByEntityTypeAndEntityIdOrderByEventTimestampDesc("Workorder", workorderId);
+    }
+
+    private String resolveActorId(UUID fallbackUserId) {
+        String fallback = fallbackUserId != null ? fallbackUserId.toString() : SYSTEM_ACTOR;
+        return SecurityContextHelper.getCurrentUserIdOrDefault(fallback);
     }
 }

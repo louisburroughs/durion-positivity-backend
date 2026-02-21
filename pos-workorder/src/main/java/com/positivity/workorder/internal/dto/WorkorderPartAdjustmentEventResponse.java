@@ -67,7 +67,7 @@ public class WorkorderPartAdjustmentEventResponse {
     /**
      * User who performed the adjustment.
      */
-    private UUID performedBy;
+    private String performedBy;
 
     /**
      * When the adjustment occurred.

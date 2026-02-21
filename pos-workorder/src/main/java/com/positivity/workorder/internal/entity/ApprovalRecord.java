@@ -42,7 +42,7 @@ public class ApprovalRecord {
     private LocalDateTime updatedAt;
 
     @Column(nullable = false)
-    private UUID resolvedBy;
+    private String resolvedBy;
 
     @Column(columnDefinition = "TEXT")
     private String exceptionReason;

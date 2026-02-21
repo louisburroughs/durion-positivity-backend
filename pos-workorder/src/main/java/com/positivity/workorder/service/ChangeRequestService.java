@@ -4,6 +4,7 @@ import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.entity.*;
 import com.positivity.workorder.internal.entity.ChangeRequest.ChangeRequestStatus;
 import com.positivity.workorder.internal.repository.*;
+import com.positivity.security.common.SecurityContextHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class ChangeRequestService {
+    private static final String SYSTEM_ACTOR = "system";
     private final ChangeRequestRepository changeRequestRepository;
     private final WorkorderRepository workOrderRepository;
     private final WorkorderServiceRepository workOrderServiceRepository;
@@ -178,6 +180,7 @@ public class ChangeRequestService {
      */
     @Transactional
     public ChangeRequest approveChangeRequest(UUID changeRequestId, UUID approvedBy, String approvalNote) {
+        String resolvedActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -204,7 +207,7 @@ public class ChangeRequestService {
                 .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED)
                 .resolvedAt(LocalDateTime.now())
-                .resolvedBy(approvedBy)
+                .resolvedBy(resolvedActorId)
                 .approvalNote(approvalNote)
                 .build();
         approvalRecordRepository.save(approvalRecord);
@@ -221,6 +224,7 @@ public class ChangeRequestService {
      */
     @Transactional
     public ChangeRequest declineChangeRequest(UUID changeRequestId, String approvalNote) {
+        String resolvedActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -246,6 +250,7 @@ public class ChangeRequestService {
                 .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.REJECTED)
                 .resolvedAt(LocalDateTime.now())
+                .resolvedBy(resolvedActorId)
                 .approvalNote(approvalNote)
                 .build();
         approvalRecordRepository.save(approvalRecord);
@@ -263,6 +268,7 @@ public class ChangeRequestService {
      */
     @Transactional
     public ChangeRequest applyEmergencyOverride(UUID changeRequestId, UUID managerId, String exceptionReason) {
+        String resolvedActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
         ChangeRequest changeRequest = changeRequestRepository.findById(changeRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("Change request not found: " + changeRequestId));
 
@@ -290,7 +296,7 @@ public class ChangeRequestService {
                 .workorderId(changeRequest.getWorkorderId())
                 .resolutionStatus(ApprovalRecord.ResolutionStatus.APPROVED_WITH_EXCEPTION)
                 .resolvedAt(LocalDateTime.now())
-                .resolvedBy(managerId)
+                .resolvedBy(resolvedActorId)
                 .exceptionReason(exceptionReason)
                 .build();
         approvalRecordRepository.save(approvalRecord);
