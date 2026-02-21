@@ -1,0 +1,630 @@
+openapi: 3.1.0
+info:
+  title: Location API
+  description: API for managing locations in the POS system
+  version: "1.0"
+servers:
+- url: http://api-gateway.local/api/location
+  description: API Gateway
+tags:
+- name: Mobile Unit API
+  description: Operations for managing mobile units within locations
+- name: Bay API
+  description: Operations for managing bays within locations
+- name: Location API
+  description: Operations related to locations and their relationships
+paths:
+  /v1/locations/{locationId}:
+    get:
+      tags:
+      - Location API
+      summary: Get location by ID
+      description: Retrieve a location by its unique ID.
+      operationId: getLocationById
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the location to retrieve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      responses:
+        "404":
+          description: Location not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationResponseDTO"
+        "200":
+          description: Location found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationResponseDTO"
+    put:
+      tags:
+      - Location API
+      summary: Update an existing location
+      description: Update the details of an existing location.
+      operationId: updateLocation
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the location to update
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationRequestDTO"
+        required: true
+      responses:
+        "404":
+          description: Location not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationResponseDTO"
+        "200":
+          description: Location updated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationResponseDTO"
+    delete:
+      tags:
+      - Location API
+      summary: Delete a location
+      description: Delete a location by its unique ID.
+      operationId: deleteLocation
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the location to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      responses:
+        "404":
+          description: Location not found.
+        "204":
+          description: Location deleted successfully.
+  /v1/locations/mobileUnit:
+    get:
+      tags:
+      - Mobile Unit API
+      summary: Get mobile units
+      description: List all mobile units or get a specific mobile unit detail by locationId
+        and unitId.
+      operationId: getMobileUnits
+      parameters: []
+      responses:
+        "200":
+          description: Mobile units retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    put:
+      tags:
+      - Mobile Unit API
+      summary: Manage mobile units
+      description: Create or update mobile units in bulk.
+      operationId: manageMobileUnits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Mobile unit management request body
+      responses:
+        "200":
+          description: Mobile units managed successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/locations/bays:
+    get:
+      tags:
+      - Bay API
+      summary: Get bays
+      description: List all bays or get a specific bay detail by locationId and bayId.
+      operationId: getBays
+      parameters: []
+      responses:
+        "200":
+          description: Bays retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    put:
+      tags:
+      - Bay API
+      summary: Manage bays
+      description: Create or update bays in bulk.
+      operationId: manageBays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Bay management request body
+      responses:
+        "200":
+          description: Bays managed successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/locations:
+    get:
+      tags:
+      - Location API
+      summary: Get all locations
+      description: Retrieve a list of all locations.
+      operationId: getAllLocations
+      responses:
+        "200":
+          description: List of locations returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationResponseDTO"
+    post:
+      tags:
+      - Location API
+      summary: Create a new location
+      description: Add a new location to the system.
+      operationId: createLocation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationRequestDTO"
+        required: true
+      responses:
+        "201":
+          description: Location created successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationResponseDTO"
+  /v1/locations/{locationId}/mobileUnit:
+    post:
+      tags:
+      - Mobile Unit API
+      summary: Create mobile unit
+      description: Create a new mobile unit for a specific location. Validate baseLocationId
+        and capabilities.
+      operationId: createMobileUnit
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Mobile unit creation request body
+      responses:
+        "200":
+          description: Mobile unit created successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/locations/{locationId}/bays:
+    post:
+      tags:
+      - Bay API
+      summary: Create bay
+      description: Create a new bay for a specific location.
+      operationId: createBay
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: Bay creation request body
+      responses:
+        "200":
+          description: Bay created successfully.
+          content:
+            '*/*':
+              schema: {}
+  /v1/locations/{childId}/parents/{parentId}:
+    post:
+      tags:
+      - Location API
+      summary: Add a parent to a location
+      description: Add a parent relationship to a location.
+      operationId: addParent
+      parameters:
+      - name: childId
+        in: path
+        description: ID of the child location
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      - name: parentId
+        in: path
+        description: ID of the parent location
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-0000-7890-abcd-1234567890ab
+      - name: parentType
+        in: query
+        description: Type of the parent relationship
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Parent relationship added successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationParentResponseDTO"
+  /v1/locations/{locationId}/validation:
+    get:
+      tags:
+      - Location API
+      summary: Validate location reference
+      description: Return existence and active state for a location ID.
+      operationId: validateLocation
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the location to validate
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      responses:
+        "200":
+          description: Validation result returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationValidationResponseDTO"
+  /v1/locations/{locationId}/responsible-person:
+    get:
+      tags:
+      - Location API
+      summary: Get responsible person for a location
+      description: Retrieve the person responsible for a given location.
+      operationId: getResponsiblePerson
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the location
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      responses:
+        "200":
+          description: Responsible person found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PersonDTO"
+        "404":
+          description: Responsible person not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PersonDTO"
+  /v1/locations/{locationId}/children:
+    get:
+      tags:
+      - Location API
+      summary: Get all children for a location
+      description: Retrieve all child locations for a given parent location.
+      operationId: getAllChildren
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the parent location
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      - name: parentType
+        in: query
+        description: Optional parent relationship type filter
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: List of child locations returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationResponseDTO"
+  /v1/locations/parents:
+    get:
+      tags:
+      - Location API
+      summary: Get all location parents
+      description: Retrieve all parent relationships for locations.
+      operationId: getAllParents
+      responses:
+        "200":
+          description: List of location parents returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationParentResponseDTO"
+  /v1/locations/{locationId}/mobileUnit/{unitId}:
+    get:
+      tags:
+      - Mobile Unit API
+      summary: Get mobile units
+      description: List all mobile units or get a specific mobile unit detail by locationId
+        and unitId.
+      operationId: getMobileUnits_1
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID (optional for specific mobile unit)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: unitId
+        in: path
+        description: Unit ID (optional for specific mobile unit)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Mobile units retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    delete:
+      tags:
+      - Mobile Unit API
+      summary: Delete mobile unit
+      description: Delete a specific mobile unit by locationId and unitId.
+      operationId: deleteMobileUnit
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      - name: unitId
+        in: path
+        description: Unit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 1
+      responses:
+        "204":
+          description: Mobile unit deleted successfully.
+        "404":
+          description: Mobile unit not found.
+  /v1/locations/{locationId}/bays/{bayId}:
+    get:
+      tags:
+      - Bay API
+      summary: Get bays
+      description: List all bays or get a specific bay detail by locationId and bayId.
+      operationId: getBays_1
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID (optional for specific bay)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: bayId
+        in: path
+        description: Bay ID (optional for specific bay)
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: Bays retrieved successfully.
+          content:
+            '*/*':
+              schema: {}
+    delete:
+      tags:
+      - Bay API
+      summary: Delete bay
+      description: Delete a specific bay by locationId and bayId.
+      operationId: deleteBay
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      - name: bayId
+        in: path
+        description: Bay ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "404":
+          description: Bay not found.
+        "204":
+          description: Bay deleted successfully.
+components:
+  schemas:
+    LocationRequestDTO:
+      type: object
+      description: Location object to be created
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        geographicalLocationId:
+          type: string
+          format: uuid
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        mailingAddress:
+          type: string
+        active:
+          type: boolean
+        responsiblePersonId:
+          type: integer
+          format: int64
+        type:
+          $ref: "#/components/schemas/LocationTypeDTO"
+        parents:
+          type: object
+          additionalProperties: {}
+      required:
+      - code
+      - name
+      - type
+    LocationTypeDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+    LocationResponseDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        geographicalLocationId:
+          type: string
+          format: uuid
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        mailingAddress:
+          type: string
+        active:
+          type: boolean
+        responsiblePersonId:
+          type: integer
+          format: int64
+        type:
+          $ref: "#/components/schemas/LocationTypeDTO"
+    LocationParentResponseDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+        childId:
+          type: string
+          format: uuid
+        parentType:
+          type: string
+    LocationValidationResponseDTO:
+      type: object
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        exists:
+          type: boolean
+        active:
+          type: boolean
+    PersonDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        firstName:
+          type: string
+        lastName:
+          type: string
+        primaryEmail:
+          type: string
+        secondaryEmail:
+          type: string
+        phoneNumbers:
+          type: array
+          items:
+            type: string
+        username:
+          type: string
