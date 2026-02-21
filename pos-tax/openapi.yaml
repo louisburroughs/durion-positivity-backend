@@ -220,7 +220,7 @@ components:
         lineItemId:
           type: string
           description: Line item identifier
-          example: 1
+          example: "1"
         subtotal:
           type: number
           description: Line subtotal before tax

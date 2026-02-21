@@ -1,8 +1,11 @@
 package com.positivity.order.internal.config;
 
 import com.positivity.security.common.GatewaySecurityConfig;
+
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.web.client.RestClient;
 
 /**
  * Order Service Security Configuration.
@@ -30,4 +33,20 @@ import org.springframework.context.annotation.Import;
 @Import(GatewaySecurityConfig.class)
 public class SecurityConfig {
     // Gateway-based authentication is configured by GatewaySecurityConfig
+
+    /**
+     * RestClient.Builder bean for components that create service-specific clients.
+     */
+    @Bean
+    public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    /**
+     * RestClient bean for HTTP client support.
+     */
+    @Bean
+    public RestClient restClient(RestClient.Builder restClientBuilder) {
+        return restClientBuilder.build();
+    }
 }

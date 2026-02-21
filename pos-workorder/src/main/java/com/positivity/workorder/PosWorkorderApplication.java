@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @EnableScheduling enables support for @Scheduled tasks like
  *                   ApprovalExpirationJob.
  */
-@SpringBootApplication(scanBasePackages = { "com.positivity.workorder", "com.positivity.tax" })
+@SpringBootApplication(scanBasePackages = { "com.positivity.workorder" })
 @EnableScheduling
 public class PosWorkorderApplication {
     public static void main(String[] args) {

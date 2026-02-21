@@ -1,0 +1,418 @@
+openapi: 3.1.0
+info:
+  title: Positivity Order API
+  description: "API documentation for the Order service, accessible via the API Gateway."
+  contact:
+    name: Durion Team
+    email: louis.burroughs@gmail.com
+  version: v1
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Price Overrides
+  description: Price override management with approval workflow
+paths:
+  /v1/orders/price-overrides:
+    get:
+      tags:
+      - Price Overrides
+      summary: Get price overrides
+      description: "Retrieve price overrides by order ID, status, or date range. At\
+        \ least one filter parameter is required."
+      operationId: getOverridesByOrder
+      parameters:
+      - name: orderId
+        in: query
+        description: Order ID filter
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Override status filter
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - APPLIED
+          - CANCELLED
+      - name: startDate
+        in: query
+        description: Start date for date range filter
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: endDate
+        in: query
+        description: End date for date range filter
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          description: Overrides retrieved
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceOverride"
+        "400":
+          description: No filter parameter provided
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceOverride"
+    post:
+      tags:
+      - Price Overrides
+      summary: Apply price override
+      description: Apply a price override to an order line. May require approval based
+        on override amount.
+      operationId: applyPriceOverride
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyPriceOverrideRequest"
+        required: true
+      responses:
+        "403":
+          description: Insufficient permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplyPriceOverrideResponse"
+        "201":
+          description: Override created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplyPriceOverrideResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplyPriceOverrideResponse"
+  /v1/orders/price-overrides/{overrideId}/reject:
+    post:
+      tags:
+      - Price Overrides
+      summary: Reject price override
+      description: Reject a pending price override with a reason.
+      operationId: rejectPriceOverride
+      parameters:
+      - name: overrideId
+        in: path
+        description: Price override ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectPriceOverrideRequest"
+        required: true
+      responses:
+        "400":
+          description: Invalid request or override not in pending state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+        "403":
+          description: Insufficient rejection permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+        "404":
+          description: Override not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+        "200":
+          description: Override rejected
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+  /v1/orders/price-overrides/{overrideId}/approve:
+    post:
+      tags:
+      - Price Overrides
+      summary: Approve price override
+      description: Approve a pending price override. Validates approver permission
+        level.
+      operationId: approvePriceOverride
+      parameters:
+      - name: overrideId
+        in: path
+        description: Price override ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovePriceOverrideRequest"
+        required: true
+      responses:
+        "200":
+          description: Override approved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+        "400":
+          description: Invalid request or override not in pending state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+        "404":
+          description: Override not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+        "403":
+          description: Insufficient approval permissions
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+  /v1/orders/price-overrides/{overrideId}:
+    get:
+      tags:
+      - Price Overrides
+      summary: Get price override
+      description: Retrieve a specific price override by ID.
+      operationId: getOverride
+      parameters:
+      - name: overrideId
+        in: path
+        description: Price override ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      responses:
+        "200":
+          description: Override found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+        "404":
+          description: Override not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverride"
+  /v1/orders/price-overrides/pending:
+    get:
+      tags:
+      - Price Overrides
+      summary: Get pending approvals
+      description: Retrieve all price overrides awaiting approval.
+      operationId: getPendingApprovals
+      responses:
+        "200":
+          description: Pending overrides retrieved
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceOverride"
+components:
+  schemas:
+    ApplyPriceOverrideRequest:
+      type: object
+      properties:
+        orderId:
+          type: string
+        orderLineId:
+          type: string
+        productId:
+          type: string
+        originalPrice:
+          type: number
+          minimum: 0.0
+        overridePrice:
+          type: number
+          minimum: 0.0
+        reasonCode:
+          type: string
+          enum:
+          - CUSTOMER_LOYALTY
+          - PRICE_MATCH
+          - PROMOTIONAL_PRICING
+          - PRICING_ERROR_CORRECTION
+          - VOLUME_DISCOUNT
+          - GOODWILL_ADJUSTMENT
+          - MANAGER_DISCRETION
+          - OTHER
+        justification:
+          type: string
+      required:
+      - orderId
+      - orderLineId
+      - originalPrice
+      - overridePrice
+      - productId
+      - reasonCode
+    ApplyPriceOverrideResponse:
+      type: object
+      properties:
+        overrideId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+        orderLineId:
+          type: string
+        productId:
+          type: string
+        originalPrice:
+          type: number
+        overridePrice:
+          type: number
+        discountAmount:
+          type: number
+        discountPercentage:
+          type: number
+        reasonCode:
+          type: string
+          enum:
+          - CUSTOMER_LOYALTY
+          - PRICE_MATCH
+          - PROMOTIONAL_PRICING
+          - PRICING_ERROR_CORRECTION
+          - VOLUME_DISCOUNT
+          - GOODWILL_ADJUSTMENT
+          - MANAGER_DISCRETION
+          - OTHER
+        justification:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - APPLIED
+          - CANCELLED
+        requiresApproval:
+          type: boolean
+        requestedByUserId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+    RejectPriceOverrideRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+        comments:
+          type: string
+      required:
+      - reason
+    PriceOverride:
+      type: object
+      properties:
+        overrideId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        orderLineId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        originalPrice:
+          type: number
+        overridePrice:
+          type: number
+        reasonCode:
+          type: string
+          enum:
+          - CUSTOMER_LOYALTY
+          - PRICE_MATCH
+          - PROMOTIONAL_PRICING
+          - PRICING_ERROR_CORRECTION
+          - VOLUME_DISCOUNT
+          - GOODWILL_ADJUSTMENT
+          - MANAGER_DISCRETION
+          - OTHER
+        justification:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - APPLIED
+          - CANCELLED
+        requestedByUserId:
+          type: string
+          format: uuid
+        approvedByUserId:
+          type: string
+          format: uuid
+        rejectedByUserId:
+          type: string
+          format: uuid
+        rejectionReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        approvedAt:
+          type: string
+          format: date-time
+        rejectedAt:
+          type: string
+          format: date-time
+        appliedAt:
+          type: string
+          format: date-time
+        requiresApproval:
+          type: boolean
+        discountPercentage:
+          type: number
+        discountAmount:
+          type: number
+    ApprovePriceOverrideRequest:
+      type: object
+      properties:
+        comments:
+          type: string

@@ -1,4 +1,4 @@
-package com.positivity.tax.internal.dto;
+package com.positivity.tax.common.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -15,7 +15,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import com.positivity.tax.internal.enums.TaxReferenceType;
+import com.positivity.tax.common.enums.TaxReferenceType;
 
 /**
  * Response from tax calculation.

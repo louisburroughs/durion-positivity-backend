@@ -1,11 +1,11 @@
 package com.positivity.tax.internal.service;
 
 import com.positivity.tax.internal.config.TaxProperties;
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
-import com.positivity.tax.internal.dto.TaxCalculationResponse;
-import com.positivity.tax.internal.dto.TaxJurisdiction;
-import com.positivity.tax.internal.dto.TaxLineItem;
-import com.positivity.tax.internal.enums.TaxJurisdictionType;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxJurisdiction;
+import com.positivity.tax.common.dto.TaxLineItem;
+import com.positivity.tax.common.enums.TaxJurisdictionType;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;

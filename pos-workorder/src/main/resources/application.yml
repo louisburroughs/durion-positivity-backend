@@ -65,3 +65,7 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+pos:
+  tax:
+    base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}

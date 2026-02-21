@@ -5,7 +5,7 @@ import com.positivity.workorder.internal.controller.EstimateController;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.service.EstimateService;
-import com.positivity.tax.service.TaxCalculationService;
+import com.positivity.workorder.internal.client.TaxClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -35,7 +35,7 @@ class EstimateControllerTest {
         private EstimateService estimateService;
 
         @MockitoBean
-        private TaxCalculationService taxCalculationService;
+        private TaxClient taxClient;
 
         @Test
         void testCreateEstimate_Success() throws Exception {

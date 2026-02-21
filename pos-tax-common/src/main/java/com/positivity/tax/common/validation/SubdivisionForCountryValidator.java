@@ -1,16 +1,26 @@
-package com.positivity.tax.internal.validation;
+package com.positivity.tax.common.validation;
 
 import com.neovisionaries.i18n.CountryCode;
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.meeuw.i18n.subdivision.SubdivisionFactory;
+
+import java.util.Set;
 
 /**
  * Validates country/subdivision membership using an ISO 3166-2 backed dataset.
  */
 public class SubdivisionForCountryValidator
         implements ConstraintValidator<ValidSubdivisionForCountry, TaxCalculationRequest.TaxAddress> {
+
+    private static final Set<String> US_SUBDIVISION_CODES = Set.of(
+            "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+            "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+            "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+            "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+            "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+            "DC", "AS", "GU", "MP", "PR", "UM", "VI");
 
     @Override
     public boolean isValid(TaxCalculationRequest.TaxAddress value, ConstraintValidatorContext context) {
@@ -31,7 +41,15 @@ public class SubdivisionForCountryValidator
         }
 
         String normalizedRegion = normalizeRegion(countryCode, regionCode);
-        return SubdivisionFactory.getSubdivision(country, normalizedRegion) != null;
+        if (SubdivisionFactory.getSubdivision(country, normalizedRegion) != null) {
+            return true;
+        }
+
+        if (CountryCode.US.equals(country)) {
+            return US_SUBDIVISION_CODES.contains(normalizedRegion);
+        }
+
+        return false;
     }
 
     private String normalizeRegion(String countryCode, String regionCode) {

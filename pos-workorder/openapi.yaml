@@ -1,0 +1,4216 @@
+openapi: 3.1.0
+info:
+  title: POS Workorder Service API
+  description: Workorder service for managing workorders and tasks
+  contact:
+    name: Durion Team
+    email: louis.burroughs@gmail.com
+  version: v1
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Work Order API
+  description: Endpoints for work order management
+- name: Workorder Detail
+  description: Workorder detail with role-based visibility
+- name: Approval Configuration API
+  description: Endpoints for managing approval configurations by location and customer
+- name: Workorder Part Adjustments
+  description: "Part substitutions, returns, and corrections"
+- name: Technician Assignment API
+  description: Endpoints for assigning technicians to workorders
+- name: Change Request API
+  description: Endpoints for managing additional work requests and approvals
+- name: Workorder Labor API
+  description: Endpoints for tracking labor performed on workorders
+- name: Workorder Parts Usage
+  description: "Track parts issue, consumption, and returns"
+- name: Estimate API
+  description: Endpoints for estimate management and approval workflow
+paths:
+  /v1/workorders/{workorderId}/technician:
+    get:
+      tags:
+      - Technician Assignment API
+      summary: Get technician assignment
+      description: Retrieve the current technician assignment and full assignment
+        history for a workorder.
+      operationId: getTechnicianAssignment
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      responses:
+        "200":
+          description: Assignment retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+        "404":
+          description: Workorder not found or no assignment exists
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+    put:
+      tags:
+      - Technician Assignment API
+      summary: Reassign workorder to different technician
+      description: Reassign a workorder to a different technician. Records reassignment
+        reason and maintains history.
+      operationId: reassignTechnician
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate reassignments
+        required: false
+        schema:
+          type: string
+        example: tech-reassign-550e8400-e29b-41d4-a716-446655440001
+      - name: X-User-Id
+        in: header
+        description: User ID from gateway authentication
+        required: false
+        schema:
+          type: string
+        example: 550e8400-e29b-41d4-a716-446655440100
+      requestBody:
+        description: Reassign technician request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReassignTechnicianRequest"
+            examples:
+              reassignTechnician:
+                description: reassignTechnician
+                value:
+                  newTechnicianId: 550e8400-e29b-41d4-a716-446655440121
+                  reassignedByUserId: 550e8400-e29b-41d4-a716-446655440100
+                  reason: Scheduling conflict
+                  notes: Reassigned due to availability
+        required: true
+      responses:
+        "200":
+          description: Technician reassigned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+        "400":
+          description: Invalid state transition or no current assignment
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+        "403":
+          description: Permission denied
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+        "404":
+          description: Workorder not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+    post:
+      tags:
+      - Technician Assignment API
+      summary: Assign technician to workorder
+      description: Assign a technician to a work order. Transitions workorder to ASSIGNED
+        status if currently APPROVED.
+      operationId: assignTechnician
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate assignments
+        required: false
+        schema:
+          type: string
+        example: tech-assign-550e8400-e29b-41d4-a716-446655440001
+      - name: X-User-Id
+        in: header
+        description: User ID from gateway authentication
+        required: false
+        schema:
+          type: string
+        example: 550e8400-e29b-41d4-a716-446655440100
+      requestBody:
+        description: Assign technician request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignTechnicianRequest"
+            examples:
+              assignTechnician:
+                description: assignTechnician
+                value:
+                  technicianId: 550e8400-e29b-41d4-a716-446655440120
+                  assignedByUserId: 550e8400-e29b-41d4-a716-446655440100
+                  notes: Primary technician assigned
+        required: true
+      responses:
+        "200":
+          description: Technician assigned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+        "400":
+          description: Invalid state transition
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+        "403":
+          description: Permission denied
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+        "404":
+          description: Workorder or technician not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TechnicianAssignmentResponse"
+  /v1/workorders/{workorderId}/labor/{entryId}/adjust:
+    put:
+      tags:
+      - Workorder Labor API
+      summary: Adjust labor hours
+      description: Manually adjust hours worked on a labor entry with a reason for
+        audit trail.
+      operationId: adjustLaborHours
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      - name: entryId
+        in: path
+        description: ID of the labor entry to adjust
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440100
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate adjustments
+        required: false
+        schema:
+          type: string
+        example: labor-adjust-550e8400-e29b-41d4-a716-446655440100
+      requestBody:
+        description: Adjust labor request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustLaborRequest"
+            examples:
+              adjustLabor:
+                description: adjustLabor
+                value:
+                  hoursWorked: 2.5
+                  adjustmentReason: Corrected after timesheet review
+        required: true
+      responses:
+        "200":
+          description: Labor hours adjusted successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "400":
+          description: Invalid hours value
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "403":
+          description: Permission denied
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "404":
+          description: Labor entry not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+  /v1/workexec/approvalConfigurations/{approvalId}:
+    get:
+      tags:
+      - Approval Configuration API
+      summary: Get configuration by ID
+      description: Retrieve an approval configuration by its unique ID.
+      operationId: getConfigurationById
+      parameters:
+      - name: approvalId
+        in: path
+        description: ID of the configuration to retrieve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Configuration found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+        "404":
+          description: Configuration not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+    put:
+      tags:
+      - Approval Configuration API
+      summary: Update an approval configuration
+      description: Update an existing approval configuration.
+      operationId: updateConfiguration
+      parameters:
+      - name: approvalId
+        in: path
+        description: ID of the configuration to update
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Updated configuration object
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalConfigurationRequest"
+            examples:
+              updateApprovalConfig:
+                description: updateApprovalConfig
+                value:
+                  approvalThreshold: 750.0
+                  requiresManagerApproval: true
+        required: true
+      responses:
+        "404":
+          description: Configuration not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+        "200":
+          description: Configuration updated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+    delete:
+      tags:
+      - Approval Configuration API
+      summary: Delete an approval configuration
+      description: Delete a configuration by its unique ID.
+      operationId: deleteConfiguration
+      parameters:
+      - name: approvalId
+        in: path
+        description: ID of the configuration to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "204":
+          description: Configuration deleted successfully.
+        "404":
+          description: Configuration not found.
+  /v1/workorders:
+    get:
+      tags:
+      - Work Order API
+      summary: Get all work orders
+      description: Retrieve a list of all work orders.
+      operationId: getAllWorkorders
+      responses:
+        "200":
+          description: List of work orders returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderResponse"
+    post:
+      tags:
+      - Work Order API
+      summary: Create a new work order
+      description: Add a new work order to the system. Supports idempotent creation
+        via Idempotency-Key header to prevent duplicate workorders.
+      operationId: createWorkorder
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate creation (recommended
+          for retries)
+        required: false
+        schema:
+          type: string
+        example: workorder-create-550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Work order creation request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkorderRequest"
+            examples:
+              createWorkorder:
+                description: createWorkorder
+                value:
+                  estimateId: 550e8400-e29b-41d4-a716-446655440001
+                  customerId: 550e8400-e29b-41d4-a716-446655440010
+        required: true
+      responses:
+        "200":
+          description: "Work order created successfully, or existing work order returned\
+            \ if idempotency key was previously processed."
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+  /v1/workorders/{workorderId}/start:
+    post:
+      tags:
+      - Work Order API
+      summary: Start a work order
+      description: "Start work on a work order, transitioning it to WORK_IN_PROGRESS\
+        \ status."
+      operationId: startWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order to start
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Start workorder request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartWorkorderRequest"
+            examples:
+              startWorkorder:
+                description: startWorkorder
+                value:
+                  userId: 550e8400-e29b-41d4-a716-446655440100
+                  reason: Technician started work
+        required: true
+      responses:
+        "200":
+          description: Work order started successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StartWorkorderResponse"
+        "400":
+          description: Invalid state transition or pending change requests.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StartWorkorderResponse"
+        "404":
+          description: Work order not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StartWorkorderResponse"
+  /v1/workorders/{workorderId}/services/{serviceId}/labor/start:
+    post:
+      tags:
+      - Workorder Labor API
+      summary: Start labor session
+      description: Start tracking labor on a specific service item. Only one active
+        session allowed per service.
+      operationId: startLaborSession
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      - name: serviceId
+        in: path
+        description: ID of the service item
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440010
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate starts
+        required: false
+        schema:
+          type: string
+        example: labor-start-550e8400-e29b-41d4-a716-446655440001
+      - name: X-User-Id
+        in: header
+        description: User ID from gateway authentication
+        required: false
+        schema:
+          type: string
+        example: 550e8400-e29b-41d4-a716-446655440100
+      requestBody:
+        description: Start labor request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartLaborRequest"
+            examples:
+              startLabor:
+                description: startLabor
+                value:
+                  technicianId: 550e8400-e29b-41d4-a716-446655440120
+                  notes: Starting diagnostic work
+        required: true
+      responses:
+        "201":
+          description: Labor session started successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "200":
+          description: Idempotent request - existing session returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "400":
+          description: Invalid state - active session exists or invalid status
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "403":
+          description: Permission denied
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "404":
+          description: Workorder or service not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+  /v1/workorders/{workorderId}/reopen:
+    post:
+      tags:
+      - Work Order API
+      summary: Reopen completed workorder
+      description: Controlled reopen for completed workorders. Requires elevated permission
+        and mandatory reason.
+      operationId: reopenWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the completed workorder to reopen
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Reopen workorder request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReopenWorkorderRequest"
+            examples:
+              reopenWorkorder:
+                description: reopenWorkorder
+                value:
+                  userId: 550e8400-e29b-41d4-a716-446655440100
+                  reopenReason: Customer requested additional work
+        required: true
+      responses:
+        "200":
+          description: Workorder reopened successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReopenWorkorderResponse"
+        "400":
+          description: Workorder cannot be reopened or reason missing.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReopenWorkorderResponse"
+        "404":
+          description: Work order not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReopenWorkorderResponse"
+  /v1/workorders/{workorderId}/parts/substitute:
+    post:
+      tags:
+      - Workorder Part Adjustments
+      summary: Substitute part
+      description: Replace one part with another. Original part preserved for history.
+      operationId: substitutePart
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Substitute part request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubstitutePartRequest"
+            examples:
+              substitutePart:
+                description: substitutePart
+                value:
+                  originalPartId: 550e8400-e29b-41d4-a716-446655440050
+                  substitutePartId: 550e8400-e29b-41d4-a716-446655440051
+                  reason: Supplier substitution
+                  notes: Equivalent OEM part
+        required: true
+      responses:
+        "201":
+          description: Part substituted successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "409":
+          description: Idempotency conflict
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "400":
+          description: "Invalid request (part already consumed, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+  /v1/workorders/{workorderId}/parts/return:
+    post:
+      tags:
+      - Workorder Parts Usage
+      summary: Return unused parts to inventory
+      description: Return unused parts after partial consumption or service completion
+      operationId: returnParts
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Return part request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReturnPartRequest"
+            examples:
+              returnParts:
+                description: returnParts
+                value:
+                  workorderPartId: 550e8400-e29b-41d4-a716-446655440050
+                  quantity: 1
+        required: true
+      responses:
+        "201":
+          description: Parts returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+  /v1/workorders/{workorderId}/parts/returnUnused:
+    post:
+      tags:
+      - Workorder Part Adjustments
+      summary: Return unused quantity
+      description: Return unused part quantity beyond normal return flow
+      operationId: returnUnusedQuantity
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Return unused quantity request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReturnPartQuantityRequest"
+            examples:
+              returnUnused:
+                description: returnUnused
+                value:
+                  workorderPartId: 550e8400-e29b-41d4-a716-446655440050
+                  quantity: 1
+                  reason: Unused after repair
+                  notes: Returned to stock
+        required: true
+      responses:
+        "400":
+          description: "Invalid request (exceeds available quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "201":
+          description: Unused quantity returned successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+  /v1/workorders/{workorderId}/parts/issue:
+    post:
+      tags:
+      - Workorder Parts Usage
+      summary: Issue parts to workorder
+      description: "Issue parts from inventory, reserving them for consumption on\
+        \ the workorder"
+      operationId: issueParts
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Issue part request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssuePartRequest"
+            examples:
+              issueParts:
+                description: issueParts
+                value:
+                  workorderPartId: 550e8400-e29b-41d4-a716-446655440050
+                  quantity: 2
+        required: true
+      responses:
+        "409":
+          description: Idempotency conflict (duplicate key)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "201":
+          description: Parts issued successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "400":
+          description: "Invalid request (negative quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+  /v1/workorders/{workorderId}/parts/correct:
+    post:
+      tags:
+      - Workorder Part Adjustments
+      summary: Correct part quantity
+      description: Administrative correction for data entry errors
+      operationId: correctPartQuantity
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Correct part quantity request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectPartQuantityRequest"
+            examples:
+              correctPartQuantity:
+                description: correctPartQuantity
+                value:
+                  workorderPartId: 550e8400-e29b-41d4-a716-446655440050
+                  newQuantity: 3
+                  reason: Data correction
+                  notes: Corrected after inventory count
+        required: true
+      responses:
+        "201":
+          description: Part quantity corrected successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+  /v1/workorders/{workorderId}/parts/consume:
+    post:
+      tags:
+      - Workorder Parts Usage
+      summary: Consume parts on workorder
+      description: Record actual consumption of parts. Quantity consumed cannot exceed
+        quantity issued.
+      operationId: consumeParts
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Consume part request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumePartRequest"
+            examples:
+              consumeParts:
+                description: consumeParts
+                value:
+                  workorderPartId: 550e8400-e29b-41d4-a716-446655440050
+                  quantity: 1
+        required: true
+      responses:
+        "400":
+          description: "Invalid request (exceeds issued quantity, etc.)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "201":
+          description: Parts consumption recorded successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+  /v1/workorders/{workorderId}/labor/{entryId}/stop:
+    post:
+      tags:
+      - Workorder Labor API
+      summary: Stop labor session
+      description: Stop an active labor session and calculate hours worked.
+      operationId: stopLaborSession
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      - name: entryId
+        in: path
+        description: ID of the labor entry to stop
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440100
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate stops
+        required: false
+        schema:
+          type: string
+        example: labor-stop-550e8400-e29b-41d4-a716-446655440100
+      responses:
+        "200":
+          description: Labor session stopped successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "400":
+          description: Session already stopped
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "403":
+          description: Permission denied
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "404":
+          description: Labor entry not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+  /v1/workorders/{workorderId}/generate-invoice:
+    post:
+      tags:
+      - Work Order API
+      summary: Generate invoice draft from completed workorder
+      description: Generate an invoice draft from a completed workorder with optional
+        idempotency key.
+      operationId: generateInvoice
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the completed work order
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate invoice generation
+          (recommended for retries)
+        required: false
+        schema:
+          type: string
+        example: invoice-generate-550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Invoice generated successfully or existing invoice returned
+            for idempotent replay.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
+        "409":
+          description: Work order is not in COMPLETED state.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
+        "404":
+          description: Work order not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceGenerationResponse"
+  /v1/workorders/{workorderId}/complete:
+    post:
+      tags:
+      - Work Order API
+      summary: Complete a work order
+      description: "Complete a work order, transitioning it to COMPLETED status and\
+        \ emitting a WorkCompleted event."
+      operationId: completeWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order to complete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Complete workorder request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteWorkorderRequest"
+            examples:
+              completeWorkorder:
+                description: completeWorkorder
+                value:
+                  userId: 550e8400-e29b-41d4-a716-446655440100
+                  completionNotes: Completed and verified
+        required: true
+      responses:
+        "200":
+          description: Work order completed successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompleteWorkorderResponse"
+        "404":
+          description: Work order not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompleteWorkorderResponse"
+        "400":
+          description: Invalid state transition or work order already completed.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompleteWorkorderResponse"
+  /v1/workorders/{workorderId}/changeRequests:
+    get:
+      tags:
+      - Change Request API
+      summary: Get all change requests for a work order
+      description: Retrieve all change requests associated with a specific work order
+      operationId: getChangeRequestsByWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: List of change requests returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChangeRequestResponse"
+    post:
+      tags:
+      - Change Request API
+      summary: Create a change request
+      description: Technician creates a request for additional work beyond authorized
+        scope. Items are marked as PENDING_APPROVAL until advisor approves. Requires
+        description and at least one service or part item. Supports idempotent creation
+        via Idempotency-Key header to prevent duplicate change requests.
+      operationId: createChangeRequest
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: Idempotency-Key
+        in: header
+        description: Optional idempotency key to prevent duplicate creation (recommended
+          for retries)
+        required: false
+        schema:
+          type: string
+        example: change-request-create-550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Change request details including items
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChangeRequestDTO"
+            examples:
+              createChangeRequest:
+                description: createChangeRequest
+                value:
+                  description: Customer requested additional diagnostics
+                  approvalGated: true
+        required: true
+      responses:
+        "200":
+          description: "Change request created successfully, or existing change request\
+            \ returned if idempotency key was previously processed"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "400":
+          description: "Invalid request - missing description, no items, or validation\
+            \ failed"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "404":
+          description: Work order not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+  /v1/workorders/{workorderId}/approval:
+    post:
+      tags:
+      - Work Order API
+      summary: Approve a work order with customer signature
+      description: Transition work order to APPROVED status with customer signature
+        capture. Work order can be approved from DRAFT status. Requires customer ID
+        validation and signature data (base64-encoded image).
+      operationId: approveWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order to approve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Approval request with customer ID and signature capture
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveWorkorderRequest"
+            examples:
+              approveWorkorder:
+                description: approveWorkorder
+                value:
+                  customerId: 550e8400-e29b-41d4-a716-446655440010
+                  signatureData: base64-signature
+                  signatureMimeType: image/png
+                  signerName: Jane Customer
+                  notes: Approved by customer
+        required: true
+      responses:
+        "400":
+          description: Work order cannot be approved in current state or customer
+            ID mismatch.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+        "200":
+          description: Work order approved successfully with signature captured.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+        "404":
+          description: Work order not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+  /v1/workorders/estimates:
+    get:
+      tags:
+      - Estimate API
+      summary: Get all estimates
+      description: Retrieve a list of all estimates.
+      operationId: getAllEstimates
+      responses:
+        "200":
+          description: List of estimates returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EstimateResponse"
+    post:
+      tags:
+      - Estimate API
+      summary: Create a new draft estimate
+      description: "Create a new estimate in DRAFT status for a customer and vehicle.\
+        \ Requires ESTIMATE_CREATE permission. System will generate a unique estimate\
+        \ number and apply default values for location, currency, and tax region if\
+        \ not provided."
+      operationId: createEstimate
+      requestBody:
+        description: Estimate creation request with customer and vehicle IDs
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEstimateRequest"
+            examples:
+              createEstimate:
+                description: createEstimate
+                value:
+                  customerId: 550e8400-e29b-41d4-a716-446655440010
+                  vehicleId: 550e8400-e29b-41d4-a716-446655440011
+                  locationId: 550e8400-e29b-41d4-a716-446655440020
+        required: true
+      responses:
+        "400":
+          description: Invalid request - missing required fields.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "409":
+          description: Conflict - estimate could not be created due to state or integrity
+            constraints.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "403":
+          description: Forbidden - user does not have ESTIMATE_CREATE permission.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "201":
+          description: Estimate created successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "500":
+          description: Internal server error - unexpected estimate creation failure.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/estimates/{estimateId}/submit-for-approval:
+    post:
+      tags:
+      - Estimate API
+      summary: Submit estimate for customer approval
+      description: "Submit a DRAFT estimate for customer approval. Creates immutable\
+        \ snapshot and transitions to PENDING_APPROVAL state. Validates completeness\
+        \ (has customer, vehicle, line items, calculated totals). CAP:003 Issue #168\
+        \ - Submit Estimate for Customer Approval"
+      operationId: submitForApproval
+      parameters:
+      - name: estimateId
+        in: path
+        description: ID of the estimate to submit
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "400":
+          description: Estimate is incomplete or not in DRAFT state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "404":
+          description: Estimate not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "200":
+          description: Estimate submitted for approval successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/estimates/{estimateId}/snapshots:
+    post:
+      tags:
+      - Estimate API
+      summary: Create historical snapshot
+      description: Capture an immutable snapshot of the estimate's complete state
+        (estimate + all line items) for audit trail and version history purposes.
+      operationId: createEstimateSnapshot
+      parameters:
+      - name: estimateId
+        in: path
+        description: Estimate ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: notes
+        in: query
+        description: Optional notes about why snapshot was created
+        required: false
+        schema:
+          type: string
+        example: Snapshot captured before approval
+      responses:
+        "404":
+          description: Estimate not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateSnapshotResponse"
+        "200":
+          description: Snapshot created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateSnapshotResponse"
+        "409":
+          description: Snapshot creation failed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateSnapshotResponse"
+  /v1/workorders/estimates/{estimateId}/reopen:
+    post:
+      tags:
+      - Estimate API
+      summary: Reopen a declined estimate
+      description: Transition a declined estimate back to DRAFT state. Can only be
+        done within the configured expiry period.
+      operationId: reopenEstimate
+      parameters:
+      - name: estimateId
+        in: path
+        description: ID of the estimate to reopen
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "400":
+          description: Estimate cannot be reopened (not declined or expired).
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "404":
+          description: Estimate not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "200":
+          description: Estimate reopened successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/estimates/{estimateId}/promote:
+    post:
+      tags:
+      - Estimate API
+      summary: Promote approved estimate to workorder
+      description: "Promote an approved estimate to a workorder. Validates preconditions:\
+        \ estimate must be APPROVED, not expired, have approved items, and not already\
+        \ promoted. Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate\
+        \ was previously promoted (idempotency). CAP:004 Story #26 - Create Workorder\
+        \ from Approved Estimate."
+      operationId: promoteEstimateToWorkorder
+      parameters:
+      - name: estimateId
+        in: path
+        description: ID of the estimate to promote
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: Idempotency-Key
+        in: header
+        description: Idempotency-Key header for safe retries
+        required: false
+        schema:
+          type: string
+        example: estimate-promote-550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "409":
+          description: Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+        "404":
+          description: Estimate not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+        "400":
+          description: Validation error - estimate not in correct state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+        "200":
+          description: Workorder created successfully from estimate
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+  /v1/workorders/estimates/{estimateId}/items:
+    post:
+      tags:
+      - Estimate API
+      summary: Add line item to estimate
+      description: "Add a part or labor line item to a draft estimate. Estimate must\
+        \ be in DRAFT status. For PART items, provide productId or description. For\
+        \ LABOR items, provide serviceId or description."
+      operationId: addEstimateItem
+      parameters:
+      - name: estimateId
+        in: path
+        description: Estimate ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Line item details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddEstimateItemRequest"
+            examples:
+              addEstimateItem:
+                description: addEstimateItem
+                value:
+                  itemType: LABOR
+                  description: Brake inspection
+                  quantity: 1
+                  unitPrice: 129.99
+                  taxCode: LABOR_STANDARD
+        required: true
+      responses:
+        "200":
+          description: Line item added successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+        "404":
+          description: Estimate not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+        "409":
+          description: Estimate not in DRAFT status (INVALID_STATE)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+        "400":
+          description: Validation error or invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+  /v1/workorders/estimates/{estimateId}/decline:
+    post:
+      tags:
+      - Estimate API
+      summary: Decline an estimate
+      description: Transition estimate to declined state. Estimate can be declined
+        from DRAFT or APPROVED status.
+      operationId: declineEstimate
+      parameters:
+      - name: estimateId
+        in: path
+        description: ID of the estimate to decline
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: reason
+        in: query
+        description: Reason for decline
+        required: false
+        schema:
+          type: string
+        example: Customer declined additional work
+      responses:
+        "400":
+          description: Estimate cannot be declined in current state.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "404":
+          description: Estimate not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "200":
+          description: Estimate declined successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/estimates/{estimateId}/calculate:
+    post:
+      tags:
+      - Estimate API
+      summary: Calculate taxes and totals
+      description: "Calculate subtotal, tax amount, and total for an estimate based\
+        \ on its line items. Estimate must be in DRAFT status. Uses stub tax calculation\
+        \ (8.25% flat rate) pending pos-accounting integration."
+      operationId: calculateEstimateTotals
+      parameters:
+      - name: estimateId
+        in: path
+        description: Estimate ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "404":
+          description: Estimate not found
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties: {}
+        "200":
+          description: Totals calculated successfully
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties: {}
+        "409":
+          description: Estimate not in DRAFT status (INVALID_STATE)
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties: {}
+  /v1/workorders/estimates/{estimateId}/approval:
+    post:
+      tags:
+      - Estimate API
+      summary: Approve an estimate with customer signature
+      description: "Transition estimate to approved state with customer signature\
+        \ capture. Estimate can be approved from DRAFT status. Requires customer ID\
+        \ validation and signature data (base64-encoded image). For commercial accounts\
+        \ with PO enforcement enabled, a purchase order number must be provided (CAP:092\
+        \ Story #98)."
+      operationId: approveEstimate
+      parameters:
+      - name: estimateId
+        in: path
+        description: ID of the estimate to approve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: "Approval request with customer ID, signature capture, and optional\
+          \ selective line item approvals"
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveEstimateRequest"
+            examples:
+              approveEstimate:
+                description: approveEstimate
+                value:
+                  customerId: 550e8400-e29b-41d4-a716-446655440010
+                  signatureData: base64-signature
+                  signatureMimeType: image/png
+                  signerName: Jane Customer
+                  notes: Approved estimate
+                  purchaseOrderNumber: PO-12345
+        required: true
+      responses:
+        "400":
+          description: "Estimate cannot be approved in current state, customer ID\
+            \ mismatch, or PO required but not provided."
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "404":
+          description: Estimate not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "200":
+          description: Estimate approved successfully with signature captured.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/changeRequests/{changeId}/emergency-override:
+    post:
+      tags:
+      - Change Request API
+      summary: Apply emergency override
+      description: Manager applies emergency override to approve a change request
+        with exception. Requires Manager role and a valid exception reason. Items
+        move from PENDING_APPROVAL to READY_TO_EXECUTE status.
+      operationId: applyEmergencyOverride
+      parameters:
+      - name: changeId
+        in: path
+        description: ID of the change request
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Emergency override details including manager ID and reason
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmergencyOverrideDTO"
+            examples:
+              emergencyOverride:
+                description: emergencyOverride
+                value:
+                  managerId: 550e8400-e29b-41d4-a716-446655440110
+                  exceptionReason: Safety-critical repair authorized
+        required: true
+      responses:
+        "200":
+          description: Emergency override applied successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "400":
+          description: Cannot apply override - invalid state or missing reason
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "404":
+          description: Change request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "403":
+          description: Insufficient permissions - Manager role required
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+  /v1/workorders/changeRequests/{changeId}/decline:
+    post:
+      tags:
+      - Change Request API
+      summary: Decline a change request
+      description: Service Advisor declines the change request. Items move from PENDING_APPROVAL
+        to CANCELLED status (not billable). Approval note is required to record the
+        decline decision.
+      operationId: declineChangeRequest
+      parameters:
+      - name: changeId
+        in: path
+        description: ID of the change request
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Decline details including note
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeclineChangeRequestDTO"
+            examples:
+              declineChangeRequest:
+                description: declineChangeRequest
+                value:
+                  approvalNote: Declined by customer
+        required: true
+      responses:
+        "404":
+          description: Change request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "400":
+          description: Cannot decline - invalid state or missing note
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "200":
+          description: Change request declined successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+  /v1/workorders/changeRequests/{changeId}/approve:
+    post:
+      tags:
+      - Change Request API
+      summary: Approve a change request
+      description: Service Advisor approves the change request. Items move from PENDING_APPROVAL
+        to READY_TO_EXECUTE status. Approval note is required as the approval artifact.
+      operationId: approveChangeRequest
+      parameters:
+      - name: changeId
+        in: path
+        description: ID of the change request
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        description: Approval details including user ID and note
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveChangeRequestDTO"
+            examples:
+              approveChangeRequest:
+                description: approveChangeRequest
+                value:
+                  approvedBy: 550e8400-e29b-41d4-a716-446655440100
+                  approvalNote: Approved after customer confirmation
+        required: true
+      responses:
+        "200":
+          description: Change request approved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "404":
+          description: Change request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "400":
+          description: Cannot approve - invalid state or missing approval note
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+  /v1/workorders/changeRequests/{changeId}/acknowledgeDenial:
+    post:
+      tags:
+      - Change Request API
+      summary: Record customer denial acknowledgment
+      description: "For declined emergency/safety items, record that customer acknowledged\
+        \ the denial. Required before closing the work order and returning the vehicle."
+      operationId: recordCustomerDenialAcknowledgment
+      parameters:
+      - name: changeId
+        in: path
+        description: ID of the change request
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "400":
+          description: Not an emergency request or invalid state
+        "404":
+          description: Change request not found
+        "204":
+          description: Acknowledgment recorded successfully
+  /v1/workexec/time-entries/timer/stop:
+    post:
+      tags:
+      - workexec-time-tracking-controller
+      operationId: stopTimers
+      parameters:
+      - name: X-User-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema: {}
+  /v1/workexec/time-entries/timer/start:
+    post:
+      tags:
+      - workexec-time-tracking-controller
+      operationId: startTimer
+      parameters:
+      - name: X-User-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkexecTimerStartRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema: {}
+  /v1/workexec/labor-performed:
+    post:
+      tags:
+      - workexec-time-tracking-controller
+      operationId: createLaborPerformed
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkexecLaborPerformedRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema: {}
+  /v1/workexec/approvalConfigurations:
+    post:
+      tags:
+      - Approval Configuration API
+      summary: Create a new approval configuration
+      description: Add a new approval configuration.
+      operationId: createConfiguration
+      requestBody:
+        description: Configuration object to be created
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalConfigurationRequest"
+            examples:
+              createApprovalConfig:
+                description: createApprovalConfig
+                value:
+                  locationId: 550e8400-e29b-41d4-a716-446655440020
+                  customerId: 550e8400-e29b-41d4-a716-446655440010
+                  approvalThreshold: 500.0
+                  requiresManagerApproval: true
+        required: true
+      responses:
+        "200":
+          description: Configuration created successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+  /v1/workorders/estimates/{estimateId}/items/{itemId}:
+    delete:
+      tags:
+      - Estimate API
+      summary: Remove line item
+      description: Remove a line item from a draft estimate (soft delete). Estimate
+        must be in DRAFT status.
+      operationId: deleteEstimateItem
+      parameters:
+      - name: estimateId
+        in: path
+        description: Estimate ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: itemId
+        in: path
+        description: Item ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      responses:
+        "204":
+          description: Line item removed successfully
+        "409":
+          description: Estimate not in DRAFT status (INVALID_STATE)
+        "404":
+          description: Estimate or item not found
+    patch:
+      tags:
+      - Estimate API
+      summary: Update line item
+      description: Update an existing line item on a draft estimate. Estimate must
+        be in DRAFT status. Only provided fields will be updated.
+      operationId: updateEstimateItem
+      parameters:
+      - name: estimateId
+        in: path
+        description: Estimate ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: itemId
+        in: path
+        description: Item ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      requestBody:
+        description: Updated item fields
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEstimateItemRequest"
+            examples:
+              updateEstimateItem:
+                description: updateEstimateItem
+                value:
+                  description: Brake inspection and adjustment
+                  quantity: 1
+                  unitPrice: 149.99
+                  taxCode: LABOR_STANDARD
+        required: true
+      responses:
+        "200":
+          description: Line item updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+        "409":
+          description: Estimate not in DRAFT status (INVALID_STATE)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+        "400":
+          description: Validation error or invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+        "404":
+          description: Estimate or item not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateItemResponse"
+  /v1/workorders/{workorderId}:
+    get:
+      tags:
+      - Work Order API
+      summary: Get work order by ID
+      description: Retrieve a work order by its unique ID.
+      operationId: getWorkorderById
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order to retrieve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Work order found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+        "404":
+          description: Work order not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderResponse"
+    delete:
+      tags:
+      - Work Order API
+      summary: Delete a work order
+      description: Delete a work order by its unique ID.
+      operationId: deleteWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "204":
+          description: Work order deleted successfully.
+        "404":
+          description: Work order not found.
+  /v1/workorders/{workorderId}/transitions:
+    get:
+      tags:
+      - Work Order API
+      summary: Get transition history
+      description: Retrieve the state transition history for a work order.
+      operationId: getTransitionHistory
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Transition history returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderStateTransitionResponse"
+  /v1/workorders/{workorderId}/snapshots:
+    get:
+      tags:
+      - Work Order API
+      summary: Get snapshot history
+      description: Retrieve the snapshot history for a work order.
+      operationId: getSnapshotHistory
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Snapshot history returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderSnapshotResponse"
+  /v1/workorders/{workorderId}/parts/usageHistory:
+    get:
+      tags:
+      - Workorder Parts Usage
+      summary: Get parts usage history
+      description: "Retrieve usage history (issue, consume, return events) for parts\
+        \ on the workorder"
+      operationId: getUsageHistory
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: partLineId
+        in: query
+        description: Optional part line ID to filter history for a specific part
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440050
+      responses:
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+        "200":
+          description: Usage history retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartUsageEventResponse"
+  /v1/workorders/{workorderId}/parts/adjustments:
+    get:
+      tags:
+      - Workorder Part Adjustments
+      summary: Get part adjustment history
+      description: "Retrieve adjustment history (substitutions, returns, corrections)\
+        \ for parts on the workorder"
+      operationId: getAdjustmentHistory
+      parameters:
+      - name: workorderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: partId
+        in: query
+        description: Optional part ID to filter history for a specific part
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440050
+      responses:
+        "200":
+          description: Adjustment history retrieved successfully (newest first)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+        "404":
+          description: Workorder or part not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
+  /v1/workorders/{workorderId}/labor:
+    get:
+      tags:
+      - Workorder Labor API
+      summary: Get labor history
+      description: "Retrieve all labor entries for a workorder, ordered newest first."
+      operationId: getLaborHistory
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440001
+      responses:
+        "200":
+          description: Labor history retrieved successfully
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+        "403":
+          description: Permission denied
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkorderLaborEntryResponse"
+  /v1/workorders/{workorderId}/detail:
+    get:
+      tags:
+      - Workorder Detail
+      summary: Get workorder detail with role-based visibility
+      description: Returns comprehensive workorder detail. Financial fields are conditionally
+        included based on user authorities. Capability flags indicate which actions
+        the user can perform.
+      operationId: getWorkorderDetail
+      parameters:
+      - name: workorderId
+        in: path
+        description: Workorder ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: X-Authorities
+        in: header
+        description: User authorities (comma-separated)
+        required: false
+        schema:
+          type: string
+        example: "workorder:workorder:view,workorder:financials:view"
+      responses:
+        "200":
+          description: Workorder detail retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderDetailResponse"
+        "404":
+          description: Workorder not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/WorkorderDetailResponse"
+  /v1/workorders/{workorderId}/completion-preconditions:
+    get:
+      tags:
+      - Work Order API
+      summary: Validate completion preconditions
+      description: Evaluate completion preconditions for a workorder and return checklist
+        + blocking reasons.
+      operationId: getCompletionPreconditions
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the workorder to validate
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Completion preconditions evaluated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompletionPreconditionsResponse"
+        "404":
+          description: Work order not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompletionPreconditionsResponse"
+  /v1/workorders/{workorderId}/canClose:
+    get:
+      tags:
+      - Change Request API
+      summary: Check if work order can be closed
+      description: Verify all declined emergency/safety items have customer denial
+        acknowledgment
+      operationId: canCloseWorkorder
+      parameters:
+      - name: workorderId
+        in: path
+        description: ID of the work order
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: "Returns true if work order can be closed, false otherwise"
+          content:
+            '*/*':
+              schema:
+                type: boolean
+  /v1/workorders/estimates/{estimateId}:
+    get:
+      tags:
+      - Estimate API
+      summary: Get estimate by ID
+      description: Retrieve an estimate by its unique ID.
+      operationId: getEstimateById
+      parameters:
+      - name: estimateId
+        in: path
+        description: ID of the estimate to retrieve
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "404":
+          description: Estimate not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+        "200":
+          description: Estimate found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateResponse"
+    delete:
+      tags:
+      - Estimate API
+      summary: Delete an estimate
+      description: Delete an estimate by its unique ID.
+      operationId: deleteEstimate
+      parameters:
+      - name: estimateId
+        in: path
+        description: ID of the estimate to delete
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "204":
+          description: Estimate deleted successfully.
+        "404":
+          description: Estimate not found.
+  /v1/workorders/estimates/{estimateId}/summary:
+    get:
+      tags:
+      - Estimate API
+      summary: Get estimate summary (customer-facing)
+      description: Retrieve a customer-facing summary of an estimate with grouped
+        line items (parts and labor) and financial breakdown. PDF generation not implemented
+        (requires document service integration).
+      operationId: getEstimateSummary
+      parameters:
+      - name: estimateId
+        in: path
+        description: Estimate ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "404":
+          description: Estimate not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateSummaryResponse"
+        "200":
+          description: Summary retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EstimateSummaryResponse"
+  /v1/workorders/estimates/shop/{locationId}:
+    get:
+      tags:
+      - Estimate API
+      summary: Get estimates by shop
+      description: Retrieve all estimates for a specific shop.
+      operationId: getEstimatesByShop
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the shop
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440020
+      responses:
+        "200":
+          description: List of estimates returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/estimates/location/{locationId}:
+    get:
+      tags:
+      - Estimate API
+      summary: Get estimates by location
+      description: Retrieve all estimates for a specific location.
+      operationId: getEstimatesByLocation
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the location
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440020
+      responses:
+        "200":
+          description: List of estimates returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/estimates/customer/{customerId}:
+    get:
+      tags:
+      - Estimate API
+      summary: Get estimates by customer
+      description: Retrieve all estimates for a specific customer.
+      operationId: getEstimatesByCustomer
+      parameters:
+      - name: customerId
+        in: path
+        description: ID of the customer
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440010
+      responses:
+        "200":
+          description: List of estimates returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EstimateResponse"
+  /v1/workorders/changeRequests/{changeId}:
+    get:
+      tags:
+      - Change Request API
+      summary: Get change request by ID
+      description: Retrieve details of a specific change request
+      operationId: getChangeRequestById
+      parameters:
+      - name: changeId
+        in: path
+        description: ID of the change request
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Change request found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+        "404":
+          description: Change request not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChangeRequestResponse"
+  /v1/workexec:
+    get:
+      tags:
+      - Approval Configuration API
+      summary: Get all approval configurations
+      description: Retrieve a list of all approval configurations.
+      operationId: getAllConfigurations
+      responses:
+        "200":
+          description: List of configurations returned successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApprovalConfigurationResponse"
+  /v1/workexec/time-entries/timer/active:
+    get:
+      tags:
+      - workexec-time-tracking-controller
+      operationId: getActiveTimerEntries
+      parameters:
+      - name: X-User-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema: {}
+  /v1/workexec/job-time-totals:
+    get:
+      tags:
+      - workexec-time-tracking-controller
+      operationId: getJobTimeTotals
+      parameters:
+      - name: startDate
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: endDate
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: timezone
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: technicianIds
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema: {}
+  /v1/workexec/approvalConfigurations/applicable:
+    get:
+      tags:
+      - Approval Configuration API
+      summary: Get applicable configuration
+      description: Get the most specific configuration for a location and customer.
+      operationId: getApplicableConfiguration
+      parameters:
+      - name: locationId
+        in: query
+        description: Location ID
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440020
+      - name: customerId
+        in: query
+        description: Customer ID
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440010
+      responses:
+        "404":
+          description: No configuration found (default will be used).
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+        "200":
+          description: Configuration found and returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApprovalConfigurationResponse"
+components:
+  schemas:
+    AssignmentHistoryEntry:
+      type: object
+      description: Assignment history entry
+      properties:
+        technicianId:
+          type: string
+          description: Technician ID for this assignment period
+          example: 550e8400-e29b-41d4-a716-446655440050
+        technicianName:
+          type: string
+          description: Technician display name
+          example: John Smith
+        assignedAt:
+          type: string
+          format: date-time
+          description: When the technician was assigned
+          example: 2024-01-27T14:30:00
+        assignedBy:
+          type: string
+          description: ID of user who assigned the technician
+          example: 550e8400-e29b-41d4-a716-446655440000
+        unassignedAt:
+          type: string
+          format: date-time
+          description: When the technician was unassigned (null for current assignment)
+          example: 2024-01-27T16:00:00
+        reason:
+          type: string
+          description: Reason for reassignment/unassignment
+          example: Technician called out sick
+        notes:
+          type: string
+          description: Assignment notes
+    TechnicianAssignmentResponse:
+      type: object
+      description: Technician assignment response
+      properties:
+        workorderId:
+          type: string
+          description: Work order ID
+          example: 550e8400-e29b-41d4-a716-446655440001
+        technicianId:
+          type: string
+          description: Assigned technician ID
+          example: 550e8400-e29b-41d4-a716-446655440050
+        technicianName:
+          type: string
+          description: Technician display name
+          example: John Smith
+        assignedAt:
+          type: string
+          format: date-time
+          description: When the technician was assigned
+          example: 2024-01-27T14:30:00
+        assignedBy:
+          type: string
+          description: ID of user who assigned the technician
+          example: 550e8400-e29b-41d4-a716-446655440000
+        previousTechnicianId:
+          type: string
+          description: Previous technician ID if this was a reassignment
+          example: 550e8400-e29b-41d4-a716-446655440049
+        previousTechnicianName:
+          type: string
+          description: Previous technician name if this was a reassignment
+          example: Jane Doe
+        status:
+          type: string
+          description: Status of the workorder after assignment
+          example: ASSIGNED
+        message:
+          type: string
+          description: Operation result message
+          example: Technician assigned successfully
+        notes:
+          type: string
+          description: Assignment notes
+        reassignmentReason:
+          type: string
+          description: Reason for reassignment if applicable
+        reassignedAt:
+          type: string
+          format: date-time
+          description: When technician was reassigned
+          example: 2024-01-27T15:30:00
+        reassignedBy:
+          type: string
+          description: ID of user who performed reassignment
+          example: 550e8400-e29b-41d4-a716-446655440000
+        technicianCertifications:
+          type: array
+          description: Technician certifications
+          example:
+          - ASE Master Technician
+          - Brake Specialist
+          items:
+            type: string
+        currentStatus:
+          type: string
+          description: Current workorder status
+          example: WORK_IN_PROGRESS
+        assignmentHistory:
+          type: array
+          description: Full assignment history for the workorder
+          items:
+            $ref: "#/components/schemas/AssignmentHistoryEntry"
+    ReassignTechnicianRequest:
+      type: object
+      description: Request to reassign a workorder to a different technician
+      properties:
+        newTechnicianId:
+          type: string
+          format: uuid
+          description: ID of the new technician
+          example: 550e8400-e29b-41d4-a716-446655440051
+        reassignedByUserId:
+          type: string
+          format: uuid
+          description: ID of the user performing the reassignment (defaults from X-User-Id
+            header if not provided)
+          example: 550e8400-e29b-41d4-a716-446655440000
+        reason:
+          type: string
+          description: Reason for reassignment
+          example: "Original technician unavailable, reassigning to available tech"
+        notes:
+          type: string
+          description: Additional notes for the reassignment
+        notifyPreviousTechnician:
+          type: boolean
+          default: "false"
+          description: Whether to send notification to previous technician
+      required:
+      - newTechnicianId
+    WorkorderLaborEntryResponse:
+      type: object
+      description: Labor entry response
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique ID of the labor entry
+          example: 550e8400-e29b-41d4-a716-446655440100
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder ID
+          example: 550e8400-e29b-41d4-a716-446655440001
+        workorderServiceId:
+          type: string
+          format: uuid
+          description: Service line item ID
+          example: 550e8400-e29b-41d4-a716-446655440010
+        technicianId:
+          type: string
+          format: uuid
+          description: Technician ID who performed the work
+          example: 550e8400-e29b-41d4-a716-446655440050
+        startTime:
+          type: string
+          format: date-time
+          description: Labor session start time
+          example: 2024-01-27T14:30:00
+        endTime:
+          type: string
+          format: date-time
+          description: Labor session end time (null if still active)
+          example: 2024-01-27T16:30:00
+        hoursWorked:
+          type: number
+          description: Hours worked
+          example: 2.0
+        notes:
+          type: string
+          description: Session notes
+          example: Brake pads replaced successfully
+        adjustmentReason:
+          type: string
+          description: Adjustment reason (if hours were manually adjusted)
+          example: Corrected for break time
+        active:
+          type: boolean
+          description: Whether this session is still active (not stopped)
+          example: false
+        createdBy:
+          type: string
+          format: uuid
+          description: User who created this entry
+          example: 550e8400-e29b-41d4-a716-446655440002
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: 2024-01-27T14:30:00Z
+    AdjustLaborRequest:
+      type: object
+      description: Request to manually adjust labor hours
+      properties:
+        hoursWorked:
+          type: number
+          description: Adjusted hours worked
+          example: 2.5
+        adjustmentReason:
+          type: string
+          description: Reason for the adjustment
+          example: Manual correction for break time
+      required:
+      - adjustmentReason
+      - hoursWorked
+    ApprovalConfigurationRequest:
+      type: object
+      description: Request DTO for approval configuration creation and updates
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location ID for this configuration (null = applies to all locations)
+          example: 1
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID for this configuration (null = applies to all customers)
+          example: 2
+        approvalMethod:
+          type: string
+          description: Approval method
+          example: CLICK_CONFIRM
+        declineExpiryDays:
+          type: integer
+          format: int32
+          description: Number of days a declined estimate can be reopened
+          example: 30
+          minimum: 0
+        requireSignature:
+          type: boolean
+          description: Whether signature is required
+          example: false
+        priority:
+          type: integer
+          format: int32
+          description: "Priority for configuration matching (0=default, 1=location-specific,\
+            \ 2=customer-specific)"
+          example: 0
+          minimum: 0
+      required:
+      - approvalMethod
+    ApprovalConfigurationResponse:
+      type: object
+      description: Response DTO for approval configurations
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the configuration
+          example: 550e8400-e29b-41d4-a716-446655440000
+        locationId:
+          type: string
+          format: uuid
+          description: Location ID for this configuration (null = applies to all locations)
+          example: 1
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID for this configuration (null = applies to all customers)
+          example: 2
+        approvalMethod:
+          type: string
+          description: Approval method
+          example: CLICK_CONFIRM
+        declineExpiryDays:
+          type: integer
+          format: int32
+          description: Number of days a declined estimate can be reopened
+          example: 30
+        requireSignature:
+          type: boolean
+          description: Whether signature is required
+          example: false
+        priority:
+          type: integer
+          format: int32
+          description: "Priority for configuration matching (0=default, 1=location-specific,\
+            \ 2=customer-specific)"
+          example: 0
+    CreateWorkorderRequest:
+      type: object
+      description: Request DTO for workorder creation
+      properties:
+        estimateId:
+          type: string
+          format: uuid
+          description: Estimate ID
+          example: 550e8400-e29b-41d4-a716-446655440001
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID
+          example: 550e8400-e29b-41d4-a716-446655440002
+      required:
+      - customerId
+      - estimateId
+    WorkorderResponse:
+      type: object
+      description: Response DTO for workorders
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the workorder
+          example: 550e8400-e29b-41d4-a716-446655440000
+        estimateId:
+          type: string
+          format: uuid
+          description: Estimate ID
+          example: 550e8400-e29b-41d4-a716-446655440001
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID
+          example: 550e8400-e29b-41d4-a716-446655440002
+        shopId:
+          type: string
+          format: uuid
+          description: Shop ID
+          example: 550e8400-e29b-41d4-a716-446655440003
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle ID
+          example: 550e8400-e29b-41d4-a716-446655440004
+        status:
+          type: string
+          description: Workorder status
+          example: DRAFT
+        approvedAt:
+          type: string
+          format: date-time
+          description: Date and time the workorder was approved
+        completedAt:
+          type: string
+          format: date-time
+          description: Date and time the workorder was completed
+        isReopened:
+          type: boolean
+          description: Whether the completed workorder is currently reopened for controlled
+            edits
+        reopenedAt:
+          type: string
+          format: date-time
+          description: Date and time the workorder was reopened
+    AssignTechnicianRequest:
+      type: object
+      description: Request to assign a technician to a workorder
+      properties:
+        technicianId:
+          type: string
+          format: uuid
+          description: ID of the technician to assign
+          example: 550e8400-e29b-41d4-a716-446655440050
+        assignedByUserId:
+          type: string
+          format: uuid
+          description: ID of the user performing the assignment (defaults from X-User-Id
+            header if not provided)
+          example: 550e8400-e29b-41d4-a716-446655440000
+        notes:
+          type: string
+          description: Assignment notes or reason
+          example: Assigned to senior tech for brake system work
+      required:
+      - technicianId
+    StartWorkorderRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+    StartWorkorderResponse:
+      type: object
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        previousStatus:
+          type: string
+        currentStatus:
+          type: string
+        transitionedAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+    StartLaborRequest:
+      type: object
+      description: Request to start a labor session on a workorder service
+      properties:
+        technicianId:
+          type: string
+          format: uuid
+          description: ID of the technician performing the work
+          example: 550e8400-e29b-41d4-a716-446655440050
+        notes:
+          type: string
+          description: Optional notes about the labor session
+          example: Beginning brake pad replacement
+      required:
+      - technicianId
+    ReopenWorkorderRequest:
+      type: object
+      description: Request payload for controlled workorder reopen
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: User initiating reopen action
+          example: 550e8400-e29b-41d4-a716-446655440000
+        reopenReason:
+          type: string
+          description: Mandatory reason for reopening completed workorder
+          example: Corrected labor hours
+    ReopenWorkorderResponse:
+      type: object
+      description: Response payload for controlled workorder reopen
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder identifier
+        currentStatus:
+          type: string
+          description: Current lifecycle status
+        isReopened:
+          type: boolean
+          description: Whether the workorder is reopened for controlled edits
+        reopenedAt:
+          type: string
+          format: date-time
+          description: Reopen timestamp
+        message:
+          type: string
+          description: Operation message
+    SubstitutePartRequest:
+      type: object
+      properties:
+        originalPartId:
+          type: string
+          format: uuid
+        substitutePartId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        notes:
+          type: string
+      required:
+      - originalPartId
+      - reason
+      - substitutePartId
+    WorkorderPartAdjustmentEventResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        originalPartId:
+          type: string
+          format: uuid
+        originalPartDescription:
+          type: string
+        workorderId:
+          type: string
+          format: uuid
+        adjustmentType:
+          type: string
+        substitutedWithPartId:
+          type: string
+          format: uuid
+        substitutedWithPartDescription:
+          type: string
+        quantityAdjustment:
+          type: number
+        reason:
+          type: string
+        performedBy:
+          type: string
+          format: uuid
+        performedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+    ReturnPartRequest:
+      type: object
+      properties:
+        workorderPartId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          minimum: 0.0001
+        notes:
+          type: string
+      required:
+      - quantity
+      - workorderPartId
+    WorkorderPartUsageEventResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workorderPartId:
+          type: string
+          format: uuid
+        workorderId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        quantity:
+          type: number
+        performedBy:
+          type: string
+          format: uuid
+        performedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        partDescription:
+          type: string
+    ReturnPartQuantityRequest:
+      type: object
+      properties:
+        workorderPartId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+        reason:
+          type: string
+        notes:
+          type: string
+      required:
+      - quantity
+      - reason
+      - workorderPartId
+    IssuePartRequest:
+      type: object
+      properties:
+        workorderPartId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          minimum: 0.0001
+        notes:
+          type: string
+      required:
+      - quantity
+      - workorderPartId
+    CorrectPartQuantityRequest:
+      type: object
+      properties:
+        workorderPartId:
+          type: string
+          format: uuid
+        newQuantity:
+          type: number
+        reason:
+          type: string
+        notes:
+          type: string
+      required:
+      - newQuantity
+      - reason
+      - workorderPartId
+    ConsumePartRequest:
+      type: object
+      properties:
+        workorderPartId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          minimum: 0.0001
+        notes:
+          type: string
+      required:
+      - quantity
+      - workorderPartId
+    InvoiceGenerationResponse:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        workorderId:
+          type: string
+          format: uuid
+        estimateId:
+          type: string
+          format: uuid
+        approvalId:
+          type: string
+          format: uuid
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        totalAmount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+    CompleteWorkorderRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        completionNotes:
+          type: string
+    CompleteWorkorderResponse:
+      type: object
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        previousStatus:
+          type: string
+        currentStatus:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+    CreateChangeRequestDTO:
+      type: object
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        requestedByUserId:
+          type: string
+          format: uuid
+        description:
+          type: string
+        isEmergencyException:
+          type: boolean
+        exceptionReason:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkorderItemDTO"
+        parts:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkorderItemDTO"
+    WorkorderItemDTO:
+      type: object
+      properties:
+        serviceEntityId:
+          type: string
+          format: uuid
+        productEntityId:
+          type: string
+          format: uuid
+        nonInventoryProductEntityId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+        isEmergencySafety:
+          type: boolean
+        photoEvidenceUrl:
+          type: string
+        emergencyNotes:
+          type: string
+        photoNotPossible:
+          type: boolean
+    ChangeRequestResponse:
+      type: object
+      description: Response DTO for change requests
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the change request
+          example: 550e8400-e29b-41d4-a716-446655440000
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder ID
+          example: 550e8400-e29b-41d4-a716-446655440001
+        requestedByUserId:
+          type: string
+          format: uuid
+          description: User ID who requested the change
+          example: 550e8400-e29b-41d4-a716-446655440002
+        requestedAt:
+          type: string
+          format: date-time
+          description: Date and time the change was requested
+        status:
+          type: string
+          description: Change request status
+          example: AWAITING_ADVISOR_REVIEW
+        description:
+          type: string
+          description: Description of the change request
+        isEmergencyException:
+          type: boolean
+          description: Whether this is an emergency exception
+        exceptionReason:
+          type: string
+          description: Reason for the exception if applicable
+        approvalNote:
+          type: string
+          description: Approval notes
+        isApprovalGated:
+          type: boolean
+          description: Whether approval is gated
+        approvedAt:
+          type: string
+          format: date-time
+          description: Date and time the change was approved
+        approvedBy:
+          type: string
+          format: uuid
+          description: User ID who approved the change
+        declinedAt:
+          type: string
+          format: date-time
+          description: Date and time the change was declined
+    ApproveWorkorderRequest:
+      type: object
+      description: Request to approve a work order with customer signature
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID who is approving the work order
+          example: 12345
+        signatureData:
+          type: string
+          description: Base64-encoded signature image data (PNG format recommended)
+          example: "data:image/png;base64,iVBORw0KGgoAAAANS..."
+        signatureMimeType:
+          type: string
+          description: "MIME type of signature (e.g., image/png, image/jpeg)"
+          example: image/png
+        signerName:
+          type: string
+          description: Name of person providing signature
+          example: John Doe
+        notes:
+          type: string
+          description: Additional notes or comments
+          example: Approved after reviewing repair details
+        lineItemApprovals:
+          type: array
+          description: "Individual line item approvals/rejections. If omitted, all\
+            \ items are considered approved."
+          items:
+            $ref: "#/components/schemas/LineItemApprovalDto"
+      required:
+      - customerId
+    LineItemApprovalDto:
+      type: object
+      description: Approval or rejection status for a specific line item
+      properties:
+        lineItemId:
+          type: string
+          format: uuid
+          description: ID of the line item (service/product) being approved or rejected
+          example: 550e8400-e29b-41d4-a716-446655440000
+        approved:
+          type: boolean
+          description: Whether this line item is approved (true) or rejected (false)
+          example: true
+        rejectionReason:
+          type: string
+          description: Reason for rejection (required if approved=false)
+          example: Customer declined optional service
+        notes:
+          type: string
+          description: Additional notes about this line item decision
+          example: Customer wants to get second opinion
+      required:
+      - approved
+      - lineItemId
+    CreateEstimateRequest:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        currencyUomId:
+          type: string
+        taxRegionId:
+          type: string
+          format: uuid
+      required:
+      - customerId
+      - vehicleId
+    EstimateResponse:
+      type: object
+      description: Response DTO for estimates
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the estimate
+          example: 550e8400-e29b-41d4-a716-446655440000
+        estimateNumber:
+          type: string
+          description: Estimate number
+          example: EST-2024-1000
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID
+          example: 550e8400-e29b-41d4-a716-446655440001
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle ID
+          example: 550e8400-e29b-41d4-a716-446655440002
+        locationId:
+          type: string
+          format: uuid
+          description: Location ID
+          example: 550e8400-e29b-41d4-a716-446655440003
+        currencyUomId:
+          type: string
+          description: Currency UOM ID
+          example: USD
+        taxRegionId:
+          type: string
+          format: uuid
+          description: Tax region ID
+          example: 550e8400-e29b-41d4-a716-446655440004
+        status:
+          type: string
+          description: Estimate status
+          example: DRAFT
+        createdByUserId:
+          type: string
+          description: Username who created the estimate
+          example: john.doe
+        createdAt:
+          type: string
+          format: date-time
+          description: Date and time the estimate was created
+        subtotal:
+          type: number
+          description: Subtotal amount before tax
+          example: 150.0
+        taxAmount:
+          type: number
+          description: Tax amount
+          example: 12.38
+        total:
+          type: number
+          description: Total amount including tax
+          example: 162.38
+        submittedAt:
+          type: string
+          format: date-time
+          description: Date and time the estimate was submitted for approval
+        submittedBy:
+          type: string
+          description: Username who submitted the estimate for approval
+          example: john.doe
+        expiresAt:
+          type: string
+          format: date-time
+          description: Date and time the approval window expires
+        approvedAt:
+          type: string
+          format: date-time
+          description: Date and time the estimate was approved
+        approvedBy:
+          type: string
+          format: uuid
+          description: Customer UUID who approved the estimate
+          example: 550e8400-e29b-41d4-a716-446655440005
+        signatureData:
+          type: string
+          description: Base64-encoded signature image
+        signatureMimeType:
+          type: string
+          description: MIME type of the signature image
+          example: image/png
+        signerName:
+          type: string
+          description: Name of person who signed
+        approvalNotes:
+          type: string
+          description: Additional notes provided at approval time
+        purchaseOrderNumber:
+          type: string
+          description: Purchase order number for commercial accounts
+          example: PO-2024-12345
+        version:
+          type: integer
+          format: int32
+          description: Optimistic locking version
+    EstimateSnapshotResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        estimateId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - DECLINED
+          - EXPIRED
+        snapshotData:
+          type: string
+        capturedAt:
+          type: string
+          format: date-time
+        capturedById:
+          type: string
+        notes:
+          type: string
+    AddEstimateItemRequest:
+      type: object
+      properties:
+        itemType:
+          type: string
+          enum:
+          - PART
+          - LABOR
+        description:
+          type: string
+        quantity:
+          type: number
+          minimum: 0.0001
+        unitPrice:
+          type: number
+          minimum: 0.00
+        taxCode:
+          type: string
+        productId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+      required:
+      - itemType
+      - quantity
+      - unitPrice
+    EstimateItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        estimateId:
+          type: string
+          format: uuid
+        itemType:
+          type: string
+          enum:
+          - PART
+          - LABOR
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        lineTotal:
+          type: number
+        taxCode:
+          type: string
+        productId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ApproveEstimateRequest:
+      type: object
+      description: Request to approve an estimate with customer signature
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID who is approving the estimate
+          example: 12345
+        signatureData:
+          type: string
+          description: Base64-encoded signature image data (PNG format recommended)
+          example: "data:image/png;base64,iVBORw0KGgoAAAANS..."
+        signatureMimeType:
+          type: string
+          description: "MIME type of signature (e.g., image/png, image/jpeg)"
+          example: image/png
+        signerName:
+          type: string
+          description: Name of person providing signature
+          example: John Doe
+        notes:
+          type: string
+          description: Additional notes or comments
+          example: Approved with customer present
+        lineItemApprovals:
+          type: array
+          description: "Individual line item approvals/rejections. If omitted, all\
+            \ items are considered approved."
+          items:
+            $ref: "#/components/schemas/LineItemApprovalDto"
+        purchaseOrderNumber:
+          type: string
+          description: Purchase order number (required when PO enforcement is enabled
+            for the account)
+          example: PO-2024-12345
+      required:
+      - customerId
+    EmergencyOverrideDTO:
+      type: object
+      properties:
+        managerId:
+          type: string
+          format: uuid
+        exceptionReason:
+          type: string
+    DeclineChangeRequestDTO:
+      type: object
+      properties:
+        approvalNote:
+          type: string
+    ApproveChangeRequestDTO:
+      type: object
+      properties:
+        approvedBy:
+          type: string
+          format: uuid
+        approvalNote:
+          type: string
+    WorkexecTimerStartRequest:
+      type: object
+      description: Start timer request for workexec time entries
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        workorderItemId:
+          type: string
+          format: uuid
+        laborCode:
+          type: string
+      required:
+      - workorderId
+    LaborQuantity:
+      type: object
+      properties:
+        quantity:
+          type: number
+        unit:
+          type: string
+      required:
+      - quantity
+      - unit
+    SourceReference:
+      type: object
+      properties:
+        system:
+          type: string
+        sourceReferenceId:
+          type: string
+      required:
+      - sourceReferenceId
+      - system
+    WorkexecLaborPerformedRequest:
+      type: object
+      description: Request payload for recording labor performed from external systems
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder identifier
+        technicianId:
+          type: string
+          format: uuid
+          description: Technician identifier
+        performedAt:
+          type: string
+          format: date-time
+          description: Timestamp when labor was performed
+        labor:
+          $ref: "#/components/schemas/LaborQuantity"
+          description: Labor quantity and unit
+        source:
+          $ref: "#/components/schemas/SourceReference"
+          description: External source metadata
+      required:
+      - labor
+      - performedAt
+      - source
+      - technicianId
+      - workorderId
+    UpdateEstimateItemRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        quantity:
+          type: number
+          minimum: 0.0001
+        unitPrice:
+          type: number
+          minimum: 0.00
+        taxCode:
+          type: string
+    WorkorderStateTransitionResponse:
+      type: object
+      description: Work order state transition history entry
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this transition record
+          example: 550e8400-e29b-41d4-a716-446655440000
+        workorderId:
+          type: string
+          format: uuid
+          description: ID of the work order
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fromStatus:
+          type: string
+          description: The status the work order transitioned FROM
+          example: DRAFT
+        toStatus:
+          type: string
+          description: The status the work order transitioned TO
+          example: WORK_IN_PROGRESS
+        transitionedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the transition occurred
+        transitionedBy:
+          type: string
+          format: uuid
+          description: User ID who performed the transition
+          example: 550e8400-e29b-41d4-a716-446655440000
+        reason:
+          type: string
+          description: Reason for the transition
+          example: Customer approved the estimate
+        metadata:
+          type: string
+          description: Additional metadata about the transition
+    WorkorderSnapshotResponse:
+      type: object
+      description: Work order snapshot history entry
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this snapshot record
+          example: 550e8400-e29b-41d4-a716-446655440000
+        workorderId:
+          type: string
+          format: uuid
+          description: ID of the work order
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          description: Status of the work order at the time of this snapshot
+          example: WORK_IN_PROGRESS
+        capturedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the snapshot was captured
+        capturedBy:
+          type: string
+          format: uuid
+          description: User ID who captured the snapshot
+          example: 550e8400-e29b-41d4-a716-446655440000
+        snapshotType:
+          type: string
+          description: "Type of snapshot (e.g., MANUAL, AUTOMATIC, SYSTEM)"
+          example: MANUAL
+        snapshotData:
+          type: string
+          description: Snapshot data (typically JSON)
+        reason:
+          type: string
+          description: Reason for capturing the snapshot
+    WorkorderCapabilities:
+      type: object
+      description: Capability flags for workorder actions based on user authorities
+      properties:
+        canStart:
+          type: boolean
+          description: User can start workorder
+          example: true
+        canApprove:
+          type: boolean
+          description: User can approve workorder
+          example: false
+        canAssignTechnician:
+          type: boolean
+          description: User can assign/reassign technicians
+          example: true
+        canRecordLabor:
+          type: boolean
+          description: User can record labor entries
+          example: true
+        canRecordPartsUsage:
+          type: boolean
+          description: User can record parts usage
+          example: true
+        canViewFinancials:
+          type: boolean
+          description: User can view financial data
+          example: false
+        canEditWorkorder:
+          type: boolean
+          description: User can edit workorder
+          example: true
+        canDeleteWorkorder:
+          type: boolean
+          description: User can delete workorder
+          example: false
+    WorkorderDetailResponse:
+      type: object
+      description: Comprehensive workorder detail with role-based visibility
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder ID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        workorderNumber:
+          type: string
+          description: Workorder number (from sequence)
+          example: WO-2024-5001
+        status:
+          type: string
+          description: Workorder status
+          enum:
+          - DRAFT
+          - APPROVED
+          - ASSIGNED
+          - WORK_IN_PROGRESS
+          - AWAITING_PARTS
+          - AWAITING_APPROVAL
+          - READY_FOR_PICKUP
+          - COMPLETED
+          - CANCELLED
+          example: WORK_IN_PROGRESS
+        customerId:
+          type: string
+          format: uuid
+          description: Customer ID
+          example: 550e8400-e29b-41d4-a716-446655440001
+        customerName:
+          type: string
+          description: Customer name
+          example: John Doe
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle ID
+          example: 550e8400-e29b-41d4-a716-446655440002
+        vehicleDescription:
+          type: string
+          description: Vehicle description
+          example: 2020
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: 2024-01-27T10:00:00Z
+        createdBy:
+          type: string
+          format: uuid
+          description: Created by user ID
+          example: 550e8400-e29b-41d4-a716-446655440003
+        isStarted:
+          type: boolean
+          description: Is workorder started (derived from status)
+          example: true
+        isInProgress:
+          type: boolean
+          description: Is workorder in progress (derived from status)
+          example: true
+        isCompleted:
+          type: boolean
+          description: Is workorder completed (derived from status)
+          example: false
+        startedAt:
+          type: string
+          format: date-time
+          description: Start timestamp
+          example: 2024-01-27T14:30:00Z
+        assignedTechnicianId:
+          type: string
+          format: uuid
+          description: Assigned technician ID
+          example: 550e8400-e29b-41d4-a716-446655440004
+        assignedTechnicianName:
+          type: string
+          description: Assigned technician name
+          example: Jane Smith
+        services:
+          type: array
+          description: Service line items with labor totals
+          items:
+            $ref: "#/components/schemas/WorkorderServiceResponse"
+        parts:
+          type: array
+          description: Part line items with usage totals
+          items:
+            $ref: "#/components/schemas/WorkorderPartResponse"
+        estimatedTotal:
+          type: number
+          description: Estimated total (conditionally included based on canViewFinancials)
+          example: 1245.5
+        laborTotal:
+          type: number
+          description: Total labor cost (conditionally included)
+          example: 425.0
+        partsTotal:
+          type: number
+          description: Total parts cost (conditionally included)
+          example: 720.5
+        taxTotal:
+          type: number
+          description: Total tax (conditionally included)
+          example: 100.0
+        capabilities:
+          $ref: "#/components/schemas/WorkorderCapabilities"
+          description: Capability flags indicating allowed actions
+      required:
+      - capabilities
+      - createdAt
+      - createdBy
+      - customerId
+      - status
+      - vehicleId
+      - workorderId
+    WorkorderPartResponse:
+      type: object
+      description: Workorder part line item with usage totals
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Part line item ID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        productEntityId:
+          type: string
+          format: uuid
+          description: Product entity ID from catalog
+          example: 550e8400-e29b-41d4-a716-446655440001
+        description:
+          type: string
+          description: Part description
+          example: Brake Rotor - Front
+        status:
+          type: string
+          description: Part line status
+          enum:
+          - PENDING_APPROVAL
+          - OPEN
+          - READY_TO_EXECUTE
+          - IN_PROGRESS
+          - COMPLETED
+          - CANCELLED
+          example: OPEN
+        quantity:
+          type: number
+          description: Authorized quantity from estimate
+          example: 2.0
+        unitPrice:
+          type: number
+          description: Unit price per part
+          example: 65.0
+        quantityIssued:
+          type: number
+          description: Quantity issued from inventory
+          example: 2.0
+        quantityConsumed:
+          type: number
+          description: Quantity consumed (cannot be returned)
+          example: 1.5
+        quantityReturned:
+          type: number
+          description: Quantity returned to inventory
+          example: 0.5
+        partCost:
+          type: number
+          description: Total part cost (authorized quantity * unit price)
+          example: 130.0
+        lineTotal:
+          type: number
+          description: Line total from estimate
+          example: 130.0
+    WorkorderServiceResponse:
+      type: object
+      description: Workorder service line item with labor totals
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Service line item ID
+          example: 550e8400-e29b-41d4-a716-446655440000
+        serviceEntityId:
+          type: string
+          format: uuid
+          description: Service entity ID from catalog
+          example: 550e8400-e29b-41d4-a716-446655440001
+        description:
+          type: string
+          description: Service description
+          example: Brake Pad Replacement
+        status:
+          type: string
+          description: Service line status
+          enum:
+          - PENDING_APPROVAL
+          - OPEN
+          - READY_TO_EXECUTE
+          - IN_PROGRESS
+          - COMPLETED
+          - CANCELLED
+          example: OPEN
+        quantity:
+          type: number
+          description: Authorized quantity (hours for labor)
+          example: 2.5
+        unitPrice:
+          type: number
+          description: Unit price (hourly rate)
+          example: 85.0
+        totalLaborHours:
+          type: number
+          description: Total labor hours recorded
+          example: 1.5
+        laborCost:
+          type: number
+          description: Total labor cost
+          example: 127.5
+        lineTotal:
+          type: number
+          description: Line total from estimate
+          example: 212.5
+    CompletionPreconditionsResponse:
+      type: object
+      description: Completion precondition evaluation response
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder identifier
+        canComplete:
+          type: boolean
+          description: Whether the workorder can be completed
+        currentStatus:
+          type: string
+          description: Current status
+        checklistItems:
+          type: array
+          description: Checklist items evaluated before completion
+          items:
+            type: string
+        blockingReasons:
+          type: array
+          description: Blocking reasons that prevent completion
+          items:
+            type: string
+        unresolvedApprovalGatedChangeRequests:
+          type: integer
+          format: int32
+          description: Number of unresolved approval-gated change requests
+        nonTerminalServiceItems:
+          type: integer
+          format: int32
+          description: Number of service items not in COMPLETED/CANCELLED status
+        nonTerminalPartItems:
+          type: integer
+          format: int32
+          description: Number of part items not in COMPLETED/CANCELLED status
+        emergencyDenialAcknowledged:
+          type: boolean
+          description: Whether emergency denial acknowledgment requirements are satisfied
+        hasBillableItems:
+          type: boolean
+          description: Whether at least one billable item exists for final snapshot
+    EstimateSummaryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        estimateNumber:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        partItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstimateItemResponse"
+        laborItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstimateItemResponse"
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        total:
+          type: number
+        currencyUomId:
+          type: string

@@ -1,4 +1,4 @@
-package com.positivity.tax.internal.validation;
+package com.positivity.tax.common.validation;
 
 import com.neovisionaries.i18n.CurrencyCode;
 import jakarta.validation.ConstraintValidator;

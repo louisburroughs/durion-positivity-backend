@@ -60,6 +60,10 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tax-common</artifactId>
+        </dependency>
 
         <!-- Utilities -->
         <dependency>
@@ -70,16 +74,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.meeuw.i18n</groupId>
-            <artifactId>i18n-subdivision-enums</artifactId>
-            <version>0.4</version>
-        </dependency>
-        <dependency>
-            <groupId>com.neovisionaries</groupId>
-            <artifactId>nv-i18n</artifactId>
-            <version>1.29</version>
         </dependency>
 
         <!-- Test Dependencies -->

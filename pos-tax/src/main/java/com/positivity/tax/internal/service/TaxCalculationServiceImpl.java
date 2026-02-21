@@ -1,8 +1,8 @@
 package com.positivity.tax.internal.service;
 
 import com.positivity.tax.internal.config.TaxProperties;
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
-import com.positivity.tax.internal.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.service.TaxCalculationService;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;

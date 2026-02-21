@@ -14,7 +14,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.tax.service.TaxCalculationService;
+import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateStatus;
@@ -52,7 +52,7 @@ class EstimateRevisionWorkflowTest {
         private AuditEventRepository auditEventRepository;
 
         @MockitoBean
-        private TaxCalculationService taxCalculationService;
+        private TaxClient taxClient;
 
         private Estimate testEstimate;
         private Workorder testWorkorder;

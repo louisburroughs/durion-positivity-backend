@@ -1,4 +1,4 @@
-package com.positivity.tax.internal.validation;
+package com.positivity.tax.common.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
@@ -10,15 +10,15 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Validates that a value is a valid ISO 3166-1 alpha-2 country code.
+ * Validates that a value is a valid ISO 4217 currency code.
  */
 @Documented
-@Constraint(validatedBy = IsoCountryCodeValidator.class)
+@Constraint(validatedBy = IsoCurrencyCodeValidator.class)
 @Target({ElementType.FIELD, ElementType.PARAMETER})
 @Retention(RetentionPolicy.RUNTIME)
-public @interface IsoCountryCode {
+public @interface IsoCurrencyCode {
 
-    String message() default "must be a valid ISO 3166-1 alpha-2 country code";
+    String message() default "must be a valid ISO 4217 currency code";
 
     Class<?>[] groups() default {};
 
