@@ -126,14 +126,24 @@ public class SecurityGatewayConfig {
                                 .bodyToMono(String.class)
                                 .onErrorReturn("unknown");
 
-                        return Mono.zip(authoritiesMono, subjectMono)
+                        Mono<String> personIdMono = securityWebClient.get()
+                                .uri(uriBuilder -> uriBuilder.path("/v1/auth/person-id")
+                                        .queryParam("token", token)
+                                        .build())
+                                .retrieve()
+                                .bodyToMono(String.class)
+                                .onErrorReturn("unknown");
+
+                        return Mono.zip(authoritiesMono, subjectMono, personIdMono)
                                 .flatMap(tuple -> {
                                     Set<String> authorities = tuple.getT1();
                                     String subject = tuple.getT2();
+                                    String personId = tuple.getT3();
                                     String authHeaderValue = String.join(",", authorities);
                                     ServerHttpRequest mutated = exchange.getRequest().mutate()
                                             .header("X-Authorities", authHeaderValue)
                                             .header("X-User", subject)
+                                            .header("X-User-Id", personId)
                                             .build();
                                     return chain.filter(exchange.mutate().request(mutated).build());
                                 });

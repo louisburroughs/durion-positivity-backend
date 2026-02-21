@@ -7,7 +7,7 @@ import org.jspecify.annotations.NonNull;
  * context
  * per ADR-0018 (audit actor fields from security context).
  *
- * @param userId   internal user identifier (from {@code X-User-Id} header)
+ * @param userId   stable person/user identifier (from {@code X-User-Id} header)
  * @param username display name / login (from {@code X-User} header)
  */
 public record AuditActorRef(

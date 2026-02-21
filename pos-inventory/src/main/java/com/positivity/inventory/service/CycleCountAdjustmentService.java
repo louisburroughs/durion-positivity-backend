@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
@@ -54,9 +53,7 @@ public interface CycleCountAdjustmentService {
     AdjustmentResponse approveAdjustment(
             @NonNull UUID adjustmentId,
             @NonNull ApproveAdjustmentRequest request,
-            @Nullable String actorUserId,
-            @Nullable String actorUsername,
-            @Nullable String correlationId);
+            String correlationId);
 
     /**
      * Rejects a pending adjustment.

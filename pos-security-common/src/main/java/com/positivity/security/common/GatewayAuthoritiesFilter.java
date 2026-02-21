@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -72,19 +73,24 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
         String authoritiesHeader = request.getHeader(GatewaySecurityConstants.HEADER_AUTHORITIES);
         String userHeader = request.getHeader(GatewaySecurityConstants.HEADER_USER);
+        String userIdHeader = request.getHeader(GatewaySecurityConstants.HEADER_USER_ID);
 
         if (authoritiesHeader != null && !authoritiesHeader.isBlank()) {
             List<SimpleGrantedAuthority> authorities = parseAuthorities(authoritiesHeader);
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
+            String userId = userIdHeader != null && !userIdHeader.isBlank() ? userIdHeader : username;
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, null,
                     authorities);
+            authentication.setDetails(Map.of(
+                    GatewaySecurityConstants.DETAIL_USER_ID, userId,
+                    GatewaySecurityConstants.DETAIL_USERNAME, username));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
             if (log.isDebugEnabled()) {
-                log.debug("Authenticated user '{}' with {} authorities from gateway headers",
-                        username, authorities.size());
+                log.debug("Authenticated user '{}' (userId='{}') with {} authorities from gateway headers",
+                        username, userId, authorities.size());
             }
         } else {
             // No authentication headers - clear any existing context
