@@ -21,8 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentService {
-    private static final String SYSTEM_ACTOR = "system";
-
     private final TimeEntryAdjustmentRepository adjustmentRepository;
     private final TimeEntryAuditRepository auditRepository;
     private final TimeEntryRepository timeEntryRepository;
@@ -107,7 +105,7 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
     @Transactional
     public boolean approveAdjustment(java.util.UUID adjustmentId, String approverUserId, Set<String> permissions,
             String correlationId) {
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         Optional<com.positivity.people.internal.entity.TimeEntryAdjustment> opt = adjustmentRepository
                 .findById(adjustmentId);
         if (opt.isEmpty()) {

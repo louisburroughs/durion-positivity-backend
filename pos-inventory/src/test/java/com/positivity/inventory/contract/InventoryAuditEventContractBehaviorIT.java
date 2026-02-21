@@ -92,7 +92,6 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
         assertThat(eventEnvelope.has("occurredAt")).isTrue();
         assertThat(eventEnvelope.has("emittedAt")).isTrue();
         assertThat(eventEnvelope.has("sourceSystem")).isTrue();
-        assertThat(eventEnvelope.has("tenantId")).isTrue();
         assertThat(eventEnvelope.has("actor")).isTrue();
         assertThat(eventEnvelope.has("correlationId")).isTrue();
         assertThat(eventEnvelope.has("aggregate")).isTrue();

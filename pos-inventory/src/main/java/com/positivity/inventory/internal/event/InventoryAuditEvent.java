@@ -30,8 +30,6 @@ import org.jspecify.annotations.NonNull;
  * @param emittedAt     wall-clock instant the event was constructed
  * @param sourceSystem  always {@code "inventory"} for events produced by this
  *                      module
- * @param tenantId      tenant identifier propagated from the incoming request
- *                      context
  * @param actor         who performed the operation (from security context, per
  *                      ADR-0018)
  * @param correlationId request correlation ID propagated from
@@ -48,7 +46,6 @@ public record InventoryAuditEvent(
         @NonNull Instant occurredAt,
         @NonNull Instant emittedAt,
         @NonNull String sourceSystem,
-        @NonNull String tenantId,
         @NonNull AuditActorRef actor,
         @NonNull String correlationId,
         @NonNull AuditAggregateRef aggregate,

@@ -34,8 +34,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionService {
-    private static final String SYSTEM_ACTOR = "system";
-
     private static final Logger log = LoggerFactory.getLogger(WorkorderSubstitutionServiceImpl.class);
 
     private final WorkorderPartRepository workorderPartRepository;
@@ -68,7 +66,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingEventId = idempotencyService.getExistingPartAdjustmentEventId(idempotencyKey);

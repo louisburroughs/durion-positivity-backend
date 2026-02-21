@@ -483,7 +483,7 @@ public class WorkorderStateMachine {
     }
 
     private void createAuditEvent(UUID workorderId, String eventType, String details) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         AuditEvent auditEvent = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorderId)
@@ -503,6 +503,6 @@ public class WorkorderStateMachine {
 
     private String resolveActorId(UUID fallbackUserId) {
         String fallback = fallbackUserId != null ? fallbackUserId.toString() : SYSTEM_ACTOR;
-        return SecurityContextHelper.getCurrentUserIdOrDefault(fallback);
+        return SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
     }
 }

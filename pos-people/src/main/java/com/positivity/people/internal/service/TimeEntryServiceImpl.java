@@ -19,8 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryServiceImpl implements TimeEntryService {
-    private static final String SYSTEM_ACTOR = "system";
-
     private final TimeEntryRepository repository;
     private final TimeEntryAuditRepository auditRepository;
 
@@ -37,7 +35,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()
@@ -133,7 +131,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
-        String auditActorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()

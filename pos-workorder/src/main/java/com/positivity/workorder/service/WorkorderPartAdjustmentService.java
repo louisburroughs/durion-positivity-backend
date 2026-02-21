@@ -43,8 +43,6 @@ import java.util.UUID;
  */
 @Service
 public class WorkorderPartAdjustmentService {
-    private static final String SYSTEM_ACTOR = "system";
-
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartAdjustmentService.class);
 
     private final WorkorderPartRepository workorderPartRepository;
@@ -93,7 +91,7 @@ public class WorkorderPartAdjustmentService {
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -200,7 +198,7 @@ public class WorkorderPartAdjustmentService {
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -291,7 +289,7 @@ public class WorkorderPartAdjustmentService {
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
-        String actorId = SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_ACTOR);
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
