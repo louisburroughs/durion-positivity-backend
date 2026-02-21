@@ -51,7 +51,6 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
     // Test data
     private UUID testOrderId;
     private UUID testInvoiceId;
-    private String testActorId;
 
     @BeforeEach
     void setUp() {
@@ -61,7 +60,6 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
         // Setup test IDs
         testOrderId = UUID.randomUUID();
         testInvoiceId = UUID.randomUUID();
-        testActorId = UUID.randomUUID().toString();
     }
 
     @AfterEach
@@ -84,10 +82,9 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "originalPrice": 100.00,
                     "adjustedPrice": 95.00,
                     "reason": "Customer loyalty discount",
-                    "actorId": "%s",
                     "actorRole": "STORE_MANAGER"
                 }
-                """.formatted(testOrderId, UUID.randomUUID(), testActorId);
+                """.formatted(testOrderId, UUID.randomUUID());
 
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/price-override"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -116,10 +113,9 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "refundAmount": 50.00,
                     "originalPaymentStatus": "SETTLED",
                     "reason": "Damaged goods returned",
-                    "actorId": "%s",
                     "actorRole": "STORE_MANAGER"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID(), testActorId);
+                """.formatted(testInvoiceId, UUID.randomUUID());
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
@@ -145,10 +141,9 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "beforeSnapshot": "{}",
                     "afterSnapshot": "{}",
                     "reason": "Customer requested cancellation",
-                    "actorId": "%s",
                     "actorRole": "STORE_MANAGER"
                 }
-                """.formatted(testOrderId, testActorId);
+                """.formatted(testOrderId);
 
         // When/Then
         mockMvc.perform(withAuth(post(API_V1_AUDIT + "/cancellation"))
@@ -301,10 +296,9 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "originalPrice": 1000.00,
                     "adjustedPrice": 100.00,
                     "reason": "Large discount without approval",
-                    "actorId": "%s",
                     "actorRole": "CASHIER"
                 }
-                """.formatted(testOrderId, UUID.randomUUID(), testActorId);
+                """.formatted(testOrderId, UUID.randomUUID());
 
         // When/Then - should return 403 if authorization logic is implemented
         // For now, testing that endpoint is reachable
@@ -330,10 +324,9 @@ class AuditTrailContractBehaviorIT extends BaseContractIntegrationTest {
                     "refundAmount": 5000.00,
                     "originalPaymentStatus": "SETTLED",
                     "reason": "Large refund requiring approval",
-                    "actorId": "%s",
                     "actorRole": "CASHIER"
                 }
-                """.formatted(testInvoiceId, UUID.randomUUID(), testActorId);
+                """.formatted(testInvoiceId, UUID.randomUUID());
 
         // When/Then - should return 403 if authorization logic is implemented
         MvcResult result = mockMvc.perform(withAuth(post(API_V1_AUDIT + "/refund"))
