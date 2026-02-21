@@ -123,8 +123,9 @@ class PricingSnapshotServiceImplTest {
                 new BigDecimal("59.99"),
                 List.of(new PricingRuleTraceEntryRequest("RULE-2", "APPLIED", Map.of("x", 1), Map.of("y", 2))));
 
-        when(objectMapper.writeValueAsString(request.getQuoteContext())).thenThrow(new JsonProcessingException("bad json") {
-        });
+        when(objectMapper.writeValueAsString(request.getQuoteContext()))
+                .thenThrow(new JsonProcessingException("bad json") {
+                });
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
                 .isInstanceOf(IllegalArgumentException.class)

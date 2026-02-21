@@ -90,7 +90,8 @@ class AuditEventServiceImplTest {
 
         when(objectMapper.writeValueAsString(request.getOldValue())).thenReturn("{\"price\":100}");
         when(objectMapper.writeValueAsString(request.getNewValue())).thenReturn("{\"price\":95}");
-        when(auditLogEventRepository.save(any(AuditLogEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(auditLogEventRepository.save(any(AuditLogEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         var result = auditEventService.createEvent(request);
 
@@ -100,7 +101,8 @@ class AuditEventServiceImplTest {
     @Test
     @DisplayName("createEvent throws when required fields are missing")
     void createEvent_missingFields_throws() {
-        AuditLogEventRequest request = new AuditLogEventRequest(null, "user-1", "quote-1", "QUOTE", Map.of(), Map.of(), null);
+        AuditLogEventRequest request = new AuditLogEventRequest(null, "user-1", "quote-1", "QUOTE", Map.of(), Map.of(),
+                null);
 
         assertThatThrownBy(() -> auditEventService.createEvent(request))
                 .isInstanceOf(IllegalArgumentException.class)
