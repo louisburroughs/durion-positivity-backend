@@ -73,9 +73,9 @@ public class WorkorderPartUsageEvent {
     /**
      * User who performed/recorded this event
      */
-    @Column(nullable = false, columnDefinition = "UUID")
+    @Column(nullable = false, length = 255)
     @NonNull
-    private UUID performedBy;
+    private String performedBy;
 
     /**
      * When the event was performed/recorded

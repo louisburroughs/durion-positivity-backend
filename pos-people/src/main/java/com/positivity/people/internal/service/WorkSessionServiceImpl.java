@@ -129,7 +129,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     private String resolveActorFromSecurityContext() {
-        return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER);
+        return SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_USER);
     }
 
     private WorkSessionDto toWorkSessionDto(WorkSession session) {

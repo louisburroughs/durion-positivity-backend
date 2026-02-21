@@ -29,8 +29,8 @@ public class WorkorderSnapshotResponse {
     @Schema(description = "Timestamp when the snapshot was captured")
     private Instant capturedAt;
 
-    @Schema(description = "User ID who captured the snapshot", example = "550e8400-e29b-41d4-a716-446655440000")
-    private UUID capturedBy;
+    @Schema(description = "Stable actor identifier who captured the snapshot", example = "550e8400-e29b-41d4-a716-446655440000")
+    private String capturedBy;
 
     @Schema(description = "Type of snapshot (e.g., MANUAL, AUTOMATIC, SYSTEM)", example = "MANUAL")
     private String snapshotType;
