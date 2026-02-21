@@ -1723,17 +1723,17 @@ paths:
           content:
             '*/*':
               schema: {}
-        "500":
-          description: Internal server error
-          content:
-            '*/*':
-              schema: {}
         "201":
           description: Price override recorded successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTrailResponse"
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema: {}
         "422":
           description: Policy validation failed
           content:
@@ -1981,16 +1981,16 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
-          description: Journal line drilldown successful
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Journal line drilldown successful
           content:
             application/json:
               schema:
@@ -2104,14 +2104,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "200":
-          description: Balance sheet generated successfully
+        "400":
+          description: Invalid date
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceSheetReport"
-        "400":
-          description: Invalid date
+        "200":
+          description: Balance sheet generated successfully
           content:
             application/json:
               schema:
@@ -2275,14 +2275,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "404":
-          description: Invoice not found
+        "200":
+          description: Invoice status returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/InvoiceStatusResponse"
-        "200":
-          description: Invoice status returned
+        "404":
+          description: Invoice not found
           content:
             '*/*':
               schema:
@@ -2574,6 +2574,12 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2590,12 +2596,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/range:
     get:
       tags:
@@ -2629,6 +2629,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2637,12 +2643,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/order/{orderId}:
     get:
       tags:
@@ -2668,6 +2668,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2676,12 +2682,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/invoice/{invoiceId}:
     get:
       tags:
@@ -2699,6 +2699,12 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Invoice not found
           content:
@@ -2715,12 +2721,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/audit/actor/{actorId}:
     get:
       tags:
@@ -2736,8 +2736,7 @@ paths:
         required: true
         schema:
           type: string
-          format: uuid
-        example: 550e8400-e29b-41d4-a716-446655440000
+        example: person-12345
       - name: startDate
         in: query
         description: Start date in ISO 8601 format
@@ -2763,6 +2762,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:
@@ -2779,12 +2784,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
   /v1/accounting/ap/payments/{paymentId}:
     get:
       tags:
@@ -3985,9 +3984,6 @@ components:
           - AUTHORIZED
         actorId:
           type: string
-          format: uuid
-          description: Deprecated. Ignored for writes; actor ID is resolved from authenticated security context.
-          deprecated: true
         actorRole:
           type: string
         reason:
@@ -4014,7 +4010,6 @@ components:
           - CANCELLATION
         actorId:
           type: string
-          format: uuid
         actorRole:
           type: string
         timestamp:
@@ -4127,9 +4122,6 @@ components:
           type: number
         actorId:
           type: string
-          format: uuid
-          description: Deprecated. Ignored for writes; actor ID is resolved from authenticated security context.
-          deprecated: true
         actorRole:
           type: string
         reason:
@@ -4164,9 +4156,6 @@ components:
           type: string
         actorId:
           type: string
-          format: uuid
-          description: Deprecated. Ignored for writes; actor ID is resolved from authenticated security context.
-          deprecated: true
         actorRole:
           type: string
         reason:

@@ -144,14 +144,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request parameters
+        "200":
+          description: Event type created or updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventType"
-        "200":
-          description: Event type created or updated successfully
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
               schema:
@@ -202,14 +202,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request parameters
+        "201":
+          description: Event type created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventType"
-        "201":
-          description: Event type created successfully
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
               schema:
