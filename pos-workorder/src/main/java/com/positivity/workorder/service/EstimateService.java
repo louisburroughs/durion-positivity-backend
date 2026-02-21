@@ -18,12 +18,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
-import com.positivity.tax.internal.dto.TaxCalculationResponse;
-import com.positivity.tax.internal.dto.TaxLineItem;
-import com.positivity.tax.internal.dto.TaxCalculationRequest.TaxAddress;
-import com.positivity.tax.internal.enums.TaxReferenceType;
-import com.positivity.tax.service.TaxCalculationService;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxLineItem;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.tax.common.enums.TaxReferenceType;
+import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateItemResponse;
@@ -61,7 +61,7 @@ public class EstimateService {
         private final WorkorderRepository workOrderRepository;
         private final ApplicationEventPublisher eventPublisher;
         private final BillingRulesClientService billingRulesClientService;
-        private final TaxCalculationService taxCalculationService;
+        private final TaxClient taxClient;
         private final ObjectMapper objectMapper;
 
         // Configuration defaults
@@ -849,7 +849,7 @@ public class EstimateService {
                                 .build();
 
                 // Call tax service
-                TaxCalculationResponse taxResponse = taxCalculationService.calculateTax(taxRequest);
+                TaxCalculationResponse taxResponse = taxClient.calculateTax(taxRequest);
 
                 // Extract calculated values
                 BigDecimal subtotal = taxResponse.getSubtotal();

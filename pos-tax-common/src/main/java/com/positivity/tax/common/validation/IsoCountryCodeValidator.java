@@ -1,4 +1,4 @@
-package com.positivity.tax.internal.validation;
+package com.positivity.tax.common.validation;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;

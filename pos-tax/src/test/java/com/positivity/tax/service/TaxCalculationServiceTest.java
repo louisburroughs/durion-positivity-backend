@@ -1,9 +1,9 @@
 package com.positivity.tax.service;
 
 import com.positivity.tax.internal.config.TaxProperties;
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
-import com.positivity.tax.internal.dto.TaxCalculationResponse;
-import com.positivity.tax.internal.dto.TaxLineItem;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.internal.service.ExternalTaxServiceClient;
 import com.positivity.tax.internal.service.TaxCalculationServiceImpl;
 import com.positivity.tax.internal.service.TestModeTaxCalculator;

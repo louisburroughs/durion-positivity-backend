@@ -1,7 +1,7 @@
 package com.positivity.tax.service;
 
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
-import com.positivity.tax.internal.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
 import org.jspecify.annotations.NonNull;
 
 /**

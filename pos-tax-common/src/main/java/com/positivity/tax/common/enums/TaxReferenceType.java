@@ -1,4 +1,4 @@
-package com.positivity.tax.internal.enums;
+package com.positivity.tax.common.enums;
 
 /**
  * Source transaction type for tax calculation requests.

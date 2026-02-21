@@ -1,4 +1,4 @@
-package com.positivity.tax.internal.dto;
+package com.positivity.tax.common.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

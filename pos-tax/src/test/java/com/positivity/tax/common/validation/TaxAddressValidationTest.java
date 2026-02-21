@@ -1,6 +1,6 @@
-package com.positivity.tax.internal.validation;
+package com.positivity.tax.common.validation;
 
-import com.positivity.tax.internal.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

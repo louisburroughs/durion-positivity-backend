@@ -1,9 +1,9 @@
-package com.positivity.tax.internal.dto;
+package com.positivity.tax.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.positivity.tax.internal.enums.TaxJurisdictionType;
-import com.positivity.tax.internal.validation.IsoCountryCode;
-import com.positivity.tax.internal.validation.ValidSubdivisionForCountry;
+import com.positivity.tax.common.enums.TaxJurisdictionType;
+import com.positivity.tax.common.validation.IsoCountryCode;
+import com.positivity.tax.common.validation.ValidSubdivisionForCountry;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;

@@ -1,9 +1,9 @@
-package com.positivity.tax.internal.dto;
+package com.positivity.tax.common.dto;
 
-import com.positivity.tax.internal.enums.TaxReferenceType;
-import com.positivity.tax.internal.validation.IsoCountryCode;
-import com.positivity.tax.internal.validation.IsoCurrencyCode;
-import com.positivity.tax.internal.validation.ValidSubdivisionForCountry;
+import com.positivity.tax.common.enums.TaxReferenceType;
+import com.positivity.tax.common.validation.IsoCountryCode;
+import com.positivity.tax.common.validation.IsoCurrencyCode;
+import com.positivity.tax.common.validation.ValidSubdivisionForCountry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
