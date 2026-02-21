@@ -2,8 +2,12 @@ package com.positivity.inventory.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +15,9 @@ import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
+import com.positivity.inventory.internal.event.AuditActorRef;
+import com.positivity.inventory.internal.event.AuditAggregateRef;
+import com.positivity.inventory.internal.event.InventoryAuditEvent;
 import com.positivity.inventory.internal.model.InventoryLedgerEntry;
 import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
@@ -18,6 +25,7 @@ import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
 import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +50,7 @@ public class CycleCountAdjustmentService {
     private final CycleCountAdjustmentRepository adjustmentRepository;
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final ApprovalThresholdEvaluator thresholdEvaluator;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Creates a new cycle count adjustment and evaluates it against approval
@@ -125,7 +134,12 @@ public class CycleCountAdjustmentService {
      * @return the updated adjustment response
      */
     @Transactional
-    public AdjustmentResponse approveAdjustment(Long adjustmentId, ApproveAdjustmentRequest request) {
+    public AdjustmentResponse approveAdjustment(
+            @NonNull Long adjustmentId,
+            @NonNull ApproveAdjustmentRequest request,
+            @Nullable String actorUserId,
+            @Nullable String actorUsername,
+            @Nullable String correlationId) {
         log.info("Approving adjustment {} by user {}", adjustmentId, request.getApproverUserId());
 
         CycleCountAdjustment adjustment = adjustmentRepository.findById(adjustmentId)
@@ -138,9 +152,10 @@ public class CycleCountAdjustmentService {
         // TODO: Verify that approverUserId has INVENTORY_ADJUSTMENT_APPROVE permission
         // TODO: Verify that approver has sufficient tier level for this adjustment
 
+        Instant occurredAt = Instant.now();
         adjustment.setStatus(AdjustmentStatus.APPROVED);
         adjustment.setApprovedByUserId(request.getApproverUserId());
-        adjustment.setApprovedAt(Instant.now());
+        adjustment.setApprovedAt(occurredAt);
         adjustment = adjustmentRepository.save(adjustment);
 
         log.info("Adjustment {} approved by {}", adjustmentId, request.getApproverUserId());
@@ -148,7 +163,51 @@ public class CycleCountAdjustmentService {
         // Post to ledger
         postAdjustmentToLedger(adjustment);
 
+        // Publish immutable audit event (issue #22 – CAP:221)
+        publishMovementAdjustedEvent(adjustment, occurredAt, actorUserId, actorUsername, correlationId);
+
         return toResponse(adjustment);
+    }
+
+    /**
+     * Builds and publishes a {@link InventoryAuditEvent} for a
+     * {@code MovementAdjusted} operation.
+     *
+     * <p>
+     * Event is published in-process so contract tests can capture it via
+     * {@code @RecordApplicationEvents}. An infrastructure listener (future) will
+     * forward it to the {@code inventory.v1.movements} Kafka topic.
+     */
+    private void publishMovementAdjustedEvent(
+            @NonNull CycleCountAdjustment adjustment,
+            @NonNull Instant occurredAt,
+            @Nullable String actorUserId,
+            @Nullable String actorUsername,
+            @Nullable String correlationId) {
+
+        String resolvedUserId = actorUserId != null ? actorUserId : adjustment.getApprovedByUserId();
+        String resolvedUsername = actorUsername != null ? actorUsername : resolvedUserId;
+
+        InventoryAuditEvent event = new InventoryAuditEvent(
+                1,
+                UUIDv7Generator.generate().toString(),
+                "MovementAdjusted",
+                "inventory.v1.movements",
+                occurredAt,
+                Instant.now(),
+                "inventory",
+                "",
+                new AuditActorRef(resolvedUserId != null ? resolvedUserId : "",
+                        resolvedUsername != null ? resolvedUsername : ""),
+                correlationId != null ? correlationId : "",
+                new AuditAggregateRef(String.valueOf(adjustment.getAdjustmentId()), "CycleCountAdjustment"),
+                Map.of(
+                        "stockItemId", adjustment.getStockItemId(),
+                        "quantityChange", adjustment.getQuantityChange(),
+                        "reasonCode", adjustment.getReasonCode()));
+
+        eventPublisher.publishEvent(event);
+        log.info("Published MovementAdjusted audit event for adjustment {}", adjustment.getAdjustmentId());
     }
 
     /**
