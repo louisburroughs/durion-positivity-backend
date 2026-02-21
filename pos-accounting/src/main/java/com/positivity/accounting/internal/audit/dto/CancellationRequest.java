@@ -34,8 +34,11 @@ public class CancellationRequest {
 
     private String partialPaymentInfo; // JSON string, optional
 
-    @NotNull(message = "Actor ID is required")
-    private UUID actorId;
+    /**
+     * Legacy client-provided actor identifier; service resolves authoritative
+     * actor from authenticated security context.
+     */
+    private String actorId;
 
     @NotNull(message = "Actor role is required")
     private String actorRole;

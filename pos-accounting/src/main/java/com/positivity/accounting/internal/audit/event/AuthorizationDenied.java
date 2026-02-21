@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Event emitted when authorization is denied.
@@ -19,7 +18,7 @@ import java.util.UUID;
 public class AuthorizationDenied {
     
     private ExceptionType exceptionType;
-    private UUID actorId;
+    private String actorId;
     private String actorRole;
     private String reasonDenied;
     private String policyVersion;

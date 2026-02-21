@@ -30,8 +30,11 @@ public class PriceOverrideRequest {
     @NotNull(message = "Adjusted price is required")
     private BigDecimal adjustedPrice;
     
-    @NotNull(message = "Actor ID is required")
-    private UUID actorId;
+    /**
+     * Legacy client-provided actor identifier; service resolves authoritative
+     * actor from authenticated security context.
+     */
+    private String actorId;
     
     @NotNull(message = "Actor role is required")
     private String actorRole;

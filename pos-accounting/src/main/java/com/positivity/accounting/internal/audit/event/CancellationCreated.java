@@ -25,7 +25,7 @@ public class CancellationCreated {
     private UUID orderId;
     private UUID invoiceId;
     private CancellationType cancellationType;
-    private UUID actorId;
+    private String actorId;
     private String actorRole;
     private String authorizationLevel;
     private String policyVersion;
