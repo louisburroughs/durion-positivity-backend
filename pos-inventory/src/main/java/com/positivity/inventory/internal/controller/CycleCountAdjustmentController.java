@@ -82,9 +82,13 @@ public class CycleCountAdjustmentController {
     @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
     public ResponseEntity<AdjustmentResponse> approveAdjustment(
             @Parameter(description = "Adjustment ID", required = true) @PathVariable Long adjustmentId,
-            @Valid @RequestBody ApproveAdjustmentRequest request) {
+            @Valid @RequestBody ApproveAdjustmentRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestHeader(value = "X-User", required = false) String username,
+            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         log.info("Received request to approve adjustment {}", adjustmentId);
-        AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request);
+        AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request, userId, username,
+                correlationId);
         return ResponseEntity.ok(response);
     }
 
