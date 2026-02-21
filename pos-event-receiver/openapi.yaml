@@ -26,14 +26,14 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
-        "404":
-          description: Event type not found
+        "200":
+          description: Event type found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventType"
-        "200":
-          description: Event type found and returned
+        "404":
+          description: Event type not found
           content:
             '*/*':
               schema:
@@ -109,14 +109,14 @@ paths:
           type: string
         example: ORDER_CREATED
       responses:
-        "404":
-          description: Event type not found
+        "200":
+          description: Event type found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventType"
-        "200":
-          description: Event type found and returned
+        "404":
+          description: Event type not found
           content:
             '*/*':
               schema:
@@ -202,14 +202,14 @@ paths:
               $ref: "#/components/schemas/EventTypeRequest"
         required: true
       responses:
-        "201":
-          description: Event type created successfully
+        "400":
+          description: Invalid request parameters
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventType"
-        "400":
-          description: Invalid request parameters
+        "201":
+          description: Event type created successfully
           content:
             '*/*':
               schema:

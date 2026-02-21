@@ -1,436 +1,528 @@
 openapi: 3.1.0
 info:
-  title: Positivity Customer API
-  description: "API documentation for the Customer service, accessible via the API\
-    \ Gateway."
+  title: POS Accounting Service API
+  description: "Accounting service for invoice, journal entry, and GL account management"
   contact:
     name: Durion Team
     email: louis.burroughs@gmail.com
   version: v1
 servers:
-- url: http://api-gateway.local/api/customer
-  description: API Gateway
+- url: http://localhost:8086
+  description: Generated server url
 tags:
-- name: Customer API
-  description: Operations related to customers
-- name: CRM Communication Preferences
-  description: Communication preferences and consent flag management
-- name: CRM Vehicles
-  description: Vehicle management operations for customers
-- name: CRM Snapshots
-  description: Consolidated CRM data snapshots
-- name: CRM Party Relationships
-  description: Commercial account relationship management APIs
-- name: CRM Contacts
-  description: Contact point and role management for parties
-- name: CRM Accounts
-  description: "Account tier management, party creation, search, merge, contacts,\
-    \ preferences, and vehicle operations"
-- name: CRM Persons
-  description: Individual person management APIs
+- name: Audit Trail
+  description: Audit trail operations for tracking accounting exceptions and overrides
+- name: Payment Applications
+  description: Manage payment applications to invoices (AR)
+- name: Posting Rules
+  description: Manage posting rule sets and their lifecycle.
+- name: Invoice Payments
+  description: Apply payments and query invoice status.
+- name: Mapping Keys
+  description: Manage mapping keys for GL mapping taxonomy
+- name: Posting Categories
+  description: Manage posting categories for GL mapping taxonomy
+- name: Credit Memos
+  description: Manage credit memos for AR corrections
+- name: Journal Entries
+  description: Manage journal entries including posting and reversal.
+- name: Accounting
+  description: Miscellaneous accounting endpoints for traceability and payments.
+- name: GL Accounts
+  description: Manage chart of accounts including lifecycle actions.
+- name: AP Payments
+  description: Accounts Payable vendor payment operations
+- name: Financial Reporting
+  description: Income Statement and Balance Sheet generation with drilldown
+- name: Default GL Mappings
+  description: Manage default GL account mappings for event types without explicit
+    posting rules
+- name: Accounting Events
+  description: Ingest and manage accounting events for journal processing.
 paths:
-  /v1/crm/{id}:
+  /v1/accounting/posting-rules/{postingRuleSetId}:
     get:
       tags:
-      - Customer API
-      summary: Get customer by ID
-      description: Retrieve a customer by their unique ID.
-      operationId: getCustomerById
+      - Posting Rules
+      summary: Get posting rule set
+      description: Retrieve a posting rule set by identifier.
+      operationId: getPostingRuleSet
       parameters:
-      - name: id
+      - name: postingRuleSetId
         in: path
-        description: ID of the customer to retrieve
+        description: Posting rule set identifier
         required: true
         schema:
           type: string
           format: uuid
-        example: 123e4567-e89b-12d3-a456-426614174000
       responses:
-        "200":
-          description: Customer found and returned.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CustomerDTO"
         "404":
-          description: Customer not found.
+          description: Posting rule set not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
+                $ref: "#/components/schemas/PostingRuleSetResponse"
+        "200":
+          description: Posting rule set returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleSetResponse"
     put:
       tags:
-      - Customer API
-      summary: Update an existing customer
-      description: Update the details of an existing customer.
-      operationId: updateCustomer
+      - Posting Rules
+      summary: Update posting rule set metadata
+      description: Update a posting rule set (only possible if no PUBLISHED version
+        exists).
+      operationId: updatePostingRuleSet
       parameters:
-      - name: id
+      - name: postingRuleSetId
         in: path
-        description: ID of the customer to update
+        description: Posting rule set identifier
         required: true
         schema:
           type: string
           format: uuid
-        example: 123e4567-e89b-12d3-a456-426614174000
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CustomerDTO"
+              $ref: "#/components/schemas/PostingRuleSetCreateRequest"
+        required: true
+      responses:
+        "404":
+          description: Posting rule set not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleSetResponse"
+        "200":
+          description: Posting rule set updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleSetResponse"
+        "409":
+          description: Cannot modify published rule set
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleSetResponse"
+  /v1/accounting/posting-categories/{postingCategoryId}:
+    get:
+      tags:
+      - Posting Categories
+      summary: Get posting category
+      description: Retrieve a posting category by identifier.
+      operationId: getPostingCategory
+      parameters:
+      - name: postingCategoryId
+        in: path
+        description: Posting category identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Posting category not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryResponse"
+        "200":
+          description: Posting category returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryResponse"
+    put:
+      tags:
+      - Posting Categories
+      summary: Update posting category
+      description: Update an existing posting category.
+      operationId: updatePostingCategory
+      parameters:
+      - name: postingCategoryId
+        in: path
+        description: Posting category identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostingCategoryUpdateRequest"
+        required: true
+      responses:
+        "404":
+          description: Posting category not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryResponse"
+        "200":
+          description: Posting category updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryResponse"
+        "400":
+          description: Invalid request or duplicate name
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryResponse"
+  /v1/accounting/mapping-keys/{mappingKeyId}:
+    get:
+      tags:
+      - Mapping Keys
+      summary: Get mapping key
+      description: Retrieve a mapping key by identifier.
+      operationId: getMappingKey
+      parameters:
+      - name: mappingKeyId
+        in: path
+        description: Mapping key identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Mapping key returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
+        "404":
+          description: Mapping key not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
+    put:
+      tags:
+      - Mapping Keys
+      summary: Update mapping key
+      description: Update an existing mapping key.
+      operationId: updateMappingKey
+      parameters:
+      - name: mappingKeyId
+        in: path
+        description: Mapping key identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingKeyUpdateRequest"
+        required: true
+      responses:
+        "404":
+          description: Mapping key not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
+        "400":
+          description: Invalid request or duplicate name
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
+        "200":
+          description: Mapping key updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
+  /v1/accounting/journal-entries/{journalEntryId}:
+    get:
+      tags:
+      - Journal Entries
+      summary: Get journal entry
+      description: Retrieve a journal entry by identifier.
+      operationId: getJournalEntry
+      parameters:
+      - name: journalEntryId
+        in: path
+        description: Journal entry identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Journal entry not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "200":
+          description: Journal entry returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+    put:
+      tags:
+      - Journal Entries
+      summary: Update journal entry
+      description: Update an existing journal entry.
+      operationId: updateJournalEntry
+      parameters:
+      - name: journalEntryId
+        in: path
+        description: Journal entry identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JournalEntryCreateRequest"
+        required: true
+      responses:
+        "404":
+          description: Journal entry not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "200":
+          description: Journal entry updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+  /v1/accounting/glAccounts/{accountId}:
+    get:
+      tags:
+      - Accounting
+      summary: Get GL account (legacy path)
+      description: Retrieve a GL account by identifier.
+      operationId: getGlAccount
+      parameters:
+      - name: accountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "501":
+          description: Not implemented
+    put:
+      tags:
+      - Accounting
+      summary: Update GL account (legacy path)
+      description: Update a GL account via the legacy endpoint.
+      operationId: manageGlAccount
+      parameters:
+      - name: accountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/gl-accounts/{glAccountId}:
+    get:
+      tags:
+      - GL Accounts
+      summary: Get GL account
+      description: Retrieve a GL account by identifier.
+      operationId: getGLAccount
+      parameters:
+      - name: glAccountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: GL account not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+        "200":
+          description: GL account returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+    put:
+      tags:
+      - GL Accounts
+      summary: Update GL account
+      description: Update details for an existing GL account.
+      operationId: updateGLAccount
+      parameters:
+      - name: glAccountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GLAccountUpdateRequest"
+        required: true
+      responses:
+        "404":
+          description: GL account not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+        "200":
+          description: GL account updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+  /v1/accounting/default-mappings/{id}:
+    get:
+      tags:
+      - Default GL Mappings
+      summary: Get default GL mapping
+      description: Retrieve a default GL mapping by identifier
+      operationId: getDefaultMapping
+      parameters:
+      - name: id
+        in: path
+        description: Default mapping identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Default mapping returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "404":
+          description: Default mapping not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+    put:
+      tags:
+      - Default GL Mappings
+      summary: Update default GL mapping
+      description: Update an existing default GL account mapping
+      operationId: updateDefaultMapping
+      parameters:
+      - name: id
+        in: path
+        description: Default mapping identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DefaultGLMappingRequest"
         required: true
       responses:
         "200":
-          description: Customer updated successfully.
+          description: Default mapping updated
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
         "404":
-          description: Customer not found.
+          description: Default mapping not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
     delete:
       tags:
-      - Customer API
-      summary: Delete a customer
-      description: Delete a customer by their unique ID.
-      operationId: deleteCustomer
+      - Default GL Mappings
+      summary: Deactivate default GL mapping
+      description: Soft delete (deactivate) a default GL mapping
+      operationId: deactivateDefaultMapping
       parameters:
       - name: id
         in: path
-        description: ID of the customer to delete
+        description: Default mapping identifier
         required: true
         schema:
           type: string
           format: uuid
-        example: 123e4567-e89b-12d3-a456-426614174000
       responses:
+        "403":
+          description: Forbidden
+        "404":
+          description: Default mapping not found
         "204":
-          description: Customer deleted successfully.
-        "404":
-          description: Customer not found.
-  /v1/crm/{customerId}/vehicles/{vehicleId}:
-    get:
-      tags:
-      - CRM Vehicles
-      summary: Get vehicle for customer
-      description: Retrieve a specific vehicle for a given customer
-      operationId: getVehiclesForCustomer
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "200":
-          description: Vehicle found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer or vehicle not found
-    put:
-      tags:
-      - CRM Vehicles
-      summary: Update vehicle
-      description: Update vehicle information for a customer
-      operationId: updateVehicles
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateVehicleForPartyRequest"
-        required: true
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "400":
-          description: Bad request - invalid input
-        "200":
-          description: Vehicle updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer or vehicle not found
-    delete:
-      tags:
-      - CRM Vehicles
-      summary: Delete vehicle
-      description: Delete or deactivate a vehicle for a customer
-      operationId: deleteVehicle
-      parameters:
-      - name: customerId
-        in: path
-        description: Customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "204":
-          description: Vehicle deleted successfully
-        "404":
-          description: Customer or vehicle not found
-  /v1/crm/{customerId}/vehicles/{vehicleId}/transfer:
-    put:
-      tags:
-      - CRM Vehicles
-      summary: Transfer vehicle
-      description: Transfer vehicle ownership between customers
-      operationId: transferVehicles
-      parameters:
-      - name: customerId
-        in: path
-        description: Source customer ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: vehicleId
-        in: path
-        description: Vehicle ID to transfer
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/VehicleTransferRequest"
-        required: true
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "400":
-          description: Bad request - invalid input
-        "200":
-          description: Vehicle transferred successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer or vehicle not found
-  /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
-    put:
-      tags:
-      - CRM Contacts
-      summary: Update contact roles
-      description: Assign or update role assignments for a specific contact within
-        a party
-      operationId: updateContactRoles
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: contactId
-        in: path
-        description: Contact ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateContactRolesRequest"
-        required: true
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party or contact not found
-        "200":
-          description: Roles updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UpdateContactRolesResponse"
-        "400":
-          description: Invalid request
-  /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
-    put:
-      tags:
-      - CRM Party Relationships
-      summary: Designate primary billing contact
-      description: "Sets a relationship as the primary billing contact, demoting any\
-        \ existing primary"
-      operationId: designatePrimaryBillingContact
-      parameters:
-      - name: partyId
-        in: path
-        description: The commercial account party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: relationshipId
-        in: path
-        description: The relationship ID to designate as primary
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - missing required permission
-        "204":
-          description: Primary billing contact updated
-        "400":
-          description: Invalid request - relationship must have BILLING role
-        "404":
-          description: Relationship not found
-        "401":
-          description: Unauthorized
-  /v1/crm/accounts/parties/{partyId}/contacts/{contactId}/roles:
-    put:
-      tags:
-      - CRM Accounts
-      summary: Update contact roles
-      description: Assign or update role assignments for a specific contact within
-        a party
-      operationId: updateContactRoles_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: contactId
-        in: path
-        description: Contact ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateContactRolesRequest"
-      responses:
-        "400":
-          description: Invalid role assignment
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party or contact not found
-        "200":
-          description: Roles updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UpdateContactRolesResponse"
-  /v1/crm:
-    get:
-      tags:
-      - Customer API
-      summary: Get all customers
-      description: Retrieve a paginated list of customers by type (PERSON or COMMERCIAL).
-        Defaults to PERSON customers if no type specified.
-      operationId: getAllCustomers
-      parameters:
-      - name: customerType
-        in: query
-        description: "Customer type filter: PERSON or COMMERCIAL"
-        required: false
-        schema:
-          type: string
-          default: PERSON
-        example: PERSON
-      - name: pageable
-        in: query
-        description: "Pagination parameters (page, size, sort)"
-        required: true
-        schema:
-          $ref: "#/components/schemas/Pageable"
-      responses:
-        "200":
-          description: Page of customers returned successfully.
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PageCustomerDTO"
+          description: Default mapping deactivated
+  /v1/accounting/vendor-bills:
     post:
       tags:
-      - Customer API
-      summary: Create a new customer
-      description: Add a new customer to the system.
-      operationId: createCustomer
+      - vendor-bill-controller
+      operationId: createBillFromGoodsReceivedEvent
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CustomerDTO"
+              $ref: "#/components/schemas/GoodsReceivedEvent"
         required: true
       responses:
-        "201":
-          description: Customer created successfully.
+        "200":
+          description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CustomerDTO"
-  /v1/crm/{customerId}/vehicles:
+                $ref: "#/components/schemas/VendorBillResponse"
+  /v1/accounting/vendor-bills/{billId}/resolve-exception:
     post:
       tags:
-      - CRM Vehicles
-      summary: Create vehicle
-      description: Create a new vehicle for a customer
-      operationId: createVehicles
+      - vendor-bill-controller
+      operationId: resolveMatchException
       parameters:
-      - name: customerId
+      - name: billId
         in: path
-        description: Customer ID
         required: true
         schema:
           type: string
@@ -439,304 +531,347 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateVehicleForPartyRequest"
+              $ref: "#/components/schemas/ExceptionResolutionRequest"
         required: true
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "400":
-          description: Bad request - invalid input
-        "201":
-          description: Vehicle created successfully
+        "200":
+          description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/VehicleResponse"
-        "404":
-          description: Customer not found
-  /v1/crm/persons:
+                $ref: "#/components/schemas/VendorBillResponse"
+  /v1/accounting/vendor-bills/match:
+    post:
+      tags:
+      - vendor-bill-controller
+      operationId: matchVendorInvoice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInvoiceReceivedEvent"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+  /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
+    post:
+      tags:
+      - vendor-bill-controller
+      operationId: selectMatchCandidate
+      parameters:
+      - name: candidateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CandidateSelectionRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+  /v1/accounting/posting-rules:
     get:
       tags:
-      - CRM Persons
-      summary: Search persons
-      description: Searches for persons matching the specified criteria
-      operationId: searchPersons
+      - Posting Rules
+      summary: List posting rule sets
+      description: Retrieve paginated posting rule sets.
+      operationId: listPostingRuleSets
       parameters:
-      - name: name
+      - name: page
         in: query
-        description: Search by name (first or last)
-        required: false
-        schema:
-          type: string
-      - name: email
-        in: query
-        description: Search by email address
-        required: false
-        schema:
-          type: string
-      - name: phone
-        in: query
-        description: Search by phone number
-        required: false
-        schema:
-          type: string
-      - name: limit
-        in: query
-        description: Maximum results to return
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-      - name: offset
-        in: query
-        description: Starting offset for pagination
+        description: Page index (0-based)
         required: false
         schema:
           type: integer
           format: int32
           default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: sort
+        in: query
+        description: Sort field
+        required: false
+        schema:
+          type: string
+          default: createdAt
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/GetPersonResponse"
         "200":
-          description: Search results returned
+          description: Posting rule sets listed
           content:
             '*/*':
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/GetPersonResponse"
-        "401":
-          description: Unauthorized
+                $ref: "#/components/schemas/PostingRuleSetListResponse"
+        "403":
+          description: Forbidden
           content:
             '*/*':
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/GetPersonResponse"
+                $ref: "#/components/schemas/PostingRuleSetListResponse"
     post:
       tags:
-      - CRM Persons
-      summary: Create a new person
-      description: Creates an individual person record in the CRM system
-      operationId: createPerson
+      - Posting Rules
+      summary: Create posting rule set
+      description: Create a new posting rule set with initial DRAFT version.
+      operationId: createPostingRuleSet
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePersonRequest"
+              $ref: "#/components/schemas/PostingRuleSetCreateRequest"
         required: true
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
         "201":
-          description: Person created successfully
+          description: Posting rule set created
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
-        "400":
-          description: Invalid request - validation failed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePersonResponse"
-  /v1/crm/parties/{partyId}/communicationPreferences:
-    get:
-      tags:
-      - CRM Communication Preferences
-      summary: Get communication preferences
-      description: Retrieve communication preferences and consent flags for a party
-      operationId: getCommunicationPreferences
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
-        "200":
-          description: Preferences retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
-    post:
-      tags:
-      - CRM Communication Preferences
-      summary: Create or update communication preferences
-      description: Set or update communication preferences and consent flags for a
-        party
-      operationId: upsertCommunicationPreferences
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpsertCommunicationPreferencesRequest"
-        required: true
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
-        "200":
-          description: Preferences updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
+                $ref: "#/components/schemas/PostingRuleSetResponse"
         "400":
           description: Invalid request
-  /v1/crm/commercial-accounts/{partyId}/relationships:
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleSetResponse"
+  /v1/accounting/posting-rules/{postingRuleSetId}/publish:
     post:
       tags:
-      - CRM Party Relationships
-      summary: Create a party relationship
-      description: Creates a relationship between a commercial account and an individual
-        person
-      operationId: createRelationship
+      - Posting Rules
+      summary: Publish posting rule set
+      description: Publish the latest DRAFT version.
+      operationId: publishPostingRuleSet
       parameters:
-      - name: partyId
+      - name: postingRuleSetId
         in: path
-        description: The commercial account party ID
+        description: Posting rule set identifier
         required: true
         schema:
           type: string
           format: uuid
+      responses:
+        "404":
+          description: Posting rule set not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleVersionResponse"
+        "200":
+          description: Posting rule set published
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleVersionResponse"
+        "400":
+          description: No DRAFT version to publish
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleVersionResponse"
+  /v1/accounting/posting-rules/{postingRuleSetId}/archive:
+    post:
+      tags:
+      - Posting Rules
+      summary: Archive posting rule set
+      description: Archive the PUBLISHED version.
+      operationId: archivePostingRuleSet
+      parameters:
+      - name: postingRuleSetId
+        in: path
+        description: Posting rule set identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Posting rule set not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleVersionResponse"
+        "400":
+          description: No PUBLISHED version to archive
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleVersionResponse"
+        "200":
+          description: Posting rule set archived
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingRuleVersionResponse"
+  /v1/accounting/posting-categories:
+    get:
+      tags:
+      - Posting Categories
+      summary: List posting categories
+      description: Retrieve paginated posting categories.
+      operationId: listPostingCategories
+      parameters:
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: sort
+        in: query
+        description: Sort field
+        required: false
+        schema:
+          type: string
+          default: categoryName
+      - name: isActive
+        in: query
+        description: Filter by active status
+        required: false
+        schema:
+          type: boolean
+      responses:
+        "200":
+          description: Posting categories listed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryListResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryListResponse"
+    post:
+      tags:
+      - Posting Categories
+      summary: Create posting category
+      description: Create a new posting category.
+      operationId: createPostingCategory
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePartyRelationshipRequest"
+              $ref: "#/components/schemas/PostingCategoryCreateRequest"
         required: true
       responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "404":
-          description: Party or person not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
         "201":
-          description: Relationship created successfully
+          description: Posting category created
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
+                $ref: "#/components/schemas/PostingCategoryResponse"
+        "400":
+          description: Invalid request or duplicate name
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostingCategoryResponse"
+  /v1/accounting/posting-categories/{postingCategoryId}/deactivate:
+    post:
+      tags:
+      - Posting Categories
+      summary: Deactivate posting category
+      description: Deactivate a posting category.
+      operationId: deactivatePostingCategory
+      parameters:
+      - name: postingCategoryId
+        in: path
+        description: Posting category identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Posting category not found
+        "204":
+          description: Posting category deactivated
         "409":
-          description: Conflict - overlapping relationship exists
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "400":
-          description: Invalid request - validation failed
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreatePartyRelationshipResponse"
-  /v1/crm/accounts/tierResolve:
+          description: Cannot deactivate - active mappings exist
+  /v1/accounting/payments/{paymentId}/void:
     post:
       tags:
-      - CRM Accounts
-      summary: Resolve account tier
-      description: Resolve or compute the account tier based on business rules
-      operationId: resolveAccountTier
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ResolveAccountTierRequest"
-        required: true
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "400":
-          description: Invalid request
-        "200":
-          description: Tier resolved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ResolveAccountTierResponse"
-        "404":
-          description: Account not found
-  /v1/crm/accounts/parties:
-    post:
-      tags:
-      - CRM Accounts
-      summary: Create commercial account
-      description: Create a new commercial party/account in the CRM system
-      operationId: createCommercialAccount
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCommercialAccountRequest"
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "201":
-          description: Account created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CreateCommercialAccountResponse"
-        "400":
-          description: Invalid request
-  /v1/crm/accounts/parties/{partyId}/vehicles:
-    post:
-      tags:
-      - CRM Accounts
-      summary: Create vehicle for party
-      description: Associate a new vehicle with a party/customer
-      operationId: createVehicleForParty
+      - Accounting
+      summary: Void payment
+      description: Void a payment before settlement.
+      operationId: voidPayment
       parameters:
-      - name: partyId
+      - name: paymentId
         in: path
-        description: Party ID
+        description: Payment identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/payments/{paymentId}/reverse:
+    post:
+      tags:
+      - Accounting
+      summary: Reverse payment
+      description: Reverse a previously applied payment.
+      operationId: reversePayment
+      parameters:
+      - name: paymentId
+        in: path
+        description: Payment identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/payments/{paymentId}/applications:
+    post:
+      tags:
+      - Payment Applications
+      summary: Apply payment
+      description: Apply a payment to an invoice and update its status.
+      operationId: applyPayment
+      parameters:
+      - name: paymentId
+        in: path
+        description: Payment identifier
         required: true
         schema:
           type: string
@@ -745,31 +880,45 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateVehicleForPartyRequest"
+              $ref: "#/components/schemas/PaymentApplicationRequest"
+        required: true
       responses:
         "201":
-          description: Vehicle created successfully
+          description: Payment applied successfully
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/CreateVehicleForPartyResponse"
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
+                $ref: "#/components/schemas/PaymentApplicationResponse"
+        "409":
+          description: Currency mismatch or invoice not applicable
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PaymentApplicationResponse"
         "400":
-          description: Invalid vehicle data
-  /v1/crm/accounts/parties/{partyId}/merge:
+          description: Invalid request or insufficient funds
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PaymentApplicationResponse"
+        "404":
+          description: Payment not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PaymentApplicationResponse"
+  /v1/accounting/payment-applications/{applicationId}/reverse:
     post:
       tags:
-      - CRM Accounts
-      summary: Merge parties
-      description: Merge multiple parties into a single party record
-      operationId: mergeParties
+      - Payment Applications
+      summary: Reverse payment application
+      description: Reverse a payment application with compensating transaction (no
+        deletion).
+      operationId: reversePaymentApplication
       parameters:
-      - name: partyId
+      - name: applicationId
         in: path
-        description: Target party ID
+        description: Payment application identifier
         required: true
         schema:
           type: string
@@ -778,972 +927,3741 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/MergePartiesRequest"
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
-        "200":
-          description: Parties merged successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MergePartiesResponse"
-        "400":
-          description: Invalid merge request
-  /v1/crm/accounts/parties/{partyId}/communicationPreferences:
-    get:
-      tags:
-      - CRM Accounts
-      summary: Get communication preferences
-      description: Retrieve communication preferences and consent flags for a party
-      operationId: getCommunicationPreferences_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
+              $ref: "#/components/schemas/PaymentApplicationReversalRequest"
         required: true
-        schema:
-          type: string
-          format: uuid
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
+        "400":
+          description: Invalid request or already reversed
         "404":
-          description: Party not found
-        "200":
-          description: Preferences retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommunicationPreferencesResponse"
+          description: Payment application not found
+        "204":
+          description: Payment application reversed
+  /v1/accounting/mappings:
     post:
       tags:
-      - CRM Accounts
-      summary: Create or update communication preferences
-      description: Set or update communication preferences and consent flags for a
-        party
-      operationId: upsertCommunicationPreferences_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - gl-mapping-controller
+      operationId: createGLMapping
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpsertCommunicationPreferencesRequest"
+              $ref: "#/components/schemas/GLMappingCreateRequest"
+        required: true
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
         "200":
-          description: Preferences updated successfully
+          description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/UpsertCommunicationPreferencesResponse"
-        "400":
-          description: Invalid preference data
-  /v1/crm/accounts/parties/search:
+                $ref: "#/components/schemas/GLMappingCreateResponse"
+  /v1/accounting/mappings/resolve:
     post:
       tags:
-      - CRM Accounts
-      summary: Search parties
-      description: Search for parties based on various criteria
-      operationId: searchParties
+      - gl-mapping-controller
+      operationId: resolveGLMapping
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SearchPartiesRequest"
+              $ref: "#/components/schemas/GLMappingResolveRequest"
+        required: true
       responses:
-        "403":
-          description: Forbidden - insufficient permissions
         "200":
-          description: Search results returned
+          description: OK
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/SearchPartiesResponse"
+                $ref: "#/components/schemas/GLMappingResolveResponse"
+  /v1/accounting/mapping-keys:
+    post:
+      tags:
+      - Mapping Keys
+      summary: Create mapping key
+      description: Create a new mapping key for a posting category.
+      operationId: createMappingKey
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingKeyCreateRequest"
+        required: true
+      responses:
+        "201":
+          description: Mapping key created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
         "400":
-          description: Invalid search criteria
-  /v1/crm/snapshot/vehicle/{vehicleId}:
-    get:
+          description: Invalid request or duplicate name
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyResponse"
+  /v1/accounting/mapping-keys/{mappingKeyId}/deactivate:
+    post:
       tags:
-      - CRM Snapshots
-      summary: Fetch snapshot by vehicle
-      description: Returns party snapshot based on vehicle ownership
-      operationId: fetchByVehicle
+      - Mapping Keys
+      summary: Deactivate mapping key
+      description: Deactivate a mapping key.
+      operationId: deactivateMappingKey
       parameters:
-      - name: vehicleId
+      - name: mappingKeyId
         in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Success
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CrmSnapshotDTO"
-        "404":
-          description: Vehicle or owner not found
-        "403":
-          description: Access denied
-  /v1/crm/snapshot/party/{partyId}:
-    get:
-      tags:
-      - CRM Snapshots
-      summary: Fetch snapshot by party
-      description: "Returns complete party snapshot with accounts, contacts, vehicles"
-      operationId: fetchByParty
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "404":
-          description: Party not found
-        "200":
-          description: Success
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CrmSnapshotDTO"
-        "403":
-          description: Access denied
-  /v1/crm/persons/{personId}:
-    get:
-      tags:
-      - CRM Persons
-      summary: Get a person by ID
-      description: Retrieves an individual person record by their unique identifier
-      operationId: getPerson
-      parameters:
-      - name: personId
-        in: path
-        description: The person's unique identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetPersonResponse"
-        "200":
-          description: Person found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetPersonResponse"
-        "404":
-          description: Person not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetPersonResponse"
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetPersonResponse"
-  /v1/crm/parties/{partyId}/contacts:
-    get:
-      tags:
-      - CRM Contacts
-      summary: Get contacts with roles
-      description: Retrieve all contacts for a party including their role assignments
-      operationId: getContactsWithRoles
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
-        "200":
-          description: Contacts retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetContactsWithRolesResponse"
-  /v1/crm/commercial-accounts/{partyId}/contacts:
-    get:
-      tags:
-      - CRM Party Relationships
-      summary: Get contacts for a commercial account
-      description: Retrieves all individuals associated with a commercial account
-        with their roles
-      operationId: getContacts
-      parameters:
-      - name: partyId
-        in: path
-        description: The commercial account party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: roles
-        in: query
-        description: Filter by relationship roles
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-            description: Role type for party relationships
-            enum:
-            - APPROVER
-            - BILLING
-            - PRIMARY_CONTACT
-            - DRIVER
-            - TECHNICAL
-      - name: status
-        in: query
-        description: Filter by status (ACTIVE or INACTIVE)
-        required: false
-        schema:
-          type: string
-      responses:
-        "200":
-          description: Contacts retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "403":
-          description: Forbidden - missing required permission
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "404":
-          description: Party not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-        "401":
-          description: Unauthorized
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetCommercialAccountContactsResponse"
-  /v1/crm/accounts/{accountId}/tier:
-    get:
-      tags:
-      - CRM Accounts
-      summary: Get account tier
-      description: Retrieve the tier level for a specific account
-      operationId: getAccountTier
-      parameters:
-      - name: accountId
-        in: path
-        description: Account ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "200":
-          description: Tier retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetAccountTierResponse"
-        "404":
-          description: Account not found
-  /v1/crm/accounts/parties/{partyId}:
-    get:
-      tags:
-      - CRM Accounts
-      summary: Get party details
-      description: Retrieve details for a specific party by ID
-      operationId: getParty
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
-        "200":
-          description: Party details retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetPartyResponse"
-  /v1/crm/accounts/parties/{partyId}/contacts:
-    get:
-      tags:
-      - CRM Accounts
-      summary: Get contacts with roles
-      description: Retrieve all contacts for a party including their role assignments
-      operationId: getContactsWithRoles_1
-      parameters:
-      - name: partyId
-        in: path
-        description: Party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "403":
-          description: Forbidden - insufficient permissions
-        "404":
-          description: Party not found
-        "200":
-          description: Contacts retrieved successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/GetContactsWithRolesResponse"
-  /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}:
-    delete:
-      tags:
-      - CRM Party Relationships
-      summary: Deactivate a party relationship
-      description: Soft-deletes a relationship by setting its effective end date
-      operationId: deactivateRelationship
-      parameters:
-      - name: partyId
-        in: path
-        description: The commercial account party ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: relationshipId
-        in: path
-        description: The relationship ID to deactivate
+        description: Mapping key identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "204":
-          description: Relationship deactivated
-        "403":
-          description: Forbidden - missing required permission
+          description: Mapping key deactivated
         "404":
-          description: Relationship not found
-        "401":
-          description: Unauthorized
-components:
-  schemas:
-    CustomerDTO:
-      type: object
-      description: Customer object to be created
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier of the customer
-          example: 123e4567-e89b-12d3-a456-426614174000
-        customerNumber:
-          type: string
-          description: Unique customer number
-          example: CUST-1001
-        lastName:
-          type: string
-          description: Last name of the customer
-          example: Doe
-        firstName:
-          type: string
-          description: First name of the customer
-          example: John
-        phoneNumber:
-          type: string
-          description: Phone number of the customer
-          example: +1-555-1234
-        email:
-          type: string
-          description: Email address of the customer
-          example: john.doe@example.com
-        primaryAddress:
-          type: string
-          description: Primary address label or identifier for the customer
-          example: 123
-        vehicleVins:
-          type: array
-          description: List of vehicle VINs associated with the customer
-          items:
-            type: string
-        customerType:
-          type: string
-          description: "Type of customer (e.g., 'retail', 'commercial')"
-      required:
-      - firstName
-      - lastName
-    CreateVehicleForPartyRequest:
-      type: object
-      description: Vehicle creation request
-      properties:
-        vinNumber:
-          type: string
-        unitNumber:
-          type: string
-        description:
-          type: string
-        licensePlate:
-          type: string
-        licensePlateRegion:
-          type: string
-    VehicleResponse:
-      type: object
-      properties:
-        vehicleId:
-          type: string
-          format: uuid
-        accountId:
-          type: string
-          format: uuid
-        vin:
-          type: string
-        vinNormalized:
-          type: string
-        unitNumber:
-          type: string
-        description:
-          type: string
-        licensePlate:
-          type: string
-        licensePlateJurisdiction:
-          type: string
-        year:
+          description: Mapping key not found
+        "409":
+          description: Cannot deactivate - active mappings exist
+  /v1/accounting/journal-entries:
+    get:
+      tags:
+      - Journal Entries
+      summary: List journal entries
+      description: Retrieve paginated journal entries.
+      operationId: listJournalEntries
+      parameters:
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
           type: integer
           format: int32
-        make:
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: sort
+        in: query
+        description: Sort field
+        required: false
+        schema:
           type: string
-        model:
+          default: createdAt
+      responses:
+        "200":
+          description: Journal entries listed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PagedResponseJournalEntryResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PagedResponseJournalEntryResponse"
+    post:
+      tags:
+      - Journal Entries
+      summary: Create journal entry
+      description: Create a new journal entry.
+      operationId: createJournalEntry
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JournalEntryCreateRequest"
+        required: true
+      responses:
+        "201":
+          description: Journal entry created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+  /v1/accounting/journal-entries/{journalEntryId}/reverse:
+    post:
+      tags:
+      - Journal Entries
+      summary: Reverse journal entry
+      description: Reverse a posted journal entry.
+      operationId: reverseJournalEntry
+      parameters:
+      - name: journalEntryId
+        in: path
+        description: Journal entry identifier
+        required: true
+        schema:
           type: string
-        trim:
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JournalEntryReversalRequest"
+        required: true
+      responses:
+        "404":
+          description: Journal entry not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "200":
+          description: Journal entry reversed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+  /v1/accounting/journal-entries/{journalEntryId}/post:
+    post:
+      tags:
+      - Journal Entries
+      summary: Post journal entry
+      description: Post a draft journal entry to the ledger.
+      operationId: postJournalEntry
+      parameters:
+      - name: journalEntryId
+        in: path
+        description: Journal entry identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "200":
+          description: Journal entry posted
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+        "404":
+          description: Journal entry not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/JournalEntryResponse"
+  /v1/accounting/invoice/invoices:
+    post:
+      tags:
+      - Invoice Payments
+      summary: Regenerate invoice from workorder
+      description: Regenerate an invoice from a workorder.
+      operationId: regenerateInvoiceFromWorkorder
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/glAccounts:
+    post:
+      tags:
+      - Accounting
+      summary: Create GL account (legacy path)
+      description: Create a GL account via the legacy endpoint.
+      operationId: createGlAccount
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/gl-accounts:
+    get:
+      tags:
+      - GL Accounts
+      summary: List GL accounts
+      description: Retrieve paginated GL accounts filtered by status and sorted by
+        a field.
+      operationId: listGLAccounts
+      parameters:
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: sort
+        in: query
+        description: Sort field
+        required: false
+        schema:
+          type: string
+          default: accountCode
+      - name: status
+        in: query
+        description: Filter by account status
+        required: false
+        schema:
+          type: string
+      responses:
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountListResponse"
+        "200":
+          description: GL accounts listed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountListResponse"
+    post:
+      tags:
+      - GL Accounts
+      summary: Create GL account
+      description: Create a new GL account.
+      operationId: createGLAccount
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GLAccountCreateRequest"
+        required: true
+      responses:
+        "201":
+          description: GL account created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+  /v1/accounting/gl-accounts/{glAccountId}/deactivate:
+    post:
+      tags:
+      - GL Accounts
+      summary: Deactivate GL account
+      description: Mark a GL account as inactive.
+      operationId: deactivateGLAccount
+      parameters:
+      - name: glAccountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "200":
+          description: GL account deactivated
+        "404":
+          description: GL account not found
+  /v1/accounting/gl-accounts/{glAccountId}/archive:
+    post:
+      tags:
+      - GL Accounts
+      summary: Archive GL account
+      description: Archive a GL account and remove it from active use.
+      operationId: archiveGLAccount
+      parameters:
+      - name: glAccountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "404":
+          description: GL account not found
+        "200":
+          description: GL account archived
+  /v1/accounting/gl-accounts/{glAccountId}/activate:
+    post:
+      tags:
+      - GL Accounts
+      summary: Activate GL account
+      description: Mark a GL account as active.
+      operationId: activateGLAccount
+      parameters:
+      - name: glAccountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GLAccountActivateRequest"
+        required: true
+      responses:
+        "404":
+          description: GL account not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+        "200":
+          description: GL account activated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GLAccountResponse"
+  /v1/accounting/events:
+    get:
+      tags:
+      - Accounting Events
+      summary: List events
+      description: Retrieve paginated accounting events with optional filters.
+      operationId: listEvents
+      parameters:
+      - name: organizationId
+        in: query
+        description: Organization identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: status
+        in: query
+        description: Filter by processing status
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Events listed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PagedResponseAccountingEventResponse"
+    post:
+      tags:
+      - Accounting Events
+      summary: Submit event
+      description: Submit a new accounting event for processing.
+      operationId: submitEvent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountingEventSubmitRequest"
+        required: true
+      responses:
+        "201":
+          description: Event created for processing
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+  /v1/accounting/events/{eventId}/retry:
+    post:
+      tags:
+      - Accounting Events
+      summary: Retry event processing
+      description: Retry processing for a failed accounting event.
+      operationId: retryEventProcessing
+      parameters:
+      - name: eventId
+        in: path
+        description: Event identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "200":
+          description: Retry requested
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+        "404":
+          description: Event not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+  /v1/accounting/events/{eventId}/reprocess:
+    post:
+      tags:
+      - Accounting Events
+      summary: Reprocess suspended event
+      description: Reprocess a SUSPENDED accounting event after mapping/rule correction.
+        Idempotent - returns 409 Conflict if already PROCESSED.
+      operationId: reprocessSuspendedEvent
+      parameters:
+      - name: eventId
+        in: path
+        description: Event identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReprocessEventRequest"
+        required: true
+      responses:
+        "409":
+          description: Event already PROCESSED (idempotency violation)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+        "200":
+          description: Reprocessing completed successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+        "404":
+          description: Event not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+  /v1/accounting/default-mappings:
+    get:
+      tags:
+      - Default GL Mappings
+      summary: List default GL mappings
+      description: Retrieve paginated list of default GL mappings
+      operationId: listDefaultMappings
+      parameters:
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: Default mappings listed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingListResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingListResponse"
+    post:
+      tags:
+      - Default GL Mappings
+      summary: Create default GL mapping
+      description: Create a new default GL account mapping for an event type
+      operationId: createDefaultMapping
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DefaultGLMappingRequest"
+        required: true
+      responses:
+        "201":
+          description: Default mapping created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "400":
+          description: Invalid request
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+  /v1/accounting/credit-memos:
+    get:
+      tags:
+      - Credit Memos
+      summary: List credit memos
+      description: "Retrieve paginated credit memos with optional filters. Filter\
+        \ by customer, invoice, or status. Supports standard pagination parameters\
+        \ (page, size, sort)."
+      operationId: listCreditMemos
+      parameters:
+      - name: customerId
+        in: query
+        description: Filter by customer ID
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: originalInvoiceId
+        in: query
+        description: Filter by original invoice ID
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: "Filter by status (DRAFT, POSTED, APPLIED, VOIDED)"
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - POSTED
+          - APPLIED
+          - VOIDED
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: Credit memos retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageCreditMemoResponse"
+        "400":
+          description: Invalid pagination or filter parameters
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageCreditMemoResponse"
+    post:
+      tags:
+      - Credit Memos
+      summary: Create credit memo
+      description: Create a new Credit Memo to reverse invoice charges. Reduces Accounts
+        Receivable by posting offsetting GL entries. Requires finalized invoice and
+        credit amount within outstanding balance.
+      operationId: createCreditMemo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCreditMemoRequest"
+        required: true
+      responses:
+        "400":
+          description: Invalid request - validation errors
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
+        "409":
+          description: Business rule violation - amount exceeds balance or invoice
+            not finalized
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
+        "201":
+          description: Credit memo created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
+        "404":
+          description: Invoice not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
+  /v1/accounting/audit/refund:
+    post:
+      tags:
+      - Audit Trail
+      summary: Record a refund
+      description: Creates an audit trail entry for a refund exception with policy
+        validation and settlement handling
+      operationId: recordRefund
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+        required: true
+      responses:
+        "403":
+          description: Authorization denied - separate authorization required
+          content:
+            '*/*':
+              schema: {}
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema: {}
+        "422":
+          description: Refund policy validation failed
+          content:
+            '*/*':
+              schema: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema: {}
+        "201":
+          description: Refund recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+  /v1/accounting/audit/price-override:
+    post:
+      tags:
+      - Audit Trail
+      summary: Record a price override
+      description: Creates an audit trail entry for a price override exception with
+        policy validation
+      operationId: recordPriceOverride
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PriceOverrideRequest"
+        required: true
+      responses:
+        "403":
+          description: Authorization denied - insufficient privileges for override
+            amount
+          content:
+            '*/*':
+              schema: {}
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema: {}
+        "201":
+          description: Price override recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+        "422":
+          description: Policy validation failed
+          content:
+            '*/*':
+              schema: {}
+  /v1/accounting/audit/cancellation:
+    post:
+      tags:
+      - Audit Trail
+      summary: Record a cancellation
+      description: Creates an audit trail entry for an order or invoice cancellation
+      operationId: recordCancellation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancellationRequest"
+        required: true
+      responses:
+        "201":
+          description: Cancellation recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            '*/*':
+              schema: {}
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema: {}
+        "404":
+          description: Source document not found
+          content:
+            '*/*':
+              schema: {}
+  /v1/accounting/ap/payments:
+    post:
+      tags:
+      - AP Payments
+      summary: Execute vendor payment
+      description: "Execute a vendor payment with optional explicit allocations to\
+        \ bills. Idempotent using paymentRef: same ref + same payload returns existing\
+        \ payment; same ref + different payload yields 409 conflict."
+      operationId: executePayment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecuteAPPaymentRequest"
+        required: true
+      responses:
+        "409":
+          description: "Conflict: paymentRef exists with different payload"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+        "400":
+          description: "Validation error: negative amounts, invalid bills, etc."
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+        "200":
+          description: "Idempotent replay: existing payment returned"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+        "500":
+          description: Payment gateway failure
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+        "201":
+          description: Payment executed successfully (new payment created)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+  /v1/accounting/vendor-bills/{billId}:
+    get:
+      tags:
+      - vendor-bill-controller
+      operationId: getBillById
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+  /v1/accounting/vendor-bills/match-candidates/{invoiceEventId}:
+    get:
+      tags:
+      - vendor-bill-controller
+      operationId: listMatchCandidates
+      parameters:
+      - name: invoiceEventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorBillMatchCandidateResponse"
+  /v1/accounting/vendor-bills/event/{eventId}:
+    get:
+      tags:
+      - vendor-bill-controller
+      operationId: getBillByOriginEventId
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VendorBillResponse"
+  /v1/accounting/traceability/{journalEntryId}:
+    get:
+      tags:
+      - Accounting
+      summary: Get journal traceability
+      description: Trace a journal entry across related records.
+      operationId: getJournalTraceability
+      parameters:
+      - name: journalEntryId
+        in: path
+        description: Journal entry identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/reports/financial/income-statement:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Income Statement
+      description: "Generate Profit & Loss report for a date range with revenue, expenses,\
+        \ and net income"
+      operationId: generateIncomeStatement
+      parameters:
+      - name: startDate
+        in: query
+        description: Period start date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2024-01-01
+      - name: endDate
+        in: query
+        description: Period end date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2024-12-31
+      responses:
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStatementReport"
+        "400":
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStatementReport"
+        "200":
+          description: Income statement generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStatementReport"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStatementReport"
+      security:
+      - bearerAuth: []
+  /v1/accounting/reports/financial/drilldown/journal-lines/{accountId}:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Drilldown to Journal Lines
+      description: Show source journal entries contributing to a GL account balance
+      operationId: drilldownToJournalLines
+      parameters:
+      - name: accountId
+        in: path
+        description: GL Account ID (UUID)
+        required: true
+        schema:
+          type: string
+        example: 123e4567-e89b-12d3-a456-426614174000
+      - name: startDate
+        in: query
+        description: Period start date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2024-01-01
+      - name: endDate
+        in: query
+        description: Period end date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2024-12-31
+      responses:
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
+        "200":
+          description: Journal line drilldown successful
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
+        "400":
+          description: Invalid account ID or date range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalLineDrilldownResponse"
+      security:
+      - bearerAuth: []
+  /v1/accounting/reports/financial/drilldown/accounts/{statementLineCode}:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Drilldown to Accounts
+      description: Show which GL accounts contribute to a specific statement line
+      operationId: drilldownToAccounts
+      parameters:
+      - name: statementLineCode
+        in: path
+        description: "Statement line code (e.g., REVENUE_SALES)"
+        required: true
+        schema:
+          type: string
+      - name: startDate
+        in: query
+        description: Period start date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2024-01-01
+      - name: endDate
+        in: query
+        description: Period end date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2024-12-31
+      responses:
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDrilldownResponse"
+        "400":
+          description: Invalid statement line code or date range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDrilldownResponse"
+        "200":
+          description: Account drilldown successful
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDrilldownResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDrilldownResponse"
+      security:
+      - bearerAuth: []
+  /v1/accounting/reports/financial/balance-sheet:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Balance Sheet
+      description: "Generate Balance Sheet as of a specific date with assets, liabilities,\
+        \ and equity"
+      operationId: generateBalanceSheet
+      parameters:
+      - name: asOfDate
+        in: query
+        description: As-of date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2024-12-31
+      responses:
+        "200":
+          description: Balance sheet generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceSheetReport"
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceSheetReport"
+        "400":
+          description: Invalid date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceSheetReport"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceSheetReport"
+      security:
+      - bearerAuth: []
+  /v1/accounting/posting-rules/{postingRuleSetId}/versions:
+    get:
+      tags:
+      - Posting Rules
+      summary: List posting rule versions
+      description: List versions for a posting rule set.
+      operationId: listPostingRuleVersions
+      parameters:
+      - name: postingRuleSetId
+        in: path
+        description: Posting rule set identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 10
+      responses:
+        "200":
+          description: Posting rule versions listed
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PostingRuleVersionResponse"
+        "404":
+          description: Posting rule set not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PostingRuleVersionResponse"
+  /v1/accounting/posting-categories/{postingCategoryId}/mapping-keys:
+    get:
+      tags:
+      - Mapping Keys
+      summary: List mapping keys by category
+      description: Retrieve paginated mapping keys for a posting category.
+      operationId: listMappingKeysByCategory
+      parameters:
+      - name: postingCategoryId
+        in: path
+        description: Posting category identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: sort
+        in: query
+        description: Sort field
+        required: false
+        schema:
+          type: string
+          default: keyName
+      - name: isActive
+        in: query
+        description: Filter by active status
+        required: false
+        schema:
+          type: boolean
+      responses:
+        "404":
+          description: Posting category not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyListResponse"
+        "200":
+          description: Mapping keys listed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyListResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MappingKeyListResponse"
+  /v1/accounting/payments/{paymentId}/status:
+    get:
+      tags:
+      - Accounting
+      summary: Get payment status
+      description: Retrieve status for an accounts payable payment.
+      operationId: getPaymentStatus
+      parameters:
+      - name: paymentId
+        in: path
+        description: Payment identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/invoice/{invoiceId}/status:
+    get:
+      tags:
+      - Invoice Payments
+      summary: Get invoice status
+      description: Retrieve current payment status for an invoice.
+      operationId: getInvoiceStatus
+      parameters:
+      - name: invoiceId
+        in: path
+        description: Invoice identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "500":
+          description: Error retrieving invoice status
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceStatusResponse"
+        "200":
+          description: Invoice status returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceStatusResponse"
+        "404":
+          description: Invoice not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvoiceStatusResponse"
+  /v1/accounting/invoice/rules/{customerId}:
+    get:
+      tags:
+      - Invoice Payments
+      summary: Get billing rules
+      description: Retrieve billing rules for a customer.
+      operationId: getBillingRules
+      parameters:
+      - name: customerId
+        in: path
+        description: Customer identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "501":
+          description: Not implemented
+  /v1/accounting/gl-accounts/{glAccountId}/balance:
+    get:
+      tags:
+      - GL Accounts
+      summary: Get GL account balance
+      description: Retrieve the current balance for a GL account.
+      operationId: getAccountBalance
+      parameters:
+      - name: glAccountId
+        in: path
+        description: GL account identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: GL account not found
+        "200":
+          description: Balance returned
+  /v1/accounting/events/{eventId}:
+    get:
+      tags:
+      - Accounting Events
+      summary: Get event
+      description: Retrieve details for an accounting event.
+      operationId: getEvent
+      parameters:
+      - name: eventId
+        in: path
+        description: Event identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Event returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+        "404":
+          description: Event not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountingEventResponse"
+  /v1/accounting/events/{eventId}/reprocessing-history:
+    get:
+      tags:
+      - Accounting Events
+      summary: Get reprocessing history
+      description: Retrieve all reprocessing attempts for a suspended accounting event.
+        Returns an empty list if the event does not exist or has no reprocessing history.
+      operationId: getReprocessingHistory
+      parameters:
+      - name: eventId
+        in: path
+        description: Event identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Reprocessing history returned (may be empty list)
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReprocessingAttemptHistoryResponse"
+  /v1/accounting/events/{eventId}/processing-log:
+    get:
+      tags:
+      - Accounting Events
+      summary: Get event processing log
+      description: Retrieve the processing log for an accounting event.
+      operationId: getEventProcessingLog
+      parameters:
+      - name: eventId
+        in: path
+        description: Event identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Processing log returned
+          content:
+            '*/*':
+              schema:
+                type: string
+        "404":
+          description: Event not found
+          content:
+            '*/*':
+              schema:
+                type: string
+  /v1/accounting/default-mappings/search:
+    get:
+      tags:
+      - Default GL Mappings
+      summary: Search default GL mappings
+      description: Find default GL mappings by event type or organization
+      operationId: searchDefaultMappings
+      parameters:
+      - name: eventType
+        in: query
+        description: Filter by event type
+        required: false
+        schema:
+          type: string
+      - name: organizationId
+        in: query
+        description: Filter by organization ID
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "200":
+          description: Matching default mappings returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DefaultGLMappingResponse"
+  /v1/accounting/default-mappings/resolve:
+    get:
+      tags:
+      - Default GL Mappings
+      summary: Resolve default mapping for event
+      description: Find the most specific active default mapping for an event type
+        and organization
+      operationId: resolveDefaultMapping
+      parameters:
+      - name: eventType
+        in: query
+        description: Event type
+        required: true
+        schema:
+          type: string
+      - name: organizationId
+        in: query
+        description: Organization ID (optional)
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "200":
+          description: Default mapping resolved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "404":
+          description: No default mapping found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DefaultGLMappingResponse"
+  /v1/accounting/default-mappings/global:
+    get:
+      tags:
+      - Default GL Mappings
+      summary: List global default mappings
+      description: Retrieve all global default GL mappings (organizationId IS NULL)
+      operationId: listGlobalDefaults
+      responses:
+        "200":
+          description: Global default mappings returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DefaultGLMappingResponse"
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DefaultGLMappingResponse"
+  /v1/accounting/credit-memos/{creditMemoId}:
+    get:
+      tags:
+      - Credit Memos
+      summary: Get credit memo
+      description: Retrieve details for a specific Credit Memo by ID. Includes full
+        audit trail and current invoice balance.
+      operationId: getCreditMemo
+      parameters:
+      - name: creditMemoId
+        in: path
+        description: Credit Memo ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Credit memo retrieved successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
+        "404":
+          description: Credit memo not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CreditMemoResponse"
+  /v1/accounting/audit/type/{type}:
+    get:
+      tags:
+      - Audit Trail
+      summary: Get audit trail by exception type
+      description: Retrieves audit trail entries filtered by exception type and date
+        range
+      operationId: getByType
+      parameters:
+      - name: type
+        in: path
+        description: Exception type
+        required: true
+        schema:
+          type: string
+          enum:
+          - PRICE_OVERRIDE
+          - REFUND
+          - CANCELLATION
+      - name: startDate
+        in: query
+        description: Start date in ISO 8601 format
+        required: true
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-01T00:00:00Z
+      - name: endDate
+        in: query
+        description: End date in ISO 8601 format
+        required: true
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-28T23:59:59Z
+      responses:
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "400":
+          description: Invalid date range or exception type
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+  /v1/accounting/audit/range:
+    get:
+      tags:
+      - Audit Trail
+      summary: Get audit trail by date range
+      description: Retrieves all audit trail entries within a specified date range
+      operationId: getByDateRange
+      parameters:
+      - name: startDate
+        in: query
+        description: Start date in ISO 8601 format
+        required: true
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-01T00:00:00Z
+      - name: endDate
+        in: query
+        description: End date in ISO 8601 format
+        required: true
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-28T23:59:59Z
+      responses:
+        "400":
+          description: Invalid date range
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+  /v1/accounting/audit/order/{orderId}:
+    get:
+      tags:
+      - Audit Trail
+      summary: Get audit trail for order
+      description: Retrieves all audit trail entries associated with a specific order
+      operationId: getByOrderId
+      parameters:
+      - name: orderId
+        in: path
+        description: Order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "404":
+          description: Order not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+  /v1/accounting/audit/invoice/{invoiceId}:
+    get:
+      tags:
+      - Audit Trail
+      summary: Get audit trail for invoice
+      description: Retrieves all audit trail entries associated with a specific invoice
+      operationId: getByInvoiceId
+      parameters:
+      - name: invoiceId
+        in: path
+        description: Invoice ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "404":
+          description: Invoice not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+  /v1/accounting/audit/actor/{actorId}:
+    get:
+      tags:
+      - Audit Trail
+      summary: Get audit trail by actor
+      description: Retrieves audit trail entries for a specific actor (user) within
+        a date range
+      operationId: getByActor
+      parameters:
+      - name: actorId
+        in: path
+        description: Actor (User) ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      - name: startDate
+        in: query
+        description: Start date in ISO 8601 format
+        required: true
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-01T00:00:00Z
+      - name: endDate
+        in: query
+        description: End date in ISO 8601 format
+        required: true
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-28T23:59:59Z
+      responses:
+        "404":
+          description: Actor not found
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "500":
+          description: Internal server error
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "400":
+          description: Invalid date range or actor ID
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
+  /v1/accounting/ap/payments/{paymentId}:
+    get:
+      tags:
+      - AP Payments
+      summary: Get payment details
+      description: Retrieve AP payment details including allocations and GL posting
+        status.
+      operationId: getPayment
+      parameters:
+      - name: paymentId
+        in: path
+        description: Payment UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+      responses:
+        "200":
+          description: Payment found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+        "404":
+          description: Payment not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+  /v1/accounting/ap/payments/by-ref/{paymentRef}:
+    get:
+      tags:
+      - AP Payments
+      summary: Get payment by reference
+      description: Retrieve AP payment details by paymentRef (idempotency key).
+      operationId: getPaymentByRef
+      parameters:
+      - name: paymentRef
+        in: path
+        description: Payment reference (idempotency key)
+        required: true
+        schema:
+          type: string
+        example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+      responses:
+        "200":
+          description: Payment found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+        "404":
+          description: Payment not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/APPaymentResponse"
+  /v1/accounting/ap/bills:
+    get:
+      tags:
+      - AP Payments
+      summary: List eligible vendor bills
+      description: "Get eligible vendor bills for payment (status = APPROVED). Bills\
+        \ are ordered by due date (oldest first, nulls last), then bill date, then\
+        \ bill ID."
+      operationId: listBills
+      parameters:
+      - name: vendorId
+        in: query
+        description: Vendor UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+      responses:
+        "200":
+          description: Bills retrieved successfully
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorBillSummaryResponse"
+        "400":
+          description: Invalid vendor ID
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorBillSummaryResponse"
+components:
+  schemas:
+    PostingRuleSetCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          minLength: 0
+        eventType:
+          type: string
+          maxLength: 100
+          minLength: 0
+        description:
+          type: string
+          maxLength: 500
+          minLength: 0
+        rulesDefinition:
+          type: string
+        createdBy:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - createdBy
+      - eventType
+      - name
+      - rulesDefinition
+    PostingRuleSetResponse:
+      type: object
+      properties:
+        postingRuleSetId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        eventType:
+          type: string
+        description:
+          type: string
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostingRuleVersionResponse"
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        modifiedAt:
+          type: string
+          format: date-time
+        modifiedBy:
+          type: string
+    PostingRuleVersionResponse:
+      type: object
+      properties:
+        versionId:
+          type: string
+          format: uuid
+        postingRuleSetId:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+          format: int32
+        state:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - ARCHIVED
+        rulesDefinition:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        modifiedAt:
+          type: string
+          format: date-time
+        modifiedBy:
+          type: string
+    PostingCategoryUpdateRequest:
+      type: object
+      properties:
+        categoryName:
+          type: string
+          maxLength: 100
+          minLength: 0
+        description:
+          type: string
+          maxLength: 500
+          minLength: 0
+        modifiedBy:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - categoryName
+      - modifiedBy
+    PostingCategoryResponse:
+      type: object
+      properties:
+        postingCategoryId:
+          type: string
+          format: uuid
+        categoryName:
+          type: string
+        description:
           type: string
         isActive:
           type: boolean
         createdAt:
           type: string
           format: date-time
-        updatedAt:
+        createdBy:
+          type: string
+        modifiedAt:
           type: string
           format: date-time
-        version:
-          type: integer
-          format: int64
-    VehicleTransferRequest:
-      type: object
-      description: Transfer request with target customer
-      properties:
-        targetCustomerId:
+        modifiedBy:
           type: string
-        notes:
-          type: string
-    RoleAssignment:
+    MappingKeyUpdateRequest:
       type: object
       properties:
-        roleCode:
+        keyName:
           type: string
-        isPrimary:
-          type: boolean
-    UpdateContactRolesRequest:
-      type: object
-      description: Role update request
-      properties:
-        version:
+          maxLength: 100
+          minLength: 0
+        description:
           type: string
-        roles:
-          type: array
-          items:
-            $ref: "#/components/schemas/RoleAssignment"
-    UpdateContactRolesResponse:
-      type: object
-      properties:
-        partyId:
+          maxLength: 500
+          minLength: 0
+        modifiedBy:
           type: string
-        contactId:
-          type: string
-        version:
-          type: string
-        status:
-          type: string
-        updatedAt:
-          type: string
-    CreatePersonRequest:
-      type: object
-      description: Request to create an individual person record
-      properties:
-        firstName:
-          type: string
-          description: First name of the person
-          example: John
-        lastName:
-          type: string
-          description: Last name of the person
-          example: Doe
-        preferredContactMethod:
-          type: string
-          description: Preferred method of contact
-          enum:
-          - EMAIL
-          - PHONE_CALL
-          - SMS
-          - NONE
-          example: EMAIL
-        emails:
-          type: array
-          description: Email addresses for this person
-          items:
-            $ref: "#/components/schemas/EmailInput"
-        phones:
-          type: array
-          description: Phone numbers for this person
-          items:
-            $ref: "#/components/schemas/PhoneInput"
+          maxLength: 50
+          minLength: 0
       required:
-      - firstName
-      - lastName
-      - preferredContactMethod
-    EmailInput:
+      - keyName
+      - modifiedBy
+    MappingKeyResponse:
       type: object
-      description: Email address input
       properties:
-        value:
-          type: string
-          description: Email address
-          example: john.doe@example.com
-        primary:
-          type: boolean
-      required:
-      - value
-    PhoneInput:
-      type: object
-      description: Phone number input
-      properties:
-        value:
-          type: string
-          description: Phone number
-          example: +1-555-123-4567
-        type:
-          type: string
-          description: Phone type
-          enum:
-          - EMAIL
-          - PHONE_MOBILE
-          - PHONE_HOME
-          - PHONE_WORK
-          - FAX
-          example: PHONE_MOBILE
-        primary:
-          type: boolean
-      required:
-      - value
-    CreatePersonResponse:
-      type: object
-      description: Response after creating a person record
-      properties:
-        personId:
+        mappingKeyId:
           type: string
           format: uuid
-          description: Unique identifier of the created person
-          example: 550e8400-e29b-41d4-a716-446655440000
-        firstName:
-          type: string
-          description: First name
-          example: John
-        lastName:
-          type: string
-          description: Last name
-          example: Doe
-        preferredContactMethod:
-          type: string
-          description: Preferred contact method
-          enum:
-          - EMAIL
-          - PHONE_CALL
-          - SMS
-          - NONE
-          example: EMAIL
-        contactPointsCreated:
-          type: integer
-          format: int32
-          description: Number of contact points created
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the person was created
-    UpsertCommunicationPreferencesRequest:
-      type: object
-      description: Communication preferences to set
-      properties:
-        version:
-          type: string
-        emailPreference:
-          type: string
-        smsPreference:
-          type: string
-        phonePreference:
-          type: string
-        marketingPreference:
-          type: string
-        consentFlags:
-          type: object
-          additionalProperties:
-            type: boolean
-        preferencesNote:
-          type: string
-        updateSource:
-          type: string
-    UpsertCommunicationPreferencesResponse:
-      type: object
-      properties:
-        partyId:
-          type: string
-        version:
-          type: string
-        operationType:
-          type: string
-        status:
-          type: string
-        updatedAt:
-          type: string
-    CreatePartyRelationshipRequest:
-      type: object
-      description: Request to create a relationship between a commercial account and
-        an individual
-      properties:
-        personId:
+        postingCategoryId:
           type: string
           format: uuid
-          description: ID of the individual person
-          example: 550e8400-e29b-41d4-a716-446655440000
-        roles:
-          type: array
-          description: Roles for this relationship
-          example:
-          - BILLING
-          - APPROVER
-          items:
-            type: string
-            description: Role type for party relationships
-            enum:
-            - APPROVER
-            - BILLING
-            - PRIMARY_CONTACT
-            - DRIVER
-            - TECHNICAL
-          uniqueItems: true
-        effectiveStartDate:
+        postingCategoryName:
           type: string
-          format: date
-          description: Date when this relationship becomes effective
-          example: 2026-01-01
-        effectiveEndDate:
-          type: string
-          format: date
-          description: Date when this relationship ends (null means no end date)
-          example: 2026-12-31
-        primaryBillingContact:
-          type: boolean
-      required:
-      - effectiveStartDate
-      - personId
-      - roles
-    CreatePartyRelationshipResponse:
-      type: object
-      description: Response after creating a party relationship
-      properties:
-        relationshipId:
-          type: string
-          format: uuid
-          description: Unique identifier of the relationship
-        partyId:
-          type: string
-          description: ID of the commercial account
-        personId:
-          type: string
-          format: uuid
-          description: ID of the individual person
-        roles:
-          type: array
-          description: Roles assigned to this relationship
-          items:
-            type: string
-            description: Role type for party relationships
-            enum:
-            - APPROVER
-            - BILLING
-            - PRIMARY_CONTACT
-            - DRIVER
-            - TECHNICAL
-          uniqueItems: true
-        effectiveStartDate:
-          type: string
-          format: date
-          description: Effective start date
-        effectiveEndDate:
-          type: string
-          format: date
-          description: Effective end date (null if active)
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the relationship was created
-        previousPrimaryDemoted:
-          type: boolean
-          description: Whether a previous primary billing contact was demoted
-        primaryBillingContact:
-          type: boolean
-    ResolveAccountTierRequest:
-      type: object
-      description: Tier resolution request
-      properties:
-        accountId:
-          type: string
-          description: Account/party identifier
-          example: 123e4567-e89b-12d3-a456-426614174000
-        annualRevenue:
-          type: number
-          description: Annual revenue or spending for tier calculation
-          example: 125000.0
-        activeContractCount:
-          type: integer
-          format: int32
-          description: Number of active contracts or subscriptions
-        accountAgeMonths:
-          type: integer
-          format: int32
-          description: Account age in months
-        applyTier:
-          type: boolean
-          description: Whether to apply the resolved tier or just return the recommendation
-        forceRecalculation:
-          type: boolean
-          description: Force recalculation even if tier was manually set
-    ResolveAccountTierResponse:
-      type: object
-      description: Account tier resolution result
-      properties:
-        accountId:
-          type: string
-          description: Account/party identifier
-          example: 123e4567-e89b-12d3-a456-426614174000
-        currentTier:
-          type: string
-          description: Currently assigned tier (before resolution)
-          enum:
-          - STANDARD
-          - BRONZE
-          - SILVER
-          - GOLD
-          - PLATINUM
-          - ENTERPRISE
-          example: SILVER
-        recommendedTier:
-          type: string
-          description: Recommended/resolved tier based on business rules
-          enum:
-          - STANDARD
-          - BRONZE
-          - SILVER
-          - GOLD
-          - PLATINUM
-          - ENTERPRISE
-          example: GOLD
-        tierApplied:
-          type: boolean
-          description: Whether the tier was applied to the account
-        manualOverrideActive:
-          type: boolean
-          description: Whether the current tier was manually set and blocked auto-update
-        resolutionReason:
-          type: string
-          description: Explanation of why this tier was recommended
-        tierScore:
-          type: integer
-          format: int32
-          description: Score or metric used for tier calculation
-    CreateCommercialAccountRequest:
-      type: object
-      description: Commercial account creation request
-      properties:
-        legalName:
-          type: string
-        displayName:
-          type: string
-        taxId:
-          type: string
-        partyType:
-          type: string
-        billingTermsId:
-          type: string
-        externalIdentifiers:
-          type: object
-          additionalProperties:
-            type: string
-        email:
-          type: string
-        phone:
-          type: string
-    CreateCommercialAccountResponse:
-      type: object
-      properties:
-        partyId:
-          type: string
-        legalName:
-          type: string
-        status:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        duplicateCandidates:
-          type: array
-          items:
-            $ref: "#/components/schemas/DuplicateCandidate"
-    DuplicateCandidate:
-      type: object
-      properties:
-        partyId:
-          type: string
-        legalName:
-          type: string
-        matchReason:
-          type: string
-    CreateVehicleForPartyResponse:
-      type: object
-      properties:
-        vehicleId:
-          type: string
-        partyId:
-          type: string
-        vinNumber:
-          type: string
-        unitNumber:
+        keyName:
           type: string
         description:
           type: string
-        licensePlate:
-          type: string
-        status:
-          type: string
+        isActive:
+          type: boolean
         createdAt:
           type: string
-    MergePartiesRequest:
-      type: object
-      description: Merge request with source party IDs
-      properties:
-        survivorPartyId:
+          format: date-time
+        createdBy:
           type: string
-        losingPartyId:
+        modifiedAt:
           type: string
-        justification:
+          format: date-time
+        modifiedBy:
           type: string
-    MergePartiesResponse:
+    JournalEntryCreateRequest:
       type: object
       properties:
-        mergeAuditId:
+        organizationId:
           type: string
-        survivorPartyId:
+          format: uuid
+        transactionDate:
           type: string
-        losingPartyId:
+          format: date-time
+        description:
           type: string
-        mergedPartyAlias:
+        sourceEventId:
           type: string
+          format: uuid
+        sourceEventType:
+          type: string
+        postingRuleSetId:
+          type: string
+          format: uuid
+        postingRuleVersionId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalEntryLineRequest"
+    JournalEntryLineRequest:
+      type: object
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+        debitAmount:
+          type: number
+        creditAmount:
+          type: number
+        description:
+          type: string
+        dimensions:
+          type: object
+          additionalProperties:
+            type: string
+    JournalEntryLineResponse:
+      type: object
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        lineNumber:
+          type: integer
+          format: int32
+        glAccountId:
+          type: string
+          format: uuid
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        debitAmount:
+          type: number
+        creditAmount:
+          type: number
+        description:
+          type: string
+        dimensions:
+          type: object
+          additionalProperties:
+            type: string
+    JournalEntryResponse:
+      type: object
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
         status:
           type: string
-        completedAt:
+          enum:
+          - DRAFT
+          - PENDING
+          - POSTED
+          - REVERSED
+        transactionDate:
           type: string
-    SearchPartiesRequest:
-      type: object
-      description: Search criteria
-      properties:
-        name:
+          format: date-time
+        description:
           type: string
-        email:
+        sourceEventId:
           type: string
-        phone:
+          format: uuid
+        sourceEventType:
           type: string
-        taxId:
+        postingRuleSetId:
           type: string
-        partyType:
+          format: uuid
+        postingRuleVersionId:
           type: string
-        status:
+          format: uuid
+        reversalJournalEntryId:
           type: string
-        includeMerged:
+          format: uuid
+        reversedByJournalEntryId:
+          type: string
+          format: uuid
+        totalDebits:
+          type: number
+        totalCredits:
+          type: number
+        isBalanced:
           type: boolean
-        pageNumber:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalEntryLineResponse"
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        modifiedAt:
+          type: string
+          format: date-time
+        modifiedBy:
+          type: string
+        postedAt:
+          type: string
+          format: date-time
+        postedBy:
+          type: string
+        reversedAt:
+          type: string
+          format: date-time
+    GLAccountUpdateRequest:
+      type: object
+      properties:
+        accountName:
+          type: string
+        description:
+          type: string
+    GLAccountResponse:
+      type: object
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        accountType:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
+        description:
+          type: string
+        parentAccountId:
+          type: string
+          format: uuid
+        activationDate:
+          type: string
+          format: date-time
+        deactivationDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - NOT_YET_ACTIVE
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        modifiedAt:
+          type: string
+          format: date-time
+        modifiedBy:
+          type: string
+        version:
+          type: integer
+          format: int32
+    DefaultGLMappingRequest:
+      type: object
+      properties:
+        eventType:
+          type: string
+          maxLength: 100
+          minLength: 0
+        organizationId:
+          type: string
+          format: uuid
+        debitAccountId:
+          type: string
+          format: uuid
+        creditAccountId:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 500
+          minLength: 0
+        active:
+          type: boolean
+      required:
+      - creditAccountId
+      - debitAccountId
+      - eventType
+    DefaultGLMappingResponse:
+      type: object
+      properties:
+        mappingId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        organizationId:
+          type: string
+          format: uuid
+        debitAccountId:
+          type: string
+          format: uuid
+        debitAccountCode:
+          type: string
+        debitAccountName:
+          type: string
+        creditAccountId:
+          type: string
+          format: uuid
+        creditAccountCode:
+          type: string
+        creditAccountName:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        modifiedAt:
+          type: string
+          format: date-time
+        modifiedBy:
+          type: string
+    GoodsReceivedEvent:
+      type: object
+      description: Goods received event from inventory/purchasing system
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Event UUID (idempotency key)
+          example: 01936e5c-1234-7a3d-8b6e-123456789012
+        organizationId:
+          type: string
+          format: uuid
+          description: Organization UUID
+          example: 00000000-0000-4000-a000-000000000010
+        purchaseOrderId:
+          type: string
+          format: uuid
+          description: Purchase order UUID
+          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: 01936e5a-7890-7a3d-8b6e-2b3456789012
+        vendorName:
+          type: string
+          description: Vendor name
+          example: Acme Supplies Ltd
+        receivedDate:
+          type: string
+          format: date-time
+          description: Date goods were received
+          example: 2026-01-15T10:30:00
+        lineItems:
+          type: array
+          description: Line items received
+          items:
+            $ref: "#/components/schemas/ReceivedLineItem"
+        dimensions:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional dimensional context for GL mapping
+          example:
+            businessUnitId: BU-001
+      required:
+      - eventId
+      - lineItems
+      - organizationId
+      - purchaseOrderId
+      - receivedDate
+      - vendorId
+    ReceivedLineItem:
+      type: object
+      description: Line item received from vendor
+      properties:
+        inventoryItem:
+          type: boolean
+        productId:
+          type: string
+          format: uuid
+          description: Product/SKU UUID
+          example: 01936e59-abcd-7a3d-8b6e-3c4567890123
+        description:
+          type: string
+          description: Product description
+          example: Widget Type A
+        quantity:
+          type: number
+          description: Quantity received
+          example: 100.0
+        unitPrice:
+          type: number
+          description: Unit price from PO
+          example: 12.5
+        isInventoryItem:
+          type: boolean
+          description: Is this an inventory item (true) or expense item (false)
+          example: true
+      required:
+      - description
+      - productId
+      - quantity
+      - unitPrice
+    VendorBillResponse:
+      type: object
+      description: Vendor bill details
+      properties:
+        vendorBillId:
+          type: string
+          format: uuid
+          description: Vendor bill UUID
+          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+        vendorName:
+          type: string
+          description: Vendor name
+          example: Acme Supplies Ltd
+        billNumber:
+          type: string
+          description: Bill number
+          example: BILL-2026-001234
+        billDate:
+          type: string
+          format: date-time
+          description: Bill date
+          example: 2026-01-15T00:00:00
+        dueDate:
+          type: string
+          format: date-time
+          description: Due date
+          example: 2026-02-14T00:00:00
+        totalAmount:
+          type: number
+          description: Total bill amount
+          example: 1200.0
+        status:
+          type: string
+          description: Bill status
+          enum:
+          - PENDING_RECEIPT_MATCH
+          - MATCH_EXCEPTION
+          - PENDING_REVIEW
+          - APPROVED
+          - REJECTED
+          - PAID
+          - CANCELLED
+          - VOIDED
+          example: PENDING_RECEIPT_MATCH
+        originEventId:
+          type: string
+          format: uuid
+          description: Origin event ID (for traceability)
+          example: 01936e5c-1234-7a3d-8b6e-123456789012
+        originEventType:
+          type: string
+          description: Origin event type
+          example: GOODS_RECEIVED
+        journalEntryId:
+          type: string
+          format: uuid
+          description: Journal entry ID (if GL posted)
+          example: 01936e5e-7890-7a3d-8b6e-4d5678901234
+        paymentTransactionId:
+          type: string
+          format: uuid
+          description: Payment transaction ID (if paid)
+          example: 01936e5f-abcd-7a3d-8b6e-5e6789012345
+        createdAt:
+          type: string
+          format: date-time
+          description: Created timestamp
+          example: 2026-01-15T10:30:00Z
+        createdBy:
+          type: string
+          description: Created by user
+          example: system
+        approvalJustification:
+          type: string
+          description: Approval justification (if status = APPROVED)
+          example: Approved by AP manager
+        rejectionReason:
+          type: string
+          description: Rejection reason (if status = REJECTED)
+          example: Incorrect invoice amount
+    ExceptionResolutionRequest:
+      type: object
+      properties:
+        resolutionAction:
+          type: string
+        reason:
+          type: string
+        operatorId:
+          type: string
+    InvoiceLineItem:
+      type: object
+      description: Invoice line item from vendor
+      properties:
+        productId:
+          type: string
+          format: uuid
+          description: Product/SKU UUID
+          example: 01936e59-abcd-7a3d-8b6e-3c4567890123
+        description:
+          type: string
+          description: Product description
+          example: Widget Type A
+        quantity:
+          type: number
+          description: Invoiced quantity
+          example: 100.0
+        unitPrice:
+          type: number
+          description: Unit price from invoice
+          example: 12.5
+      required:
+      - description
+      - productId
+      - quantity
+      - unitPrice
+    VendorInvoiceReceivedEvent:
+      type: object
+      description: Vendor invoice received event from AP system
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Event UUID (idempotency key)
+          example: 01936e5d-5678-7a3d-8b6e-456789012345
+        organizationId:
+          type: string
+          format: uuid
+          description: Organization UUID
+          example: 00000000-0000-4000-a000-000000000010
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: 01936e5a-7890-7a3d-8b6e-2b3456789012
+        invoiceReference:
+          type: string
+          description: Vendor invoice number
+          example: INV-2026-001234
+        invoiceDate:
+          type: string
+          format: date-time
+          description: Invoice date
+          example: 2026-01-16T00:00:00
+        dueDate:
+          type: string
+          format: date-time
+          description: Invoice due date
+          example: 2026-02-15T00:00:00
+        lineItems:
+          type: array
+          description: Invoice line items
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+      required:
+      - eventId
+      - invoiceDate
+      - invoiceReference
+      - lineItems
+      - organizationId
+      - vendorId
+    CandidateSelectionRequest:
+      type: object
+      properties:
+        operatorId:
+          type: string
+    PostingCategoryCreateRequest:
+      type: object
+      properties:
+        categoryName:
+          type: string
+          maxLength: 100
+          minLength: 0
+        description:
+          type: string
+          maxLength: 500
+          minLength: 0
+        createdBy:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - categoryName
+      - createdBy
+    InvoiceApplication:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        amountToApply:
+          type: number
+          minimum: 0.01
+      required:
+      - amountToApply
+      - invoiceId
+    PaymentApplicationRequest:
+      type: object
+      properties:
+        applicationRequestId:
+          type: string
+          maxLength: 100
+          minLength: 0
+        applications:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceApplication"
+      required:
+      - applicationRequestId
+      - applications
+    ApplicationDetail:
+      type: object
+      properties:
+        paymentApplicationId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        appliedAmount:
+          type: number
+        invoiceBalanceBefore:
+          type: number
+        invoiceBalanceAfter:
+          type: number
+        invoiceStatus:
+          type: string
+          enum:
+          - OPEN
+          - PARTIALLY_PAID
+          - PAID_IN_FULL
+          - VOIDED
+          - CANCELLED
+    CustomerCreditInfo:
+      type: object
+      properties:
+        creditId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+    PaymentApplicationResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        currency:
+          type: string
+        totalAmount:
+          type: number
+        appliedAmount:
+          type: number
+        remainingAmount:
+          type: number
+        applications:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApplicationDetail"
+        customerCredit:
+          $ref: "#/components/schemas/CustomerCreditInfo"
+        applicationTimestamp:
+          type: string
+          format: date-time
+        applicationRequestId:
+          type: string
+    PaymentApplicationReversalRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+          minLength: 10
+      required:
+      - reason
+    GLMappingCreateRequest:
+      type: object
+      properties:
+        sourceSystem:
+          type: string
+        externalCode:
+          type: string
+        glAccountId:
+          type: string
+          format: uuid
+        effectiveStartDate:
+          type: string
+          format: date-time
+        effectiveEndDate:
+          type: string
+          format: date-time
+        dimensions:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+      - effectiveStartDate
+      - externalCode
+      - glAccountId
+      - sourceSystem
+    GLMappingCreateResponse:
+      type: object
+      properties:
+        mapping:
+          $ref: "#/components/schemas/GLMappingResponse"
+    GLMappingResponse:
+      type: object
+      properties:
+        glMappingId:
+          type: string
+          format: uuid
+        sourceSystem:
+          type: string
+        externalCode:
+          type: string
+        glAccountId:
+          type: string
+          format: uuid
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        effectiveStartDate:
+          type: string
+          format: date-time
+        effectiveEndDate:
+          type: string
+          format: date-time
+        dimensions:
+          type: object
+          additionalProperties:
+            type: string
+        priority:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+    GLMappingResolveRequest:
+      type: object
+      properties:
+        sourceSystem:
+          type: string
+        externalCode:
+          type: string
+        transactionDate:
+          type: string
+          format: date-time
+      required:
+      - externalCode
+      - sourceSystem
+      - transactionDate
+    GLMappingResolveResponse:
+      type: object
+      properties:
+        glAccountId:
+          type: string
+          format: uuid
+    MappingKeyCreateRequest:
+      type: object
+      properties:
+        postingCategoryId:
+          type: string
+          format: uuid
+        keyName:
+          type: string
+          maxLength: 100
+          minLength: 0
+        description:
+          type: string
+          maxLength: 500
+          minLength: 0
+        createdBy:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - createdBy
+      - keyName
+      - postingCategoryId
+    JournalEntryReversalRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    GLAccountCreateRequest:
+      type: object
+      properties:
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        accountType:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - REVENUE
+          - EXPENSE
+        description:
+          type: string
+        parentAccountId:
+          type: string
+          format: uuid
+        activationDate:
+          type: string
+          format: date-time
+    GLAccountActivateRequest:
+      type: object
+      properties:
+        effectiveDate:
+          type: string
+          format: date
+      required:
+      - effectiveDate
+    AccountingEventSubmitRequest:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        organizationId:
+          type: string
+          format: uuid
+        sourceSystem:
+          type: string
+        transactionDate:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: {}
+    AccountingEventResponse:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        sourceSystem:
+          type: string
+        transactionDate:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: {}
+        status:
+          type: string
+          enum:
+          - RECEIVED
+          - PROCESSING
+          - PROCESSED
+          - FAILED
+          - SUSPENDED
+        journalEntryId:
+          type: string
+          format: uuid
+        errorMessage:
+          type: string
+        receivedAt:
+          type: string
+          format: date-time
+        processedAt:
+          type: string
+          format: date-time
+        sequenceNumber:
+          type: integer
+          format: int64
+        failureReasonCode:
+          type: string
+        failureDetails:
+          type: string
+        attemptCount:
+          type: integer
+          format: int32
+        finalPostingReferenceId:
+          type: string
+        resolvedByUserId:
+          type: string
+        mappingVersionAttempted:
+          type: string
+    ReprocessEventRequest:
+      type: object
+      properties:
+        triggeredByUserId:
+          type: string
+        mappingVersionToUse:
+          type: string
+        reprocessingNotes:
+          type: string
+      required:
+      - triggeredByUserId
+    CreateCreditMemoRequest:
+      type: object
+      properties:
+        originalInvoiceId:
+          type: string
+          format: uuid
+        creditAmount:
+          type: number
+          minimum: 0.01
+        reasonCode:
+          type: string
+          maxLength: 50
+          minLength: 0
+        justificationNote:
+          type: string
+          maxLength: 1000
+          minLength: 0
+      required:
+      - creditAmount
+      - originalInvoiceId
+      - reasonCode
+    CreditMemoResponse:
+      type: object
+      properties:
+        creditMemoId:
+          type: string
+          format: uuid
+        originalInvoiceId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        creditAmount:
+          type: number
+        taxAmountReversed:
+          type: number
+        totalAmount:
+          type: number
+        reasonCode:
+          type: string
+        justificationNote:
+          type: string
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - POSTED
+          - APPLIED
+          - VOIDED
+        creationTimestamp:
+          type: string
+          format: date-time
+        postedTimestamp:
+          type: string
+          format: date-time
+        createdByUserId:
+          type: string
+        priorPeriodAdjustment:
+          type: boolean
+        originalPeriodId:
+          type: string
+        currency:
+          type: string
+        invoiceBalanceAfter:
+          type: number
+    RefundRequest:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        refundType:
+          type: string
+          enum:
+          - REVERSAL
+          - CREDIT_MEMO
+          - ADJUSTMENT
+        refundAmount:
+          type: number
+        originalPaymentStatus:
+          type: string
+          enum:
+          - PENDING
+          - SETTLED
+          - FAILED
+          - AUTHORIZED
+        actorId:
+          type: string
+          format: uuid
+        actorRole:
+          type: string
+        reason:
+          type: string
+      required:
+      - actorId
+      - actorRole
+      - invoiceId
+      - originalPaymentStatus
+      - paymentId
+      - reason
+      - refundAmount
+      - refundType
+    AuditTrailResponse:
+      type: object
+      properties:
+        auditId:
+          type: string
+          format: uuid
+        exceptionType:
+          type: string
+          enum:
+          - PRICE_OVERRIDE
+          - REFUND
+          - CANCELLATION
+        actorId:
+          type: string
+          format: uuid
+        actorRole:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        authorizationLevel:
+          type: string
+        policyVersion:
+          type: string
+        orderId:
+          type: string
+          format: uuid
+        lineItemId:
+          type: string
+          format: uuid
+        originalPrice:
+          type: number
+        adjustedPrice:
+          type: number
+        overrideAmountOrPercent:
+          type: string
+        forbiddenCategoryCode:
+          type: string
+        policyValidationResult:
+          type: string
+          enum:
+          - APPROVED
+          - REJECTED_FORBIDDEN
+          - REJECTED_THRESHOLD_EXCEEDED
+        invoiceId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        refundType:
+          type: string
+          enum:
+          - REVERSAL
+          - CREDIT_MEMO
+          - ADJUSTMENT
+        refundAmount:
+          type: number
+        originalPaymentStatus:
+          type: string
+          enum:
+          - PENDING
+          - SETTLED
+          - FAILED
+          - AUTHORIZED
+        refundMethod:
+          type: string
+          enum:
+          - VOID
+          - CHARGEBACK
+          - CASH_REFUND
+          - CREDIT_MEMO
+        linkedSourceIds:
+          type: string
+        cancellationType:
+          type: string
+          enum:
+          - ORDER_CANCELLED
+          - INVOICE_CANCELLED
+          - PAYMENT_FAILED
+        beforeSnapshot:
+          type: string
+        afterSnapshot:
+          type: string
+        partialPaymentInfo:
+          type: string
+        glReversalStatus:
+          type: string
+        accountingIntent:
+          type: string
+          enum:
+          - REVENUE_ADJUSTMENT
+          - PAYMENT_REVERSAL
+          - CUSTOMER_CREDIT
+          - WRITE_OFF
+          - REVENUE_REVERSAL
+          - PAYMENT_RECOVERY
+        accountingStatus:
+          type: string
+          enum:
+          - PENDING_POSTING
+          - POSTED
+          - FAILED
+        expectedAccountingOutcome:
+          type: string
+        sourceEventId:
+          type: string
+          format: uuid
+        sourceDocumentId:
+          type: string
+    PriceOverrideRequest:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        lineItemId:
+          type: string
+          format: uuid
+        originalPrice:
+          type: number
+        adjustedPrice:
+          type: number
+        actorId:
+          type: string
+          format: uuid
+        actorRole:
+          type: string
+        reason:
+          type: string
+      required:
+      - actorId
+      - actorRole
+      - adjustedPrice
+      - lineItemId
+      - orderId
+      - originalPrice
+      - reason
+    CancellationRequest:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        cancellationType:
+          type: string
+          enum:
+          - ORDER_CANCELLED
+          - INVOICE_CANCELLED
+          - PAYMENT_FAILED
+        beforeSnapshot:
+          type: string
+        afterSnapshot:
+          type: string
+        partialPaymentInfo:
+          type: string
+        actorId:
+          type: string
+          format: uuid
+        actorRole:
+          type: string
+        reason:
+          type: string
+      required:
+      - actorId
+      - actorRole
+      - afterSnapshot
+      - beforeSnapshot
+      - cancellationType
+      - reason
+    AllocationLineRequest:
+      type: object
+      description: Allocation line for a specific vendor bill
+      properties:
+        vendorBillId:
+          type: string
+          format: uuid
+          description: Vendor bill UUID
+          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
+        appliedAmount:
+          type: number
+          description: Amount to apply to this bill
+          example: 750.0
+          minimum: 0.00
+      required:
+      - appliedAmount
+      - vendorBillId
+    ExecuteAPPaymentRequest:
+      type: object
+      description: Request to execute an AP vendor payment
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        grossAmount:
+          type: number
+          description: Gross payment amount
+          example: 1500.0
+          minimum: 0.01
+        feeAmount:
+          type: number
+          description: Fee amount (if known at capture time)
+          example: 15.0
+        netAmount:
+          type: number
+          description: Net amount deposited (if applicable)
+          example: 1485.0
+        currency:
+          type: string
+          description: ISO 4217 currency code
+          example: USD
+          maxLength: 3
+          minLength: 3
+        paymentRef:
+          type: string
+          description: Unique payment reference (idempotency key)
+          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+          maxLength: 100
+          minLength: 1
+        paymentMethod:
+          type: string
+          description: "Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)"
+          enum:
+          - ACH
+          - CHECK
+          - WIRE
+          - CREDIT_CARD
+          - OTHER
+          example: ACH
+        paymentSource:
+          type: string
+          description: "Payment source token or identifier from the payment provider\
+            \ (e.g., Stripe token, bank account ID)"
+          example: tok_visa
+          maxLength: 255
+          minLength: 0
+        memo:
+          type: string
+          description: Optional payment memo/notes
+          example: Monthly supplier payment
+          maxLength: 1000
+          minLength: 0
+        allocations:
+          type: array
+          description: "Optional explicit allocations to vendor bills. If omitted,\
+            \ automatic allocation applied."
+          items:
+            $ref: "#/components/schemas/AllocationLineRequest"
+      required:
+      - currency
+      - grossAmount
+      - paymentMethod
+      - paymentRef
+      - paymentSource
+      - vendorId
+    APPaymentResponse:
+      type: object
+      description: AP Payment response with allocations and GL status
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+          description: Payment UUID
+          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        paymentRef:
+          type: string
+          description: Payment reference (idempotency key)
+          example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+        vendorName:
+          type: string
+          description: Vendor name
+          example: Acme Supplies Ltd
+        grossAmount:
+          type: number
+          description: Gross payment amount
+          example: 1500.0
+        feeAmount:
+          type: number
+          description: Fee amount
+          example: 15.0
+        netAmount:
+          type: number
+          description: Net amount
+          example: 1485.0
+        unappliedAmount:
+          type: number
+          description: Unapplied amount (credit to vendor)
+          example: 0.0
+        currency:
+          type: string
+          description: Currency code
+          example: USD
+        status:
+          type: string
+          description: Payment status
+          enum:
+          - INITIATED
+          - GATEWAY_PENDING
+          - GATEWAY_FAILED
+          - GATEWAY_SUCCEEDED
+          - GL_POST_PENDING
+          - GL_POSTED
+          - GL_POST_FAILED
+          example: GATEWAY_SUCCEEDED
+        gatewayTransactionId:
+          type: string
+          description: Gateway transaction ID
+          example: ch_3QvD2TGxyz123ABC
+        gatewayTimestamp:
+          type: string
+          format: date-time
+          description: Gateway response timestamp
+          example: 2026-02-09T10:30:00Z
+        glJournalEntryId:
+          type: string
+          format: uuid
+          description: GL journal entry ID (once posted)
+          example: 01936e5f-abcd-7a3d-8b6e-5d6789012345
+        glPostedAt:
+          type: string
+          format: date-time
+          description: GL posting timestamp
+          example: 2026-02-09T10:31:00Z
+        glPostError:
+          type: string
+          description: GL posting error message (if failed)
+          example: Account 2000 not found
+        memo:
+          type: string
+          description: Payment memo/notes
+          example: Monthly supplier payment
+        allocations:
+          type: array
+          description: Allocations to vendor bills
+          items:
+            $ref: "#/components/schemas/AllocationLineResponse"
+        createdAt:
+          type: string
+          format: date-time
+          description: Payment created timestamp
+          example: 2026-02-09T10:29:00Z
+        createdBy:
+          type: string
+          description: User who initiated payment
+          example: ap_clerk_1
+    AllocationLineResponse:
+      type: object
+      description: Allocation of payment to a vendor bill
+      properties:
+        allocationId:
+          type: string
+          format: uuid
+          description: Allocation UUID
+          example: 01936e5e-1234-7a3d-8b6e-4c567890abcd
+        vendorBillId:
+          type: string
+          format: uuid
+          description: Vendor bill UUID
+          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
+        appliedAmount:
+          type: number
+          description: Amount applied to this bill
+          example: 750.0
+        allocationSequence:
+          type: integer
+          format: int32
+          description: Allocation sequence number
+          example: 1
+    VendorBillMatchCandidateResponse:
+      type: object
+      properties:
+        candidateId:
+          type: string
+          format: uuid
+        invoiceEventId:
+          type: string
+          format: uuid
+        vendorBillId:
+          type: string
+          format: uuid
+        vendorId:
+          type: string
+          format: uuid
+        billNumber:
+          type: string
+        billTotalAmount:
+          type: number
+        matchScore:
+          type: integer
+          format: int32
+        scoreBreakdown:
+          type: string
+        resolved:
+          type: boolean
+        selected:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    IncomeStatementReport:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        generatedAt:
+          type: string
+          format: date-time
+        lineItems:
+          type: object
+          additionalProperties:
+            type: number
+        totalRevenue:
+          type: number
+        totalExpenses:
+          type: number
+        netIncome:
+          type: number
+    JournalLineDrilldownResponse:
+      type: object
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
+        transactionDate:
+          type: string
+          format: date
+        description:
+          type: string
+        debitAmount:
+          type: number
+        creditAmount:
+          type: number
+        sourceEventId:
+          type: string
+          format: uuid
+        sourceEventType:
+          type: string
+    AccountDrilldownResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+        accountName:
+          type: string
+        balance:
+          type: number
+        statementLineCode:
+          type: string
+    BalanceSheetReport:
+      type: object
+      properties:
+        asOfDate:
+          type: string
+          format: date
+        generatedAt:
+          type: string
+          format: date-time
+        lineItems:
+          type: object
+          additionalProperties:
+            type: number
+        totalAssets:
+          type: number
+        totalLiabilities:
+          type: number
+        totalEquity:
+          type: number
+        balanced:
+          type: boolean
+    PostingRuleSetListResponse:
+      type: object
+      properties:
+        ruleSets:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostingRuleSetResponse"
+        totalElements:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+        currentPage:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
-        sortField:
-          type: string
-        sortOrder:
-          type: string
-    PartySummary:
-      type: object
-      properties:
-        partyId:
-          type: string
-        legalName:
-          type: string
-        displayName:
-          type: string
-        partyType:
-          type: string
-        status:
-          type: string
-        createdAt:
-          type: string
-    SearchPartiesResponse:
+    PostingCategoryListResponse:
       type: object
       properties:
         results:
           type: array
           items:
-            $ref: "#/components/schemas/PartySummary"
+            $ref: "#/components/schemas/PostingCategoryResponse"
         totalCount:
           type: integer
-          format: int32
+          format: int64
         pageNumber:
           type: integer
           format: int32
         pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+    MappingKeyListResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/MappingKeyResponse"
+        totalCount:
+          type: integer
+          format: int64
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+    PagedResponseJournalEntryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalEntryResponse"
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalCount:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    InvoiceStatusResponse:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - PAID
+          - PARTIALLY_PAID
+          - UNPAID
+          - FAILED
+        totalPaid:
+          type: number
+        invoiceTotal:
+          type: number
+        remainingBalance:
+          type: number
+        latestTransactionReference:
+          type: string
+        lastUpdated:
+          type: string
+          format: date-time
+    GLAccountListResponse:
+      type: object
+      properties:
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalPages:
+          type: integer
+          format: int32
+        glAccounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/GLAccountResponse"
+        totalElements:
+          type: integer
+          format: int64
+    PagedResponseAccountingEventResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountingEventResponse"
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalCount:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    ReprocessingAttemptHistoryResponse:
+      type: object
+      properties:
+        attemptId:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        attemptedAt:
+          type: string
+          format: date-time
+        triggeredByUserId:
+          type: string
+        outcome:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILURE
+        outcomeDetails:
+          type: string
+        mappingVersionUsed:
+          type: string
+    DefaultGLMappingListResponse:
+      type: object
+      properties:
+        mappings:
+          type: array
+          items:
+            $ref: "#/components/schemas/DefaultGLMappingResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
           type: integer
           format: int32
     Pageable:
@@ -1761,7 +4679,7 @@ components:
           type: array
           items:
             type: string
-    PageCustomerDTO:
+    PageCreditMemoResponse:
       type: object
       properties:
         totalElements:
@@ -1782,7 +4700,7 @@ components:
         content:
           type: array
           items:
-            $ref: "#/components/schemas/CustomerDTO"
+            $ref: "#/components/schemas/CreditMemoResponse"
         number:
           type: integer
           format: int32
@@ -1820,373 +4738,56 @@ components:
           type: boolean
         unsorted:
           type: boolean
-    AccountSummary:
+    VendorBillSummaryResponse:
       type: object
+      description: Vendor bill summary for payment allocation
       properties:
-        partyId:
-          type: string
-        accountNumber:
-          type: string
-        accountName:
-          type: string
-        accountType:
-          type: string
-    BillingPreferences:
-      type: object
-      properties:
-        marketingOptOut:
-          type: boolean
-        doNotContact:
-          type: boolean
-        invoiceDeliveryMethod:
-          type: string
-    ContactPreferences:
-      type: object
-      properties:
-        emailOptIn:
-          type: boolean
-        smsOptIn:
-          type: boolean
-        phoneOptIn:
-          type: boolean
-        doNotContact:
-          type: boolean
-        preferredContactMethod:
-          type: string
-        preferredLanguage:
-          type: string
-    ContactSummary:
-      type: object
-      properties:
-        contactId:
-          type: string
-        name:
-          type: string
-        roles:
-          type: array
-          items:
-            type: string
-        phoneNumbers:
-          type: array
-          items:
-            $ref: "#/components/schemas/PhoneNumberDTO"
-        emailAddresses:
-          type: array
-          items:
-            $ref: "#/components/schemas/EmailAddressDTO"
-        preferences:
-          $ref: "#/components/schemas/ContactPreferences"
-        primary:
-          type: boolean
-    CrmSnapshotDTO:
-      type: object
-      properties:
-        snapshotMetadata:
-          $ref: "#/components/schemas/SnapshotMetadata"
-        account:
-          $ref: "#/components/schemas/AccountSummary"
-        contacts:
-          type: array
-          items:
-            $ref: "#/components/schemas/ContactSummary"
-        vehicles:
-          type: array
-          items:
-            $ref: "#/components/schemas/VehicleSummary"
-        preferences:
-          $ref: "#/components/schemas/BillingPreferences"
-    EmailAddressDTO:
-      type: object
-      properties:
-        type:
-          type: string
-        address:
-          type: string
-    PhoneNumberDTO:
-      type: object
-      properties:
-        type:
-          type: string
-        number:
-          type: string
-    SnapshotMetadata:
-      type: object
-      properties:
-        snapshotId:
+        vendorBillId:
           type: string
           format: uuid
-        createdAt:
+          description: Vendor bill UUID
+          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor UUID
+          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+        vendorName:
+          type: string
+          description: Vendor name
+          example: Acme Supplies Ltd
+        billNumber:
+          type: string
+          description: Bill number
+          example: INV-2026-001234
+        billDate:
           type: string
           format: date-time
-        version:
-          type: string
-    VehicleSummary:
-      type: object
-      properties:
-        vehicleId:
-          type: string
-        vin:
-          type: string
-        licensePlate:
-          type: string
-        make:
-          type: string
-        model:
-          type: string
-        year:
-          type: integer
-          format: int32
-    ContactPointDto:
-      type: object
-      description: Contact point details
-      properties:
-        contactPointId:
-          type: string
-          format: uuid
-          description: Contact point ID
-        contactType:
-          type: string
-          description: Type of contact point
-          enum:
-          - EMAIL
-          - PHONE_MOBILE
-          - PHONE_HOME
-          - PHONE_WORK
-          - FAX
-          example: EMAIL
-        value:
-          type: string
-          description: Contact value
-          example: john.doe@example.com
-        primary:
-          type: boolean
-    GetPersonResponse:
-      type: object
-      description: Person details response
-      properties:
-        personId:
-          type: string
-          format: uuid
-          description: Unique identifier of the person
-          example: 550e8400-e29b-41d4-a716-446655440000
-        firstName:
-          type: string
-          description: First name
-          example: John
-        lastName:
-          type: string
-          description: Last name
-          example: Doe
-        displayName:
-          type: string
-          description: Display name
-          example: John Doe
-        preferredContactMethod:
-          type: string
-          description: Preferred contact method
-          enum:
-          - EMAIL
-          - PHONE_CALL
-          - SMS
-          - NONE
-          example: EMAIL
-        contactPoints:
-          type: array
-          description: "Contact points (emails, phones)"
-          items:
-            $ref: "#/components/schemas/ContactPointDto"
-        createdAt:
+          description: Bill date
+          example: 2026-01-15T00:00:00
+        dueDate:
           type: string
           format: date-time
-          description: Timestamp when the person was created
-        updatedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the person was last updated
-    AssignedRole:
-      type: object
-      properties:
-        roleCode:
-          type: string
-        roleLabel:
-          type: string
-        isPrimary:
-          type: boolean
-    ContactWithRoles:
-      type: object
-      properties:
-        contactId:
-          type: string
-        contactName:
-          type: string
-        email:
-          type: string
-        phone:
-          type: string
-        hasPrimaryEmail:
-          type: boolean
-        roles:
-          type: array
-          items:
-            $ref: "#/components/schemas/AssignedRole"
-        invoiceDeliveryMethod:
-          type: string
-    GetContactsWithRolesResponse:
-      type: object
-      properties:
-        partyId:
-          type: string
-        contacts:
-          type: array
-          items:
-            $ref: "#/components/schemas/ContactWithRoles"
-    GetCommunicationPreferencesResponse:
-      type: object
-      properties:
-        partyId:
-          type: string
-        version:
-          type: string
-        emailPreference:
-          type: string
-        smsPreference:
-          type: string
-        phonePreference:
-          type: string
-        marketingPreference:
-          type: string
-        consentFlags:
-          type: object
-          additionalProperties:
-            type: boolean
-        preferencesNote:
-          type: string
-        updatedAt:
-          type: string
-        updateSource:
-          type: string
-    ContactWithRole:
-      type: object
-      description: Contact information with role assignments
-      properties:
-        relationshipId:
-          type: string
-          format: uuid
-          description: Relationship ID
-        individualId:
-          type: string
-          format: uuid
-          description: Individual person ID
-        roles:
-          type: array
-          description: Roles assigned to this contact
-          items:
-            type: string
-            description: Role type for party relationships
-            enum:
-            - APPROVER
-            - BILLING
-            - PRIMARY_CONTACT
-            - DRIVER
-            - TECHNICAL
-          uniqueItems: true
+          description: Due date
+          example: 2026-02-14T00:00:00
+        totalAmount:
+          type: number
+          description: Total bill amount
+          example: 1200.0
+        openAmount:
+          type: number
+          description: Open/unpaid amount (eligible for payment)
+          example: 1200.0
         status:
           type: string
-          description: Status of the relationship
-          example: ACTIVE
-        effectiveFrom:
-          type: string
-          format: date
-          description: Effective start date
-        effectiveTo:
-          type: string
-          format: date
-          description: Effective end date (null if active)
-        individual:
-          $ref: "#/components/schemas/IndividualDetails"
-          description: Individual person details
-        primaryBilling:
-          type: boolean
-    GetCommercialAccountContactsResponse:
-      type: object
-      description: Contacts with roles for a commercial account
-      properties:
-        commercialAccountId:
-          type: string
-          description: ID of the commercial account
-        contacts:
-          type: array
-          description: List of contacts with their roles
-          items:
-            $ref: "#/components/schemas/ContactWithRole"
-    IndividualDetails:
-      type: object
-      description: Individual person details
-      properties:
-        displayName:
-          type: string
-          description: Display name
-          example: John Doe
-        email:
-          type: string
-          description: Primary email address
-        phone:
-          type: string
-          description: Primary phone number
-    GetAccountTierResponse:
-      type: object
-      description: Account tier information response
-      properties:
-        accountId:
-          type: string
-          description: Account/party identifier
-          example: 123e4567-e89b-12d3-a456-426614174000
-        tier:
-          type: string
-          description: Current tier level
+          description: Bill status
           enum:
-          - STANDARD
-          - BRONZE
-          - SILVER
-          - GOLD
-          - PLATINUM
-          - ENTERPRISE
-          example: GOLD
-        tierDisplayName:
-          type: string
-          description: Display name of the tier
-          example: Gold
-        tierAssignedAt:
-          type: string
-          format: date-time
-          description: When the tier was last assigned or updated
-        tierAssignedBy:
-          type: string
-          description: Who assigned or last modified the tier
-        notes:
-          type: string
-          description: Optional notes about tier assignment or status
-        manualOverride:
-          type: boolean
-          description: Whether tier was manually assigned or auto-calculated
-    GetPartyResponse:
-      type: object
-      properties:
-        partyId:
-          type: string
-        partyType:
-          type: string
-        legalName:
-          type: string
-        displayName:
-          type: string
-        taxId:
-          type: string
-        status:
-          type: string
-        billingTermsId:
-          type: string
-        createdAt:
-          type: string
-        modifiedAt:
-          type: string
+          - PENDING_RECEIPT_MATCH
+          - MATCH_EXCEPTION
+          - PENDING_REVIEW
+          - APPROVED
+          - REJECTED
+          - PAID
+          - CANCELLED
+          - VOIDED
+          example: APPROVED

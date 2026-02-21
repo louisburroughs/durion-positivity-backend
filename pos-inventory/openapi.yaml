@@ -45,19 +45,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "501":
-          description: Not implemented
+        "200":
+          description: Default locations returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
-        "200":
-          description: Default locations returned
+        "501":
+          description: Not implemented
           content:
-            application/json:
+            '*/*':
               schema:
                 type: array
                 items:
@@ -510,16 +510,16 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: Task not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CycleCountTaskResponse"
         "200":
           description: Task retrieved successfully
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CycleCountTaskResponse"
+        "404":
+          description: Task not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CycleCountTaskResponse"
   /api/inventory/cycleCount/task/{taskId}/history:
