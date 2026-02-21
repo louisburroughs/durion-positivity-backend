@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.event;
 
+import java.util.UUID;
+
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -9,6 +11,6 @@ import org.jspecify.annotations.NonNull;
  * @param aggregateType short type name, e.g. {@code "CycleCountAdjustment"}
  */
 public record AuditAggregateRef(
-        @NonNull String aggregateId,
-        @NonNull String aggregateType) {
+                @NonNull UUID aggregateId,
+                @NonNull String aggregateType) {
 }

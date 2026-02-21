@@ -71,7 +71,7 @@ class AuditTrailServiceTest {
     @InjectMocks
     private AuditTrailService service;
 
-    private UUID testActorId;
+    private String testActorId;
     private UUID testOrderId;
     private UUID testInvoiceId;
     private UUID testPaymentId;
@@ -79,7 +79,7 @@ class AuditTrailServiceTest {
 
     @BeforeEach
     void setUp() {
-        testActorId = UUID.randomUUID();
+        testActorId = UUID.randomUUID().toString();
         testOrderId = UUID.randomUUID();
         testInvoiceId = UUID.randomUUID();
         testPaymentId = UUID.randomUUID();

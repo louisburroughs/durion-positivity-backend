@@ -29,7 +29,7 @@ public class AuditTrailResponse {
 
     private UUID auditId;
     private ExceptionType exceptionType;
-    private UUID actorId;
+    private String actorId;
     private String actorRole;
     private Instant timestamp;
     private String reason;

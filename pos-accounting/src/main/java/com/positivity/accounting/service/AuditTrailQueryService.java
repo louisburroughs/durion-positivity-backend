@@ -65,7 +65,7 @@ public class AuditTrailQueryService {
         /**
          * Get audit entries by actor within a date range.
          */
-        public List<AuditTrailResponse> getByActorAndDateRange(UUID actorId,
+        public List<AuditTrailResponse> getByActorAndDateRange(String actorId,
                         Instant startDate,
                         Instant endDate) {
                 log.info("Querying audit entries for actor {} between {} and {}",

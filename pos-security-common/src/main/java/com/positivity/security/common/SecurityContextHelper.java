@@ -69,7 +69,8 @@ public final class SecurityContextHelper {
      * Resolves from gateway-injected authentication details (`X-User-Id`) when
      * available. Falls back to principal/username for compatibility.
      *
-     * @return Optional containing stable user ID/person ID, or empty if unauthenticated
+     * @return Optional containing stable user ID/person ID, or empty if
+     *         unauthenticated
      */
     public static Optional<String> getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -109,7 +110,7 @@ public final class SecurityContextHelper {
             return Collections.emptySet();
         }
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
-        if (authorities == null) {
+        if (authorities.isEmpty()) {
             return Collections.emptySet();
         }
         return authorities.stream()

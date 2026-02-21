@@ -7,10 +7,11 @@ import org.jspecify.annotations.NonNull;
  * context
  * per ADR-0018 (audit actor fields from security context).
  *
- * @param userId   stable person/user identifier (from {@code X-User-Id} header)
- * @param username display name / login (from {@code X-User} header)
+ * @param personId stable person/user identifier (from JWT claim or security
+ *                 context)
+ * @param username display name / login (from JWT claim or security context)
  */
 public record AuditActorRef(
-        @NonNull String userId,
-        @NonNull String username) {
+                @NonNull String personId,
+                @NonNull String username) {
 }

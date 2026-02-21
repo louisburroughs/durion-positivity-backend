@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.audit.repository.AuditTrailEntryReposi
 import com.positivity.accounting.internal.enums.AccountingIntent;
 import com.positivity.accounting.internal.enums.AccountingStatus;
 import com.positivity.accounting.internal.enums.CancellationType;
+import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +57,7 @@ public class AuditTrailService {
         public AuditTrailResponse recordPriceOverride(PriceOverrideRequest request) {
                 log.info("Recording price override for order {} line {}",
                                 request.getOrderId(), request.getLineItemId());
+                String actorId = resolveActorId();
 
                 // Validate authorization
                 PriceOverrideAuthorizationService.AuthorizationResult authResult = overrideAuthService.validate(
@@ -71,7 +73,7 @@ public class AuditTrailService {
                         // Emit denial event
                         eventPublisher.publishEvent(AuthorizationDenied.builder()
                                         .exceptionType(ExceptionType.PRICE_OVERRIDE)
-                                        .actorId(request.getActorId())
+                                        .actorId(actorId)
                                         .actorRole(request.getActorRole())
                                         .reasonDenied(authResult.getMessage())
                                         .policyVersion(authResult.getPolicyVersion())
@@ -91,7 +93,7 @@ public class AuditTrailService {
                 // Create audit entry
                 AuditTrailEntry entry = AuditTrailEntry.builder()
                                 .exceptionType(ExceptionType.PRICE_OVERRIDE)
-                                .actorId(request.getActorId())
+                                .actorId(actorId)
                                 .actorRole(request.getActorRole())
                                 .reason(request.getReason())
                                 .authorizationLevel(authResult.getAuthorizationLevel())
@@ -146,6 +148,7 @@ public class AuditTrailService {
         public AuditTrailResponse recordRefund(RefundRequest request) {
                 log.info("Recording refund for invoice {} payment {}",
                                 request.getInvoiceId(), request.getPaymentId());
+                String actorId = resolveActorId();
 
                 // Validate authorization
                 RefundAuthorizationService.RefundAuthorizationResult authResult = refundAuthService.validate(
@@ -159,7 +162,7 @@ public class AuditTrailService {
                         // Emit denial event
                         eventPublisher.publishEvent(AuthorizationDenied.builder()
                                         .exceptionType(ExceptionType.REFUND)
-                                        .actorId(request.getActorId())
+                                        .actorId(actorId)
                                         .actorRole(request.getActorRole())
                                         .reasonDenied(authResult.getMessage())
                                         .policyVersion(authResult.getPolicyVersion())
@@ -184,7 +187,7 @@ public class AuditTrailService {
                 // Create audit entry
                 AuditTrailEntry entry = AuditTrailEntry.builder()
                                 .exceptionType(ExceptionType.REFUND)
-                                .actorId(request.getActorId())
+                                .actorId(actorId)
                                 .actorRole(request.getActorRole())
                                 .reason(request.getReason())
                                 .authorizationLevel(request.getActorRole())
@@ -242,6 +245,7 @@ public class AuditTrailService {
         public AuditTrailResponse recordCancellation(CancellationRequest request) {
                 log.info("Recording cancellation of type {} for order {} invoice {}",
                                 request.getCancellationType(), request.getOrderId(), request.getInvoiceId());
+                String actorId = resolveActorId();
 
                 // Determine accounting intent based on cancellation type
                 AccountingIntent accountingIntent = request.getCancellationType() == CancellationType.ORDER_CANCELLED
@@ -251,7 +255,7 @@ public class AuditTrailService {
                 // Create audit entry
                 AuditTrailEntry entry = AuditTrailEntry.builder()
                                 .exceptionType(ExceptionType.CANCELLATION)
-                                .actorId(request.getActorId())
+                                .actorId(actorId)
                                 .actorRole(request.getActorRole())
                                 .reason(request.getReason())
                                 .authorizationLevel(request.getActorRole())
@@ -344,6 +348,10 @@ public class AuditTrailService {
                         log.error("Failed to serialize object to JSON", e);
                         return "{}";
                 }
+        }
+
+        private String resolveActorId() {
+                return SecurityContextHelper.getCurrentUserIdOrDefault("system");
         }
 
         /**
