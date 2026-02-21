@@ -6,8 +6,11 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
+import com.positivity.shared.id.UUIDv7Generator;
+
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Immutable ledger entry representing a single inventory transaction.
@@ -25,8 +28,7 @@ import java.time.Instant;
 public class InventoryLedgerEntry {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long ledgerEntryId;
+    private UUID ledgerEntryId;
 
     /**
      * SKU identifier for the stock item.
@@ -38,7 +40,7 @@ public class InventoryLedgerEntry {
      * Reference to the source adjustment that created this entry.
      * Null for non-adjustment transactions (e.g., sales, receipts).
      */
-    private Long adjustmentId;
+    private UUID adjustmentId;
 
     /**
      * Type of inventory event (e.g., ADJUST_CYCLE_COUNT, GOODS_RECEIPT,
@@ -94,6 +96,9 @@ public class InventoryLedgerEntry {
 
     @PrePersist
     protected void onCreate() {
+        if (ledgerEntryId == null) {
+            ledgerEntryId = UUIDv7Generator.generate();
+        }
         if (timestamp == null) {
             timestamp = Instant.now();
         }

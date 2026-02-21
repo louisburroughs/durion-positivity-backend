@@ -12,7 +12,7 @@ import java.util.UUID;
  *
  * Issue: CAP-170 (#46)
  */
-public interface NormalizedAvailabilityRepository extends JpaRepository<NormalizedAvailability, Long> {
+public interface NormalizedAvailabilityRepository extends JpaRepository<NormalizedAvailability, UUID> {
 
     Optional<NormalizedAvailability> findByProductIdAndManufacturerIdAndAsOf(UUID productId, String manufacturerId,
             Instant asOf);

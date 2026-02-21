@@ -8,12 +8,13 @@ import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository for {@link ApprovalThresholdConfig} entities.
  */
 @Repository
-public interface ApprovalThresholdConfigRepository extends JpaRepository<ApprovalThresholdConfig, Long> {
+public interface ApprovalThresholdConfigRepository extends JpaRepository<ApprovalThresholdConfig, UUID> {
     
     /**
      * Find configuration for a specific approval tier.

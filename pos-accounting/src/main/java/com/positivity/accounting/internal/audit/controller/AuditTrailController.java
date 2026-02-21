@@ -178,7 +178,7 @@ public class AuditTrailController {
     })
     @GetMapping("/actor/{actorId}")
     public ResponseEntity<List<AuditTrailResponse>> getByActor(
-            @Parameter(description = "Actor (User) ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID actorId,
+            @Parameter(description = "Actor (User) ID", required = true, example = "person-12345") @PathVariable String actorId,
             @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         List<AuditTrailResponse> entries = queryService.getByActorAndDateRange(actorId, startDate, endDate);

@@ -5,6 +5,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.security.common.SecurityContextHelper;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -42,7 +43,6 @@ import java.util.UUID;
  */
 @Service
 public class WorkorderPartAdjustmentService {
-
     private static final Logger log = LoggerFactory.getLogger(WorkorderPartAdjustmentService.class);
 
     private final WorkorderPartRepository workorderPartRepository;
@@ -91,6 +91,7 @@ public class WorkorderPartAdjustmentService {
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -152,7 +153,7 @@ public class WorkorderPartAdjustmentService {
                 .substitutedWithPartId(substitutePart.getId())
                 .quantityAdjustment(BigDecimal.ZERO) // No quantity change, just substitution
                 .reason(reason)
-                .performedBy(performedBy)
+                .performedBy(actorId)
                 .performedAt(Instant.now())
                 .notes(notes)
                 .build();
@@ -197,6 +198,7 @@ public class WorkorderPartAdjustmentService {
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -247,7 +249,7 @@ public class WorkorderPartAdjustmentService {
                 .substitutedWithPartId(null)
                 .quantityAdjustment(quantity.negate()) // Negative for return
                 .reason(reason)
-                .performedBy(performedBy)
+                .performedBy(actorId)
                 .performedAt(Instant.now())
                 .notes(notes)
                 .build();
@@ -287,6 +289,7 @@ public class WorkorderPartAdjustmentService {
             @NonNull UUID performedBy,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -335,7 +338,7 @@ public class WorkorderPartAdjustmentService {
                 .substitutedWithPartId(null)
                 .quantityAdjustment(adjustment)
                 .reason(reason)
-                .performedBy(performedBy)
+                .performedBy(actorId)
                 .performedAt(Instant.now())
                 .notes(notes)
                 .build();

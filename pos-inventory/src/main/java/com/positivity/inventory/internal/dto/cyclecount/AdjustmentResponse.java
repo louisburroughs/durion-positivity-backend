@@ -7,6 +7,7 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
 import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
@@ -20,7 +21,7 @@ import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
 @Builder
 public class AdjustmentResponse {
     
-    private Long adjustmentId;
+    private UUID adjustmentId;
     private String stockItemId;
     private String reasonCode;
     private Integer quantityChange;
@@ -38,7 +39,7 @@ public class AdjustmentResponse {
     private Instant approvedAt;
     private Instant rejectedAt;
     private Instant postedAt;
-    private Long ledgerEntryId;
+    private UUID ledgerEntryId;
     private String errorMessage;
     private BigDecimal varianceValue;
     private BigDecimal variancePercentage;

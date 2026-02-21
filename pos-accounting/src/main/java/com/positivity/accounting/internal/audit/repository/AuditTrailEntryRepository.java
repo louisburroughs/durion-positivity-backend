@@ -45,7 +45,7 @@ public interface AuditTrailEntryRepository extends JpaRepository<AuditTrailEntry
             "AND a.timestamp BETWEEN :startDate AND :endDate " +
             "ORDER BY a.timestamp ASC")
     List<AuditTrailEntry> findByActorAndDateRange(
-            @Param("actorId") UUID actorId,
+            @Param("actorId") String actorId,
             @Param("startDate") Instant startDate,
             @Param("endDate") Instant endDate);
 

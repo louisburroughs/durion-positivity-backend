@@ -36,7 +36,7 @@ public class WorkorderStateTransition {
     private LocalDateTime updatedAt;
 
     @Column(nullable = false)
-    private UUID transitionedBy;
+    private String transitionedBy;
 
     @Column(columnDefinition = "TEXT")
     private String reason;

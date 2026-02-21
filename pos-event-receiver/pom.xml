@@ -121,6 +121,9 @@
                     <plugin>
                         <groupId>org.springframework.boot</groupId>
                         <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <jmxPort>9107</jmxPort>
+                        </configuration>
                         <executions>
                             <execution>
                                 <id>start-for-openapi</id>

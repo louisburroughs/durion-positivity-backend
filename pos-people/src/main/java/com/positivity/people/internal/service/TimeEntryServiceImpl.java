@@ -6,6 +6,7 @@ import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.service.TimeEntryService;
+import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimeEntryServiceImpl implements TimeEntryService {
-
     private final TimeEntryRepository repository;
     private final TimeEntryAuditRepository auditRepository;
 
@@ -35,6 +35,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()
@@ -53,7 +54,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
                     TimeEntryAudit audit = new TimeEntryAudit();
                     audit.setTimeEntryId(id);
                     audit.setAction("APPROVE_ATTEMPT_NOT_FOUND");
-                    audit.setActorId(approverUserId);
+                    audit.setActorId(auditActorId);
                     audit.setCorrelationId(correlationId);
                     audit.setDetails("Time entry not found during approve attempt");
                     auditRepository.save(audit);
@@ -89,7 +90,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
                     TimeEntryAudit audit = new TimeEntryAudit();
                     audit.setTimeEntryId(id);
                     audit.setAction("APPROVE_FORBIDDEN");
-                    audit.setActorId(approverUserId);
+                    audit.setActorId(auditActorId);
                     audit.setCorrelationId(correlationId);
                     audit.setDetails("Permission denied");
                     auditRepository.save(audit);
@@ -109,7 +110,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
                 TimeEntryAudit audit = new TimeEntryAudit();
                 audit.setTimeEntryId(id);
                 audit.setAction("APPROVED");
-                audit.setActorId(approverUserId);
+                audit.setActorId(auditActorId);
                 audit.setCorrelationId(correlationId);
                 audit.setDetails("Approved via batch API");
                 auditRepository.save(audit);
@@ -130,6 +131,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         List<TimeEntryDecisionResult> results = new ArrayList<>();
         if (timeEntryIds == null || timeEntryIds.isEmpty())
             return results;
+        String auditActorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
 
         // Convert String IDs to UUIDs for repository query
         List<UUID> uuidIds = timeEntryIds.stream()
@@ -148,7 +150,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
                     TimeEntryAudit audit = new TimeEntryAudit();
                     audit.setTimeEntryId(id);
                     audit.setAction("REJECT_ATTEMPT_NOT_FOUND");
-                    audit.setActorId(rejectorUserId);
+                    audit.setActorId(auditActorId);
                     audit.setCorrelationId(correlationId);
                     audit.setDetails("Time entry not found during reject attempt");
                     auditRepository.save(audit);
@@ -184,7 +186,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
                     TimeEntryAudit audit = new TimeEntryAudit();
                     audit.setTimeEntryId(id);
                     audit.setAction("REJECT_FORBIDDEN");
-                    audit.setActorId(rejectorUserId);
+                    audit.setActorId(auditActorId);
                     audit.setCorrelationId(correlationId);
                     audit.setDetails("Permission denied");
                     auditRepository.save(audit);
@@ -206,7 +208,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
                 TimeEntryAudit audit = new TimeEntryAudit();
                 audit.setTimeEntryId(id);
                 audit.setAction("REJECTED");
-                audit.setActorId(rejectorUserId);
+                audit.setActorId(auditActorId);
                 audit.setCorrelationId(correlationId);
                 audit.setDetails(
                         "Rejected via batch API. Reason: " + (rejectionReason != null ? rejectionReason : "N/A"));

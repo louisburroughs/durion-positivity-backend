@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -18,6 +19,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.accounting.internal.audit.dto.AuditTrailResponse;
 import com.positivity.accounting.internal.audit.dto.CancellationRequest;
@@ -71,7 +74,7 @@ class AuditTrailServiceTest {
     @InjectMocks
     private AuditTrailService service;
 
-    private UUID testActorId;
+    private String testActorId;
     private UUID testOrderId;
     private UUID testInvoiceId;
     private UUID testPaymentId;
@@ -79,11 +82,21 @@ class AuditTrailServiceTest {
 
     @BeforeEach
     void setUp() {
-        testActorId = UUID.randomUUID();
+        testActorId = UUID.randomUUID().toString();
         testOrderId = UUID.randomUUID();
         testInvoiceId = UUID.randomUUID();
         testPaymentId = UUID.randomUUID();
         testLineItemId = UUID.randomUUID();
+
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken("test-user", null);
+        authentication.setAuthenticated(true);
+        authentication.setDetails(java.util.Map.of("userId", testActorId));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     // ===== PRICE OVERRIDE TESTS =====

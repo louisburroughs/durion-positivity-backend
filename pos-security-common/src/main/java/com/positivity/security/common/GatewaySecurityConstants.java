@@ -48,6 +48,12 @@ public final class GatewaySecurityConstants {
     public static final String HEADER_USER = "X-User";
 
     /**
+     * Header containing the stable authenticated person identifier.
+     * Injected by pos-api-gateway after JWT validation.
+     */
+    public static final String HEADER_USER_ID = "X-User-Id";
+
+    /**
      * Header containing the original JWT token (optional, for audit/logging).
      * Not used for authentication - headers are trusted instead.
      */
@@ -62,4 +68,14 @@ public final class GatewaySecurityConstants {
      * Prefix for role-based authorities.
      */
     public static final String ROLE_PREFIX = "ROLE_";
+
+    /**
+     * Authentication details map key for stable person identifier.
+     */
+    public static final String DETAIL_USER_ID = "userId";
+
+    /**
+     * Authentication details map key for username/display principal.
+     */
+    public static final String DETAIL_USERNAME = "username";
 }

@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
+import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.model.InventoryLedgerEntry;
 import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -8,6 +9,7 @@ import com.positivity.inventory.service.InventoryAvailabilityService;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Comparator;
 import java.util.List;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
  * Issue: CAP-170 (#48)
  */
 @Service
+@Slf4j
 public class InventoryAvailabilityServiceImpl implements InventoryAvailabilityService {
 
     private static final String DEFAULT_LOCATION = "DEFAULT";
@@ -35,21 +38,44 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     @Override
     @Transactional(readOnly = true)
     public List<LocationAvailabilityDto> getAvailabilityByProduct(@NonNull UUID productId) {
+        if (productId == null) {
+            throw new InvalidInventoryAvailabilityRequestException("Product ID is required");
+        }
+
         // Issue #48: Resolve per-location on-hand and ATP from ledger entries.
-        List<InventoryLedgerEntry> ledgerEntries = inventoryLedgerEntryRepository
-                .findByStockItemIdOrderByTimestampAsc(productId.toString());
+        List<InventoryLedgerEntry> ledgerEntries;
+        try {
+            ledgerEntries = inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString());
+        } catch (Exception ex) {
+            log.error("Failed retrieving inventory availability ledger entries for product {}", productId, ex);
+            throw new IllegalStateException("Unable to retrieve inventory availability at this time", ex);
+        }
 
         if (ledgerEntries.isEmpty()) {
             return List.of();
         }
 
         Map<String, List<InventoryLedgerEntry>> entriesByLocation = ledgerEntries.stream()
+                .filter(this::isProcessableEntry)
                 .collect(Collectors.groupingBy(this::resolveLocationId));
 
         return entriesByLocation.entrySet().stream()
                 .map(entry -> toLocationAvailability(entry.getKey(), entry.getValue()))
                 .sorted(Comparator.comparing(LocationAvailabilityDto::getLocationId))
                 .toList();
+    }
+
+    private boolean isProcessableEntry(InventoryLedgerEntry ledgerEntry) {
+        if (ledgerEntry == null) {
+            log.warn("Skipping null inventory ledger entry while computing availability");
+            return false;
+        }
+        if (ledgerEntry.getChangeInQuantity() == null) {
+            log.warn("Skipping inventory ledger entry {} with null changeInQuantity",
+                    ledgerEntry.getLedgerEntryId());
+            return false;
+        }
+        return true;
     }
 
     private String resolveLocationId(InventoryLedgerEntry ledgerEntry) {
@@ -62,7 +88,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private LocationAvailabilityDto toLocationAvailability(String locationId, List<InventoryLedgerEntry> entries) {
         int onHandQuantity = entries.stream()
                 .filter(ledgerEntry -> ledgerEntry.getEventType() != null && ledgerEntry.getEventType().affectsOnHand())
-                .mapToInt(InventoryLedgerEntry::getChangeInQuantity)
+                .mapToInt(ledgerEntry -> ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity() : 0)
                 .sum();
 
         int activeReservations = entries.stream()
@@ -86,9 +112,19 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         }
 
         return switch (eventType) {
-            case RESERVATION_CREATED, ALLOCATION_CREATED -> ledgerEntry.getChangeInQuantity();
-            case RESERVATION_RELEASED, ALLOCATION_RELEASED -> -ledgerEntry.getChangeInQuantity();
+            case RESERVATION_CREATED, ALLOCATION_CREATED -> safeQuantity(ledgerEntry);
+            case RESERVATION_RELEASED, ALLOCATION_RELEASED -> -safeQuantity(ledgerEntry);
             default -> 0;
         };
+    }
+
+    private int safeQuantity(InventoryLedgerEntry ledgerEntry) {
+        Integer quantity = ledgerEntry.getChangeInQuantity();
+        if (quantity == null) {
+            log.warn("Ledger entry {} has null changeInQuantity; treating as 0",
+                    ledgerEntry.getLedgerEntryId());
+            return 0;
+        }
+        return quantity;
     }
 }

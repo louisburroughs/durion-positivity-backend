@@ -174,14 +174,14 @@ paths:
               $ref: "#/components/schemas/ApprovePriceOverrideRequest"
         required: true
       responses:
-        "200":
-          description: Override approved
+        "400":
+          description: Invalid request or override not in pending state
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PriceOverride"
-        "400":
-          description: Invalid request or override not in pending state
+        "200":
+          description: Override approved
           content:
             '*/*':
               schema:
@@ -407,9 +407,9 @@ components:
           format: date-time
         requiresApproval:
           type: boolean
-        discountPercentage:
-          type: number
         discountAmount:
+          type: number
+        discountPercentage:
           type: number
     ApprovePriceOverrideRequest:
       type: object

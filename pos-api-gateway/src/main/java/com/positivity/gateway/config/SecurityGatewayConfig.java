@@ -20,6 +20,7 @@ import java.util.Set;
 
 @Configuration
 public class SecurityGatewayConfig {
+    private static final String TOKEN2 = "token";
     private static final Logger log = LoggerFactory.getLogger(SecurityGatewayConfig.class);
 
     /**
@@ -97,7 +98,7 @@ public class SecurityGatewayConfig {
             // Validate token
             return securityWebClient.get()
                     .uri(uriBuilder -> uriBuilder.path("/v1/auth/validate")
-                            .queryParam("token", token)
+                            .queryParam(TOKEN2, token)
                             .build())
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<java.util.Map<String, Boolean>>() {
@@ -111,7 +112,7 @@ public class SecurityGatewayConfig {
                         // Fetch authorities
                         Mono<Set<String>> authoritiesMono = securityWebClient.get()
                                 .uri(uriBuilder -> uriBuilder.path("/v1/auth/authorities")
-                                        .queryParam("token", token)
+                                        .queryParam(TOKEN2, token)
                                         .build())
                                 .retrieve()
                                 .bodyToMono(new ParameterizedTypeReference<Set<String>>() {
@@ -120,20 +121,30 @@ public class SecurityGatewayConfig {
                         // Fetch subject (optional)
                         Mono<String> subjectMono = securityWebClient.get()
                                 .uri(uriBuilder -> uriBuilder.path("/v1/auth/subject")
-                                        .queryParam("token", token)
+                                        .queryParam(TOKEN2, token)
                                         .build())
                                 .retrieve()
                                 .bodyToMono(String.class)
                                 .onErrorReturn("unknown");
 
-                        return Mono.zip(authoritiesMono, subjectMono)
+                        Mono<String> personIdMono = securityWebClient.get()
+                                .uri(uriBuilder -> uriBuilder.path("/v1/auth/person-id")
+                                        .queryParam(TOKEN2, token)
+                                        .build())
+                                .retrieve()
+                                .bodyToMono(String.class)
+                                .onErrorReturn("unknown");
+
+                        return Mono.zip(authoritiesMono, subjectMono, personIdMono)
                                 .flatMap(tuple -> {
                                     Set<String> authorities = tuple.getT1();
                                     String subject = tuple.getT2();
+                                    String personId = tuple.getT3();
                                     String authHeaderValue = String.join(",", authorities);
                                     ServerHttpRequest mutated = exchange.getRequest().mutate()
                                             .header("X-Authorities", authHeaderValue)
                                             .header("X-User", subject)
+                                            .header("X-User-Id", personId)
                                             .build();
                                     return chain.filter(exchange.mutate().request(mutated).build());
                                 });

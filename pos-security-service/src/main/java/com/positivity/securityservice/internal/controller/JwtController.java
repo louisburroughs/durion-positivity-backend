@@ -83,6 +83,7 @@ public class JwtController {
 
         String token = jwtService.generateToken(
                 request.subject(),
+                request.personId(),
                 request.roles() != null ? request.roles() : Set.of());
 
         return ResponseEntity.ok(TokenResponse.of(token));
@@ -124,6 +125,7 @@ public class JwtController {
 
         JwtService.TokenPair tokenPair = jwtService.generateTokenPair(
                 request.subject(),
+                request.personId(),
                 request.roles() != null ? request.roles() : Set.of());
 
         return ResponseEntity.ok(TokenPairResponse.of(tokenPair.accessToken(), tokenPair.refreshToken()));
@@ -273,6 +275,24 @@ public class JwtController {
         }
         String subject = jwtService.getUsernameFromToken(token);
         return ResponseEntity.ok(subject);
+    }
+
+    /**
+     * Extracts and returns the stable person identifier from a valid JWT token.
+     *
+     * @param token JWT token
+     * @return personId or 401 if token invalid
+     */
+    @Operation(summary = "Extract personId from JWT token", description = "Get the stable person identifier from a JWT token")
+    @ApiResponse(responseCode = "200", description = "personId extracted successfully")
+    @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @GetMapping("/person-id")
+    public ResponseEntity<String> getPersonId(@RequestParam String token) {
+        if (!jwtService.validateToken(token)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String personId = jwtService.getPersonIdFromToken(token);
+        return ResponseEntity.ok(personId);
     }
 
     /**

@@ -33,6 +33,7 @@ import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -517,12 +518,13 @@ public class WorkorderService {
     private void createApprovalInvalidationAudit(Workorder workorder,
             WorkorderStatus oldStatus,
             EstimateRevisedEvent event) {
+        String actorId = SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
         AuditEvent audit = AuditEvent.builder()
                 .entityType("Workorder")
                 .entityId(workorder.getId())
                 .eventType("approval.invalidated")
                 .eventTimestamp(event.getTimestamp())
-                .userId(event.getChangedBy())
+                .userId(actorId)
                 .details(String.format(
                         "Approval invalidated due to estimate revision. " +
                                 "Previous status: %s, New status: %s, " +

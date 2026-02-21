@@ -101,9 +101,9 @@ public class WorkorderPartAdjustmentEvent {
     /**
      * User who performed the adjustment.
      */
-    @Column(name = "performed_by", nullable = false, columnDefinition = "UUID")
+    @Column(name = "performed_by", nullable = false, length = 255)
     @NonNull
-    private UUID performedBy;
+    private String performedBy;
 
     /**
      * When the adjustment occurred.

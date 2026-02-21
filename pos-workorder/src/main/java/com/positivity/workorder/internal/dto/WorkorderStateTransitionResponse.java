@@ -32,8 +32,8 @@ public class WorkorderStateTransitionResponse {
     @Schema(description = "Timestamp when the transition occurred")
     private Instant transitionedAt;
 
-    @Schema(description = "User ID who performed the transition", example = "550e8400-e29b-41d4-a716-446655440000")
-    private UUID transitionedBy;
+    @Schema(description = "Stable actor identifier who performed the transition", example = "550e8400-e29b-41d4-a716-446655440000")
+    private String transitionedBy;
 
     @Schema(description = "Reason for the transition", example = "Customer approved the estimate")
     private String reason;

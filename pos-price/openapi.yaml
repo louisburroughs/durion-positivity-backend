@@ -1,0 +1,230 @@
+openapi: 3.1.0
+info:
+  title: Price API
+  description: API for managing pricing and price restrictions in the POS system
+  version: "1.0"
+servers:
+- url: http://localhost:8086
+  description: Generated server url
+tags:
+- name: Price Normalization
+  description: Price normalization and standardization operations
+- name: Price Restrictions
+  description: Price restriction evaluation and override operations
+- name: Price Quotes
+  description: Contextual price quote operations
+paths:
+  /v1/price/restrictions:override:
+    post:
+      tags:
+      - Price Restrictions
+      summary: Override price restrictions
+      description: Override price restrictions for a specific context or condition.
+      operationId: overrideRestrictions
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "400":
+          description: Invalid request body.
+          content:
+            '*/*':
+              schema: {}
+        "501":
+          description: Not yet implemented.
+          content:
+            '*/*':
+              schema: {}
+        "500":
+          description: Internal server error.
+          content:
+            '*/*':
+              schema: {}
+        "403":
+          description: Insufficient permissions to override restrictions.
+          content:
+            '*/*':
+              schema: {}
+  /v1/price/restrictions:evaluate:
+    post:
+      tags:
+      - Price Restrictions
+      summary: Evaluate price restrictions
+      description: Evaluate whether a price is within allowed restrictions.
+      operationId: evaluateRestrictions
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "400":
+          description: Invalid request body.
+          content:
+            '*/*':
+              schema: {}
+        "501":
+          description: Not yet implemented.
+          content:
+            '*/*':
+              schema: {}
+        "500":
+          description: Internal server error.
+          content:
+            '*/*':
+              schema: {}
+  /v1/price/quotes:
+    post:
+      tags:
+      - Price Quotes
+      operationId: calculatePriceQuote
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PriceQuoteRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceQuoteResponse"
+  /v1/price/normalize:
+    post:
+      tags:
+      - Price Normalization
+      summary: Normalize pricing
+      description: Normalize and standardize pricing data across the system.
+      operationId: normalizePricing
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "400":
+          description: Invalid request body.
+          content:
+            '*/*':
+              schema: {}
+        "501":
+          description: Not yet implemented.
+          content:
+            '*/*':
+              schema: {}
+        "500":
+          description: Internal server error.
+          content:
+            '*/*':
+              schema: {}
+  /v1/price/snapshots/{snapshotId}:
+    get:
+      tags:
+      - pricing-snapshot-controller
+      operationId: getSnapshot
+      parameters:
+      - name: snapshotId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PricingSnapshotResponse"
+components:
+  schemas:
+    PriceQuoteRequest:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        locationId:
+          type: string
+          format: uuid
+        customerTierId:
+          type: string
+          format: uuid
+        effectiveTimestamp:
+          type: string
+          format: date-time
+      required:
+      - customerTierId
+      - locationId
+      - productId
+      - quantity
+    MoneyAmount:
+      type: object
+      properties:
+        amount:
+          type: number
+        currency:
+          type: string
+    PriceQuoteResponse:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+        msrp:
+          $ref: "#/components/schemas/MoneyAmount"
+        unitPrice:
+          $ref: "#/components/schemas/MoneyAmount"
+        extendedPrice:
+          $ref: "#/components/schemas/MoneyAmount"
+        priceSource:
+          type: string
+        pricingBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricingBreakdownEntry"
+        warnings:
+          type: array
+          items:
+            type: string
+    PricingBreakdownEntry:
+      type: object
+      properties:
+        ruleName:
+          type: string
+        ruleType:
+          type: string
+        adjustment:
+          $ref: "#/components/schemas/MoneyAmount"
+        resultingValue:
+          $ref: "#/components/schemas/MoneyAmount"
+    PricingSnapshotResponse:
+      type: object
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        sourceContext:
+          type: string
+        itemIdentifier:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        prices:
+          type: string
+        appliedRules:
+          type: string
+        policyVersion:
+          type: string

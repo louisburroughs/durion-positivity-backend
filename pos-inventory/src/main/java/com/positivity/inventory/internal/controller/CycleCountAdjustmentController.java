@@ -1,6 +1,27 @@
 package com.positivity.inventory.internal.controller;
 
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
+import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
+import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
+import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
+import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
+import com.positivity.inventory.service.CycleCountAdjustmentService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -8,15 +29,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import com.positivity.inventory.internal.dto.cyclecount.*;
-import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
-import com.positivity.inventory.service.CycleCountAdjustmentService;
-
-import java.util.List;
 
 /**
  * REST controller for cycle count adjustment operations.
@@ -81,10 +93,11 @@ public class CycleCountAdjustmentController {
     @ApiResponse(responseCode = "400", description = "Adjustment not found or not in approvable state")
     @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
     public ResponseEntity<AdjustmentResponse> approveAdjustment(
-            @Parameter(description = "Adjustment ID", required = true) @PathVariable Long adjustmentId,
-            @Valid @RequestBody ApproveAdjustmentRequest request) {
+            @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
+            @Valid @RequestBody ApproveAdjustmentRequest request,
+            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         log.info("Received request to approve adjustment {}", adjustmentId);
-        AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request);
+        AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request, correlationId);
         return ResponseEntity.ok(response);
     }
 
@@ -94,6 +107,7 @@ public class CycleCountAdjustmentController {
      * <p>
      * Requires the user to have INVENTORY_ADJUSTMENT_APPROVE permission.
      * Rejection is final - no changes are made to inventory.
+     * 
      * 
      * @param adjustmentId the adjustment ID
      * @param request      the rejection request with reason
@@ -106,7 +120,7 @@ public class CycleCountAdjustmentController {
     @ApiResponse(responseCode = "400", description = "Adjustment not found or not in rejectable state")
     @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
     public ResponseEntity<AdjustmentResponse> rejectAdjustment(
-            @Parameter(description = "Adjustment ID", required = true) @PathVariable Long adjustmentId,
+            @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
             @Valid @RequestBody RejectAdjustmentRequest request) {
         log.info("Received request to reject adjustment {}", adjustmentId);
         AdjustmentResponse response = adjustmentService.rejectAdjustment(adjustmentId, request);
@@ -124,7 +138,7 @@ public class CycleCountAdjustmentController {
     @ApiResponse(responseCode = "200", description = "Adjustment found")
     @ApiResponse(responseCode = "404", description = "Adjustment not found")
     public ResponseEntity<AdjustmentResponse> getAdjustment(
-            @Parameter(description = "Adjustment ID", required = true) @PathVariable Long adjustmentId) {
+            @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId) {
         AdjustmentResponse response = adjustmentService.getAdjustment(adjustmentId);
         return ResponseEntity.ok(response);
     }
@@ -155,7 +169,8 @@ public class CycleCountAdjustmentController {
     @Operation(summary = "List pending approvals", description = "Lists all adjustments awaiting approval")
     @ApiResponse(responseCode = "200", description = "Pending adjustments retrieved")
     public ResponseEntity<List<AdjustmentResponse>> listPendingApprovals() {
-        List<AdjustmentResponse> response = adjustmentService.listPendingApprovals();
+        List<AdjustmentResponse> response = adjustmentService
+                .listAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
         return ResponseEntity.ok(response);
     }
 
@@ -168,7 +183,7 @@ public class CycleCountAdjustmentController {
     @Operation(summary = "Count pending approvals", description = "Returns the count of adjustments awaiting approval")
     @ApiResponse(responseCode = "200", description = "Count retrieved")
     public ResponseEntity<Long> countPendingApprovals() {
-        long count = adjustmentService.countPendingApprovals();
+        long count = adjustmentService.countAdjustmentsByStatus(AdjustmentStatus.PENDING_APPROVAL);
         return ResponseEntity.ok(count);
     }
 }

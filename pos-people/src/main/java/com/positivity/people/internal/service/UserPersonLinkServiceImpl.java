@@ -65,7 +65,7 @@ public class UserPersonLinkServiceImpl implements UserPersonLinkService {
         link.setUserId(userId);
         link.setPersonId(personId);
         link.setLinkType("PRIMARY");
-        link.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USER));
+        link.setCreatedBy(SecurityContextHelper.getCurrentUserIdOrDefault(SYSTEM_USER));
         try {
             UserPersonLink saved = linkRepository.save(link);
             return toResponse(saved);

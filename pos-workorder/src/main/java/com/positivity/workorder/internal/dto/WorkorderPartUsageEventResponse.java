@@ -38,7 +38,7 @@ public class WorkorderPartUsageEventResponse {
     private BigDecimal quantity;
 
     @NonNull
-    private UUID performedBy;
+    private String performedBy;
 
     @NonNull
     private Instant performedAt;
