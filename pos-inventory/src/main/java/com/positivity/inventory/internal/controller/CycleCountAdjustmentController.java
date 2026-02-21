@@ -95,12 +95,9 @@ public class CycleCountAdjustmentController {
     public ResponseEntity<AdjustmentResponse> approveAdjustment(
             @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
             @Valid @RequestBody ApproveAdjustmentRequest request,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestHeader(value = "X-User", required = false) String username,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         log.info("Received request to approve adjustment {}", adjustmentId);
-        AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request, userId, username,
-                correlationId);
+        AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request, correlationId);
         return ResponseEntity.ok(response);
     }
 

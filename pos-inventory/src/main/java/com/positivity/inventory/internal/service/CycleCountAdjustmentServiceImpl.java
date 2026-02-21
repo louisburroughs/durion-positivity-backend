@@ -29,6 +29,7 @@ import com.positivity.inventory.internal.repository.CycleCountAdjustmentReposito
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.service.CycleCountAdjustmentService;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;
@@ -99,10 +100,10 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     public AdjustmentResponse approveAdjustment(
             @NonNull UUID adjustmentId,
             @NonNull ApproveAdjustmentRequest request,
-            @Nullable String actorUserId,
-            @Nullable String actorUsername,
             @Nullable String correlationId) {
-        log.info("Approving adjustment {} by user {}", adjustmentId, request.getApproverUserId());
+        String actorUserId = SecurityContextHelper.getCurrentUserIdOrDefault("system");
+        String actorUsername = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        log.info("Approving adjustment {} by authenticated actor {}", adjustmentId, actorUsername);
 
         CycleCountAdjustment adjustment = adjustmentRepository.findById(adjustmentId)
                 .orElseThrow(() -> new IllegalArgumentException(ADJUSTMENT_NOT_FOUND + adjustmentId));
@@ -113,11 +114,11 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
 
         Instant occurredAt = Instant.now();
         adjustment.setStatus(AdjustmentStatus.APPROVED);
-        adjustment.setApprovedByUserId(request.getApproverUserId());
+        adjustment.setApprovedByUserId(actorUserId);
         adjustment.setApprovedAt(occurredAt);
         adjustment = adjustmentRepository.save(adjustment);
 
-        log.info("Adjustment {} approved by {}", adjustmentId, request.getApproverUserId());
+        log.info("Adjustment {} approved by {} ({})", adjustmentId, actorUsername, actorUserId);
         postAdjustmentToLedger(adjustment);
         publishMovementAdjustedEvent(adjustment, occurredAt, actorUserId, actorUsername, correlationId);
 
@@ -217,11 +218,12 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private void publishMovementAdjustedEvent(
             @NonNull CycleCountAdjustment adjustment,
             @NonNull Instant occurredAt,
-            @Nullable String actorUserId,
-            @Nullable String actorUsername,
+            @NonNull String actorUserId,
+            @NonNull String actorUsername,
             @Nullable String correlationId) {
-        String resolvedUserId = actorUserId != null ? actorUserId : adjustment.getApprovedByUserId();
-        String resolvedUsername = actorUsername != null ? actorUsername : resolvedUserId;
+        String resolvedCorrelationId = correlationId != null && !correlationId.isBlank()
+                ? correlationId
+                : UUIDv7Generator.generate().toString();
 
         InventoryAuditEvent event = new InventoryAuditEvent(
                 1,
@@ -232,9 +234,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 Instant.now(),
                 "inventory",
                 "",
-                new AuditActorRef(resolvedUserId != null ? resolvedUserId : "",
-                        resolvedUsername != null ? resolvedUsername : ""),
-                correlationId != null ? correlationId : "",
+                new AuditActorRef(actorUserId, actorUsername),
+                resolvedCorrelationId,
                 new AuditAggregateRef(String.valueOf(adjustment.getAdjustmentId()), "CycleCountAdjustment"),
                 Map.of(
                         "stockItemId", adjustment.getStockItemId(),

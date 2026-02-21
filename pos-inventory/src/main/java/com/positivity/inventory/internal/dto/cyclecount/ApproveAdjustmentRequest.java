@@ -1,6 +1,5 @@
 package com.positivity.inventory.internal.dto.cyclecount;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -14,8 +13,11 @@ import lombok.Builder;
 @AllArgsConstructor
 @Builder
 public class ApproveAdjustmentRequest {
-    
-    @NotBlank(message = "Approver user ID is required")
+
+    /**
+     * Legacy client-provided value; service layer resolves authoritative actor from
+     * authenticated context.
+     */
     private String approverUserId;
     
     /**

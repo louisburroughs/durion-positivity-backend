@@ -26,6 +26,8 @@ public interface JwtService {
     public static final String ROLES = "roles";
     /** Claim key for expanded authorities in the JWT. */
     public static final String AUTHORITIES = "authorities";
+    /** Claim key for stable person identifier used by audit lineage. */
+    public static final String PERSON_ID = "personId";
     /** Claim key for JWT ID (unique identifier for revocation). */
     public static final String JTI = "jti";
 
@@ -45,7 +47,11 @@ public interface JwtService {
      * 
      * @throws IllegalArgumentException if username or roles are invalid
      */
-    String generateToken(String username, Set<String> roles);
+    default String generateToken(String username, Set<String> roles) {
+        return generateToken(username, username, roles);
+    }
+
+    String generateToken(String username, String personId, Set<String> roles);
 
     /**
      * Validates the given JWT token by checking:
@@ -74,6 +80,14 @@ public interface JwtService {
      * @return the subject (username) from the token
      */
     String getUsernameFromToken(String token);
+
+    /**
+     * Extracts the stable person identifier from the given JWT token.
+     *
+     * @param token the JWT token string
+     * @return the person identifier claim, or subject when claim is absent
+     */
+    String getPersonIdFromToken(String token);
 
     /**
      * Extracts the set of roles from the given JWT token.
@@ -142,7 +156,11 @@ public interface JwtService {
      * 
      * @throws IllegalArgumentException if username or roles are invalid
      */
-    TokenPair generateTokenPair(String username, Set<String> roles);
+    default TokenPair generateTokenPair(String username, Set<String> roles) {
+        return generateTokenPair(username, username, roles);
+    }
+
+    TokenPair generateTokenPair(String username, String personId, Set<String> roles);
 
     /**
      * Validates the given refresh token by checking:
