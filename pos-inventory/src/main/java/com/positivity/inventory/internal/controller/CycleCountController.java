@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +46,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/inventory/cycleCount")
 @Tag(name = "Cycle Count API", description = "API for cycle count operations and variance tracking")
+@PreAuthorize("hasAuthority('inventory:availability:read')")
 public class CycleCountController {
         private final CycleCountService cycleCountService;
 

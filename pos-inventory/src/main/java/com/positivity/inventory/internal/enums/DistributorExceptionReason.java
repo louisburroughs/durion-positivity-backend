@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.model;
+package com.positivity.inventory.internal.enums;
 
 /**
  * Reason codes for distributor feed normalization exceptions.

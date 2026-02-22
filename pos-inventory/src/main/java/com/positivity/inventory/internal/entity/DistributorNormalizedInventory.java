@@ -1,12 +1,11 @@
-package com.positivity.inventory.internal.model;
+package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,49 +17,54 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Exception queue entry for distributor feed records that cannot be normalized.
+ * Normalized distributor inventory state keyed by distributor and SKU.
  *
  * Issue: CAP-170 (#47)
  */
 @Entity
-@Table(name = "distributor_feed_exception")
+@Table(name = "distributor_normalized_inventory", uniqueConstraints = @UniqueConstraint(columnNames = {
+        "distributor_id", "distributor_sku" }))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SuppressWarnings("java:S2166")
-/**
- * The business process sees this as an exception, but it's really just a record
- * of a failed normalization attempt, so it should not be treated as a true
- * exception in the code logic.
- */
-public class DistributorFeedException {
+public class DistributorNormalizedInventory {
 
     @Id
     private UUID id;
 
     @Column(nullable = false)
+    private UUID productId;
+
+    @Column(nullable = false)
     private String distributorId;
 
+    @Column(nullable = false)
     private String distributorSku;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private DistributorExceptionReason reason;
+    private Integer quantityAvailable;
 
-    @Column(nullable = false, length = 4000)
-    private String rawPayload;
+    private Integer leadTimeDaysMin;
+
+    private Integer leadTimeDaysMax;
+
+    private String shipFromRegionCode;
 
     @Column(nullable = false)
-    private Instant createdAt;
+    private String normalizationPolicyVersion;
+
+    private String rawLeadTime;
+
+    private String rawShipFromRegion;
+
+    @Column(nullable = false)
+    private Instant lastUpdatedAt;
 
     @PrePersist
     protected void onCreate() {
         if (id == null) {
             id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
         }
     }
 }

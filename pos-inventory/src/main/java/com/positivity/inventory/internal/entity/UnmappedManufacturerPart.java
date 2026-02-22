@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.model;
+package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

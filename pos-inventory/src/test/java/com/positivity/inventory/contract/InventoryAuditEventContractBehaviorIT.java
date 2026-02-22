@@ -19,9 +19,9 @@ import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
+import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.event.InventoryAuditEvent;
-import com.positivity.inventory.internal.model.cyclecount.ApprovalThresholdConfig;
-import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import com.positivity.inventory.service.contract.BaseContractIntegrationTest;
 

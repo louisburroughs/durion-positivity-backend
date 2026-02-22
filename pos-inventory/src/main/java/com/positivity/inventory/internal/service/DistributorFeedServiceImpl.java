@@ -1,9 +1,9 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.DistributorFeedItemDto;
-import com.positivity.inventory.internal.model.DistributorExceptionReason;
-import com.positivity.inventory.internal.model.DistributorFeedException;
-import com.positivity.inventory.internal.model.DistributorNormalizedInventory;
+import com.positivity.inventory.internal.entity.DistributorFeedException;
+import com.positivity.inventory.internal.entity.DistributorNormalizedInventory;
+import com.positivity.inventory.internal.enums.DistributorExceptionReason;
 import com.positivity.inventory.internal.repository.DistributorFeedExceptionRepository;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
 import com.positivity.inventory.service.DistributorFeedService;
@@ -135,7 +135,8 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         String normalized = rawLeadTime.trim();
         String normalizedUpper = normalized.toUpperCase(Locale.ROOT);
 
-        // Qualitative values accepted by CAP-170 policy; no numeric day bounds available.
+        // Qualitative values accepted by CAP-170 policy; no numeric day bounds
+        // available.
         if (normalizedUpper.equals("BACKORDER")
                 || normalizedUpper.equals("CALL FOR AVAILABILITY")
                 || normalizedUpper.equals("CALL")
@@ -143,7 +144,8 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
             return new LeadTimeNormalizationResult(true, null, null);
         }
 
-        if (normalizedUpper.equals("SAME DAY") || normalizedUpper.equals("SAMEDAY") || normalizedUpper.equals("TODAY")) {
+        if (normalizedUpper.equals("SAME DAY") || normalizedUpper.equals("SAMEDAY")
+                || normalizedUpper.equals("TODAY")) {
             return new LeadTimeNormalizationResult(true, 0, 0);
         }
 

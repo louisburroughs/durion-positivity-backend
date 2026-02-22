@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.model;
+package com.positivity.inventory.internal.entity;
 
 /**
  * Status lifecycle for manufacturer parts that cannot yet be mapped to

@@ -1,9 +1,9 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
-import com.positivity.inventory.internal.model.InventoryLedgerEntry;
-import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
 import org.jspecify.annotations.NonNull;
@@ -88,7 +88,8 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private LocationAvailabilityDto toLocationAvailability(String locationId, List<InventoryLedgerEntry> entries) {
         int onHandQuantity = entries.stream()
                 .filter(ledgerEntry -> ledgerEntry.getEventType() != null && ledgerEntry.getEventType().affectsOnHand())
-                .mapToInt(ledgerEntry -> ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity() : 0)
+                .mapToInt(ledgerEntry -> ledgerEntry.getChangeInQuantity() != null ? ledgerEntry.getChangeInQuantity()
+                        : 0)
                 .sum();
 
         int activeReservations = entries.stream()
