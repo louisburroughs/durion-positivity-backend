@@ -2,6 +2,7 @@ package com.positivity.people;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -103,6 +104,18 @@ public class ArchitectureTest {
                         .should().haveSimpleNameEndingWith("Service")
                         .allowEmptyShould(true)
                         .because("outside internal packages, exposed module types should be service contracts");
+
+        @ArchTest
+        static final ArchRule mapped_controller_methods_should_require_authorization = methods()
+                        .that().areAnnotatedWith("org.springframework.web.bind.annotation.RequestMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.GetMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PostMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PutMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.DeleteMapping")
+                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PatchMapping")
+                        .should().beAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+                        .allowEmptyShould(true)
+                        .because("all HTTP endpoints must declare authorization guards");
 
 
     @ArchTest

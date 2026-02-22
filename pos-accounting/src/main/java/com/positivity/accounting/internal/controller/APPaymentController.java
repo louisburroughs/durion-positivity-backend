@@ -8,6 +8,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,6 +67,7 @@ public class APPaymentController {
         @ApiResponse(responseCode = "400", description = "Validation error: negative amounts, invalid bills, etc.")
         @ApiResponse(responseCode = "409", description = "Conflict: paymentRef exists with different payload")
         @ApiResponse(responseCode = "500", description = "Payment gateway failure")
+        @PreAuthorize("hasAuthority('accounting:ap:pay')")
         public @NonNull ResponseEntity<APPaymentResponse> executePayment(
                         @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request, Authentication authentication) {
 
@@ -91,6 +93,7 @@ public class APPaymentController {
         @Operation(summary = "Get payment details", description = "Retrieve AP payment details including allocations and GL posting status.")
         @ApiResponse(responseCode = "200", description = "Payment found")
         @ApiResponse(responseCode = "404", description = "Payment not found")
+        @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<APPaymentResponse> getPayment(
                         @PathVariable @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NonNull UUID paymentId) {
 
@@ -103,6 +106,7 @@ public class APPaymentController {
         @Operation(summary = "Get payment by reference", description = "Retrieve AP payment details by paymentRef (idempotency key).")
         @ApiResponse(responseCode = "200", description = "Payment found")
         @ApiResponse(responseCode = "404", description = "Payment not found")
+        @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<APPaymentResponse> getPaymentByRef(
                         @PathVariable @Parameter(description = "Payment reference (idempotency key)", example = "01936e5c-7890-7a3d-8b6e-2b3456789012") @NonNull String paymentRef) {
 
@@ -131,6 +135,7 @@ public class APPaymentController {
                         "Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID.")
         @ApiResponse(responseCode = "200", description = "Bills retrieved successfully")
         @ApiResponse(responseCode = "400", description = "Invalid vendor ID")
+        @PreAuthorize("hasAuthority('accounting:ap:view')")
         public @NonNull ResponseEntity<List<VendorBillSummaryResponse>> listBills(
                         @RequestParam @Parameter(description = "Vendor UUID", example = "01936e5b-4567-7a3d-8b6e-1a2345678901", required = true) @NonNull UUID vendorId) {
 
