@@ -1,6 +1,9 @@
 package com.positivity.securityservice.service;
 
+import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
@@ -30,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing roles, role assignments, and role-permission mappings.
@@ -53,7 +57,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      */
     @Override
     @Transactional
-    public Role createRole(String name, String description) {
+    public RoleDto createRole(String name, String description) {
         if (roleRepository.existsByName(name)) {
             throw new IllegalArgumentException("Role with name " + name + " already exists");
         }
@@ -64,7 +68,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         role.setCreatedBy(getCurrentUsername());
         role.setCreatedAt(Instant.now());
 
-        return roleRepository.save(role);
+        return toRoleDto(roleRepository.save(role));
     }
 
     /**
@@ -72,7 +76,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      */
     @Override
     @Transactional
-    public Role updateRolePermissions(RolePermissionsRequest request) {
+    public RoleDto updateRolePermissions(RolePermissionsRequest request) {
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + request.getRoleId()));
 
@@ -91,7 +95,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         log.info("Updated permissions for role {}: {} permissions assigned",
                 role.getName(), permissions.size());
 
-        return roleRepository.save(role);
+        return toRoleDto(roleRepository.save(role));
     }
 
     /**
@@ -99,7 +103,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      */
     @Override
     @Transactional
-    public RoleAssignment createRoleAssignment(RoleAssignmentRequest request) {
+    public RoleAssignmentDto createRoleAssignment(RoleAssignmentRequest request) {
         if (request.getScopeType() == ScopeType.LOCATION
                 && (request.getScopeLocationIds() == null || request.getScopeLocationIds().isEmpty())) {
             throw new IllegalArgumentException("LOCATION scope requires at least one location ID");
@@ -139,7 +143,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 user.getUsername(), role.getName(), assignment.getScopeType(),
                 assignment.getScopeLocationIds());
 
-        return roleAssignmentRepository.save(assignment);
+        return toRoleAssignmentDto(roleAssignmentRepository.save(assignment));
     }
 
     private void validateNoOverlappingAssignment(
@@ -192,22 +196,17 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      * Get role assignments for a user.
      */
     @Override
-    public List<RoleAssignment> getAssignmentsForUser(@NonNull UUID userId, boolean includeHistory) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
-
-        if (includeHistory) {
-            return roleAssignmentRepository.findAllByUser_Id(userId);
-        }
-
-        return roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
+    public List<RoleAssignmentDto> getAssignmentsForUser(@NonNull UUID userId, boolean includeHistory) {
+        return getAssignmentEntitiesForUser(userId, includeHistory).stream()
+                .map(this::toRoleAssignmentDto)
+                .toList();
     }
 
     /**
      * Get effective role assignments for a user.
      */
     @Override
-    public List<RoleAssignment> getEffectiveRoleAssignments(@NonNull UUID userId) {
+    public List<RoleAssignmentDto> getEffectiveRoleAssignments(@NonNull UUID userId) {
         return getAssignmentsForUser(userId, false);
     }
 
@@ -215,12 +214,14 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      * Get all permissions for a user (from all their effective role assignments).
      */
     @Override
-    public Set<Permission> getUserPermissions(UUID userId) {
-        List<RoleAssignment> assignments = getAssignmentsForUser(userId, false);
-        Set<Permission> allPermissions = new HashSet<>();
+    public Set<PermissionDto> getUserPermissions(UUID userId) {
+        List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
+        Set<PermissionDto> allPermissions = new HashSet<>();
 
         for (RoleAssignment assignment : assignments) {
-            allPermissions.addAll(assignment.getRole().getPermissions());
+            allPermissions.addAll(assignment.getRole().getPermissions().stream()
+                    .map(this::toPermissionDto)
+                    .collect(Collectors.toSet()));
         }
 
         return allPermissions;
@@ -231,7 +232,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      */
     @Override
     public boolean userHasPermission(UUID userId, String permissionName, String locationId) {
-        List<RoleAssignment> assignments = getAssignmentsForUser(userId, false);
+        List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
 
         for (RoleAssignment assignment : assignments) {
             if (!assignment.coversLocation(locationId)) {
@@ -272,17 +273,17 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      * Get all roles.
      */
     @Override
-    public List<Role> getAllRoles() {
-        return roleRepository.findAll();
+    public List<RoleDto> getAllRoles() {
+        return roleRepository.findAll().stream().map(this::toRoleDto).toList();
     }
 
     /**
      * Get role by name.
      */
     @Override
-    public Role getRoleByName(String name) {
-        return roleRepository.findByName(name)
-                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + name));
+    public RoleDto getRoleByName(String name) {
+        return toRoleDto(roleRepository.findByName(name)
+                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + name)));
     }
 
     private String getCurrentUsername() {
@@ -291,5 +292,57 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             return authentication.getName();
         }
         return "system";
+    }
+
+    private List<RoleAssignment> getAssignmentEntitiesForUser(UUID userId, boolean includeHistory) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+
+        if (includeHistory) {
+            return roleAssignmentRepository.findAllByUser_Id(userId);
+        }
+
+        return roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
+    }
+
+    private RoleDto toRoleDto(Role role) {
+        return RoleDto.builder()
+                .id(role.getId())
+                .name(role.getName())
+                .description(role.getDescription())
+                .permissions(role.getPermissions().stream()
+                        .map(this::toPermissionDto)
+                        .collect(Collectors.toSet()))
+                .createdAt(role.getCreatedAt())
+                .createdBy(role.getCreatedBy())
+                .lastModifiedAt(role.getLastModifiedAt())
+                .lastModifiedBy(role.getLastModifiedBy())
+                .build();
+    }
+
+    private PermissionDto toPermissionDto(Permission permission) {
+        return PermissionDto.builder()
+                .id(permission.getName())
+                .domain(permission.getDomain())
+                .description(permission.getDescription())
+                .deprecated(permission.isDeprecated())
+                .build();
+    }
+
+    private RoleAssignmentDto toRoleAssignmentDto(RoleAssignment assignment) {
+        return RoleAssignmentDto.builder()
+                .id(assignment.getId())
+                .userId(assignment.getUser().getId())
+                .roleId(assignment.getRole().getId())
+                .scopeType(assignment.getScopeType())
+                .scopeLocationIds(assignment.getScopeLocationIds())
+                .effectiveStartDate(assignment.getEffectiveStartDate())
+                .effectiveEndDate(assignment.getEffectiveEndDate())
+                .revokedAt(assignment.getRevokedAt())
+                .createdAt(assignment.getCreatedAt())
+                .createdBy(assignment.getCreatedBy())
+                .lastModifiedAt(assignment.getLastModifiedAt())
+                .lastModifiedBy(assignment.getLastModifiedBy())
+                .build();
     }
 }

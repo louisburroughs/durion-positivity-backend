@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -42,11 +43,10 @@ class UserServiceTest {
         when(passwordEncoder.encode("secret")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        User result = userService.createUser("alice", "secret", Set.of("ADMIN"));
+        UserDto result = userService.createUser("alice", "secret", Set.of("ADMIN"));
 
         assertThat(result.getUsername()).isEqualTo("alice");
-        assertThat(result.getPassword()).isEqualTo("encoded");
-        assertThat(result.getRoles()).contains(role);
+        assertThat(result.getRoles()).contains("ADMIN");
     }
 
     @Test
@@ -69,9 +69,9 @@ class UserServiceTest {
         when(roleRepository.findByName("ADMIN")).thenReturn(Optional.of(role));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        User result = userService.assignRoles("alice", Set.of("ADMIN"));
+        UserDto result = userService.assignRoles("alice", Set.of("ADMIN"));
 
-        assertThat(result.getRoles()).contains(role);
+        assertThat(result.getRoles()).contains("ADMIN");
     }
 
     @Test

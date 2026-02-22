@@ -1,8 +1,9 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.dto.UserAuthContext;
+import com.positivity.securityservice.internal.dto.UserDto;
+import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,14 +37,14 @@ public class UserController {
     @ApiResponse(responseCode = "201", description = "User created successfully.")
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
     @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<UserDto> createUser(@RequestBody Map<String, Object> payload) {
         String username = (String) payload.get("username");
         String password = (String) payload.get("password");
         List<?> rolesList = (List<?>) payload.get("roles");
         Set<String> roles = rolesList.stream()
                 .map(Object::toString)
                 .collect(Collectors.toSet());
-        User user = userService.createUser(username, password, roles);
+        UserDto user = userService.createUser(username, password, roles);
         return ResponseEntity.status(201).body(user);
     }
 
@@ -53,17 +54,17 @@ public class UserController {
     public ResponseEntity<Map<String, String>> login(@RequestBody Map<String, String> payload) {
         String username = payload.get("username");
         String password = payload.get("password");
-        Optional<User> userOpt = userService.getUserByUsername(username);
+        Optional<UserAuthContext> userOpt = userService.getUserByUsername(username);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(401)
                     .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Invalid credentials"));
         }
-        User user = userOpt.get();
-        if (!passwordEncoder.matches(password, user.getPassword())) {
+        UserAuthContext user = userOpt.get();
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             return ResponseEntity.status(401)
                     .body(Map.of("code", "INVALID_CREDENTIALS", "message", "Invalid credentials"));
         }
-        Set<String> roles = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
+        Set<String> roles = user.getRoles();
         String token = jwtService.generateToken(username, roles);
         return ResponseEntity.ok(Map.of("token", token));
     }
@@ -71,7 +72,7 @@ public class UserController {
     @Operation(summary = "Get all users", description = "Retrieve a list of all users.")
     @ApiResponse(responseCode = "200", description = "List of users returned successfully.")
     @GetMapping
-    public List<User> getAllUsers() {
+    public List<UserDto> getAllUsers() {
         return userService.getAllUsers();
     }
 
@@ -79,9 +80,9 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "User found and returned.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(
+    public ResponseEntity<UserDto> getUserById(
             @Parameter(description = "ID of the user to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
-        Optional<User> user = userService.getUserById(id);
+        Optional<UserDto> user = userService.getUserById(id);
         return user.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -90,18 +91,10 @@ public class UserController {
     @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(
+    public ResponseEntity<UserDto> updateUser(
             @Parameter(description = "ID of the user to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id,
-            @Parameter(description = "Updated user object") @RequestBody User user) {
-        Optional<User> existingUserOpt = userService.getUserById(id);
-        if (existingUserOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        User existingUser = existingUserOpt.get();
-        existingUser.setUsername(user.getUsername());
-        existingUser.setPassword(user.getPassword());
-        existingUser.setRoles(user.getRoles());
-        User updatedUser = userService.saveUser(existingUser);
+            @Parameter(description = "Updated user object") @RequestBody UserUpdateRequest user) {
+        UserDto updatedUser = userService.updateUser(id, user);
         return ResponseEntity.ok(updatedUser);
     }
 
@@ -118,12 +111,12 @@ public class UserController {
 
     @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
     @PutMapping("/{username}/roles")
-    public ResponseEntity<User> assignRoles(@PathVariable String username, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<UserDto> assignRoles(@PathVariable String username, @RequestBody Map<String, Object> payload) {
         List<?> rolesList = (List<?>) payload.get("roles");
         Set<String> roles = rolesList.stream()
                 .map(Object::toString)
                 .collect(Collectors.toSet());
-        User user = userService.assignRoles(username, roles);
+        UserDto user = userService.assignRoles(username, roles);
         return ResponseEntity.ok(user);
     }
 }

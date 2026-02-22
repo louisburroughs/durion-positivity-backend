@@ -31,6 +31,7 @@ public class AuthorizationController {
         return ResponseEntity.ok(new AuthorizationDecisionResponse(decision.name().toLowerCase()));
     }
 
+    /** this is redundant */
     @GetMapping("/authorize")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AuthorizationDecisionResponse> authorize(

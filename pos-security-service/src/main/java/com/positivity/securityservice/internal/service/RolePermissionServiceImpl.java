@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.PrincipalRole;
 import com.positivity.securityservice.internal.entity.Role;
@@ -11,6 +13,7 @@ import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.service.RolePermissionService;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
@@ -37,7 +40,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
 
     @Override
     @Transactional
-    public Role createRole(@NonNull String roleName, String description) {
+    public RoleDto createRole(@NonNull String roleName, String description) {
         if (roleRepository.existsByName(roleName)) {
             throw new IllegalArgumentException("Role already exists: " + roleName);
         }
@@ -45,12 +48,12 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         role.setName(roleName);
         role.setDescription(description);
         role.setCreatedBy(getCurrentActor());
-        return roleRepository.save(role);
+        return toRoleDto(roleRepository.save(role));
     }
 
     @Override
     @Transactional
-    public Role grantPermission(@NonNull UUID roleId, @NonNull String permissionKey) {
+    public RoleDto grantPermission(@NonNull UUID roleId, @NonNull String permissionKey) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
@@ -74,16 +77,16 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 permissionKey,
                 Instant.now()));
 
-        return savedRole;
+        return toRoleDto(savedRole);
     }
 
     @Override
     @Transactional
-    public Role revokePermission(@NonNull UUID roleId, @NonNull String permissionKey) {
+    public RoleDto revokePermission(@NonNull UUID roleId, @NonNull String permissionKey) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
         role.getPermissions().removeIf(permission -> permissionKey.equals(permission.getName()));
-        return roleRepository.save(role);
+        return toRoleDto(roleRepository.save(role));
     }
 
     @Override
@@ -108,5 +111,29 @@ public class RolePermissionServiceImpl implements RolePermissionService {
             return authentication.getName();
         }
         return "system";
+    }
+
+    private RoleDto toRoleDto(Role role) {
+        return RoleDto.builder()
+                .id(role.getId())
+                .name(role.getName())
+                .description(role.getDescription())
+                .permissions(role.getPermissions().stream()
+                        .map(this::toPermissionDto)
+                        .collect(Collectors.toSet()))
+                .createdAt(role.getCreatedAt())
+                .createdBy(role.getCreatedBy())
+                .lastModifiedAt(role.getLastModifiedAt())
+                .lastModifiedBy(role.getLastModifiedBy())
+                .build();
+    }
+
+    private PermissionDto toPermissionDto(Permission permission) {
+        return PermissionDto.builder()
+                .id(permission.getName())
+                .domain(permission.getDomain())
+                .description(permission.getDescription())
+                .deprecated(permission.isDeprecated())
+                .build();
     }
 }

@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.dto;
 
+import java.util.UUID;
+
 import lombok.Builder;
 import lombok.Value;
 
@@ -11,7 +13,7 @@ import lombok.Value;
 @Value
 @Builder
 public class PermissionDto {
-    String id;
+    UUID id;
     String domain;
     String description;
     boolean deprecated;
