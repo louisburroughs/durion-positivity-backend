@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 
 /**
  * Request DTO for creating an individual person record.

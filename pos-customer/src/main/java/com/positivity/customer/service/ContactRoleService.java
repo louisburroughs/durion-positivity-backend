@@ -98,14 +98,14 @@ public class ContactRoleService {
                                 var emailOpt = Optional.ofNullable(contactPointRepository
                                                 .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
                                                                 contactId,
-                                                                com.positivity.customer.internal.dto.ContactPointType.EMAIL));
+                                                                com.positivity.customer.internal.enums.ContactPointType.EMAIL));
                                 emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
                                 contactDto.setHasPrimaryEmail(emailOpt.isPresent());
 
                                 var phoneOpt = Optional.ofNullable(contactPointRepository
                                                 .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
                                                                 contactId,
-                                                                com.positivity.customer.internal.dto.ContactPointType.PHONE_MOBILE));
+                                                                com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
                                 phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));
 
                                 // Map role assignments

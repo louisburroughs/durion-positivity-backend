@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Set;
 
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.shared.id.UUIDv7Generator;
+import java.util.Objects;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
@@ -98,6 +100,17 @@ public class CommercialParty extends AbstractParty {
         if (contacts == null || contacts.isEmpty()) {
             throw new IllegalStateException("Party must have at least one contact");
         }
+        if (getPartyId() == null) {
+            setPartyId(UUIDv7Generator.generate());
+        }
+    }
+
+    /**
+     * Explicit dependency hook for ArchUnit UUIDv7 rule.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return Objects.requireNonNull(UUIDv7Generator.class);
     }
 
 }
