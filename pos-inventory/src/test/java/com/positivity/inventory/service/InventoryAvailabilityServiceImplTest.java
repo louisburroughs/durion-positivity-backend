@@ -1,9 +1,9 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
+import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
-import com.positivity.inventory.internal.model.InventoryLedgerEntry;
-import com.positivity.inventory.internal.model.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.InventoryAvailabilityServiceImpl;
 
@@ -68,7 +68,7 @@ class InventoryAvailabilityServiceImplTest {
         }
 
         @Test
-    void getAvailabilityByProduct_allowsNegativeAtpWhenReservationsExceedOnHand() {
+        void getAvailabilityByProduct_allowsNegativeAtpWhenReservationsExceedOnHand() {
                 UUID productId = UUID.randomUUID();
                 InventoryLedgerEntry onHandEntry = ledgerEntry(
                                 productId,

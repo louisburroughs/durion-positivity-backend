@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;

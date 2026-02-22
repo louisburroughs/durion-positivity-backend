@@ -17,11 +17,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.dto.PreferredContactMethod;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.ContactPointRepository;

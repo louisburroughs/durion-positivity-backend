@@ -4,6 +4,7 @@ import org.jspecify.annotations.NonNull;
 
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
+import java.util.UUID;
 
 public interface WorkSessionService {
 
@@ -14,8 +15,8 @@ public interface WorkSessionService {
     WorkSessionDto stopSession(@NonNull String personId);
 
     @NonNull
-    BreakDto startBreak(@NonNull Long sessionId);
+    BreakDto startBreak(@NonNull UUID sessionId);
 
     @NonNull
-    BreakDto stopBreak(@NonNull Long sessionId);
+    BreakDto stopBreak(@NonNull UUID sessionId);
 }

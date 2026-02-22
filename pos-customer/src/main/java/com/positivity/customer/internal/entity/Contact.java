@@ -10,7 +10,7 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import com.positivity.customer.internal.dto.PreferredContactMethod;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.Data;

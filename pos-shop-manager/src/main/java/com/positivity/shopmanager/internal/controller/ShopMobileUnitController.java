@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shopmanager.internal.service.MobileUnitServiceImpl;
 import com.positivity.shopmanager.service.MobileUnitService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -25,6 +27,7 @@ public class ShopMobileUnitController {
     @Operation(summary = "Get mobile units", description = "List all mobile units or get a specific mobile unit detail by locationId and bayId.")
     @ApiResponse(responseCode = "200", description = "Mobile units retrieved successfully.")
     @GetMapping({ "/mobileUnit", "/{locationId}/mobileUnit/{bayId}" })
+    @PreAuthorize("hasAuthority('shop:bay:view')")
     public ResponseEntity<Object> getMobileUnits(
             @Parameter(description = "Location ID (optional for specific mobile unit)") @PathVariable(required = false) Long locationId,
             @Parameter(description = "Bay ID (optional for specific mobile unit)") @PathVariable(required = false) Long bayId) {
@@ -37,6 +40,7 @@ public class ShopMobileUnitController {
     @ApiResponse(responseCode = "200", description = "Mobile unit created successfully.")
     @EmitEvent(id = "SHOP_MOBILE_UNIT_CREATE", apiVersion = "1")
     @PostMapping("/{locationId}/mobileUnit")
+    @PreAuthorize("hasAuthority('shop:bay:create')")
     public ResponseEntity<Object> createMobileUnit(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Mobile unit creation request body") @RequestBody(required = false) Object request) {
@@ -49,6 +53,7 @@ public class ShopMobileUnitController {
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
     @EmitEvent(id = "SHOP_MOBILE_UNIT_MANAGE", apiVersion = "1")
     @PutMapping("/mobileUnit")
+    @PreAuthorize("hasAuthority('shop:bay:edit')")
     public ResponseEntity<Object> manageMobileUnits(
             @Parameter(description = "Mobile unit management request body") @RequestBody(required = false) Object request) {
         log.info("Managing mobile units");
@@ -62,6 +67,7 @@ public class ShopMobileUnitController {
             @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     })
     @DeleteMapping("/{locationId}/mobileUnit/{bayId}")
+    @PreAuthorize("hasAuthority('shop:bay:edit')")
     public ResponseEntity<Void> deleteMobileUnit(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Bay ID", example = "1") @PathVariable Long bayId) {

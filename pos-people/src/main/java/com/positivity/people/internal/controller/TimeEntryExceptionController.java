@@ -6,6 +6,7 @@ import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.service.TimeEntryExceptionService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,6 +38,7 @@ public class TimeEntryExceptionController {
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_CREATE", apiVersion = "1")
     @PostMapping(consumes = "application/json", produces = "application/json")
+    @PreAuthorize("hasAuthority('people:timeException:create')")
     public ResponseEntity<TimeEntryExceptionResponse> createException(@RequestBody TimeEntryExceptionRequest req) {
         TimeEntryExceptionResponse resp = exceptionService.createException(req);
         return ResponseEntity.ok(resp);
@@ -47,6 +49,7 @@ public class TimeEntryExceptionController {
             @ApiResponse(responseCode = "200", description = "List returned")
     })
     @GetMapping(produces = "application/json")
+    @PreAuthorize("hasAuthority('people:timeException:view')")
     public ResponseEntity<List<TimeEntryException>> listByEmployee(@RequestParam(required = false) String employeeId) {
         List<TimeEntryException> list = exceptionService.listByEmployee(employeeId);
         return ResponseEntity.ok(list);
@@ -55,6 +58,7 @@ public class TimeEntryExceptionController {
     @Operation(summary = "Acknowledge an exception", description = "Mark an exception as acknowledged by the specified actor.")
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/acknowledge", produces = "application/json")
+    @PreAuthorize("hasAuthority('people:timeException:acknowledge')")
     public ResponseEntity<Object> acknowledgeException(@PathVariable java.util.UUID exceptionId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
@@ -76,6 +80,7 @@ public class TimeEntryExceptionController {
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/resolve", consumes = "application/json", produces = "application/json")
+    @PreAuthorize("hasAuthority('people:timeException:resolve')")
     public ResponseEntity<Object> resolveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody(required = false) java.util.Map<String, String> body,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -104,6 +109,7 @@ public class TimeEntryExceptionController {
     })
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/waive", consumes = "application/json", produces = "application/json")
+    @PreAuthorize("hasAuthority('people:timeException:resolve')")
     public ResponseEntity<Object> waiveException(@PathVariable java.util.UUID exceptionId,
             @RequestBody java.util.Map<String, String> body,
             @RequestHeader(value = "X-User-Id", required = false) String userId,

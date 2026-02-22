@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,7 +20,7 @@ import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
-import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
+import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.service.CycleCountAdjustmentService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Cycle Count Adjustments", description = "Manage inventory adjustments from cycle counts")
+@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create','inventory:adjustment:approve')")
 public class CycleCountAdjustmentController {
 
     private final CycleCountAdjustmentService adjustmentService;

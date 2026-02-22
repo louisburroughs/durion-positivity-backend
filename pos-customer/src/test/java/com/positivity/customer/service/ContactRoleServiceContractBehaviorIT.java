@@ -87,7 +87,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 contactPerson.setFirstName("John");
                 contactPerson.setLastName("Doe");
                 contactPerson.setPreferredContactMethod(
-                                com.positivity.customer.internal.dto.PreferredContactMethod.EMAIL);
+                                com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
                 contactPerson = personRepository.save(contactPerson);
                 testContactUuid = contactPerson.getPersonId();
         }
@@ -166,7 +166,7 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
                 PersonParty contact2 = new PersonParty();
                 contact2.setFirstName("Jane");
                 contact2.setLastName("Smith");
-                contact2.setPreferredContactMethod(com.positivity.customer.internal.dto.PreferredContactMethod.EMAIL);
+                contact2.setPreferredContactMethod(com.positivity.customer.internal.enums.PreferredContactMethod.EMAIL);
                 contact2 = personRepository.save(contact2);
                 UUID contact2Uuid = contact2.getPersonId();
 

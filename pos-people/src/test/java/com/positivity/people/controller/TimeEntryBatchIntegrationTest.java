@@ -8,8 +8,12 @@ import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.service.TimeEntryServiceImpl;
 import com.positivity.people.service.TimeEntryService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 import java.util.Arrays;
 import java.util.List;
@@ -27,10 +31,23 @@ class TimeEntryBatchIntegrationTest {
 
     @BeforeEach
     void setup() {
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
+                "test-user", "password", "ROLE_USER");
+        authentication.setDetails(java.util.Map.of(
+                GatewaySecurityConstants.DETAIL_USER_ID, "11111111-1111-1111-1111-111111111111",
+                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+        authentication.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         entryRepository = mock(TimeEntryRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
         timeEntryService = new TimeEntryServiceImpl(entryRepository, auditRepository);
         controller = new TimeEntryApprovalController(timeEntryService);
+    }
+
+    @AfterEach
+    void clearAuth() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

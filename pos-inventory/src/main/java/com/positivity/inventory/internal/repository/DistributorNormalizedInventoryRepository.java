@@ -1,7 +1,8 @@
 package com.positivity.inventory.internal.repository;
 
-import com.positivity.inventory.internal.model.DistributorNormalizedInventory;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.positivity.inventory.internal.entity.DistributorNormalizedInventory;
 
 import java.util.Optional;
 import java.util.UUID;

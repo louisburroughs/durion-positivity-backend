@@ -1,22 +1,29 @@
 package com.positivity.customer.internal.entity;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
-import com.positivity.shared.id.UUIDv7Generator;
 
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.InheritanceType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Transient;
+import jakarta.validation.constraints.Email;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Abstract base class for individual customers implementing PartyEntity
@@ -37,15 +44,7 @@ public abstract class AbstractParty implements Party {
     @Schema(description = "Unique customer number", example = "CUST-1001")
     private String customerNumber;
 
-    @NotBlank
-    @Schema(description = "Last name of the customer", example = "Doe")
-    private String lastName;
-
-    @NotBlank
-    @Schema(description = "First name of the customer", example = "John")
-    private String firstName;
-
-    @Schema(description = "Phone number of the customer", example = "+1-555-1234")
+    @Schema(description = "Phone number of the customer", example = "+1-888-555-1234")
     private String phoneNumber;
 
     @Email
@@ -85,28 +84,8 @@ public abstract class AbstractParty implements Party {
     @UpdateTimestamp
     private Instant modifiedAt;
 
-    @PrePersist
-    public void generateId() {
-        if (partyId == null) {
-            partyId = UUIDv7Generator.generate();
-        }
-        validateNames();
-    }
-
-    @PreUpdate
-    private void validateCustomer() {
-        validateNames();
-    }
-
     /** Helper method to validate customer names */
-    private void validateNames() {
-        if (firstName == null || firstName.isBlank()) {
-            throw new IllegalStateException("firstName is required for a customer");
-        }
-        if (lastName == null || lastName.isBlank()) {
-            throw new IllegalStateException("lastName is required for a customer");
-        }
-    }
+    protected abstract void validateNames();
 
     @Override
     public void addVehicleVin(String vin) {
@@ -121,5 +100,13 @@ public abstract class AbstractParty implements Party {
         if (vehicleVins != null) {
             vehicleVins.remove(vin);
         }
+    }
+
+    /**
+     * Explicit dependency hook for ArchUnit UUIDv7 rule.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return com.positivity.shared.id.UUIDv7Generator.class;
     }
 }

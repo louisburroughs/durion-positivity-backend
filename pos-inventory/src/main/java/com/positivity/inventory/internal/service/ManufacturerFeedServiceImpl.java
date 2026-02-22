@@ -1,9 +1,9 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.ManufacturerFeedItemDto;
-import com.positivity.inventory.internal.model.NormalizedAvailability;
-import com.positivity.inventory.internal.model.UnmappedManufacturerPart;
-import com.positivity.inventory.internal.model.UnmappedPartStatus;
+import com.positivity.inventory.internal.entity.NormalizedAvailability;
+import com.positivity.inventory.internal.entity.UnmappedManufacturerPart;
+import com.positivity.inventory.internal.entity.UnmappedPartStatus;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import com.positivity.inventory.internal.repository.UnmappedManufacturerPartRepository;
 import com.positivity.inventory.service.ManufacturerFeedService;

@@ -11,9 +11,13 @@ import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.service.TimeEntryAdjustmentServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 import java.util.Optional;
 import java.util.Set;
@@ -32,10 +36,23 @@ class TimeEntryAdjustmentServiceTest {
 
     @BeforeEach
     void setup() {
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
+                "test-user", "password", "ROLE_USER");
+        authentication.setDetails(java.util.Map.of(
+                GatewaySecurityConstants.DETAIL_USER_ID, "22222222-2222-2222-2222-222222222222",
+                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+        authentication.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         adjustmentRepository = mock(TimeEntryAdjustmentRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
         timeEntryRepository = mock(TimeEntryRepository.class);
         service = new TimeEntryAdjustmentServiceImpl(adjustmentRepository, auditRepository, timeEntryRepository);
+    }
+
+    @AfterEach
+    void clearAuth() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

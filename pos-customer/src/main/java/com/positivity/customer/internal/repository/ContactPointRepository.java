@@ -1,7 +1,7 @@
 package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.enums.ContactPointType;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.shopmanager.internal.dto.PersonDTO;
 import com.positivity.shopmanager.internal.dto.ServiceEntityDTO;
+import com.positivity.shopmanager.internal.service.ShopServiceImpl;
 import com.positivity.shopmanager.service.ShopService;
 
 @Slf4j
@@ -32,6 +34,7 @@ public class ShopController {
     @ApiResponse(responseCode = "200", description = "Person details returned successfully.")
     @ApiResponse(responseCode = "404", description = "Technician or person not found.")
     @GetMapping("/{locationId}/technicians/{personId}/person")
+    @PreAuthorize("hasAuthority('shop:location:view')")
     public ResponseEntity<PersonDTO> getTechnicianPerson(
             @Parameter(description = "ID of the shop", example = "1") @PathVariable UUID locationId,
             @Parameter(description = "ID of the technician", example = "1") @PathVariable UUID personId) {
@@ -46,6 +49,7 @@ public class ShopController {
     @ApiResponse(responseCode = "200", description = "Service details returned successfully.")
     @ApiResponse(responseCode = "404", description = "Service not found.")
     @GetMapping("/{locationId}/services/{serviceId}/details")
+    @PreAuthorize("hasAuthority('shop:location:view')")
     public ResponseEntity<ServiceEntityDTO> getShopServiceDetails(
             @Parameter(description = "ID of the shop", example = "1") @PathVariable UUID locationId,
             @Parameter(description = "ID of the service", example = "1") @PathVariable UUID serviceId) {

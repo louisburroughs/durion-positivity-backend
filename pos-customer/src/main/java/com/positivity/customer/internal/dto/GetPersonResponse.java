@@ -10,6 +10,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.positivity.customer.internal.enums.ContactPointType;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
+
 /**
  * Response DTO for retrieving person details.
  *

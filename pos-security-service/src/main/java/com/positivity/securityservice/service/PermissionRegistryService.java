@@ -1,8 +1,8 @@
 package com.positivity.securityservice.service;
 
+import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
-import com.positivity.securityservice.internal.entity.Permission;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,12 +25,12 @@ public interface PermissionRegistryService {
     /**
      * Get all permissions for a domain
      */
-    List<Permission> getPermissionsByDomain(String domain);
+    List<PermissionDto> getPermissionsByDomain(String domain);
 
     /**
      * Get all registered permissions
      */
-    List<Permission> getAllPermissions();
+    List<PermissionDto> getAllPermissions();
 
     /**
      * Check if a permission exists
@@ -40,5 +40,5 @@ public interface PermissionRegistryService {
     /**
      * Get permission by name
      */
-    Optional<Permission> getPermissionByName(String name);
+    Optional<PermissionDto> getPermissionByName(String name);
 }

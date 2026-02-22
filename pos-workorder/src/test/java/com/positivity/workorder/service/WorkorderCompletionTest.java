@@ -15,11 +15,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
+import java.util.Map;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 @ExtendWith(MockitoExtension.class)
 class WorkorderCompletionTest {
@@ -81,6 +86,17 @@ class WorkorderCompletionTest {
 
     @BeforeEach
     void setUp() {
+        // Mock authenticated user with gateway-injected details so snapshot/audit flows have an actor
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
+                "test-user",
+                "password",
+                "ROLE_USER");
+        authentication.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USER_ID, "550e8400-e29b-41d4-a716-446655440034",
+                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+        authentication.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         testWorkorderId = UUID.fromString("550e8400-e29b-41d4-a716-446655440030");
         testShopId = UUID.fromString("550e8400-e29b-41d4-a716-446655440031");
         testVehicleId = UUID.fromString("550e8400-e29b-41d4-a716-446655440032");
@@ -99,6 +115,11 @@ class WorkorderCompletionTest {
         workOrderService = new WorkorderService(workOrderRepository, estimateRepository, estimateItemRepository,
                 workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
                 auditEventRepository, idempotencyService, promotionValidationService);
+    }
+
+    @AfterEach
+    void clearAuth() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

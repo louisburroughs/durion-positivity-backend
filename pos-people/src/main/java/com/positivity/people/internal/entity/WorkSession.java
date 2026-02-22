@@ -2,20 +2,23 @@ package com.positivity.people.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import lombok.Data;
+
 import java.time.Instant;
+import java.util.UUID;
+import com.positivity.shared.id.UUIDv7Generator;
 
 @Entity
 @Table(name = "work_session")
+@Data
 public class WorkSession {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "session_id", nullable = false, updatable = false)
-    private Long sessionId;
+    @Column(name = "session_id", nullable = false, updatable = false, columnDefinition = "uuid")
+    private UUID sessionId;
 
     @Column(name = "person_id", nullable = false, length = 64)
     private String personId;
@@ -32,51 +35,11 @@ public class WorkSession {
     @Column(name = "actor", length = 128)
     private String actor;
 
-    public Long getSessionId() {
-        return sessionId;
+    @PrePersist
+    void ensureId() {
+        if (sessionId == null) {
+            sessionId = UUIDv7Generator.generate();
+        }
     }
 
-    public void setSessionId(Long sessionId) {
-        this.sessionId = sessionId;
-    }
-
-    public String getPersonId() {
-        return personId;
-    }
-
-    public void setPersonId(String personId) {
-        this.personId = personId;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Instant getStartedAt() {
-        return startedAt;
-    }
-
-    public void setStartedAt(Instant startedAt) {
-        this.startedAt = startedAt;
-    }
-
-    public Instant getEndedAt() {
-        return endedAt;
-    }
-
-    public void setEndedAt(Instant endedAt) {
-        this.endedAt = endedAt;
-    }
-
-    public String getActor() {
-        return actor;
-    }
-
-    public void setActor(String actor) {
-        this.actor = actor;
-    }
 }
