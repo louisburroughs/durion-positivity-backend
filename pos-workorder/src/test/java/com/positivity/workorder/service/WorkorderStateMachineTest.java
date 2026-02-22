@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -18,10 +19,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 @ExtendWith(MockitoExtension.class)
 class WorkorderStateMachineTest {
@@ -54,6 +60,16 @@ class WorkorderStateMachineTest {
 
     @BeforeEach
     void setUp() {
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
+                "test-user",
+                "password",
+                "ROLE_USER");
+        authentication.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USER_ID, "550e8400-e29b-41d4-a716-446655440045",
+                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+        authentication.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         testWorkorderId = UUID.fromString("550e8400-e29b-41d4-a716-446655440040");
         testChangeRequestId = UUID.fromString("550e8400-e29b-41d4-a716-446655440041");
         testShopId = UUID.fromString("550e8400-e29b-41d4-a716-446655440042");
@@ -67,6 +83,11 @@ class WorkorderStateMachineTest {
                 .customerId(testCustomerId)
                 .status(WorkorderStatus.APPROVED)
                 .build();
+    }
+
+    @AfterEach
+    void clearAuth() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

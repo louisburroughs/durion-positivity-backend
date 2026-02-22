@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
+import com.positivity.securityservice.internal.service.JwtServiceImpl;
+
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;

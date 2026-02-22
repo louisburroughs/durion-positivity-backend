@@ -1,18 +1,20 @@
 package com.positivity.securityservice.internal.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import org.jspecify.annotations.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.service.PermissionService;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.regex.Pattern;
+
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.NonNull;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Default implementation of permission registration/query API.
@@ -22,8 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PermissionServiceImpl implements PermissionService {
-
-    private static final Pattern PERMISSION_PATTERN = Pattern.compile("^\\w+:\\w+:\\w+$");
 
     private final PermissionRepository permissionRepository;
 
@@ -70,12 +70,14 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     private boolean isValidPermissionKey(String permissionKey) {
-        return permissionKey != null && PERMISSION_PATTERN.matcher(permissionKey).matches();
+        return permissionKey != null
+                && PermissionRegistryServiceImpl.PERMISSION_PATTERN.matcher(permissionKey).matches();
     }
 
     private PermissionDto toDto(Permission permission) {
         return PermissionDto.builder()
-                .id(permission.getName())
+                .id(permission.getId())
+                .name(permission.getName())
                 .domain(permission.getDomain())
                 .description(permission.getDescription())
                 .deprecated(permission.isDeprecated())
