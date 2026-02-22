@@ -1,13 +1,13 @@
 package com.positivity.customer;
 
-import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
-import com.positivity.customer.internal.dto.PartyRelationshipRole;
-import com.positivity.customer.internal.dto.PreferredContactMethod;
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.entity.*;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.repository.*;

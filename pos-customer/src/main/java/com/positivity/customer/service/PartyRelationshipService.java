@@ -10,11 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.positivity.customer.internal.dto.ContactPointType;
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
-import com.positivity.customer.internal.dto.PartyRelationshipRole;
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.ContactPoint;
 import com.positivity.customer.internal.entity.PartyRelationship;

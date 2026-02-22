@@ -5,8 +5,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import com.positivity.customer.internal.dto.PreferredContactMethod;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.shared.id.UUIDv7Generator;
+import java.util.Objects;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
@@ -64,6 +66,21 @@ public class PersonParty extends AbstractParty {
     @Schema(description = "Full display name", example = "John Doe")
     public String getDisplayName() {
         return (getFirstName() != null ? getFirstName() : "") + " " + (getLastName() != null ? getLastName() : "");
+    }
+
+    @PrePersist
+    private void ensureId() {
+        if (getPartyId() == null) {
+            setPartyId(UUIDv7Generator.generate());
+        }
+    }
+
+    /**
+     * Explicit dependency hook for ArchUnit UUIDv7 rule.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return Objects.requireNonNull(UUIDv7Generator.class);
     }
 
     @Override

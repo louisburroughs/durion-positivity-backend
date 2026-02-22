@@ -4,9 +4,10 @@
 - [x] pos-shop-manager (rule added, controllers updated)
 - [x] pos-accounting (rule added, controllers updated)
 - [x] pos-api-gateway (rule added; no controllers)
+- [x] pos-archunit (rule added; no controllers)
 - [ ] pos-archunit
-- [ ] pos-catalog
-- [ ] pos-customer
+- [x] pos-catalog (rule added; already compliant)
+- [ ] pos-customer (in progress; pending UUIDv7 entity rule fixes)
 - [ ] pos-dependencies
 - [ ] pos-document-helper
 - [ ] pos-documents
