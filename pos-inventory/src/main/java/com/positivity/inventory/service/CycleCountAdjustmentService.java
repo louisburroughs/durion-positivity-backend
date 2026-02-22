@@ -9,7 +9,7 @@ import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
-import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
+import com.positivity.inventory.internal.enums.AdjustmentStatus;
 
 /**
  * Service for managing cycle count adjustments.

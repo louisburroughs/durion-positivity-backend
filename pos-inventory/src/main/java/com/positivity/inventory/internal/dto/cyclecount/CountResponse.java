@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.positivity.inventory.internal.entity.TaskStatus;
+import com.positivity.inventory.internal.enums.TaskStatus;
 
 /**
  * Response after submitting a count or recount.
@@ -18,7 +18,7 @@ import com.positivity.inventory.internal.entity.TaskStatus;
 @AllArgsConstructor
 @Builder
 public class CountResponse {
-    
+
     private UUID countEntryId;
     private UUID taskId;
     private Integer actualQuantity;

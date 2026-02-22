@@ -1,7 +1,7 @@
 package com.positivity.inventory.service;
 
-import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
-import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
+import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.enums.ApprovalTier;
 
 import java.util.Optional;
 
@@ -11,7 +11,8 @@ import java.util.Optional;
 public interface ApprovalThresholdEvaluator {
 
     /**
-     * Evaluates whether an adjustment requires approval and determines the required tier.
+     * Evaluates whether an adjustment requires approval and determines the required
+     * tier.
      *
      * @param adjustment the adjustment to evaluate
      * @return optional approval tier, empty if auto-approval is allowed

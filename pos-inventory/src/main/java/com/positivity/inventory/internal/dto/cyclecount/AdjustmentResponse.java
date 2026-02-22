@@ -9,8 +9,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
-import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
+import com.positivity.inventory.internal.enums.AdjustmentStatus;
+import com.positivity.inventory.internal.enums.ApprovalTier;
 
 /**
  * Response DTO for cycle count adjustment operations.
@@ -20,7 +20,7 @@ import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
 @AllArgsConstructor
 @Builder
 public class AdjustmentResponse {
-    
+
     private UUID adjustmentId;
     private String stockItemId;
     private String reasonCode;

@@ -9,12 +9,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
 @RequestMapping("/v1/inventory/pickingLists")
 @Tag(name = "Picking Lists", description = "Picking list command endpoints")
+@PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:picking:manage')")
 public class PickingListController {
 
     @PostMapping("/{id}/confirm")

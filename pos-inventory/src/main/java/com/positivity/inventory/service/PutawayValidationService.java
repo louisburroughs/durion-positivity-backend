@@ -1,5 +1,7 @@
-package com.positivity.inventory.internal.dto;
+package com.positivity.inventory.service;
 
+import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
+import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;

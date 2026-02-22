@@ -3,8 +3,8 @@ package com.positivity.inventory.internal.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import com.positivity.inventory.internal.model.cyclecount.AdjustmentStatus;
-import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
+import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.enums.AdjustmentStatus;
 
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 @Repository
 public interface CycleCountAdjustmentRepository extends JpaRepository<CycleCountAdjustment, UUID> {
-    
+
     /**
      * Find all adjustments with a specific status.
      * 
@@ -22,7 +22,7 @@ public interface CycleCountAdjustmentRepository extends JpaRepository<CycleCount
      * @return list of matching adjustments
      */
     List<CycleCountAdjustment> findByStatus(AdjustmentStatus status);
-    
+
     /**
      * Find all adjustments for a specific stock item.
      * 
@@ -30,7 +30,7 @@ public interface CycleCountAdjustmentRepository extends JpaRepository<CycleCount
      * @return list of adjustments for that item
      */
     List<CycleCountAdjustment> findByStockItemId(String stockItemId);
-    
+
     /**
      * Count adjustments with a specific status.
      * 

@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.model;
+package com.positivity.inventory.internal.entity;
 
 /**
  * Defines inventory ledger event types for tracking stock movements.
