@@ -1,9 +1,24 @@
 package com.positivity.workorder.service;
 
-import tools.jackson.databind.ObjectMapper;
-import com.positivity.workorder.internal.entity.*;
-import com.positivity.workorder.internal.event.WorkCompletedEvent;
-import com.positivity.workorder.internal.repository.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,20 +26,29 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.Optional;
-import java.util.UUID;
-import java.util.List;
-import java.util.Map;
-import java.math.BigDecimal;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.entity.AuditEvent;
+import com.positivity.workorder.internal.entity.ChangeRequest;
+import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderItemStatus;
+import com.positivity.workorder.internal.entity.WorkorderSnapshot;
+import com.positivity.workorder.internal.entity.WorkorderStateTransition;
+import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.repository.AuditEventRepository;
+import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.EstimateItemRepository;
+import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
+import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
+
+import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class WorkorderCompletionTest {
@@ -86,7 +110,8 @@ class WorkorderCompletionTest {
 
     @BeforeEach
     void setUp() {
-        // Mock authenticated user with gateway-injected details so snapshot/audit flows have an actor
+        // Mock authenticated user with gateway-injected details so snapshot/audit flows
+        // have an actor
         TestingAuthenticationToken authentication = new TestingAuthenticationToken(
                 "test-user",
                 "password",
