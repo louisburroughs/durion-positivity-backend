@@ -91,16 +91,18 @@ public class ArchitectureTest {
                         .because("service layer is the public API of this module");
 
         @ArchTest
-        static final ArchRule mapped_controller_methods_should_require_authorization = methods()
-                        .that().areAnnotatedWith("org.springframework.web.bind.annotation.RequestMapping")
-                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.GetMapping")
-                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PostMapping")
-                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PutMapping")
-                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.DeleteMapping")
-                        .or().areAnnotatedWith("org.springframework.web.bind.annotation.PatchMapping")
-                        .should().beAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
-                        .allowEmptyShould(true)
-                        .because("all HTTP endpoints must declare authorization guards");
+    static final ArchRule mapped_controller_methods_should_require_authorization = methods()
+            .that().areAnnotatedWith("org.springframework.web.bind.annotation.RequestMapping")
+            .or().areAnnotatedWith("org.springframework.web.bind.annotation.GetMapping")
+            .or().areAnnotatedWith("org.springframework.web.bind.annotation.PostMapping")
+            .or().areAnnotatedWith("org.springframework.web.bind.annotation.PutMapping")
+            .or().areAnnotatedWith("org.springframework.web.bind.annotation.DeleteMapping")
+            .or().areAnnotatedWith("org.springframework.web.bind.annotation.PatchMapping")
+            .should().beAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+            .orShould().beDeclaredInClassesThat()
+            .areAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+            .allowEmptyShould(true)
+            .because("all HTTP endpoints must declare authorization guards");
 
     @ArchTest
     static final ArchRule packages_should_be_free_of_cycles = slices()

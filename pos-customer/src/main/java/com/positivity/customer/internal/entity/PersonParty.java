@@ -5,10 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.shared.id.UUIDv7Generator;
-import java.util.Objects;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
@@ -18,8 +17,11 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -46,6 +48,14 @@ import lombok.ToString;
 @Schema(description = "Individual person party in the CRM system")
 public class PersonParty extends AbstractParty {
 
+    @NotBlank
+    @Schema(description = "Last name of the customer", example = "Doe")
+    private String lastName;
+
+    @NotBlank
+    @Schema(description = "First name of the customer", example = "John")
+    private String firstName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "preferred_contact_method", nullable = false, length = 20)
     @Schema(description = "Preferred method of contact", example = "EMAIL", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -69,18 +79,30 @@ public class PersonParty extends AbstractParty {
     }
 
     @PrePersist
-    private void ensureId() {
+    public void generateId() {
         if (getPartyId() == null) {
             setPartyId(UUIDv7Generator.generate());
         }
+        validateNames();
+        setCreatedAt(Instant.now());
+        setModifiedAt(Instant.now());
     }
 
-    /**
-     * Explicit dependency hook for ArchUnit UUIDv7 rule.
-     */
-    @Transient
-    public Class<?> uuidv7Dependency() {
-        return Objects.requireNonNull(UUIDv7Generator.class);
+    @PreUpdate
+    private void validateCustomer() {
+        validateNames();
+        setModifiedAt(Instant.now());
+
+    }
+
+    /** Helper method to validate customer names */
+    protected void validateNames() {
+        if (firstName == null || firstName.isBlank()) {
+            throw new IllegalStateException("firstName is required for a customer");
+        }
+        if (lastName == null || lastName.isBlank()) {
+            throw new IllegalStateException("lastName is required for a customer");
+        }
     }
 
     @Override

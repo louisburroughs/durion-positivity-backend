@@ -22,6 +22,7 @@ import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
+import com.positivity.customer.internal.service.PartyRelationshipServiceImpl;
 import com.positivity.customer.service.PartyRelationshipService;
 import com.positivity.events.EmitEvent;
 

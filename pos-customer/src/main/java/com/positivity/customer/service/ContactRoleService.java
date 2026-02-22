@@ -1,216 +1,39 @@
 package com.positivity.customer.service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
-import com.positivity.customer.internal.entity.ContactRole;
-import com.positivity.customer.internal.entity.ContactRoleAssignment;
-import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
-import com.positivity.customer.internal.repository.PersonPartyRepository;
 
-/**
- * Service for managing contact role assignments.
- * 
- * <p>
- * Handles the business logic for assigning and removing roles from contacts,
- * including:
- * </p>
- * <ul>
- * <li>Automatic primary demotion when a new primary is assigned</li>
- * <li>Validation that at least one billing contact remains</li>
- * <li>Event publishing for role changes</li>
- * </ul>
- * 
- * @see <a href=
- *      "https://github.com/louisburroughs/durion-positivity-backend/issues/108">Backend
- *      Issue #108</a>
- */
-@Service
-public class ContactRoleService {
+public interface ContactRoleService {
 
-        private static final Logger log = LoggerFactory.getLogger(ContactRoleService.class);
+    /**
+     * Get all contacts with their role assignments for a party.
+     * 
+     * @param partyId the party ID
+     * @return response containing contacts with their roles
+     * @throws IllegalArgumentException if party not found or invalid ID
+     */
+    GetContactsWithRolesResponse getContactsWithRoles(UUID partyId);
 
-        private final ContactRoleAssignmentRepository roleAssignmentRepository;
-        private final CommercialPartyRepository partyRepository;
-        private final PersonPartyRepository personRepository;
-        private final ContactPointRepository contactPointRepository;
-
-        public ContactRoleService(
-                        ContactRoleAssignmentRepository roleAssignmentRepository,
-                        CommercialPartyRepository partyRepository,
-                        PersonPartyRepository personRepository,
-                        ContactPointRepository contactPointRepository) {
-                this.roleAssignmentRepository = roleAssignmentRepository;
-                this.partyRepository = partyRepository;
-                this.personRepository = personRepository;
-                this.contactPointRepository = contactPointRepository;
-        }
-
-        /**
-         * Get all contacts with their role assignments for a party.
-         * 
-         * @param partyId the party ID
-         * @return response containing contacts with their roles
-         * @throws IllegalArgumentException if party not found or invalid ID
-         */
-        @NonNull
-        @Transactional(readOnly = true)
-        public GetContactsWithRolesResponse getContactsWithRoles(@NonNull UUID partyId) {
-                // Verify party exists
-                partyRepository.findById(partyId)
-                                .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
-
-                // Get all role assignments for this party
-                List<ContactRoleAssignment> assignments = roleAssignmentRepository.findByCustomerAccountId(partyId);
-
-                // Group assignments by contact
-                var contactMap = assignments.stream()
-                                .collect(Collectors.groupingBy(ContactRoleAssignment::getContactId));
-
-                List<GetContactsWithRolesResponse.ContactWithRoles> contacts = new ArrayList<>();
-
-                for (var entry : contactMap.entrySet()) {
-                        UUID contactId = entry.getKey();
-                        List<ContactRoleAssignment> contactAssignments = entry.getValue();
-
-                        // Get person details
-                        personRepository.findById(contactId).ifPresent(person -> {
-                                var contactDto = GetContactsWithRolesResponse.ContactWithRoles.builder()
-                                                .contactId(contactId.toString())
-                                                .contactName(person.getFirstName() + " " + person.getLastName())
-                                                .build();
-
-                                // Get email and phone from contact points
-                                var emailOpt = Optional.ofNullable(contactPointRepository
-                                                .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                                                contactId,
-                                                                com.positivity.customer.internal.enums.ContactPointType.EMAIL));
-                                emailOpt.ifPresent(cp -> contactDto.setEmail(cp.getValue()));
-                                contactDto.setHasPrimaryEmail(emailOpt.isPresent());
-
-                                var phoneOpt = Optional.ofNullable(contactPointRepository
-                                                .findByPersonPartyIdAndContactTypeAndIsPrimaryTrue(
-                                                                contactId,
-                                                                com.positivity.customer.internal.enums.ContactPointType.PHONE_MOBILE));
-                                phoneOpt.ifPresent(cp -> contactDto.setPhone(cp.getValue()));
-
-                                // Map role assignments
-                                List<GetContactsWithRolesResponse.AssignedRole> roles = contactAssignments.stream()
-                                                .map(assignment -> GetContactsWithRolesResponse.AssignedRole.builder()
-                                                                .roleCode(assignment.getRoleName().name())
-                                                                .roleLabel(assignment.getRoleName().getLabel())
-                                                                .isPrimary(assignment.isPrimary())
-                                                                .build())
-                                                .toList();
-
-                                contactDto.setRoles(roles);
-                                contacts.add(contactDto);
-                        });
-                }
-
-                return GetContactsWithRolesResponse.builder()
-                                .partyId(partyId.toString())
-                                .contacts(contacts)
-                                .build();
-        }
-
-        /**
-         * Update role assignments for a contact within a party.
-         * 
-         * <p>
-         * Implements automatic primary demotion: when a role is assigned as primary,
-         * any existing primary for that role is automatically demoted.
-         * </p>
-         * 
-         * @param partyId   the party ID
-         * @param contactId the contact (person) ID
-         * @param request   the role assignment request
-         * @return response with update status
-         * @throws IllegalArgumentException if party/contact not found or invalid data
-         */
-        @NonNull
-        @Transactional
-        public UpdateContactRolesResponse updateContactRoles(
-                        @NonNull UUID partyId,
-                        @NonNull UUID contactId,
-                        @NonNull UpdateContactRolesRequest request) {
-
-                // Verify party exists
-                partyRepository.findById(partyId)
-                                .orElseThrow(() -> new IllegalArgumentException("Party not found: " + partyId));
-
-                // Verify contact (person) exists
-                personRepository.findById(contactId)
-                                .orElseThrow(() -> new IllegalArgumentException("Contact not found: " + contactId));
-
-                // Delete existing role assignments for this contact/party
-                roleAssignmentRepository.deleteByContactIdAndCustomerAccountId(contactId, partyId);
-                roleAssignmentRepository.flush();
-
-                // Create new assignments
-                List<ContactRoleAssignment> newAssignments = new ArrayList<>();
-
-                if (request.getRoles() != null) {
-                        for (var roleReq : request.getRoles()) {
-                                ContactRole role = ContactRole.valueOf(roleReq.getRoleCode());
-                                boolean isPrimary = Boolean.TRUE.equals(roleReq.getIsPrimary());
-
-                                // If marking as primary, demote existing primary for this role
-                                if (isPrimary) {
-                                        demoteExistingPrimary(partyId, role);
-                                }
-
-                                ContactRoleAssignment assignment = ContactRoleAssignment.builder()
-                                                .contactId(contactId)
-                                                .customerAccountId(partyId)
-                                                .roleName(role)
-                                                .primary(isPrimary)
-                                                .build();
-
-                                newAssignments.add(assignment);
-                        }
-                }
-
-                roleAssignmentRepository.saveAll(newAssignments);
-
-                log.info("Updated contact roles: partyId={}, contactId={}, roleCount={}",
-                                partyId, contactId, newAssignments.size());
-
-                return UpdateContactRolesResponse.builder()
-                                .partyId(partyId.toString())
-                                .contactId(contactId.toString())
-                                .status("SUCCESS")
-                                .build();
-        }
-
-        /**
-         * Demote any existing primary contact for a given role within an account.
-         * 
-         * @param customerAccountId the customer account UUID
-         * @param role              the role to demote the existing primary for
-         */
-        private void demoteExistingPrimary(@NonNull UUID customerAccountId, @NonNull ContactRole role) {
-                roleAssignmentRepository.findByCustomerAccountIdAndRoleNameAndPrimaryTrue(customerAccountId, role)
-                                .ifPresent(existingPrimary -> {
-                                        existingPrimary.setPrimary(false);
-                                        roleAssignmentRepository.save(existingPrimary);
-                                        log.info("Demoted existing primary for role {} in account {}",
-                                                        role, customerAccountId);
-                                });
-        }
+    /**
+     * Update role assignments for a contact within a party.
+     * 
+     * <p>
+     * Implements automatic primary demotion: when a role is assigned as primary,
+     * any existing primary for that role is automatically demoted.
+     * </p>
+     * 
+     * @param partyId   the party ID
+     * @param contactId the contact (person) ID
+     * @param request   the role assignment request
+     * @return response with update status
+     * @throws IllegalArgumentException if party/contact not found or invalid data
+     */
+    UpdateContactRolesResponse updateContactRoles(
+            UUID partyId,
+            UUID contactId,
+            UpdateContactRolesRequest request);
 
 }

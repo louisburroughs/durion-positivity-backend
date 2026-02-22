@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
+
 /**
  * Response DTO for listing contacts with roles for a commercial account.
  * Implements the consumer API contract defined in Issue #110.

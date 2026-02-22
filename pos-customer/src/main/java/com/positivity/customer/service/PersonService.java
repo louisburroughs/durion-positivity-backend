@@ -1,47 +1,15 @@
 package com.positivity.customer.service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
-import com.positivity.customer.internal.entity.ContactPoint;
-import com.positivity.customer.internal.entity.PersonParty;
-import com.positivity.customer.internal.repository.ContactPointRepository;
-import com.positivity.customer.internal.repository.PersonPartyRepository;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-/**
- * Service for managing individual person records in the CRM system.
- * Implements the business logic for Issue #111: Party: Create Individual Person
- * Record.
- * <p>
- * Domain Authority: CRM domain is the system of record for Party/PersonParty
- * entities.
- * </p>
- *
- * @see <a href=
- *      "https://github.com/louisburroughs/durion-positivity-backend/issues/111">Backend
- *      Issue #111</a>
- */
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class PersonService {
-
-    private final PersonPartyRepository personRepository;
-    private final ContactPointRepository contactPointRepository;
+public interface PersonService {
 
     /**
      * Creates a new individual person record with optional contact points.
@@ -60,69 +28,7 @@ public class PersonService {
      * @return response with created person details
      * @throws ResponseStatusException if validation fails
      */
-    @Transactional
-    public CreatePersonResponse createPerson(@NonNull CreatePersonRequest request, UUID userId) {
-        log.info("Creating person: firstName={}, lastName={}, preferredContactMethod={}, user={}",
-                request.getFirstName(), request.getLastName(), request.getPreferredContactMethod(), userId);
-
-        // Validation is handled by @Valid on controller, but double-check required
-        // fields
-        validateCreateRequest(request);
-
-        // Create person entity
-        PersonParty person = new PersonParty();
-        person.setFirstName(request.getFirstName().trim());
-        person.setLastName(request.getLastName().trim());
-        person.setPreferredContactMethod(request.getPreferredContactMethod());
-
-        // Save person first to get ID
-        PersonParty savedPerson = personRepository.save(person);
-        log.debug("Person created with ID: {}", savedPerson.getPersonId());
-
-        // Create contact points
-        List<ContactPoint> contactPoints = new ArrayList<>();
-
-        // Process emails
-        if (request.getEmails() != null && !request.getEmails().isEmpty()) {
-            for (CreatePersonRequest.EmailInput emailInput : request.getEmails()) {
-                validateEmail(emailInput.getValue());
-
-                ContactPoint cp = new ContactPoint();
-                cp.setPerson(savedPerson);
-                cp.setContactType(ContactPointType.EMAIL);
-                cp.setValue(emailInput.getValue().trim().toLowerCase());
-                cp.setPrimary(emailInput.isPrimary());
-                contactPoints.add(cp);
-            }
-        }
-
-        // Process phones
-        if (request.getPhones() != null && !request.getPhones().isEmpty()) {
-            for (CreatePersonRequest.PhoneInput phoneInput : request.getPhones()) {
-                ContactPointType phoneType = phoneInput.getType() != null
-                        ? phoneInput.getType()
-                        : ContactPointType.PHONE_MOBILE;
-
-                ContactPoint cp = new ContactPoint();
-                cp.setPerson(savedPerson);
-                cp.setContactType(phoneType);
-                cp.setValue(phoneInput.getValue().trim());
-                cp.setPrimary(phoneInput.isPrimary());
-                contactPoints.add(cp);
-            }
-        }
-
-        // Save all contact points
-        if (!contactPoints.isEmpty()) {
-            contactPointRepository.saveAll(contactPoints);
-            log.debug("Created {} contact points for person {}", contactPoints.size(), savedPerson.getPersonId());
-        }
-
-        log.info("Successfully created person {} with {} contact points",
-                savedPerson.getPersonId(), contactPoints.size());
-
-        return CreatePersonResponse.from(savedPerson, contactPoints.size());
-    }
+    CreatePersonResponse createPerson(CreatePersonRequest request, UUID userId);
 
     /**
      * Retrieves a person by ID.
@@ -131,22 +37,7 @@ public class PersonService {
      * @return person details
      * @throws ResponseStatusException if person not found
      */
-    @Transactional(readOnly = true)
-    public GetPersonResponse getPerson(@NonNull UUID personId) {
-        log.debug("Getting person: {}", personId);
-
-        PersonParty person = personRepository.findById(personId)
-                .orElseThrow(() -> {
-                    log.warn("Person not found: {}", personId);
-                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found");
-                });
-
-        // Load contact points
-        List<ContactPoint> contactPoints = contactPointRepository.findByPersonPartyId(personId);
-        person.getContactPoints().addAll(contactPoints);
-
-        return toGetPersonResponse(person);
-    }
+    GetPersonResponse getPerson(UUID personId);
 
     /**
      * Searches for persons by various criteria.
@@ -158,43 +49,7 @@ public class PersonService {
      * @param offset starting offset for pagination
      * @return list of matching persons
      */
-    @Transactional(readOnly = true)
-    public List<GetPersonResponse> searchPersons(String name, String email, String phone, int limit, int offset) {
-        log.debug("Searching persons: name={}, email={}, phone={}, limit={}, offset={}",
-                name, email, phone, limit, offset);
-
-        List<PersonParty> persons;
-
-        // Search by different criteria
-        if (name != null && !name.trim().isEmpty()) {
-            persons = personRepository.searchByName(name.trim());
-        } else if (email != null && !email.trim().isEmpty()) {
-            // Find by email requires joining with contact points
-            persons = personRepository.findByContactPointValue(email.trim().toLowerCase());
-        } else if (phone != null && !phone.trim().isEmpty()) {
-            // Find by phone requires joining with contact points
-            persons = personRepository.findByContactPointValue(phone.trim());
-        } else {
-            // Return empty for no search criteria
-            persons = new ArrayList<>();
-        }
-
-        // Apply pagination manually (for now - could be improved with Pageable)
-        int endIndex = Math.min(offset + limit, persons.size());
-        if (offset >= persons.size()) {
-            return new ArrayList<>();
-        }
-        persons = persons.subList(offset, endIndex);
-
-        return persons.stream()
-                .map(person -> {
-                    List<ContactPoint> contactPoints = contactPointRepository
-                            .findByPersonPartyId(person.getPersonId());
-                    person.getContactPoints().addAll(contactPoints);
-                    return toGetPersonResponse(person);
-                })
-                .toList();
-    }
+    List<GetPersonResponse> searchPersons(String name, String email, String phone, int limit, int offset);
 
     /**
      * Searches for persons by name (legacy method for backwards compatibility).
@@ -202,58 +57,6 @@ public class PersonService {
      * @param searchTerm the search term
      * @return list of matching persons
      */
-    @Transactional(readOnly = true)
-    public List<GetPersonResponse> searchPersons(@NonNull String searchTerm) {
-        return searchPersons(searchTerm, null, null, 20, 0);
-    }
+    List<GetPersonResponse> searchPersons(String searchTerm);
 
-    private void validateCreateRequest(CreatePersonRequest request) {
-        if (request.getFirstName() == null || request.getFirstName().trim().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "firstName is required");
-        }
-        if (request.getLastName() == null || request.getLastName().trim().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lastName is required");
-        }
-        if (request.getPreferredContactMethod() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "preferredContactMethod is required");
-        }
-    }
-
-    private void validateEmail(String email) {
-        if (email == null || email.trim().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email value is required");
-        }
-        // Basic email format validation
-        if (!email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid email format: " + email);
-        }
-    }
-
-    /**
-     * Converts a PersonParty entity to a GetPersonResponse DTO.
-     *
-     * @param person the person-party entity
-     * @return the response DTO
-     */
-    private GetPersonResponse toGetPersonResponse(PersonParty person) {
-        List<GetPersonResponse.ContactPointDto> contactPointDtos = person.getContactPoints().stream()
-                .map(cp -> GetPersonResponse.ContactPointDto.builder()
-                        .contactPointId(cp.getContactPointId())
-                        .contactType(cp.getContactType())
-                        .value(cp.getValue())
-                        .isPrimary(cp.isPrimary())
-                        .build())
-                .toList();
-
-        return GetPersonResponse.builder()
-                .personId(person.getPersonId())
-                .firstName(person.getFirstName())
-                .lastName(person.getLastName())
-                .displayName(person.getDisplayName())
-                .preferredContactMethod(person.getPreferredContactMethod())
-                .contactPoints(contactPointDtos)
-                .createdAt(person.getCreatedAt())
-                .updatedAt(person.getUpdatedAt())
-                .build();
-    }
 }
