@@ -14,8 +14,12 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.entity.TimeEntryException;
@@ -31,9 +35,22 @@ class TimeEntryExceptionServiceTest {
 
     @BeforeEach
     void setup() {
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken(
+                "test-user", "password", "ROLE_USER");
+        authentication.setDetails(java.util.Map.of(
+                GatewaySecurityConstants.DETAIL_USER_ID, "33333333-3333-3333-3333-333333333333",
+                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+        authentication.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         exceptionRepository = mock(TimeEntryExceptionRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
         service = new TimeEntryExceptionServiceImpl(exceptionRepository, auditRepository);
+    }
+
+    @AfterEach
+    void clearAuth() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
