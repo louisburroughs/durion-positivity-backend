@@ -67,7 +67,7 @@ class APPaymentControllerTest {
 
                         // When: Request with valid reference
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", validRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         // Then: Should succeed (404 because no payment found, but validation passed)
                                         .andExpect(status().isNotFound());
@@ -85,7 +85,7 @@ class APPaymentControllerTest {
 
                         // When: Request with alphanumeric reference
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", validRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         // Then: Should succeed
                                         .andExpect(status().isNotFound());
@@ -107,7 +107,7 @@ class APPaymentControllerTest {
                         // This is defense-in-depth: firewall + our validation both protect against log
                         // injection
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maliciousRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         // Firewall returns 400 Bad Request for blocked URLs
                                         .andExpect(status().isBadRequest());
@@ -125,7 +125,7 @@ class APPaymentControllerTest {
                         // When: Request with CRLF injection
                         // Then: Firewall blocks before reaching controller
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maliciousRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         .andExpect(status().isBadRequest());
 
@@ -141,7 +141,7 @@ class APPaymentControllerTest {
                         // When: Request with CRLF injection
                         // Then: Firewall blocks before reaching controller
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maliciousRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         .andExpect(status().isBadRequest());
 
@@ -156,7 +156,7 @@ class APPaymentControllerTest {
 
                         // When: Request with excessive length
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", tooLongRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         // Then: Should return 400 Bad Request
                                         .andExpect(status().isBadRequest())
@@ -176,7 +176,7 @@ class APPaymentControllerTest {
 
                         // When: Request with max length reference
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", maxLengthRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         // Then: Should succeed
                                         .andExpect(status().isNotFound());
@@ -194,7 +194,7 @@ class APPaymentControllerTest {
 
                         // When: Request with min length reference
                         mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", minLengthRef)
-                                        .header("X-Authorities", "ap:payment:view")
+                                        .header("X-Authorities", "accounting:ap:view")
                                         .header("X-User", "test-user"))
                                         // Then: Should succeed
                                         .andExpect(status().isNotFound());
@@ -219,7 +219,7 @@ class APPaymentControllerTest {
                                                 .thenReturn(Optional.empty());
 
                                 mockMvc.perform(get("/v1/accounting/ap/payments/by-ref/{paymentRef}", ref)
-                                                .header("X-Authorities", "ap:payment:view")
+                                                .header("X-Authorities", "accounting:ap:view")
                                                 .header("X-User", "test-user"))
                                                 .andExpect(status().isNotFound());
 
