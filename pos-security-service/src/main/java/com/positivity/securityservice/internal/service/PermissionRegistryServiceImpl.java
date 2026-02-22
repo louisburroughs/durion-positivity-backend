@@ -1,10 +1,11 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
+import com.positivity.securityservice.service.PermissionRegistryService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +36,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      * Pattern for validating permission names: domain:resource:action
      * All lowercase, alphanumeric with underscores.
      */
-    private static final Pattern PERMISSION_PATTERN = Pattern
+    public static final Pattern PERMISSION_PATTERN = Pattern
             .compile("^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$");
 
     /**
@@ -177,7 +178,8 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
 
     private PermissionDto toDto(Permission permission) {
         return PermissionDto.builder()
-                .id(permission.getName())
+                .id(permission.getId())
+                .name(permission.getName())
                 .domain(permission.getDomain())
                 .description(permission.getDescription())
                 .deprecated(permission.isDeprecated())

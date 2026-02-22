@@ -14,6 +14,7 @@ import lombok.Value;
 @Builder
 public class PermissionDto {
     UUID id;
+    String name;
     String domain;
     String description;
     boolean deprecated;

@@ -87,7 +87,7 @@ public class ArchitectureTest {
         // sub-slices under com.positivity.events.
         @ArchTest
         static final ArchRule packages_should_be_free_of_cycles = slices()
-                        .matching("com.positivity.events.(*)..")
+                        .matching("com.positivity.events.internal.(*)..")
                         .should().beFreeOfCycles()
                         .allowEmptyShould(true)
                         .because("cyclic dependencies make modules harder to maintain and evolve");

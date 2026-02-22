@@ -130,7 +130,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
 
     private PermissionDto toPermissionDto(Permission permission) {
         return PermissionDto.builder()
-                .id(permission.getName())
+                .id(permission.getId())
+                .name(permission.getName())
                 .domain(permission.getDomain())
                 .description(permission.getDescription())
                 .deprecated(permission.isDeprecated())

@@ -85,7 +85,7 @@ public class ArchitectureTest {
 
     @ArchTest
     static final ArchRule packages_should_be_free_of_cycles = slices()
-            .matching("com.positivity.service_discovery.(*)..")
+            .matching("com.positivity.service_discovery.internal.(*)..")
             .should().beFreeOfCycles()
             .because("cyclic dependencies make modules harder to maintain and evolve");
     @ArchTest

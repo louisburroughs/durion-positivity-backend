@@ -9,6 +9,9 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import com.positivity.shared.id.UUIDv7Generator;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -19,7 +22,10 @@ import lombok.Setter;
 public class ItemCostEntity {
 
     @Id
-    @Column(name = "item_id", nullable = false, columnDefinition = "UUID")
+    @Column(name = "item_cost_id", nullable = false, columnDefinition = "UUID")
+    private UUID itemCostId;
+
+    @Column(name = "item_id", nullable = false, columnDefinition = "UUID", unique = true)
     private UUID itemId;
 
     @Column(name = "standard_cost", precision = 19, scale = 4)
@@ -42,6 +48,9 @@ public class ItemCostEntity {
 
     @PrePersist
     void onCreate() {
+        if (itemId == null) {
+            itemId = UUIDv7Generator.generate();
+        }
         if (qtyOnHand == null) {
             qtyOnHand = BigDecimal.ZERO;
         }
