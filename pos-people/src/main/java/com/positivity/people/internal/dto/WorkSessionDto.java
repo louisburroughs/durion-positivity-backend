@@ -1,10 +1,11 @@
 package com.positivity.people.internal.dto;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public class WorkSessionDto {
 
-    private Long sessionId;
+    private UUID sessionId;
     private String personId;
     private String status;
     private Instant startedAt;
@@ -13,7 +14,7 @@ public class WorkSessionDto {
     public WorkSessionDto() {
     }
 
-    public WorkSessionDto(Long sessionId, String personId, String status, Instant startedAt, Instant endedAt) {
+    public WorkSessionDto(UUID sessionId, String personId, String status, Instant startedAt, Instant endedAt) {
         this.sessionId = sessionId;
         this.personId = personId;
         this.status = status;
@@ -21,11 +22,11 @@ public class WorkSessionDto {
         this.endedAt = endedAt;
     }
 
-    public Long getSessionId() {
+    public UUID getSessionId() {
         return sessionId;
     }
 
-    public void setSessionId(Long sessionId) {
+    public void setSessionId(UUID sessionId) {
         this.sessionId = sessionId;
     }
 

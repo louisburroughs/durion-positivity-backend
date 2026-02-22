@@ -10,6 +10,7 @@ import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.people.service.WorkSessionService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -87,7 +88,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public BreakDto startBreak(@NonNull Long sessionId) {
+    public BreakDto startBreak(@NonNull UUID sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         String resolvedActor = resolveActorFromSecurityContext();
 
@@ -115,7 +116,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
     }
 
     @Override
-    public BreakDto stopBreak(@NonNull Long sessionId) {
+    public BreakDto stopBreak(@NonNull UUID sessionId) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         String resolvedActor = resolveActorFromSecurityContext();
 

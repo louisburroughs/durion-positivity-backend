@@ -1,27 +1,28 @@
 package com.positivity.people.internal.dto;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public class BreakDto {
 
-    private Long sessionId;
+    private UUID sessionId;
     private Instant startedAt;
     private Instant endedAt;
 
     public BreakDto() {
     }
 
-    public BreakDto(Long sessionId, Instant startedAt, Instant endedAt) {
+    public BreakDto(UUID sessionId, Instant startedAt, Instant endedAt) {
         this.sessionId = sessionId;
         this.startedAt = startedAt;
         this.endedAt = endedAt;
     }
 
-    public Long getSessionId() {
+    public UUID getSessionId() {
         return sessionId;
     }
 
-    public void setSessionId(Long sessionId) {
+    public void setSessionId(UUID sessionId) {
         this.sessionId = sessionId;
     }
 
