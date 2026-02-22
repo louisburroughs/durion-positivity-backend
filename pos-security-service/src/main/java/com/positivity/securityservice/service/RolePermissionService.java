@@ -1,6 +1,6 @@
 package com.positivity.securityservice.service;
 
-import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.dto.RoleDto;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
@@ -11,11 +11,11 @@ import org.jspecify.annotations.NonNull;
  */
 public interface RolePermissionService {
 
-    Role createRole(@NonNull String roleName, String description);
+    RoleDto createRole(@NonNull String roleName, String description);
 
-    Role grantPermission(@NonNull UUID roleId, @NonNull String permissionKey);
+    RoleDto grantPermission(@NonNull UUID roleId, @NonNull String permissionKey);
 
-    Role revokePermission(@NonNull UUID roleId, @NonNull String permissionKey);
+    RoleDto revokePermission(@NonNull UUID roleId, @NonNull String permissionKey);
 
     void assignRoleToPrincipal(@NonNull String principalId, @NonNull UUID roleId);
 }

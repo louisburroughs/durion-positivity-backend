@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
@@ -72,12 +73,12 @@ class RoleManagementServiceImplTest {
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
         when(permissionRepository.findByName("security:role:grant")).thenReturn(Optional.of(permission));
 
-        Role created = roleManagementService.createRole("MANAGER", "Manager role");
-        Role updated = roleManagementService.updateRolePermissions(
+        RoleDto created = roleManagementService.createRole("MANAGER", "Manager role");
+        RoleDto updated = roleManagementService.updateRolePermissions(
                 new RolePermissionsRequest(roleId, Set.of("security:role:grant")));
 
         assertThat(created.getCreatedBy()).isEqualTo("agent-user");
-        assertThat(updated.getPermissions()).contains(permission);
+        assertThat(updated.getPermissions()).extracting("id").contains("security:role:grant");
     }
 
     @Test
@@ -121,11 +122,11 @@ class RoleManagementServiceImplTest {
         when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
         when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
-        RoleAssignment createdAssignment = roleManagementService.createRoleAssignment(request);
+        var createdAssignment = roleManagementService.createRoleAssignment(request);
         boolean hasPermission = roleManagementService.userHasPermission(userId, "security:role:grant", "loc-1");
         roleManagementService.revokeRoleAssignment(assignmentId, LocalDateTime.now().plusDays(1));
 
-        assertThat(createdAssignment.getRole().getName()).isEqualTo("MANAGER");
+        assertThat(createdAssignment.getRoleId()).isEqualTo(roleId);
         assertThat(hasPermission).isTrue();
     }
 

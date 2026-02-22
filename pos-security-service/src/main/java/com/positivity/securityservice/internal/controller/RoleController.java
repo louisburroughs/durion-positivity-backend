@@ -2,12 +2,12 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.ErrorResponse;
+import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionGrantRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
-import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.service.RoleManagementService;
 import com.positivity.securityservice.service.RolePermissionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,7 +52,7 @@ public class RoleController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Create a new role", description = "Creates a new role with the specified name and description")
-    public ResponseEntity<Role> createRole(@RequestBody Map<String, String> request) {
+    public ResponseEntity<RoleDto> createRole(@RequestBody Map<String, String> request) {
         String name = request.get("name");
         String description = request.get("description");
 
@@ -60,7 +60,7 @@ public class RoleController {
             throw new IllegalArgumentException("Role name is required and cannot be blank");
         }
 
-        Role role = roleManagementService.createRole(name, description);
+        RoleDto role = roleManagementService.createRole(name, description);
         return ResponseEntity.status(HttpStatus.CREATED).body(role);
     }
 
@@ -71,7 +71,7 @@ public class RoleController {
     @PutMapping("/{roleId}/permissions/grant")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Grant permission to a role")
-    public ResponseEntity<Role> grantPermissionToRole(
+    public ResponseEntity<RoleDto> grantPermissionToRole(
             @PathVariable UUID roleId,
             @RequestBody RolePermissionGrantRequest request) {
         if (request == null || request.getPermission() == null || request.getPermission().isBlank()) {
@@ -87,7 +87,7 @@ public class RoleController {
     @DeleteMapping("/{roleId}/permissions/{permissionKey}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Revoke permission from a role")
-    public ResponseEntity<Role> revokePermissionFromRole(
+    public ResponseEntity<RoleDto> revokePermissionFromRole(
             @PathVariable UUID roleId,
             @PathVariable String permissionKey) {
         return ResponseEntity.ok(rolePermissionService.revokePermission(roleId, permissionKey));
@@ -101,8 +101,8 @@ public class RoleController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update role permissions", description = "Assigns a set of permissions to a role")
     @ApiResponse(responseCode = "404", description = "Role or permission not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<Role> updateRolePermissions(@RequestBody RolePermissionsRequest request) {
-        Role role = roleManagementService.updateRolePermissions(request);
+    public ResponseEntity<RoleDto> updateRolePermissions(@RequestBody RolePermissionsRequest request) {
+        RoleDto role = roleManagementService.updateRolePermissions(request);
         return ResponseEntity.ok(role);
     }
 
@@ -114,8 +114,8 @@ public class RoleController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Create role assignment", description = "Assigns a role to a user with optional scope and effective dates")
     @ApiResponse(responseCode = "404", description = "User or role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<RoleAssignment> createRoleAssignment(@RequestBody RoleAssignmentRequest request) {
-        RoleAssignment assignment = roleManagementService.createRoleAssignment(request);
+    public ResponseEntity<RoleAssignmentDto> createRoleAssignment(@RequestBody RoleAssignmentRequest request) {
+        RoleAssignmentDto assignment = roleManagementService.createRoleAssignment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(assignment);
     }
 
@@ -127,10 +127,10 @@ public class RoleController {
     @Operation(summary = "Get user role assignments", description = "Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked")
     @ApiResponse(responseCode = "200", description = "Role assignments returned successfully")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<List<RoleAssignment>> getUserRoleAssignments(
+    public ResponseEntity<List<RoleAssignmentDto>> getUserRoleAssignments(
             @Parameter(description = "User ID", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID userId,
             @Parameter(description = "Include historical assignments (expired/revoked)", example = "false") @RequestParam(defaultValue = "false") boolean includeHistory) {
-        List<RoleAssignment> assignments = roleManagementService.getAssignmentsForUser(userId, includeHistory);
+        List<RoleAssignmentDto> assignments = roleManagementService.getAssignmentsForUser(userId, includeHistory);
         return ResponseEntity.ok(assignments);
     }
 
@@ -141,8 +141,8 @@ public class RoleController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get user permissions", description = "Returns all permissions for a user from their role assignments")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<Set<Permission>> getUserPermissions(@PathVariable UUID userId) {
-        Set<Permission> permissions = roleManagementService.getUserPermissions(userId);
+    public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
+        Set<PermissionDto> permissions = roleManagementService.getUserPermissions(userId);
         return ResponseEntity.ok(permissions);
     }
 
@@ -186,7 +186,7 @@ public class RoleController {
     @GetMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get all roles", description = "Returns all roles in the system")
-    public ResponseEntity<List<Role>> getAllRoles() {
+    public ResponseEntity<List<RoleDto>> getAllRoles() {
         return ResponseEntity.ok(roleManagementService.getAllRoles());
     }
 
@@ -197,8 +197,8 @@ public class RoleController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Get role by name", description = "Returns a specific role by its name")
     @ApiResponse(responseCode = "404", description = "Role not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<Role> getRoleByName(@PathVariable String name) {
-        Role role = roleManagementService.getRoleByName(name);
+    public ResponseEntity<RoleDto> getRoleByName(@PathVariable String name) {
+        RoleDto role = roleManagementService.getRoleByName(name);
         return ResponseEntity.ok(role);
     }
 }

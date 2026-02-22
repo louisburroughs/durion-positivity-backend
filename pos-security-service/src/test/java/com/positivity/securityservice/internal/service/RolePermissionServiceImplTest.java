@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
@@ -63,7 +64,7 @@ class RolePermissionServiceImplTest {
             when(roleRepository.existsByName("MANAGER")).thenReturn(false);
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            Role result = sut.createRole("MANAGER", "Manager role");
+            RoleDto result = sut.createRole("MANAGER", "Manager role");
 
             assertThat(result.getName()).isEqualTo("MANAGER");
             assertThat(result.getCreatedBy()).isEqualTo("agent-user");
@@ -75,7 +76,7 @@ class RolePermissionServiceImplTest {
             when(roleRepository.existsByName("MANAGER")).thenReturn(false);
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            Role result = sut.createRole("MANAGER", "Manager role");
+            RoleDto result = sut.createRole("MANAGER", "Manager role");
 
             assertThat(result.getCreatedBy()).isEqualTo("system");
         }
@@ -111,9 +112,9 @@ class RolePermissionServiceImplTest {
             when(permissionRepository.findByName(permissionKey)).thenReturn(Optional.of(permission));
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            Role result = sut.grantPermission(roleId, permissionKey);
+            RoleDto result = sut.grantPermission(roleId, permissionKey);
 
-            assertThat(result.getPermissions()).contains(permission);
+            assertThat(result.getPermissions()).extracting("id").contains(permissionKey);
             verify(applicationEventPublisher).publishEvent(any());
         }
 
@@ -132,10 +133,10 @@ class RolePermissionServiceImplTest {
             when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            Role result = sut.grantPermission(roleId, permissionKey);
+            RoleDto result = sut.grantPermission(roleId, permissionKey);
 
             assertThat(result.getPermissions()).hasSize(1);
-            assertThat(result.getPermissions().iterator().next().getName()).isEqualTo(permissionKey);
+            assertThat(result.getPermissions().iterator().next().getId()).isEqualTo(permissionKey);
             verify(permissionRepository).save(any(Permission.class));
         }
 
@@ -170,7 +171,7 @@ class RolePermissionServiceImplTest {
             when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            Role result = sut.revokePermission(roleId, permissionKey);
+            RoleDto result = sut.revokePermission(roleId, permissionKey);
 
             assertThat(result.getPermissions()).isEmpty();
         }

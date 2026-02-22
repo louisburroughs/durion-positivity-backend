@@ -1,5 +1,6 @@
 package com.positivity.securityservice.service;
 
+import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
@@ -25,7 +26,7 @@ import java.util.regex.Pattern;
 @Slf4j
 public class PermissionRegistryServiceImpl implements PermissionRegistryService {
 
-    private record ProcessingCounters(int registered, int updated, int skipped) {
+    public record ProcessingCounters(int registered, int updated, int skipped) {
     }
 
     private final PermissionRepository permissionRepository;
@@ -142,16 +143,20 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      * Get all permissions for a domain.
      */
     @Override
-    public List<Permission> getPermissionsByDomain(String domain) {
-        return permissionRepository.findByDomain(domain);
+    public List<PermissionDto> getPermissionsByDomain(String domain) {
+        return permissionRepository.findByDomain(domain).stream()
+                .map(this::toDto)
+                .toList();
     }
 
     /**
      * Get all registered permissions.
      */
     @Override
-    public List<Permission> getAllPermissions() {
-        return permissionRepository.findAll();
+    public List<PermissionDto> getAllPermissions() {
+        return permissionRepository.findAll().stream()
+                .map(this::toDto)
+                .toList();
     }
 
     /**
@@ -166,7 +171,16 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
      * Get permission by name.
      */
     @Override
-    public Optional<Permission> getPermissionByName(String name) {
-        return permissionRepository.findByName(name);
+    public Optional<PermissionDto> getPermissionByName(String name) {
+        return permissionRepository.findByName(name).map(this::toDto);
+    }
+
+    private PermissionDto toDto(Permission permission) {
+        return PermissionDto.builder()
+                .id(permission.getName())
+                .domain(permission.getDomain())
+                .description(permission.getDescription())
+                .deprecated(permission.isDeprecated())
+                .build();
     }
 }
