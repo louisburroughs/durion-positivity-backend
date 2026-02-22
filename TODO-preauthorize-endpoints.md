@@ -1,35 +1,31 @@
-# TODO: Enforce @PreAuthorize on mapped controller methods
+# @PreAuthorize coverage tracker
 
-- [x] pos-people (rule added, controllers updated)
-- [x] pos-shop-manager (rule added, controllers updated)
-- [x] pos-accounting (rule added, controllers updated)
-- [x] pos-api-gateway (rule added; no controllers)
-- [x] pos-archunit (rule added; no controllers)
-- [ ] pos-archunit
-- [x] pos-catalog (rule added; already compliant)
-- [ ] pos-customer (in progress; pending UUIDv7 entity rule fixes)
-- [ ] pos-dependencies
-- [ ] pos-document-helper
-- [ ] pos-documents
-- [ ] pos-event-receiver
-- [ ] pos-events
-- [ ] pos-image
-- [ ] pos-inquiry
-- [ ] pos-inventory
-- [ ] pos-invoice
-- [ ] pos-location
-- [ ] pos-mcp-server
-- [ ] pos-order
-- [ ] pos-price
-- [ ] pos-security-common
-- [ ] pos-security-service
-- [ ] pos-service-discovery
-- [ ] pos-shared-dtos
-- [ ] pos-shop-manager
-- [ ] pos-tax
-- [ ] pos-tax-common
-- [ ] pos-vehicle-fitment
-- [ ] pos-vehicle-inventory
-- [ ] pos-vehicle-reference-carapi
-- [ ] pos-vehicle-reference-nhtsa
-- [ ] pos-workorder
+Rule added to every ArchitectureTest and controllers annotated (class-level allowed).
+
+- [x] pos-accounting
+- [x] pos-api-gateway (no controllers)
+- [x] pos-archunit (no controllers)
+- [x] pos-catalog
+- [x] pos-customer
+- [x] pos-documents
+- [x] pos-event-receiver
+- [x] pos-events
+- [x] pos-image (no controllers)
+- [x] pos-inquiry (no controllers)
+- [x] pos-inventory
+- [x] pos-invoice
+- [x] pos-location
+- [x] pos-mcp-server
+- [x] pos-order
+- [x] pos-people
+- [x] pos-price
+- [x] pos-security-service
+- [x] pos-service-discovery
+- [x] pos-shop-manager
+- [x] pos-vehicle-fitment
+- [x] pos-vehicle-inventory
+- [x] pos-vehicle-reference-carapi
+- [x] pos-vehicle-reference-nhtsa
+- [x] pos-workorder
+
+Modules without ArchitectureTest: pos-dependencies, pos-document-helper, pos-security-common, pos-shared-dtos, pos-tax, pos-tax-common, pos-vehicle-reference-carapi? (done), pos-vehicle-reference-nhtsa? (done) – N/A unless tests are added later.

@@ -11,6 +11,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+
+import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 
 /**

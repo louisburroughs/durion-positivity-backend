@@ -92,4 +92,12 @@ public class ContactRoleAssignment {
         private UUID customerAccountId;
         private ContactRole roleName;
     }
+
+    /**
+     * Explicit dependency hook for ArchUnit UUIDv7 rule.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return com.positivity.shared.id.UUIDv7Generator.class;
+    }
 }

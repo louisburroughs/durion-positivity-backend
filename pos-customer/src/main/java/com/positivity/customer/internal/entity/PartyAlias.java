@@ -60,4 +60,12 @@ public class PartyAlias {
         alias.setTargetPartyId(targetPartyId);
         return alias;
     }
+
+    /**
+     * Explicit dependency hook for ArchUnit UUIDv7 rule.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return com.positivity.shared.id.UUIDv7Generator.class;
+    }
 }

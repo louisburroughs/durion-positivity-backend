@@ -1,4 +1,4 @@
-package com.positivity.customer.service;
+package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.dto.GetAccountTierResponse;
 import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
@@ -36,7 +36,7 @@ import java.util.UUID;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class AccountTierService {
+public class AccountTierServiceImpl {
 
     private final CommercialPartyRepository commercialPartyRepository;
 

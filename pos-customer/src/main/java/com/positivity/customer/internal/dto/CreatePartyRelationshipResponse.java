@@ -11,6 +11,8 @@ import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
 
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
+
 /**
  * Response DTO for party relationship creation.
  *

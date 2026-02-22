@@ -93,6 +93,8 @@ public class ArchitectureTest {
             .or().areAnnotatedWith("org.springframework.web.bind.annotation.DeleteMapping")
             .or().areAnnotatedWith("org.springframework.web.bind.annotation.PatchMapping")
             .should().beAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+            .orShould().beDeclaredInClassesThat()
+            .areAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
             .allowEmptyShould(true)
             .because("all HTTP endpoints must declare authorization guards");
 
