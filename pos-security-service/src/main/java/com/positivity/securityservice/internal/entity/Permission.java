@@ -36,6 +36,12 @@ public class Permission {
     private String description;
 
     /**
+     * Indicates whether this permission has been deprecated.
+     */
+    @Column(nullable = false)
+    private boolean deprecated;
+
+    /**
      * The domain this permission belongs to (e.g., pricing, inventory, security)
      */
     @Column(nullable = false, length = 50)

@@ -1,11 +1,13 @@
 package com.positivity.customer.internal.entity;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.shared.id.UUIDv7Generator;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
@@ -21,6 +23,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
@@ -92,12 +95,46 @@ public class CommercialParty extends AbstractParty {
     @EqualsAndHashCode.Exclude
     private Set<Contact> contacts = new HashSet<>();
 
-    @PrePersist
-    @PreUpdate
     private void ensureContactsPresent() {
         if (contacts == null || contacts.isEmpty()) {
             throw new IllegalStateException("Party must have at least one contact");
         }
+    }
+
+    @PrePersist
+    public void generateId() {
+        if (getPartyId() == null) {
+            setPartyId(UUIDv7Generator.generate());
+        }
+        validateNames();
+        ensureContactsPresent();
+        setCreatedAt(Instant.now());
+        setModifiedAt(Instant.now());
+    }
+
+    @PreUpdate
+    private void validateCustomer() {
+        validateNames();
+        ensureContactsPresent();
+        setModifiedAt(Instant.now());
+    }
+
+    /** Helper method to validate customer names */
+    protected void validateNames() {
+        if (legalName == null || legalName.isBlank()) {
+            throw new IllegalStateException("legalName is required for a customer");
+        }
+        if (displayName == null || displayName.isBlank()) {
+            throw new IllegalStateException("displayName is required for a customer");
+        }
+    }
+
+    /**
+     * Explicit dependency hook for ArchUnit UUIDv7 rule.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return UUIDv7Generator.class;
     }
 
 }

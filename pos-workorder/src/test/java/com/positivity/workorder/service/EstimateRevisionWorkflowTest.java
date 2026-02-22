@@ -5,14 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.entity.AuditEvent;
@@ -23,6 +27,7 @@ import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.security.common.GatewaySecurityConstants;
 
 /**
  * Integration tests for the Estimate Revision and Approval Invalidation
@@ -57,6 +62,26 @@ class EstimateRevisionWorkflowTest {
         private Estimate testEstimate;
         private Workorder testWorkorder;
         private static final UUID TEST_USER_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440001");
+
+        @BeforeEach
+        void mockAuthentication() {
+                TestingAuthenticationToken authentication = new TestingAuthenticationToken(
+                                "test-user",
+                                "password",
+                                "ROLE_USER");
+
+                authentication.setDetails(Map.of(
+                                GatewaySecurityConstants.DETAIL_USER_ID, TEST_USER_ID.toString(),
+                                GatewaySecurityConstants.DETAIL_USERNAME, "test-user"));
+
+                authentication.setAuthenticated(true);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        @AfterEach
+        void clearAuthentication() {
+                SecurityContextHolder.clearContext();
+        }
 
         @BeforeEach
         void setUp() {

@@ -5,11 +5,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
-import com.positivity.inventory.internal.dto.PutawayValidationService;
 import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
+import com.positivity.inventory.service.PutawayValidationService;
 
 /**
  * Default implementation of PutawayValidationService.

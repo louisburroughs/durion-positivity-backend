@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,6 +31,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/v1/billing/rules")
 @Tag(name = "Billing Rules", description = "Manage billing rules for commercial accounts")
+@PreAuthorize("hasAuthority('invoice:billing-rules')")
 public class BillingRulesController {
 
     private static final Logger log = LoggerFactory.getLogger(BillingRulesController.class);

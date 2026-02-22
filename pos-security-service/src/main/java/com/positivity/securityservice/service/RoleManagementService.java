@@ -2,9 +2,9 @@ package com.positivity.securityservice.service;
 
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
-import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.RoleAssignment;
+import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
+import com.positivity.securityservice.internal.dto.RoleDto;
 import org.jspecify.annotations.NonNull;
 
 import java.time.LocalDateTime;
@@ -21,32 +21,32 @@ public interface RoleManagementService {
     /**
      * Create a new role
      */
-    Role createRole(String name, String description);
+    RoleDto createRole(String name, String description);
 
     /**
      * Update permissions for a role
      */
-    Role updateRolePermissions(RolePermissionsRequest request);
+    RoleDto updateRolePermissions(RolePermissionsRequest request);
 
     /**
      * Create a role assignment for a user
      */
-    RoleAssignment createRoleAssignment(RoleAssignmentRequest request);
+    RoleAssignmentDto createRoleAssignment(RoleAssignmentRequest request);
 
     /**
      * Get effective role assignments for a user
      */
-    List<RoleAssignment> getAssignmentsForUser(@NonNull UUID userId, boolean includeHistory);
+    List<RoleAssignmentDto> getAssignmentsForUser(@NonNull UUID userId, boolean includeHistory);
 
     /**
      * Get effective role assignments for a user
      */
-    List<RoleAssignment> getEffectiveRoleAssignments(@NonNull UUID userId);
+    List<RoleAssignmentDto> getEffectiveRoleAssignments(@NonNull UUID userId);
 
     /**
      * Get all permissions for a user (from all their effective role assignments)
      */
-    Set<Permission> getUserPermissions(UUID userId);
+    Set<PermissionDto> getUserPermissions(UUID userId);
 
     /**
      * Check if a user has a specific permission, considering scope
@@ -61,10 +61,10 @@ public interface RoleManagementService {
     /**
      * Get all roles
      */
-    List<Role> getAllRoles();
+    List<RoleDto> getAllRoles();
 
     /**
      * Get role by name
      */
-    Role getRoleByName(String name);
+    RoleDto getRoleByName(String name);
 }

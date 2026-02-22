@@ -9,7 +9,7 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import com.positivity.customer.internal.dto.PartyRelationshipRole;
+import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import io.swagger.v3.oas.annotations.media.Schema;

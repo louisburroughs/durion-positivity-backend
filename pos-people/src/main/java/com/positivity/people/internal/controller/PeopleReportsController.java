@@ -35,6 +35,7 @@ public class PeopleReportsController {
         @ApiResponse(responseCode = "200", description = "Report generated successfully.")
         @EmitEvent(id = "REPORT_ATTENDANCE_VS_JOBTIME_GENERATED", apiVersion = "1")
         @GetMapping("/attendanceJobtimeDiscrepancy")
+        @PreAuthorize("hasAnyAuthority('people:time:export:read','accounting:time:export')")
         public ResponseEntity<List<AttendanceDiscrepancyReportResponse>> getAttendanceDiscrepancyReport(
                         @Parameter(description = "Start date (inclusive)", required = true, example = "2026-02-01") @RequestParam LocalDate startDate,
                         @Parameter(description = "End date (inclusive)", required = true, example = "2026-02-07") @RequestParam LocalDate endDate,

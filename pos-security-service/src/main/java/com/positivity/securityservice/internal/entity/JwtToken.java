@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -36,7 +37,7 @@ import java.util.UUID;
 @Entity
 public class JwtToken {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(columnDefinition = "UUID")
     private UUID id;
 
     @Column(nullable = false, unique = true, length = 512)
@@ -76,4 +77,11 @@ public class JwtToken {
      */
     @Version
     private Long version;
+
+    @PrePersist
+    protected void onCreate() {
+        if (id == null) {
+            id = UUIDv7Generator.generate();
+        }
+    }
 }

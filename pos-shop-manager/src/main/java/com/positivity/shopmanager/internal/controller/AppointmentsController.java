@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
+import com.positivity.shopmanager.internal.service.AppointmentsServiceImpl;
 import com.positivity.shopmanager.service.AppointmentsService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -32,6 +34,7 @@ public class AppointmentsController {
     })
     @EmitEvent(id = "SHOP_APPOINTMENT_CREATE", apiVersion = "1")
     @PostMapping("/appointments")
+    @PreAuthorize("hasAuthority('shop:schedule:edit')")
     public ResponseEntity<Object> createAppointment(
             @Parameter(description = "Idempotency key for safe retries") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Parameter(description = "Correlation ID for request tracing") @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId,
@@ -52,6 +55,7 @@ public class AppointmentsController {
             @ApiResponse(responseCode = "501", description = "Not implemented.")
     })
     @GetMapping("/appointments/{appointmentId}")
+    @PreAuthorize("hasAuthority('shop:schedule:view')")
     public ResponseEntity<Object> getAppointment(
             @Parameter(description = "Appointment ID", example = "appt-123") @PathVariable String appointmentId,
             @Parameter(description = "Correlation ID for request tracing") @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {

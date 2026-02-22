@@ -2,23 +2,23 @@ package com.positivity.people.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
+import com.positivity.shared.id.UUIDv7Generator;
 
 @Entity
 @Table(name = "work_session_break")
 public class WorkSessionBreak {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "break_id", nullable = false, updatable = false)
-    private Long breakId;
+    @Column(name = "break_id", nullable = false, updatable = false, columnDefinition = "uuid")
+    private UUID breakId;
 
     @Column(name = "session_id", nullable = false)
-    private Long sessionId;
+    private UUID sessionId;
 
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;
@@ -29,19 +29,26 @@ public class WorkSessionBreak {
     @Column(name = "actor", length = 128)
     private String actor;
 
-    public Long getBreakId() {
+    @PrePersist
+    void ensureId() {
+        if (breakId == null) {
+            breakId = UUIDv7Generator.generate();
+        }
+    }
+
+    public UUID getBreakId() {
         return breakId;
     }
 
-    public void setBreakId(Long breakId) {
+    public void setBreakId(UUID breakId) {
         this.breakId = breakId;
     }
 
-    public Long getSessionId() {
+    public UUID getSessionId() {
         return sessionId;
     }
 
-    public void setSessionId(Long sessionId) {
+    public void setSessionId(UUID sessionId) {
         this.sessionId = sessionId;
     }
 

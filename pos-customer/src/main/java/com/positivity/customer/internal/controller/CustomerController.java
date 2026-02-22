@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
+import com.positivity.customer.internal.service.CommercialPartyServiceImpl;
+import com.positivity.customer.internal.service.PersonPartyServiceImpl;
 import com.positivity.customer.service.CustomerService;
 import com.positivity.events.EmitEvent;
 
@@ -26,17 +28,23 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Tag(name = "Customer API", description = "Operations related to customers")
 @RestController
 @RequestMapping("/v1/crm")
-@RequiredArgsConstructor
 public class CustomerController {
 
-    private final CustomerService customerService;
+    private static final String COMMERCIAL = "COMMERCIAL";
+
+    private final CustomerService commercialService;
+    private final CustomerService personService;
+
+    public CustomerController(PersonPartyServiceImpl personService, CommercialPartyServiceImpl commercialService) {
+        this.commercialService = commercialService;
+        this.personService = personService;
+    }
 
     @Operation(summary = "Get all customers", description = "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified.")
     @ApiResponse(responseCode = "200", description = "Page of customers returned successfully.")
@@ -47,10 +55,10 @@ public class CustomerController {
             @Parameter(description = "Pagination parameters (page, size, sort)") @PageableDefault(size = 20, sort = "lastName") Pageable pageable) {
         log.info("Fetching customers of type: {} with paging: {}", customerType, pageable);
 
-        if ("COMMERCIAL".equalsIgnoreCase(customerType)) {
-            return customerService.getAllCommercialCustomers(pageable);
+        if (COMMERCIAL.equalsIgnoreCase(customerType)) {
+            return commercialService.getAllCustomers(pageable);
         } else {
-            return customerService.getAllCustomers(pageable);
+            return personService.getAllCustomers(pageable);
         }
     }
 
@@ -62,7 +70,9 @@ public class CustomerController {
     public ResponseEntity<CustomerDTO> getCustomerById(
             @Parameter(description = "ID of the customer to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
         log.info("Fetching customer with id: {}", id);
-        return customerService.getCustomerById(id)
+
+        return commercialService.getCustomerById(id)
+                .or(() -> personService.getCustomerById(id))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -75,7 +85,10 @@ public class CustomerController {
     public ResponseEntity<CustomerDTO> createCustomer(
             @Parameter(description = "Customer object to be created") @RequestBody CustomerDTO customer) {
         log.info("Creating new customer: {}", customer);
-        CustomerDTO saved = customerService.createCustomer(customer);
+        CustomerService service = COMMERCIAL.equalsIgnoreCase(customer.getCustomerType())
+                ? commercialService
+                : personService;
+        CustomerDTO saved = service.createCustomer(customer);
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -89,7 +102,10 @@ public class CustomerController {
             @Parameter(description = "ID of the customer to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id,
             @Parameter(description = "Updated customer object") @RequestBody CustomerDTO customer) {
         log.info("Updating customer with id: {}", id);
-        return customerService.updateCustomer(id, customer)
+        CustomerService service = COMMERCIAL.equalsIgnoreCase(customer.getCustomerType())
+                ? commercialService
+                : personService;
+        return service.updateCustomer(id, customer)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -102,7 +118,7 @@ public class CustomerController {
     public ResponseEntity<Void> deleteCustomer(
             @Parameter(description = "ID of the customer to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
         log.info("Deleting customer with id: {}", id);
-        if (customerService.deleteCustomer(id)) {
+        if (commercialService.deleteCustomer(id) || personService.deleteCustomer(id)) {
             return ResponseEntity.noContent().build();
         } else {
             return ResponseEntity.notFound().build();

@@ -3,6 +3,7 @@ package com.positivity.customer.internal.controller;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.internal.service.PersonServiceImpl;
 import com.positivity.customer.service.PersonService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;

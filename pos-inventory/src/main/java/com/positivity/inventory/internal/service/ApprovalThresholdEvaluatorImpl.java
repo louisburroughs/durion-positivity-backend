@@ -6,9 +6,9 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
-import com.positivity.inventory.internal.model.cyclecount.ApprovalThresholdConfig;
-import com.positivity.inventory.internal.model.cyclecount.ApprovalTier;
-import com.positivity.inventory.internal.model.cyclecount.CycleCountAdjustment;
+import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
+import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
 

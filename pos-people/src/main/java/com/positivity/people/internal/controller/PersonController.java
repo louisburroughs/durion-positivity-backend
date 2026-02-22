@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,6 +36,7 @@ public class PersonController {
     @Operation(summary = "Get all people", description = "Retrieve a list of all people.")
     @ApiResponse(responseCode = "200", description = "List of people returned successfully.")
     @GetMapping
+    @PreAuthorize("hasAuthority('people:person:view')")
     public List<Person> getAllPeople() {
         return personService.getAllPeople();
     }
@@ -43,6 +45,7 @@ public class PersonController {
     @ApiResponse(responseCode = "200", description = "Person found and returned.")
     @ApiResponse(responseCode = "404", description = "Person not found.")
     @GetMapping("/{personId}")
+    @PreAuthorize("hasAuthority('people:person:view')")
     public ResponseEntity<Person> getPersonById(
             @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
         return personService.getPersonById(personId)
@@ -54,6 +57,7 @@ public class PersonController {
     @ApiResponse(responseCode = "201", description = "Person created successfully.")
     @EmitEvent(id = "PEOPLE_PERSON_CREATE", apiVersion = "1")
     @PostMapping
+    @PreAuthorize("hasAuthority('people:person:create')")
     public ResponseEntity<Person> createPerson(
             @Parameter(description = "Person object to be created") @RequestBody Person person) {
         Person saved = personService.savePerson(person);
@@ -65,6 +69,7 @@ public class PersonController {
     @ApiResponse(responseCode = "404", description = "Person not found.")
     @EmitEvent(id = "PEOPLE_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
+    @PreAuthorize("hasAuthority('people:person:edit')")
     public ResponseEntity<Person> updatePerson(
             @Parameter(description = "ID of the person to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId,
             @Parameter(description = "Updated person object") @RequestBody Person person) {
@@ -80,6 +85,7 @@ public class PersonController {
     @ApiResponse(responseCode = "204", description = "Person deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Person not found.")
     @DeleteMapping("/{personId}")
+    @PreAuthorize("hasAuthority('people:person:delete')")
     public ResponseEntity<Void> deletePerson(
             @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID personId) {
         if (personService.getPersonById(personId).isEmpty()) {
