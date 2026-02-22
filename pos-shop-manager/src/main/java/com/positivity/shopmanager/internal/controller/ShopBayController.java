@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shopmanager.internal.service.BayServiceImpl;
 import com.positivity.shopmanager.service.BayService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -25,6 +27,7 @@ public class ShopBayController {
     @Operation(summary = "Get bays", description = "List all bays or get a specific bay detail by locationId and bayId.")
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
     @GetMapping({ "/bays", "/{locationId}/bays/{bayId}" })
+    @PreAuthorize("hasAuthority('shop:bay:view')")
     public ResponseEntity<Object> getBays(
             @Parameter(description = "Location ID (optional for specific bay)") @PathVariable(required = false) Long locationId,
             @Parameter(description = "Bay ID (optional for specific bay)") @PathVariable(required = false) Long bayId) {
@@ -37,6 +40,7 @@ public class ShopBayController {
     @ApiResponse(responseCode = "200", description = "Bay created successfully.")
     @EmitEvent(id = "SHOP_BAY_CREATE", apiVersion = "1")
     @PostMapping("/{locationId}/bays")
+    @PreAuthorize("hasAuthority('shop:bay:create')")
     public ResponseEntity<Object> createBay(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Bay creation request body") @RequestBody(required = false) Object request) {
@@ -49,6 +53,7 @@ public class ShopBayController {
     @ApiResponse(responseCode = "200", description = "Bays managed successfully.")
     @EmitEvent(id = "SHOP_BAY_MANAGE", apiVersion = "1")
     @PutMapping("/bays")
+    @PreAuthorize("hasAuthority('shop:bay:edit')")
     public ResponseEntity<Object> manageBays(
             @Parameter(description = "Bay management request body") @RequestBody(required = false) Object request) {
         log.info("Managing bays");
@@ -62,6 +67,7 @@ public class ShopBayController {
             @ApiResponse(responseCode = "404", description = "Bay not found.")
     })
     @DeleteMapping("/{locationId}/bays/{bayId}")
+    @PreAuthorize("hasAuthority('shop:bay:edit')")
     public ResponseEntity<Void> deleteBay(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Bay ID", example = "1") @PathVariable Long bayId) {

@@ -16,6 +16,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,6 +44,7 @@ public class PersonAccessController {
         @EmitEvent(id = "PEOPLE_ACCESS_ROLES_LIST", apiVersion = "1")
         @Operation(summary = "Get available roles", description = "Retrieve list of roles that can be assigned to people")
         @ApiResponse(responseCode = "200", description = "Roles retrieved successfully")
+        @PreAuthorize("hasAuthority('people:role:view')")
         public ResponseEntity<List<RoleDto>> getRoles(@PathVariable UUID personUuid) {
                 return ResponseEntity.ok(peopleAccessControlService.getAvailableRolesForPerson(personUuid));
         }
@@ -51,6 +53,7 @@ public class PersonAccessController {
         @EmitEvent(id = "PEOPLE_ACCESS_ASSIGNMENTS_LIST", apiVersion = "1")
         @Operation(summary = "Get role assignments", description = "Retrieve role assignments for a person with optional history and date filtering")
         @ApiResponse(responseCode = "200", description = "Assignments retrieved successfully")
+        @PreAuthorize("hasAuthority('people:role:view')")
         public ResponseEntity<List<UserRoleDto>> getAssignments(
                         @PathVariable UUID personUuid,
                         @RequestParam(required = false) Boolean includeHistory,
@@ -70,6 +73,7 @@ public class PersonAccessController {
                         @ApiResponse(responseCode = "400", description = "Invalid request", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
                         @ApiResponse(responseCode = "404", description = "Person or role not found", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
         })
+        @PreAuthorize("hasAuthority('people:role:assign')")
         public ResponseEntity<UserRoleDto> createAssignment(
                         @PathVariable UUID personUuid,
                         @Valid @RequestBody PersonRoleAssignmentRequest request) {
@@ -91,6 +95,7 @@ public class PersonAccessController {
         @ApiResponse(responseCode = "204", description = "Role assignment revoked successfully")
         @ApiResponse(responseCode = "400", description = "Invalid request for revoking role assignment", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
         @ApiResponse(responseCode = "404", description = "Person or role assignment not found", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+        @PreAuthorize("hasAuthority('people:role:revoke')")
         public ResponseEntity<Void> revokeAssignment(
                         @PathVariable UUID personUuid,
                         @PathVariable String roleCode,

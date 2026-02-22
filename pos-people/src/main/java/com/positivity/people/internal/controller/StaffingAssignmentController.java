@@ -14,6 +14,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,6 +43,7 @@ public class StaffingAssignmentController {
     @ApiResponse(responseCode = "409", description = "Overlapping assignment exists.")
     @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_CREATE", apiVersion = "1")
     @PostMapping
+    @PreAuthorize("hasAuthority('people:employee:edit')")
     public ResponseEntity<StaffingAssignmentResponse> createAssignment(
             @Valid @RequestBody @NonNull CreateStaffingAssignmentRequest request,
             @AuthenticationPrincipal String actor) {
@@ -53,6 +55,7 @@ public class StaffingAssignmentController {
     @Operation(summary = "List assignments for person")
     @ApiResponse(responseCode = "200", description = "List of assignments.")
     @GetMapping
+    @PreAuthorize("hasAuthority('people:employee:view')")
     public List<StaffingAssignmentResponse> getAssignments(
             @RequestParam @NonNull UUID personId) {
         return staffingAssignmentService.findByPersonId(personId);
@@ -62,6 +65,7 @@ public class StaffingAssignmentController {
     @ApiResponse(responseCode = "200", description = "Assignment found.")
     @ApiResponse(responseCode = "404", description = "Assignment not found.")
     @GetMapping("/{assignmentId}")
+    @PreAuthorize("hasAuthority('people:employee:view')")
     public ResponseEntity<StaffingAssignmentResponse> getAssignment(
             @PathVariable @NonNull UUID assignmentId) {
         return staffingAssignmentService.findById(assignmentId)
@@ -76,6 +80,7 @@ public class StaffingAssignmentController {
     @ApiResponse(responseCode = "409", description = "Overlapping assignment exists.")
     @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_UPDATE", apiVersion = "1")
     @PutMapping("/{assignmentId}")
+    @PreAuthorize("hasAuthority('people:employee:edit')")
     public ResponseEntity<StaffingAssignmentResponse> updateAssignment(
             @PathVariable @NonNull UUID assignmentId,
             @Valid @RequestBody @NonNull UpdateStaffingAssignmentRequest request,
@@ -90,6 +95,7 @@ public class StaffingAssignmentController {
     @ApiResponse(responseCode = "404", description = "Assignment not found.")
     @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_END", apiVersion = "1")
     @DeleteMapping("/{assignmentId}")
+    @PreAuthorize("hasAuthority('people:employee:edit')")
     public ResponseEntity<Void> endAssignment(@PathVariable @NonNull UUID assignmentId) {
         staffingAssignmentService.end(assignmentId);
         return ResponseEntity.noContent().build();

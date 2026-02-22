@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -19,6 +20,7 @@ public class WorkOrderOperationalContextController {
     @Operation(summary = "View workorder operational context", description = "Read-only operational context view for workorders used by UI with optional filters.")
     @ApiResponse(responseCode = "200", description = "Operational context retrieved successfully.")
     @GetMapping("/{locationId}/workorders/{workorderId}/operationalContext")
+    @PreAuthorize("hasAuthority('shop:schedule:view')")
     public ResponseEntity<Object> viewOpenWorkordersByShop(
             @Parameter(description = "Shop location ID", example = "1") @PathVariable Long locationId,
             @Parameter(description = "Workorder ID", example = "1") @PathVariable Long workorderId,

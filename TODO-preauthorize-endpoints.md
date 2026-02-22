@@ -1,0 +1,34 @@
+# TODO: Enforce @PreAuthorize on mapped controller methods
+
+- [x] pos-people (rule added, controllers updated)
+- [x] pos-shop-manager (rule added, controllers updated)
+- [x] pos-accounting (rule added, controllers updated)
+- [x] pos-api-gateway (rule added; no controllers)
+- [ ] pos-archunit
+- [ ] pos-catalog
+- [ ] pos-customer
+- [ ] pos-dependencies
+- [ ] pos-document-helper
+- [ ] pos-documents
+- [ ] pos-event-receiver
+- [ ] pos-events
+- [ ] pos-image
+- [ ] pos-inquiry
+- [ ] pos-inventory
+- [ ] pos-invoice
+- [ ] pos-location
+- [ ] pos-mcp-server
+- [ ] pos-order
+- [ ] pos-price
+- [ ] pos-security-common
+- [ ] pos-security-service
+- [ ] pos-service-discovery
+- [ ] pos-shared-dtos
+- [ ] pos-shop-manager
+- [ ] pos-tax
+- [ ] pos-tax-common
+- [ ] pos-vehicle-fitment
+- [ ] pos-vehicle-inventory
+- [ ] pos-vehicle-reference-carapi
+- [ ] pos-vehicle-reference-nhtsa
+- [ ] pos-workorder

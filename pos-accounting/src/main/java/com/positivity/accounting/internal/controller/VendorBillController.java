@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +50,7 @@ public class VendorBillController {
      */
     @PostMapping
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_CREATE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public ResponseEntity<VendorBillResponse> createBillFromGoodsReceivedEvent(
             @NonNull @Valid @RequestBody GoodsReceivedEvent event) {
         log.info("Received request to create vendor bill from goods received event | eventId={} | vendorId={}",
@@ -69,6 +71,7 @@ public class VendorBillController {
      */
     @PostMapping("/match")
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH", apiVersion = "1")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
             @NonNull @Valid @RequestBody VendorInvoiceReceivedEvent event) {
         log.info("Received request to perform three-way match | eventId={} | invoiceRef={}",
@@ -90,6 +93,7 @@ public class VendorBillController {
      */
     @PostMapping("/{billId}/resolve-exception")
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public ResponseEntity<VendorBillResponse> resolveMatchException(
             @NonNull @PathVariable UUID billId,
             @NonNull @Valid @RequestBody ExceptionResolutionRequest request) {
@@ -115,6 +119,7 @@ public class VendorBillController {
      */
     @GetMapping("/{billId}")
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_GET", apiVersion = "1")
+    @PreAuthorize("hasAuthority('accounting:ap:view')")
     public ResponseEntity<VendorBillResponse> getBillById(
             @NonNull @PathVariable UUID billId) {
         log.info("Received request to retrieve vendor bill | billId={}", billId);
@@ -134,6 +139,7 @@ public class VendorBillController {
      */
     @GetMapping("/event/{eventId}")
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_GET_BY_EVENT", apiVersion = "1")
+    @PreAuthorize("hasAuthority('accounting:ap:view')")
     public ResponseEntity<VendorBillResponse> getBillByOriginEventId(
             @NonNull @PathVariable UUID eventId) {
         log.info("Received request to retrieve vendor bill by origin event | eventId={}", eventId);
@@ -153,6 +159,7 @@ public class VendorBillController {
      */
     @GetMapping("/match-candidates/{invoiceEventId}")
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST", apiVersion = "1")
+    @PreAuthorize("hasAuthority('accounting:ap:view')")
     public ResponseEntity<List<VendorBillMatchCandidateResponse>> listMatchCandidates(
             @NonNull @PathVariable UUID invoiceEventId) {
         log.info("Received request to list match candidates | invoiceEventId={}", invoiceEventId);
@@ -173,6 +180,7 @@ public class VendorBillController {
      */
     @PostMapping("/match-candidates/{candidateId}/select")
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT", apiVersion = "1")
+    @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public ResponseEntity<VendorBillResponse> selectMatchCandidate(
             @NonNull @PathVariable UUID candidateId,
             @NonNull @Valid @RequestBody CandidateSelectionRequest request) {

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,6 +26,7 @@ public class PeopleAvailabilityController {
     @Operation(summary = "Get people availability", description = "Return availability with optional locationId and date filters.")
     @ApiResponse(responseCode = "200", description = "Availability data returned successfully.")
     @GetMapping("/availability")
+    @PreAuthorize("hasAuthority('people:availability:view')")
     public ResponseEntity<Object> getPeopleAvailability(
             @Parameter(description = "Filter by location ID") @RequestParam(required = false) Long locationId,
             @Parameter(description = "Filter by date (ISO format: yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
