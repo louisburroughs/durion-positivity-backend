@@ -1,6 +1,7 @@
 package com.positivity.location.service;
 
 import com.positivity.location.internal.client.PersonClient;
+import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
@@ -16,25 +17,41 @@ import com.positivity.location.internal.repository.LocationTypeRepository;
 import com.positivity.location.internal.dto.PersonDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.DateTimeException;
+import java.time.ZoneId;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class LocationService {
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_INACTIVE = "INACTIVE";
+    private static final String INVALID_TIMEZONE = "INVALID_TIMEZONE";
+    private static final String INVALID_OPERATING_HOURS = "INVALID_OPERATING_HOURS";
+
     private final LocationRepository locationRepository;
     private final LocationParentRepository locationParentRepository;
     private final LocationTypeRepository locationTypeRepository;
     private final PersonClient personClient;
+
+    // Issue CAP-136 #78: lightweight process-level guard used with repository
+    // checks.
+    private final Set<String> recentNormalizedNames = new HashSet<>();
 
     @Transactional(readOnly = true)
     public List<LocationResponseDTO> getAllLocationsDto() {
@@ -46,6 +63,21 @@ public class LocationService {
     @Transactional(readOnly = true)
     public Optional<LocationResponseDTO> getLocationByIdDto(UUID id) {
         return locationRepository.findById(id).map(this::toLocationResponse);
+    }
+
+    /**
+     * Returns locations for a status filter, defaulting to ACTIVE when blank.
+     *
+     * Issue: CAP-136 #78
+     *
+     * @param status   optional status filter
+     * @param pageable paging input
+     * @return paged locations
+     */
+    @Transactional(readOnly = true)
+    public Page<LocationResponseDTO> listLocations(String status, Pageable pageable) {
+        String statusFilter = normalizeStatus(status);
+        return locationRepository.findByStatus(statusFilter, pageable).map(this::toLocationResponse);
     }
 
     @Transactional(readOnly = true)
@@ -65,9 +97,19 @@ public class LocationService {
 
     @Transactional
     public LocationResponseDTO createLocation(LocationRequestDTO request) {
+        validateTimezone(request.getTimezone());
+        validateOperatingHours(request.getOperatingHours());
+        String normalizedName = normalizeName(request.getName());
+        // Issue CAP-136 #78: conflict on duplicate name.
+        if (locationRepository.existsByNormalizedName(normalizedName)
+                || recentNormalizedNames.contains(normalizedName)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "LOCATION_NAME_TAKEN");
+        }
+
         Location location = new Location();
         applyLocationRequest(location, request);
         Location saved = saveLocationInternal(location);
+        recentNormalizedNames.add(normalizedName);
         return toLocationResponse(saved);
     }
 
@@ -78,9 +120,70 @@ public class LocationService {
             return Optional.empty();
         }
         Location location = existingLocation.get();
+        validateTimezone(request.getTimezone());
+        validateOperatingHours(request.getOperatingHours());
+        String normalizedName = normalizeName(request.getName());
+        if (locationRepository.findByNormalizedNameAndIdNot(normalizedName, id).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "LOCATION_NAME_TAKEN");
+        }
         applyLocationRequest(location, request);
         Location updated = saveLocationInternal(location);
+        recentNormalizedNames.add(normalizedName);
         return Optional.of(toLocationResponse(updated));
+    }
+
+    /**
+     * Applies partial location updates including deactivation and rename conflict
+     * checks.
+     *
+     * Issue: CAP-136 #78
+     *
+     * @param id    location id
+     * @param patch partial payload
+     * @return updated location response
+     */
+    @Transactional
+    public LocationResponseDTO patchLocation(UUID id, LocationPatchRequest patch) {
+        Location location = locationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        if (patch.getName() != null && !patch.getName().isBlank()) {
+            String normalizedName = normalizeName(patch.getName());
+            if (locationRepository.findByNormalizedNameAndIdNot(normalizedName, id).isPresent()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "LOCATION_NAME_TAKEN");
+            }
+            location.setName(patch.getName());
+            recentNormalizedNames.add(normalizedName);
+        }
+
+        if (patch.getTimezone() != null && !patch.getTimezone().isBlank()) {
+            validateTimezone(patch.getTimezone());
+            location.setTimezone(patch.getTimezone());
+        }
+
+        if (patch.getOperatingHours() != null) {
+            validateOperatingHours(patch.getOperatingHours());
+            location.setOperatingHours(String.valueOf(patch.getOperatingHours()));
+        }
+
+        if (patch.getHolidayClosures() != null) {
+            location.setHolidayClosures(String.valueOf(patch.getHolidayClosures()));
+        }
+
+        if (patch.getCheckInBufferMinutes() != null) {
+            location.setCheckInBufferMinutes(patch.getCheckInBufferMinutes());
+        }
+
+        if (patch.getCleanupBufferMinutes() != null) {
+            location.setCleanupBufferMinutes(patch.getCleanupBufferMinutes());
+        }
+
+        if (patch.getStatus() != null && patch.getStatus().equalsIgnoreCase(STATUS_INACTIVE)) {
+            location.setStatus(STATUS_INACTIVE);
+            location.setActive(false);
+        }
+
+        return toLocationResponse(saveLocationInternal(location));
     }
 
     @Transactional
@@ -121,6 +224,8 @@ public class LocationService {
     private Location saveLocationInternal(Location location) {
         try {
             return locationRepository.saveAndFlush(location);
+        } catch (OptimisticLockingFailureException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "OPTIMISTIC_LOCK_FAILED", e);
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Location code already exists", e);
         }
@@ -198,7 +303,8 @@ public class LocationService {
     }
 
     public PersonDTO getResponsiblePerson(UUID locationId) {
-        Location location = locationRepository.findById(locationId).orElseThrow();
+        Location location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (location.getResponsiblePersonId() == null)
             return null;
         return personClient.getPersonById(location.getResponsiblePersonId());
@@ -230,6 +336,16 @@ public class LocationService {
     private void applyLocationRequest(Location location, LocationRequestDTO request) {
         location.setName(request.getName());
         location.setCode(request.getCode());
+        location.setStatus(request.getActive() != null && !request.getActive() ? STATUS_INACTIVE : STATUS_ACTIVE);
+        location.setTimezone(request.getTimezone());
+        if (request.getOperatingHours() != null) {
+            location.setOperatingHours(String.valueOf(request.getOperatingHours()));
+        }
+        if (request.getHolidayClosures() != null) {
+            location.setHolidayClosures(String.valueOf(request.getHolidayClosures()));
+        }
+        location.setCheckInBufferMinutes(request.getCheckInBufferMinutes());
+        location.setCleanupBufferMinutes(request.getCleanupBufferMinutes());
         location.setGeographicalLocationId(request.getGeographicalLocationId());
         location.setAddressLine1(request.getAddressLine1());
         location.setAddressLine2(request.getAddressLine2());
@@ -245,6 +361,45 @@ public class LocationService {
         }
         location.setResponsiblePersonId(request.getResponsiblePersonId());
         location.setType(resolveLocationType(request.getType()));
+    }
+
+    private void validateTimezone(String timezone) {
+        if (timezone == null || timezone.isBlank()) {
+            return;
+        }
+        try {
+            ZoneId.of(timezone);
+        } catch (DateTimeException e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_TIMEZONE);
+        }
+    }
+
+    private void validateOperatingHours(
+            List<com.positivity.location.internal.dto.OperatingHoursRequest> operatingHours) {
+        if (operatingHours == null) {
+            return;
+        }
+        Set<String> days = new HashSet<>();
+        for (var hours : operatingHours) {
+            if (!days.add(hours.getDayOfWeek())) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_OPERATING_HOURS);
+            }
+            if (hours.getOpenTime() == null || hours.getCloseTime() == null
+                    || !hours.getOpenTime().isBefore(hours.getCloseTime())) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_OPERATING_HOURS);
+            }
+        }
+    }
+
+    private String normalizeName(String name) {
+        return name == null ? "" : name.toLowerCase(Locale.ROOT).trim();
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return STATUS_ACTIVE;
+        }
+        return status.trim().toUpperCase(Locale.ROOT);
     }
 
     private LocationType resolveLocationType(LocationTypeDTO locationTypeDto) {

@@ -1,5 +1,6 @@
 package com.positivity.location.internal.dto;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -35,6 +36,11 @@ public class LocationRequestDTO {
     private String mailingAddress;
     private Boolean active;
     private Long responsiblePersonId;
+    private String timezone;
+    private List<OperatingHoursRequest> operatingHours;
+    private List<HolidayClosureRequest> holidayClosures;
+    private Integer checkInBufferMinutes;
+    private Integer cleanupBufferMinutes;
 
     @NotNull(message = "type is required")
     private LocationTypeDTO type;
