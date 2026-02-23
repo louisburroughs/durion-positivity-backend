@@ -30,7 +30,8 @@ import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.service.EventIngestionService;
 import com.positivity.accounting.service.IdempotencyService;
-import com.positivity.accounting.service.PostingEngineOrchestrator;
+import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
+import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

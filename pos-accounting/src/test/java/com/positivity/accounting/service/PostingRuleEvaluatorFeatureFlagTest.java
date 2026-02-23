@@ -1,5 +1,7 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;

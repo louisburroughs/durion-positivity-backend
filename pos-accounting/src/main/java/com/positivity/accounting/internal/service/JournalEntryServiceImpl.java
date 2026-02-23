@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.accounting.service.JournalEntryService;
 

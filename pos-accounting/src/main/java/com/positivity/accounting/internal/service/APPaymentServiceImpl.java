@@ -35,6 +35,7 @@ import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.service.APPaymentService;
 import com.positivity.accounting.service.OutboxService;
+import com.positivity.accounting.internal.service.OutboxServiceImpl;
 
 import lombok.RequiredArgsConstructor;
 

@@ -1,5 +1,6 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,7 +57,7 @@ import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("DefaultGLMappingServiceImpl Unit Tests")
-class DefaultGLMappingServiceImplTest {
+class DefaultGLMappingServiceTest {
 
     @Mock
     private DefaultGLMappingRepository repository;
@@ -65,7 +66,7 @@ class DefaultGLMappingServiceImplTest {
     private GLAccountRepository glAccountRepository;
 
     @Mock
-    private GLAccountService glAccountService;
+    private GLAccountServiceImpl glAccountService;
 
     @InjectMocks
     private DefaultGLMappingServiceImpl service;

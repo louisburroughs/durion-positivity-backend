@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -24,7 +24,9 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
-import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
+import com.positivity.accounting.service.IdempotencyService;
+import com.positivity.accounting.service.JournalEntryService;
+import com.positivity.accounting.service.PostingRuleEvaluator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +50,7 @@ import lombok.extern.slf4j.Slf4j;
  * 
  * @see PostingRuleEvaluator
  * @see JournalEntryServiceImpl
- * @see IdempotencyService
+ * @see IdempotencyServiceImpl
  */
 @Slf4j
 @Service

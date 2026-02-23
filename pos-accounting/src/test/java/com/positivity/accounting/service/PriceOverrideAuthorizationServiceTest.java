@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.entity.PolicyValidationResult;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
+import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl;
 import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl.AuthorizationResult;
 
 /**
@@ -33,7 +34,7 @@ class PriceOverrideAuthorizationServiceTest {
     private OverridePolicyThresholdRepository policyRepository;
 
     @InjectMocks
-    private PriceOverrideAuthorizationService service;
+    private PriceOverrideAuthorizationServiceImpl service;
 
     private String testRole;
     private BigDecimal originalPrice;

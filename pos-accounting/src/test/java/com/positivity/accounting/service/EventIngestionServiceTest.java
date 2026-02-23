@@ -25,12 +25,16 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
+import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
+import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
 
 /**
  * Unit tests for EventIngestionService
@@ -45,13 +49,13 @@ class EventIngestionServiceTest {
         private AccountingEventRepository accountingEventRepository;
 
         @Mock
-        private com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
+        private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
 
         @Mock
-        private IdempotencyService idempotencyService;
+        private IdempotencyServiceImpl idempotencyService;
 
         @Mock
-        private com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository auditTrailEntryRepository;
+        private AuditTrailEntryRepository auditTrailEntryRepository;
 
         @Mock
         private PostingEngineOrchestrator postingEngineOrchestrator;
