@@ -1,0 +1,64 @@
+package com.positivity.mcp.internal.controller;
+
+import com.positivity.mcp.internal.dto.SystemPromptRequest;
+import com.positivity.mcp.internal.dto.SystemPromptResponse;
+import com.positivity.mcp.service.SystemPromptService;
+import org.jspecify.annotations.NonNull;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/v1/prompts")
+class SystemPromptController {
+
+    private final SystemPromptService systemPromptService;
+
+    SystemPromptController(@NonNull SystemPromptService systemPromptService) {
+        this.systemPromptService = systemPromptService;
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    ResponseEntity<List<SystemPromptResponse>> list() {
+        return ResponseEntity.ok(systemPromptService.findAll());
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    ResponseEntity<SystemPromptResponse> get(@PathVariable @NonNull UUID id) {
+        return ResponseEntity.ok(systemPromptService.get(id));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    ResponseEntity<SystemPromptResponse> create(@Validated @RequestBody @NonNull SystemPromptRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(systemPromptService.create(request));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    ResponseEntity<SystemPromptResponse> update(@PathVariable @NonNull UUID id,
+                                                @Validated @RequestBody @NonNull SystemPromptRequest request) {
+        return ResponseEntity.ok(systemPromptService.update(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    ResponseEntity<Void> delete(@PathVariable @NonNull UUID id) {
+        systemPromptService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+}
