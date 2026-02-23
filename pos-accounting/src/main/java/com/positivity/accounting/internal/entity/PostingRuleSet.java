@@ -2,6 +2,9 @@ package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +32,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString(exclude = "versions")
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "posting_rule_set", indexes = {
         @Index(name = "idx_posting_rule_set_name", columnList = "name"),
         @Index(name = "idx_posting_rule_set_event_type", columnList = "event_type")
@@ -45,9 +49,6 @@ public class PostingRuleSet {
         if (postingRuleSetId == null) {
             postingRuleSetId = UUIDv7Generator.generate();
         }
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
     }
 
     @Column(name = "name", length = 100, nullable = false)
@@ -64,20 +65,18 @@ public class PostingRuleSet {
     private List<PostingRuleVersion> versions = new ArrayList<>();
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
     private Instant modifiedAt;
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.modifiedAt = Instant.now();
-    }
 }

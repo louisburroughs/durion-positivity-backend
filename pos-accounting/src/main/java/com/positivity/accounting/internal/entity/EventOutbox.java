@@ -7,8 +7,12 @@ import org.jspecify.annotations.NonNull;
 
 import com.positivity.shared.id.UUIDv7Generator;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -41,6 +45,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "event_outbox", indexes = {
         @Index(name = "idx_outbox_status_created", columnList = "status,created_at"),
         @Index(name = "idx_outbox_aggregate", columnList = "aggregate_type,aggregate_id"),
@@ -105,6 +110,7 @@ public class EventOutbox {
     /**
      * When the event was created
      */
+    @CreatedDate
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -126,8 +132,7 @@ public class EventOutbox {
             outboxId = UUIDv7Generator.generate();
         }
         if (createdAt == null) {
-            createdAt = Instant.now();
-        }
+            }
         if (status == null) {
             status = OutboxStatus.PENDING;
         }

@@ -15,6 +15,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
+
 /**
  * Unit tests for AccountingPeriodService
  * 
@@ -26,7 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AccountingPeriodServiceTest {
 
     @InjectMocks
-    private AccountingPeriodService service;
+    private AccountingPeriodServiceImpl service;
 
     private Instant now;
     private String currentPeriod;

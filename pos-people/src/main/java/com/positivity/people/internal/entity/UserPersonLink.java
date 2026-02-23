@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,6 +20,7 @@ import java.util.UUID;
  * authentication methods.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "user_person_links", uniqueConstraints = @UniqueConstraint(columnNames = {
         "user_id" }), indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
 @Getter
@@ -44,6 +47,7 @@ public class UserPersonLink {
     @NonNull
     private UserLinkStatus status;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -57,9 +61,6 @@ public class UserPersonLink {
     protected void onCreate() {
         if (id == null) {
             id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
         }
         if (status == null) {
             status = UserLinkStatus.ACTIVE;

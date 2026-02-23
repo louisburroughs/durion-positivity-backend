@@ -1,6 +1,9 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -34,6 +37,7 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "customer_credit", indexes = {
         @Index(name = "idx_customer_credit_customer", columnList = "customer_id"),
         @Index(name = "idx_customer_credit_payment", columnList = "source_payment_id"),
@@ -52,8 +56,7 @@ public class CustomerCredit {
             creditId = UUIDv7Generator.generate();
         }
         if (createdAt == null) {
-            createdAt = Instant.now();
-        }
+            }
     }
 
     @Column(name = "customer_id", nullable = false, columnDefinition = "UUID")
@@ -72,6 +75,7 @@ public class CustomerCredit {
     private String traceId;
 
     // Audit fields (immutable)
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

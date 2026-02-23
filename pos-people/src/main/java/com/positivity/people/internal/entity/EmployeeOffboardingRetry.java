@@ -11,11 +11,14 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@jakarta.persistence.EntityListeners(AuditingEntityListener.class)
 @Table(name = "employee_offboarding_retry_queue")
 @Getter
 @Setter
@@ -47,6 +50,7 @@ public class EmployeeOffboardingRetry {
     @Column(name = "next_attempt_at", nullable = false)
     private Instant nextAttemptAt;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -54,9 +58,6 @@ public class EmployeeOffboardingRetry {
     void onCreate() {
         if (id == null) {
             id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,6 +28,7 @@ import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
+import com.positivity.accounting.service.FinancialReportingService;
 
 /**
  * Service implementation for financial reporting (Income Statement, Balance

@@ -6,8 +6,12 @@ import java.util.UUID;
 
 import com.positivity.shared.id.UUIDv7Generator;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
@@ -49,6 +53,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ap_payment_allocation", indexes = {
         @Index(name = "idx_ap_payment_allocation_payment", columnList = "payment_id"),
         @Index(name = "idx_ap_payment_allocation_bill", columnList = "vendor_bill_id")
@@ -65,7 +70,6 @@ public class APPaymentAllocation {
         if (allocationId == null) {
             allocationId = UUIDv7Generator.generate();
         }
-        createdAt = Instant.now();
     }
 
     @Column(name = "payment_id", nullable = false)
@@ -81,6 +85,7 @@ public class APPaymentAllocation {
     private Integer allocationSequence;
 
     // Audit field
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

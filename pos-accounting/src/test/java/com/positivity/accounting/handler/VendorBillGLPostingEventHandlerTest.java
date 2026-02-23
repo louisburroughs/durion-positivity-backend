@@ -26,7 +26,7 @@ import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.handler.VendorBillGLPostingEventHandler;
-import com.positivity.accounting.service.EventIngestionService;
+import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
 
 /**
  * Unit tests for VendorBillGLPostingEventHandler.
@@ -39,7 +39,7 @@ import com.positivity.accounting.service.EventIngestionService;
 class VendorBillGLPostingEventHandlerTest {
 
         @Mock
-        private EventIngestionService eventIngestionService;
+        private EventIngestionServiceImpl eventIngestionService;
 
         @InjectMocks
         private VendorBillGLPostingEventHandler handler;

@@ -1,6 +1,9 @@
 package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -30,6 +33,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "cycle_count_task")
 public class CycleCountTask {
 
@@ -100,19 +104,14 @@ public class CycleCountTask {
     /**
      * Timestamp when the task was created.
      */
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
-    @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
 
     /**
      * Timestamp of the last update to this task.
      */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
-    @Builder.Default
-    private LocalDateTime updatedAt = LocalDateTime.now();
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
+    private LocalDateTime updatedAt;
 }

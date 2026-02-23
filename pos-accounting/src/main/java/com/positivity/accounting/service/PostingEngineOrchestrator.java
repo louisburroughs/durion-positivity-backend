@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
+import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,7 +47,7 @@ import lombok.extern.slf4j.Slf4j;
  * - Idempotency checks provide additional deduplication
  * 
  * @see PostingRuleEvaluator
- * @see JournalEntryService
+ * @see JournalEntryServiceImpl
  * @see IdempotencyService
  */
 @Slf4j

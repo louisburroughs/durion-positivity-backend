@@ -17,7 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.positivity.accounting.internal.audit.entity.OverridePolicyThreshold;
 import com.positivity.accounting.internal.audit.entity.PolicyValidationResult;
 import com.positivity.accounting.internal.audit.repository.OverridePolicyThresholdRepository;
-import com.positivity.accounting.service.PriceOverrideAuthorizationService.AuthorizationResult;
+import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl.AuthorizationResult;
 
 /**
  * Unit tests for PriceOverrideAuthorizationService
@@ -43,7 +43,7 @@ class PriceOverrideAuthorizationServiceTest {
     void setUp() {
         testRole = "STORE_MANAGER";
         originalPrice = new BigDecimal("100.00");
-        
+
         testPolicy = new OverridePolicyThreshold();
         testPolicy.setRole(testRole);
         testPolicy.setVersion("v1.0");

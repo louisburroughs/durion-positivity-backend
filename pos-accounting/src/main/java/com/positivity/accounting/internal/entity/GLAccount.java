@@ -9,8 +9,12 @@ import org.springframework.data.domain.Persistable;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.shared.id.UUIDv7Generator;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -46,6 +50,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "gl_account", indexes = {
         @Index(name = "idx_account_code", columnList = "account_code", unique = true),
         @Index(name = "idx_account_type", columnList = "account_type"),
@@ -92,6 +97,7 @@ public class GLAccount implements Persistable<UUID> {
     private LocalDateTime deactivationDate;
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

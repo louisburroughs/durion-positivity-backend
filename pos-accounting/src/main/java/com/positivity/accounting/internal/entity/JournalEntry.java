@@ -4,6 +4,9 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
 import com.positivity.security.common.SecurityContextHelper;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -36,6 +39,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString(exclude = "lines")
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "journal_entry", indexes = {
         @Index(name = "idx_journal_entry_status", columnList = "status"),
         @Index(name = "idx_journal_entry_entry_type", columnList = "entry_type"),
@@ -143,6 +147,7 @@ public class JournalEntry {
     private Boolean isBalanced = false;
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

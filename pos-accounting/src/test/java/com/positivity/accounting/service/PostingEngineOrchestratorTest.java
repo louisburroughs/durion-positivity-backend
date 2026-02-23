@@ -40,6 +40,7 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
+import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 
 /**
  * Unit tests for PostingEngineOrchestrator
@@ -59,7 +60,7 @@ class PostingEngineOrchestratorTest {
     private PostingRuleEvaluator postingRuleEvaluator;
 
     @Mock
-    private JournalEntryService journalEntryService;
+    private JournalEntryServiceImpl journalEntryService;
 
     @Mock
     private IdempotencyService idempotencyService;

@@ -7,9 +7,12 @@ import java.time.Instant;
 
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.util.UUID;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_adjustment")
 public class TimeEntryAdjustment {
 
@@ -42,6 +45,7 @@ public class TimeEntryAdjustment {
     @Column(name = "created_by")
     private String createdBy;
 
+    @CreatedDate
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -55,9 +59,6 @@ public class TimeEntryAdjustment {
     public void generateIdAndTimestamp() {
         if (adjustmentId == null) {
             adjustmentId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
         }
     }
 

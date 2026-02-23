@@ -1,6 +1,9 @@
 package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -28,6 +31,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class CycleCountAdjustment {
 
     @Id
@@ -114,12 +118,14 @@ public class CycleCountAdjustment {
     /**
      * Timestamp when the adjustment was created.
      */
+    @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     /**
      * Timestamp when the adjustment was last updated.
      */
+    @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
 
@@ -155,14 +161,6 @@ public class CycleCountAdjustment {
         if (adjustmentId == null) {
             adjustmentId = UUIDv7Generator.generate();
         }
-        Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
     }
 
     /**

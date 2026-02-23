@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
 import com.positivity.accounting.internal.exception.GLPostingException;
+import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
 import com.positivity.accounting.service.EventIngestionService;
 
 import lombok.RequiredArgsConstructor;
@@ -40,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
  * <li>Auto-post if rule set allows</li>
  * </ol>
  * 
- * @see EventIngestionService
+ * @see EventIngestionServiceImpl
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/130">Issue
  *      #130</a>

@@ -3,6 +3,9 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,6 +35,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "posting_rule_version", uniqueConstraints = {
         @UniqueConstraint(name = "uk_posting_rule_set_version", columnNames = { "posting_rule_set_id",
                 "version_number" })
@@ -51,9 +55,6 @@ public class PostingRuleVersion {
         if (versionId == null) {
             versionId = UUIDv7Generator.generate();
         }
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
     }
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -75,12 +76,14 @@ public class PostingRuleVersion {
     private String rulesDefinition;
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
     private Instant modifiedAt;
 
@@ -99,11 +102,6 @@ public class PostingRuleVersion {
 
     @Column(name = "archived_by", length = 50)
     private String archivedBy;
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.modifiedAt = Instant.now();
-    }
 
     /**
      * Check if this version is immutable (cannot be edited).

@@ -4,6 +4,9 @@ import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -16,6 +19,7 @@ import java.util.UUID;
  * CAP:092 - Preferences & Billing Rules
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "billing_rules", indexes = {
         @Index(name = "idx_billing_rules_party_id", columnList = "party_id", unique = true)
 })
@@ -46,9 +50,11 @@ public class BillingRules {
     @Column(name = "version", nullable = false)
     private Integer version = 0;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -60,15 +66,6 @@ public class BillingRules {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
-
-        Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
     }
 
     // Getters and Setters

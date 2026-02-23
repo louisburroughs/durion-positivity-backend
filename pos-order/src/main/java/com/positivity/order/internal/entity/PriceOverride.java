@@ -2,6 +2,9 @@ package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -20,6 +23,7 @@ import java.util.UUID;
  * transitions.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "price_override")
 @Data
 @NoArgsConstructor
@@ -110,12 +114,14 @@ public class PriceOverride {
     /**
      * Timestamp when the override was created.
      */
+    @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     /**
      * Timestamp when the override was last updated.
      */
+    @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
 
@@ -145,18 +151,6 @@ public class PriceOverride {
         if (overrideId == null) {
             overrideId = UUIDv7Generator.generate();
         }
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        if (updatedAt == null) {
-            updatedAt = now;
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = Instant.now();
     }
 
     /**

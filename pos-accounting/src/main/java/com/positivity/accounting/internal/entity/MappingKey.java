@@ -4,13 +4,16 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -33,6 +36,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "mapping_key", indexes = {
         @Index(name = "idx_mapping_key_category", columnList = "posting_category_id"),
         @Index(name = "idx_mapping_key_name", columnList = "key_name")
@@ -49,9 +53,6 @@ public class MappingKey {
         if (mappingKeyId == null) {
             mappingKeyId = UUIDv7Generator.generate();
         }
-        Instant now = Instant.now();
-        this.createdAt = now;
-        this.modifiedAt = now;
     }
 
     @Column(name = "posting_category_id", nullable = false)
@@ -67,20 +68,18 @@ public class MappingKey {
     private Boolean isActive = true;
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
     private Instant modifiedAt;
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
 
-    @PreUpdate
-    protected void onUpdate() {
-        this.modifiedAt = Instant.now();
-    }
 }

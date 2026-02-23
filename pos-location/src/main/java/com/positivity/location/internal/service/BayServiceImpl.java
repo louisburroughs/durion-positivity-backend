@@ -297,7 +297,7 @@ public class BayServiceImpl implements BayService {
                 .skillRequirementIds(
                         entity.getSkillRequirementIds() == null ? List.of() : entity.getSkillRequirementIds())
                 .createdAt(entity.getCreatedAt())
-                .lastModifiedAt(entity.getLastModifiedAt())
+                .lastModifiedAt(entity.getUpdatedAt())
                 .build();
     }
 }

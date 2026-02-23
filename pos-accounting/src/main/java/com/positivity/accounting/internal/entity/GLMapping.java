@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -36,6 +38,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "gl_mapping", indexes = {
         @Index(name = "idx_gl_mapping_category_key", columnList = "posting_category_id, mapping_key_id"),
         @Index(name = "idx_gl_mapping_effective_from", columnList = "effective_start_date"),
@@ -55,7 +58,6 @@ public class GLMapping {
         if (glMappingId == null) {
             glMappingId = UUIDv7Generator.generate();
         }
-        this.createdAt = Instant.now();
     }
 
     @Column(name = "source_system", length = 50, nullable = false)
@@ -97,6 +99,7 @@ public class GLMapping {
     private Map<String, String> dimensions;
 
     // Audit fields (immutable after creation)
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

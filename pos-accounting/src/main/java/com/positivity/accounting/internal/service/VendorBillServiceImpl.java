@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,6 +28,7 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.service.VendorBillService;
 import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
