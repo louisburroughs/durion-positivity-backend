@@ -2,11 +2,12 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.catalog.internal.enums.ChangeSourceType;
 import com.positivity.catalog.internal.enums.CostType;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
@@ -27,6 +28,8 @@ import lombok.Setter;
 public class ItemCostAuditEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "audit_id", nullable = false, columnDefinition = "UUID")
     private UUID auditId;
 
@@ -61,9 +64,6 @@ public class ItemCostAuditEntity {
 
     @PrePersist
     void onCreate() {
-        if (auditId == null) {
-            auditId = UUIDv7Generator.generate();
-        }
         if (timestamp == null) {
             timestamp = Instant.now();
         }

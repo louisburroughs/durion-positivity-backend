@@ -1,31 +1,37 @@
 package com.positivity.catalog.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Setter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "price_book_rule")
 public class PriceBookRuleEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID ruleId;
 
@@ -57,9 +63,9 @@ public class PriceBookRuleEntity {
     private Integer priority;
 
     @Column(nullable = false)
-    private OffsetDateTime effectiveStartAt;
+    private Instant effectiveStartAt;
 
-    private OffsetDateTime effectiveEndAt;
+    private Instant effectiveEndAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
@@ -68,20 +74,19 @@ public class PriceBookRuleEntity {
     @Column(nullable = false, columnDefinition = "UUID")
     private UUID createdByUserId;
 
-    @Column(nullable = false)
-    private OffsetDateTime createdAt;
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
 
+    @LastModifiedDate
     @Column(nullable = false)
-    private OffsetDateTime updatedAt;
+    private Instant updatedAt;
 
     @Version
     private Long version;
 
     @PrePersist
     public void prePersist() {
-        if (ruleId == null) {
-            ruleId = UUIDv7Generator.generate();
-        }
         if (conditionType == null) {
             conditionType = PriceBookRuleConditionType.NONE;
         }
@@ -91,14 +96,5 @@ public class PriceBookRuleEntity {
         if (priority == null) {
             priority = 0;
         }
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now(ZoneOffset.UTC);
-        }
-        updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 }

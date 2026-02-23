@@ -1,10 +1,12 @@
 package com.positivity.catalog.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -13,14 +15,19 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Setter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "location_price_override")
 public class LocationPriceOverrideEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -55,7 +62,8 @@ public class LocationPriceOverrideEntity {
     @Column(nullable = false, columnDefinition = "UUID")
     private UUID createdByUserId;
 
-    @Column(nullable = false)
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(columnDefinition = "UUID")
@@ -78,11 +86,8 @@ public class LocationPriceOverrideEntity {
 
     @jakarta.persistence.PrePersist
     public void prePersist() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
+        if (status == null) {
+            status = PriceOverrideStatus.PENDING_APPROVAL;
         }
     }
 }

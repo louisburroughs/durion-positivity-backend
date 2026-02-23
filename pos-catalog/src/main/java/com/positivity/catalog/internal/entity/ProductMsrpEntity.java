@@ -1,28 +1,33 @@
 package com.positivity.catalog.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Setter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "product_msrp")
 public class ProductMsrpEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID msrpId;
 
@@ -40,11 +45,13 @@ public class ProductMsrpEntity {
 
     private LocalDate effectiveEndDate;
 
-    @Column(nullable = false)
-    private OffsetDateTime createdAt;
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
 
+    @LastModifiedDate
     @Column(nullable = false)
-    private OffsetDateTime updatedAt;
+    private Instant updatedAt;
 
     @Column(columnDefinition = "UUID")
     private UUID updatedBy;
@@ -52,19 +59,4 @@ public class ProductMsrpEntity {
     @Version
     private Long version;
 
-    @PrePersist
-    public void prePersist() {
-        if (msrpId == null) {
-            msrpId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now(ZoneOffset.UTC);
-        }
-        updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
-    }
 }

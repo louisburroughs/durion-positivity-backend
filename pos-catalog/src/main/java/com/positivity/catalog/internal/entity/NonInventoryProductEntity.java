@@ -1,6 +1,6 @@
 package com.positivity.catalog.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,15 +13,10 @@ import java.util.UUID;
 @Table(name = "non_inventory_product")
 public class NonInventoryProductEntity implements CatalogItem {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 
     private String name;
     private String longDescription;

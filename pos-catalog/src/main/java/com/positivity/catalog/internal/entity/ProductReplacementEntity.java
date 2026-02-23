@@ -1,22 +1,30 @@
 package com.positivity.catalog.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Setter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "product_replacement")
 public class ProductReplacementEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID replacementId;
 
@@ -33,28 +41,14 @@ public class ProductReplacementEntity {
 
     private Instant effectiveAt;
 
-    @Column(nullable = false)
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
 
     private Instant deletedAt;
 
-    @jakarta.persistence.PrePersist
-    public void prePersist() {
-        Instant now = Instant.now();
-        if (replacementId == null) {
-            replacementId = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        updatedAt = now;
-    }
-
-    @jakarta.persistence.PreUpdate
-    public void preUpdate() {
-        updatedAt = Instant.now();
-    }
 }

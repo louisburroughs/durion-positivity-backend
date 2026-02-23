@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 
 @Repository
 public interface EstimateRepository extends JpaRepository<Estimate, UUID> {

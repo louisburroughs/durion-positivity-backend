@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 
 /**
  * Mapper for converting TechnicianAssignment entities to DTOs.

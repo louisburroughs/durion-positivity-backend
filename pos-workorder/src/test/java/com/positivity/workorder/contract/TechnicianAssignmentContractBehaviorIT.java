@@ -15,14 +15,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
-import com.positivity.workorder.internal.entity.ApprovalStatus;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
-import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.enums.ApprovalStatus;
+import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
@@ -48,388 +48,389 @@ import io.restassured.http.ContentType;
 @Import(ContractTestConfiguration.class)
 class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest {
 
-    @Autowired
-    private EstimateRepository estimateRepository;
+        @Autowired
+        private EstimateRepository estimateRepository;
 
-    @Autowired
-    private EstimateItemRepository estimateItemRepository;
+        @Autowired
+        private EstimateItemRepository estimateItemRepository;
 
-    @Autowired
-    private WorkorderRepository workorderRepository;
+        @Autowired
+        private WorkorderRepository workorderRepository;
 
-    @Autowired
-    private TechnicianAssignmentRepository assignmentRepository;
+        @Autowired
+        private TechnicianAssignmentRepository assignmentRepository;
 
-    private UUID testCustomerId;
-    private UUID testLocationId;
-    private UUID testVehicleId;
-    private UUID testTechnicianId1;
-    private UUID testTechnicianId2;
+        private UUID testCustomerId;
+        private UUID testLocationId;
+        private UUID testVehicleId;
+        private UUID testTechnicianId1;
+        private UUID testTechnicianId2;
 
-    @AfterEach
-    void tearDown() {
-        assignmentRepository.deleteAll();
-        workorderRepository.deleteAll();
-        estimateItemRepository.deleteAll();
-        estimateRepository.deleteAll();
-    }
-
-    // ========== TECHNICIAN ASSIGNMENT TESTS ==========
-
-    @Test
-    @DisplayName("TA-001: Successfully assign technician to APPROVED workorder")
-    void testAssignTechnician_HappyPath() {
-        // Given: A workorder in APPROVED status
-        UUID workorderId = seedApprovedWorkorder();
-        testTechnicianId1 = UUID.randomUUID();
-
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
-
-        // When: Assign a technician to the workorder
-        Map<String, Object> assignRequest = Map.of(
-                "technicianId", testTechnicianId1.toString(),
-                "assignedByUserId", SYSTEM_USER_ID.toString(),
-                "notes", "Assigned to senior tech for brake system work");
-
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(assignRequest)
-                .when()
-                .post("/v1/workorders/{workorderId}/technician", workorderId)
-                .then()
-                .log().ifValidationFails()
-                .statusCode(200)
-                .body("workorderId", equalTo(workorderId.toString()))
-                .body("technicianId", equalTo(testTechnicianId1.toString()))
-                .body("assignedAt", notNullValue())
-                .body("assignedBy", equalTo(SYSTEM_USER_ID.toString()))
-                .body("status", equalTo("ASSIGNED"))
-                .body("message", containsString("successfully"));
-
-        // Then: Verify workorder status transitioned to ASSIGNED
-        Workorder updatedWorkorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(updatedWorkorder.getStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
-
-        // Verify assignment was recorded
-        List<TechnicianAssignment> assignments = assignmentRepository
-                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
-        assertThat(assignments).hasSize(1);
-
-        TechnicianAssignment assignment = assignments.get(0);
-        assertThat(assignment.getTechnicianId()).isEqualTo(testTechnicianId1);
-        assertThat(assignment.getWorkorderId()).isEqualTo(workorderId);
-        assertThat(assignment.getAssignedBy()).isEqualTo(SYSTEM_USER_ID);
-        assertThat(assignment.getCurrent()).isTrue();
-        assertThat(assignment.getUnassignedAt()).isNull();
-        assertThat(assignment.getNotes()).isEqualTo("Assigned to senior tech for brake system work");
-    }
-
-    @Test
-    @DisplayName("TA-002: Successfully reassign technician with reason")
-    void testReassignTechnician_WithReason() {
-        // Given: A workorder with an existing technician assignment
-        UUID workorderId = seedWorkorderWithAssignedTechnician();
-        testTechnicianId2 = UUID.randomUUID();
-
-        // Verify initial assignment
-        TechnicianAssignment initialAssignment = assignmentRepository
-                .findByWorkorderIdAndCurrentTrue(workorderId)
-                .orElseThrow();
-        UUID previousTechId = initialAssignment.getTechnicianId();
-        assertThat(initialAssignment.getCurrent()).isTrue();
-
-        // When: Reassign to a different technician
-        Map<String, Object> reassignRequest = Map.of(
-                "newTechnicianId", testTechnicianId2.toString(),
-                "reassignedByUserId", SYSTEM_USER_ID.toString(),
-                "reason", "Original technician unavailable, reassigning to available tech",
-                "notes", "Customer requested different technician",
-                "notifyPreviousTechnician", true);
-
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(reassignRequest)
-                .when()
-                .put("/v1/workorders/{workorderId}/technician", workorderId)
-                .then()
-                .log().ifValidationFails()
-                .statusCode(200)
-                .body("workorderId", equalTo(workorderId.toString()))
-                .body("technicianId", equalTo(testTechnicianId2.toString()))
-                .body("previousTechnicianId", anyOf(equalTo(previousTechId.toString()), nullValue()))
-                .body("reassignmentReason", equalTo("Original technician unavailable, reassigning to available tech"))
-                .body("reassignedAt", notNullValue())
-                .body("reassignedBy", equalTo(SYSTEM_USER_ID.toString()))
-                .body("message", containsString("successfully"));
-
-        // Then: Verify new assignment is current
-        TechnicianAssignment currentAssignment = assignmentRepository
-                .findByWorkorderIdAndCurrentTrue(workorderId)
-                .orElseThrow();
-        assertThat(currentAssignment.getTechnicianId()).isEqualTo(testTechnicianId2);
-        assertThat(currentAssignment.getCurrent()).isTrue();
-
-        // Verify previous assignment is marked as not current
-        List<TechnicianAssignment> allAssignments = assignmentRepository
-                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
-        assertThat(allAssignments).hasSize(2);
-
-        TechnicianAssignment previousAssignment = allAssignments.stream()
-                .filter(a -> a.getTechnicianId().equals(previousTechId))
-                .findFirst()
-                .orElseThrow();
-        assertThat(previousAssignment.getCurrent()).isFalse();
-        assertThat(previousAssignment.getUnassignedAt()).isNotNull();
-        assertThat(previousAssignment.getReassignmentReason())
-                .contains("Original technician unavailable");
-    }
-
-    @Test
-    @DisplayName("TA-003: Successfully retrieve assignment history")
-    void testGetAssignmentHistory_MultipleAssignments() {
-        // Given: A workorder with multiple assignment history
-        UUID workorderId = seedWorkorderWithReassignmentHistory();
-
-        // When: Retrieve assignment history
-        givenWithGatewayAuth()
-                .when()
-                .get("/v1/workorders/{workorderId}/technician", workorderId)
-                .then()
-                .log().ifValidationFails()
-                .statusCode(200)
-                .body("workorderId", equalTo(workorderId.toString()))
-                .body("technicianId", notNullValue())
-                .body("assignedAt", notNullValue())
-                .body("currentStatus", notNullValue())
-                .body("assignmentHistory", notNullValue())
-                .body("assignmentHistory", hasSize(greaterThanOrEqualTo(2)))
-                .body("assignmentHistory[0].technicianId", notNullValue())
-                .body("assignmentHistory[0].assignedAt", notNullValue())
-                .body("assignmentHistory[0].assignedBy", notNullValue());
-
-        // Then: Verify history is ordered newest-first
-        List<TechnicianAssignment> history = assignmentRepository
-                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
-        assertThat(history.size()).isGreaterThanOrEqualTo(2);
-
-        // Verify most recent is first
-        LocalDateTime previousTimestamp = history.get(0).getAssignedAt();
-        for (int i = 1; i < history.size(); i++) {
-            LocalDateTime currentTimestamp = history.get(i).getAssignedAt();
-            assertThat(currentTimestamp).isBeforeOrEqualTo(previousTimestamp);
-            previousTimestamp = currentTimestamp;
+        @AfterEach
+        void tearDown() {
+                assignmentRepository.deleteAll();
+                workorderRepository.deleteAll();
+                estimateItemRepository.deleteAll();
+                estimateRepository.deleteAll();
         }
-    }
 
-    @Test
-    @DisplayName("TA-004: Reject assignment if workorder status is COMPLETED")
-    void testAssignTechnician_InvalidStatus() {
-        // Given: A workorder in COMPLETED status
-        UUID workorderId = seedCompletedWorkorder();
-        testTechnicianId1 = UUID.randomUUID();
+        // ========== TECHNICIAN ASSIGNMENT TESTS ==========
 
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
+        @Test
+        @DisplayName("TA-001: Successfully assign technician to APPROVED workorder")
+        void testAssignTechnician_HappyPath() {
+                // Given: A workorder in APPROVED status
+                UUID workorderId = seedApprovedWorkorder();
+                testTechnicianId1 = UUID.randomUUID();
 
-        // When: Attempt to assign a technician
-        Map<String, Object> assignRequest = Map.of(
-                "technicianId", testTechnicianId1.toString(),
-                "assignedByUserId", SYSTEM_USER_ID.toString(),
-                "notes", "Attempting to assign to completed workorder");
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
 
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(assignRequest)
-                .when()
-                .post("/v1/workorders/{workorderId}/technician", workorderId)
-                .then()
-                .log().ifValidationFails()
-                .statusCode(400); // Bad request due to invalid state
+                // When: Assign a technician to the workorder
+                Map<String, Object> assignRequest = Map.of(
+                                "technicianId", testTechnicianId1.toString(),
+                                "assignedByUserId", SYSTEM_USER_ID.toString(),
+                                "notes", "Assigned to senior tech for brake system work");
 
-        // Then: Verify no assignment was created
-        List<TechnicianAssignment> assignments = assignmentRepository
-                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
-        assertThat(assignments).isEmpty();
-    }
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(assignRequest)
+                                .when()
+                                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(200)
+                                .body("workorderId", equalTo(workorderId.toString()))
+                                .body("technicianId", equalTo(testTechnicianId1.toString()))
+                                .body("assignedAt", notNullValue())
+                                .body("assignedBy", equalTo(SYSTEM_USER_ID.toString()))
+                                .body("status", equalTo("ASSIGNED"))
+                                .body("message", containsString("successfully"));
 
-    @Test
-    @DisplayName("TA-005: Reject reassignment if no current assignment exists")
-    void testReassignTechnician_NoExistingAssignment() {
-        // Given: A workorder with NO existing assignment
-        UUID workorderId = seedApprovedWorkorder();
-        testTechnicianId1 = UUID.randomUUID();
+                // Then: Verify workorder status transitioned to ASSIGNED
+                Workorder updatedWorkorder = workorderRepository.findById(workorderId).orElseThrow();
+                assertThat(updatedWorkorder.getStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
 
-        // Verify no current assignment
-        assertThat(assignmentRepository.findByWorkorderIdAndCurrentTrue(workorderId)).isEmpty();
+                // Verify assignment was recorded
+                List<TechnicianAssignment> assignments = assignmentRepository
+                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                assertThat(assignments).hasSize(1);
 
-        // When: Attempt to reassign
-        Map<String, Object> reassignRequest = Map.of(
-                "newTechnicianId", testTechnicianId1.toString(),
-                "reassignedByUserId", SYSTEM_USER_ID.toString(),
-                "reason", "Attempting reassignment without existing assignment");
+                TechnicianAssignment assignment = assignments.get(0);
+                assertThat(assignment.getTechnicianId()).isEqualTo(testTechnicianId1);
+                assertThat(assignment.getWorkorderId()).isEqualTo(workorderId);
+                assertThat(assignment.getAssignedBy()).isEqualTo(SYSTEM_USER_ID);
+                assertThat(assignment.getCurrent()).isTrue();
+                assertThat(assignment.getUnassignedAt()).isNull();
+                assertThat(assignment.getNotes()).isEqualTo("Assigned to senior tech for brake system work");
+        }
 
-        givenWithGatewayAuth()
-                .contentType(ContentType.JSON)
-                .body(reassignRequest)
-                .when()
-                .put("/v1/workorders/{workorderId}/technician", workorderId)
-                .then()
-                .log().ifValidationFails()
-                .statusCode(400); // Bad request - no current assignment to reassign from
+        @Test
+        @DisplayName("TA-002: Successfully reassign technician with reason")
+        void testReassignTechnician_WithReason() {
+                // Given: A workorder with an existing technician assignment
+                UUID workorderId = seedWorkorderWithAssignedTechnician();
+                testTechnicianId2 = UUID.randomUUID();
 
-        // Then: Verify no assignment was created
-        List<TechnicianAssignment> assignments = assignmentRepository
-                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
-        assertThat(assignments).isEmpty();
-    }
+                // Verify initial assignment
+                TechnicianAssignment initialAssignment = assignmentRepository
+                                .findByWorkorderIdAndCurrentTrue(workorderId)
+                                .orElseThrow();
+                UUID previousTechId = initialAssignment.getTechnicianId();
+                assertThat(initialAssignment.getCurrent()).isTrue();
 
-    @Test
-    @DisplayName("TA-006: Return 404 when retrieving assignment for non-existent workorder")
-    void testGetAssignment_WorkorderNotFound() {
-        // Given: A non-existent workorder ID
-        UUID nonExistentId = UUID.randomUUID();
+                // When: Reassign to a different technician
+                Map<String, Object> reassignRequest = Map.of(
+                                "newTechnicianId", testTechnicianId2.toString(),
+                                "reassignedByUserId", SYSTEM_USER_ID.toString(),
+                                "reason", "Original technician unavailable, reassigning to available tech",
+                                "notes", "Customer requested different technician",
+                                "notifyPreviousTechnician", true);
 
-        // When/Then: Attempt to retrieve assignment
-        givenWithGatewayAuth()
-                .when()
-                .get("/v1/workorders/{workorderId}/technician", nonExistentId)
-                .then()
-                .log().ifValidationFails()
-                .statusCode(404);
-    }
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(reassignRequest)
+                                .when()
+                                .put("/v1/workorders/{workorderId}/technician", workorderId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(200)
+                                .body("workorderId", equalTo(workorderId.toString()))
+                                .body("technicianId", equalTo(testTechnicianId2.toString()))
+                                .body("previousTechnicianId", anyOf(equalTo(previousTechId.toString()), nullValue()))
+                                .body("reassignmentReason", equalTo(
+                                                "Original technician unavailable, reassigning to available tech"))
+                                .body("reassignedAt", notNullValue())
+                                .body("reassignedBy", equalTo(SYSTEM_USER_ID.toString()))
+                                .body("message", containsString("successfully"));
 
-    // ========== TEST DATA SEED METHODS ==========
+                // Then: Verify new assignment is current
+                TechnicianAssignment currentAssignment = assignmentRepository
+                                .findByWorkorderIdAndCurrentTrue(workorderId)
+                                .orElseThrow();
+                assertThat(currentAssignment.getTechnicianId()).isEqualTo(testTechnicianId2);
+                assertThat(currentAssignment.getCurrent()).isTrue();
 
-    /**
-     * Seed an APPROVED workorder ready for technician assignment.
-     */
-    private UUID seedApprovedWorkorder() {
-        testCustomerId = UUID.randomUUID();
-        testLocationId = UUID.randomUUID();
-        testVehicleId = UUID.randomUUID();
+                // Verify previous assignment is marked as not current
+                List<TechnicianAssignment> allAssignments = assignmentRepository
+                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                assertThat(allAssignments).hasSize(2);
 
-        // Create an approved estimate
-        Estimate estimate = Estimate.builder()
-                .customerId(testCustomerId)
-                .locationId(testLocationId)
-                .vehicleId(testVehicleId)
-                .status(EstimateStatus.APPROVED)
-                .approvedBy(testCustomerId)
-                .createdById("test-user")
-                .createdByUserId("test-user")
-                .build();
-        estimate = estimateRepository.save(estimate);
+                TechnicianAssignment previousAssignment = allAssignments.stream()
+                                .filter(a -> a.getTechnicianId().equals(previousTechId))
+                                .findFirst()
+                                .orElseThrow();
+                assertThat(previousAssignment.getCurrent()).isFalse();
+                assertThat(previousAssignment.getUnassignedAt()).isNotNull();
+                assertThat(previousAssignment.getReassignmentReason())
+                                .contains("Original technician unavailable");
+        }
 
-        // Add approved items
-        EstimateItem item = EstimateItem.builder()
-                .estimateId(estimate.getId())
-                .itemType(EstimateItemType.LABOR)
-                .description("Oil change")
-                .quantity(BigDecimal.ONE)
-                .unitPrice(BigDecimal.valueOf(50.00))
-                .approvalStatus(ApprovalStatus.APPROVED)
-                .createdById("test-user")
-                .build();
-        estimateItemRepository.save(item);
+        @Test
+        @DisplayName("TA-003: Successfully retrieve assignment history")
+        void testGetAssignmentHistory_MultipleAssignments() {
+                // Given: A workorder with multiple assignment history
+                UUID workorderId = seedWorkorderWithReassignmentHistory();
 
-        // Create workorder in APPROVED status
-        Workorder workorder = Workorder.builder()
-                .estimateId(estimate.getId())
-                .customerId(testCustomerId)
-                .vehicleId(testVehicleId)
-                .status(WorkorderStatus.APPROVED)
-                .build();
-        workorder = workorderRepository.save(workorder);
+                // When: Retrieve assignment history
+                givenWithGatewayAuth()
+                                .when()
+                                .get("/v1/workorders/{workorderId}/technician", workorderId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(200)
+                                .body("workorderId", equalTo(workorderId.toString()))
+                                .body("technicianId", notNullValue())
+                                .body("assignedAt", notNullValue())
+                                .body("currentStatus", notNullValue())
+                                .body("assignmentHistory", notNullValue())
+                                .body("assignmentHistory", hasSize(greaterThanOrEqualTo(2)))
+                                .body("assignmentHistory[0].technicianId", notNullValue())
+                                .body("assignmentHistory[0].assignedAt", notNullValue())
+                                .body("assignmentHistory[0].assignedBy", notNullValue());
 
-        return workorder.getId();
-    }
+                // Then: Verify history is ordered newest-first
+                List<TechnicianAssignment> history = assignmentRepository
+                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                assertThat(history.size()).isGreaterThanOrEqualTo(2);
 
-    /**
-     * Seed a workorder with an assigned technician.
-     */
-    private UUID seedWorkorderWithAssignedTechnician() {
-        UUID workorderId = seedApprovedWorkorder();
-        testTechnicianId1 = UUID.randomUUID();
+                // Verify most recent is first
+                LocalDateTime previousTimestamp = history.get(0).getAssignedAt();
+                for (int i = 1; i < history.size(); i++) {
+                        LocalDateTime currentTimestamp = history.get(i).getAssignedAt();
+                        assertThat(currentTimestamp).isBeforeOrEqualTo(previousTimestamp);
+                        previousTimestamp = currentTimestamp;
+                }
+        }
 
-        // Create initial assignment
-        LocalDateTime now = LocalDateTime.now();
-        TechnicianAssignment assignment = TechnicianAssignment.builder()
-                .workorderId(workorderId)
-                .technicianId(testTechnicianId1)
-                .assignedBy(SYSTEM_USER_ID)
-                .assignedAt(now.minusHours(2))
-                .notes("Initial assignment")
-                .current(true)
-                .createdAt(now.minusHours(2))
-                .updatedAt(now.minusHours(2))
-                .build();
-        assignmentRepository.save(assignment);
+        @Test
+        @DisplayName("TA-004: Reject assignment if workorder status is COMPLETED")
+        void testAssignTechnician_InvalidStatus() {
+                // Given: A workorder in COMPLETED status
+                UUID workorderId = seedCompletedWorkorder();
+                testTechnicianId1 = UUID.randomUUID();
 
-        // Update workorder status to ASSIGNED
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        workorder.setStatus(WorkorderStatus.ASSIGNED);
-        workorderRepository.save(workorder);
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.COMPLETED);
 
-        return workorderId;
-    }
+                // When: Attempt to assign a technician
+                Map<String, Object> assignRequest = Map.of(
+                                "technicianId", testTechnicianId1.toString(),
+                                "assignedByUserId", SYSTEM_USER_ID.toString(),
+                                "notes", "Attempting to assign to completed workorder");
 
-    /**
-     * Seed a workorder with reassignment history.
-     */
-    private UUID seedWorkorderWithReassignmentHistory() {
-        UUID workorderId = seedApprovedWorkorder();
-        testTechnicianId1 = UUID.randomUUID();
-        testTechnicianId2 = UUID.randomUUID();
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(assignRequest)
+                                .when()
+                                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(400); // Bad request due to invalid state
 
-        LocalDateTime now = LocalDateTime.now();
+                // Then: Verify no assignment was created
+                List<TechnicianAssignment> assignments = assignmentRepository
+                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                assertThat(assignments).isEmpty();
+        }
 
-        // Create first assignment (now inactive)
-        TechnicianAssignment firstAssignment = TechnicianAssignment.builder()
-                .workorderId(workorderId)
-                .technicianId(testTechnicianId1)
-                .assignedBy(SYSTEM_USER_ID)
-                .assignedAt(now.minusDays(2))
-                .unassignedAt(now.minusDays(1))
-                .reassignmentReason("Technician called out sick")
-                .notes("First assignment")
-                .current(false)
-                .createdAt(now.minusDays(2))
-                .updatedAt(now.minusDays(1))
-                .build();
-        assignmentRepository.save(firstAssignment);
+        @Test
+        @DisplayName("TA-005: Reject reassignment if no current assignment exists")
+        void testReassignTechnician_NoExistingAssignment() {
+                // Given: A workorder with NO existing assignment
+                UUID workorderId = seedApprovedWorkorder();
+                testTechnicianId1 = UUID.randomUUID();
 
-        // Create second assignment (current)
-        TechnicianAssignment currentAssignment = TechnicianAssignment.builder()
-                .workorderId(workorderId)
-                .technicianId(testTechnicianId2)
-                .assignedBy(SYSTEM_USER_ID)
-                .assignedAt(now.minusDays(1))
-                .notes("Reassigned to available technician")
-                .current(true)
-                .createdAt(now.minusDays(1))
-                .updatedAt(now.minusDays(1))
-                .build();
-        assignmentRepository.save(currentAssignment);
+                // Verify no current assignment
+                assertThat(assignmentRepository.findByWorkorderIdAndCurrentTrue(workorderId)).isEmpty();
 
-        // Update workorder status
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        workorder.setStatus(WorkorderStatus.WORK_IN_PROGRESS);
-        workorderRepository.save(workorder);
+                // When: Attempt to reassign
+                Map<String, Object> reassignRequest = Map.of(
+                                "newTechnicianId", testTechnicianId1.toString(),
+                                "reassignedByUserId", SYSTEM_USER_ID.toString(),
+                                "reason", "Attempting reassignment without existing assignment");
 
-        return workorderId;
-    }
+                givenWithGatewayAuth()
+                                .contentType(ContentType.JSON)
+                                .body(reassignRequest)
+                                .when()
+                                .put("/v1/workorders/{workorderId}/technician", workorderId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(400); // Bad request - no current assignment to reassign from
 
-    /**
-     * Seed a COMPLETED workorder for testing invalid state transitions.
-     */
-    private UUID seedCompletedWorkorder() {
-        UUID workorderId = seedApprovedWorkorder();
+                // Then: Verify no assignment was created
+                List<TechnicianAssignment> assignments = assignmentRepository
+                                .findByWorkorderIdOrderByAssignedAtDesc(workorderId);
+                assertThat(assignments).isEmpty();
+        }
 
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        workorder.setStatus(WorkorderStatus.COMPLETED);
-        workorder = workorderRepository.save(workorder);
+        @Test
+        @DisplayName("TA-006: Return 404 when retrieving assignment for non-existent workorder")
+        void testGetAssignment_WorkorderNotFound() {
+                // Given: A non-existent workorder ID
+                UUID nonExistentId = UUID.randomUUID();
 
-        return workorder.getId();
-    }
+                // When/Then: Attempt to retrieve assignment
+                givenWithGatewayAuth()
+                                .when()
+                                .get("/v1/workorders/{workorderId}/technician", nonExistentId)
+                                .then()
+                                .log().ifValidationFails()
+                                .statusCode(404);
+        }
+
+        // ========== TEST DATA SEED METHODS ==========
+
+        /**
+         * Seed an APPROVED workorder ready for technician assignment.
+         */
+        private UUID seedApprovedWorkorder() {
+                testCustomerId = UUID.randomUUID();
+                testLocationId = UUID.randomUUID();
+                testVehicleId = UUID.randomUUID();
+
+                // Create an approved estimate
+                Estimate estimate = Estimate.builder()
+                                .customerId(testCustomerId)
+                                .locationId(testLocationId)
+                                .vehicleId(testVehicleId)
+                                .status(EstimateStatus.APPROVED)
+                                .approvedBy(testCustomerId)
+                                .createdById("test-user")
+                                .createdByUserId("test-user")
+                                .build();
+                estimate = estimateRepository.save(estimate);
+
+                // Add approved items
+                EstimateItem item = EstimateItem.builder()
+                                .estimateId(estimate.getId())
+                                .itemType(EstimateItemType.LABOR)
+                                .description("Oil change")
+                                .quantity(BigDecimal.ONE)
+                                .unitPrice(BigDecimal.valueOf(50.00))
+                                .approvalStatus(ApprovalStatus.APPROVED)
+                                .createdById("test-user")
+                                .build();
+                estimateItemRepository.save(item);
+
+                // Create workorder in APPROVED status
+                Workorder workorder = Workorder.builder()
+                                .estimateId(estimate.getId())
+                                .customerId(testCustomerId)
+                                .vehicleId(testVehicleId)
+                                .status(WorkorderStatus.APPROVED)
+                                .build();
+                workorder = workorderRepository.save(workorder);
+
+                return workorder.getId();
+        }
+
+        /**
+         * Seed a workorder with an assigned technician.
+         */
+        private UUID seedWorkorderWithAssignedTechnician() {
+                UUID workorderId = seedApprovedWorkorder();
+                testTechnicianId1 = UUID.randomUUID();
+
+                // Create initial assignment
+                LocalDateTime now = LocalDateTime.now();
+                TechnicianAssignment assignment = TechnicianAssignment.builder()
+                                .workorderId(workorderId)
+                                .technicianId(testTechnicianId1)
+                                .assignedBy(SYSTEM_USER_ID)
+                                .assignedAt(now.minusHours(2))
+                                .notes("Initial assignment")
+                                .current(true)
+                                .createdAt(now.minusHours(2))
+                                .updatedAt(now.minusHours(2))
+                                .build();
+                assignmentRepository.save(assignment);
+
+                // Update workorder status to ASSIGNED
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                workorder.setStatus(WorkorderStatus.ASSIGNED);
+                workorderRepository.save(workorder);
+
+                return workorderId;
+        }
+
+        /**
+         * Seed a workorder with reassignment history.
+         */
+        private UUID seedWorkorderWithReassignmentHistory() {
+                UUID workorderId = seedApprovedWorkorder();
+                testTechnicianId1 = UUID.randomUUID();
+                testTechnicianId2 = UUID.randomUUID();
+
+                LocalDateTime now = LocalDateTime.now();
+
+                // Create first assignment (now inactive)
+                TechnicianAssignment firstAssignment = TechnicianAssignment.builder()
+                                .workorderId(workorderId)
+                                .technicianId(testTechnicianId1)
+                                .assignedBy(SYSTEM_USER_ID)
+                                .assignedAt(now.minusDays(2))
+                                .unassignedAt(now.minusDays(1))
+                                .reassignmentReason("Technician called out sick")
+                                .notes("First assignment")
+                                .current(false)
+                                .createdAt(now.minusDays(2))
+                                .updatedAt(now.minusDays(1))
+                                .build();
+                assignmentRepository.save(firstAssignment);
+
+                // Create second assignment (current)
+                TechnicianAssignment currentAssignment = TechnicianAssignment.builder()
+                                .workorderId(workorderId)
+                                .technicianId(testTechnicianId2)
+                                .assignedBy(SYSTEM_USER_ID)
+                                .assignedAt(now.minusDays(1))
+                                .notes("Reassigned to available technician")
+                                .current(true)
+                                .createdAt(now.minusDays(1))
+                                .updatedAt(now.minusDays(1))
+                                .build();
+                assignmentRepository.save(currentAssignment);
+
+                // Update workorder status
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                workorder.setStatus(WorkorderStatus.WORK_IN_PROGRESS);
+                workorderRepository.save(workorder);
+
+                return workorderId;
+        }
+
+        /**
+         * Seed a COMPLETED workorder for testing invalid state transitions.
+         */
+        private UUID seedCompletedWorkorder() {
+                UUID workorderId = seedApprovedWorkorder();
+
+                Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+                workorder.setStatus(WorkorderStatus.COMPLETED);
+                workorder = workorderRepository.save(workorder);
+
+                return workorder.getId();
+        }
 }

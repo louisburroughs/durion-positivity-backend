@@ -2,26 +2,33 @@ package com.positivity.catalog.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Setter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "item_cost")
 public class ItemCostEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "item_cost_id", nullable = false, columnDefinition = "UUID")
     private UUID itemCostId;
 
@@ -40,27 +47,18 @@ public class ItemCostEntity {
     @Column(name = "qty_on_hand", nullable = false, precision = 19, scale = 4)
     private BigDecimal qtyOnHand;
 
-    @Column(name = "created_at", nullable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     @PrePersist
     void onCreate() {
-        if (itemId == null) {
-            itemId = UUIDv7Generator.generate();
-        }
         if (qtyOnHand == null) {
             qtyOnHand = BigDecimal.ZERO;
         }
-        Instant now = Instant.now();
-        createdAt = now;
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void onUpdate() {
-        updatedAt = Instant.now();
     }
 }

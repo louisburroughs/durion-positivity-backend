@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.entity;
+package com.positivity.workorder.internal.enums;
 
 /**
  * Approval status for estimate line items.

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.workorder.internal.enums.PriceLockStatus;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.*;

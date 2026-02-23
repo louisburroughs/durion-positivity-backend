@@ -2,7 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
 import com.positivity.workorder.internal.enums.PriceLockStatus;
-import com.positivity.workorder.internal.entity.SubstitutionStatus;
+import com.positivity.workorder.internal.enums.SubstitutionStatus;
 import com.positivity.workorder.internal.entity.WorkOrderPartSubstitution;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;

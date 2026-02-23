@@ -21,7 +21,7 @@ import io.restassured.response.Response;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
-import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;

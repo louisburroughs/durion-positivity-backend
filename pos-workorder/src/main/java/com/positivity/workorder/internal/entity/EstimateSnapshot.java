@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

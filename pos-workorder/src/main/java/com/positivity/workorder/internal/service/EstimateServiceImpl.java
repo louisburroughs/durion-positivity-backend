@@ -36,8 +36,8 @@ import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateSnapshot;
-import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -358,7 +358,7 @@ public class EstimateServiceImpl implements EstimateService {
                                         estimateId, allItems.size());
                         for (EstimateItem item : allItems) {
                                 item.setApprovalStatus(
-                                                com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED);
+                                                com.positivity.workorder.internal.enums.ApprovalStatus.APPROVED);
                                 item.setApprovalTimestamp(LocalDateTime.now());
                                 estimateItemRepository.save(item);
                         }
@@ -379,11 +379,11 @@ public class EstimateServiceImpl implements EstimateService {
                                 // Explicit approval/rejection provided
                                 if (Boolean.TRUE.equals(approval.getApproved())) {
                                         item.setApprovalStatus(
-                                                        com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED);
+                                                        com.positivity.workorder.internal.enums.ApprovalStatus.APPROVED);
                                         log.debug("Line item {} explicitly approved", item.getId());
                                 } else {
                                         item.setApprovalStatus(
-                                                        com.positivity.workorder.internal.entity.ApprovalStatus.DECLINED);
+                                                        com.positivity.workorder.internal.enums.ApprovalStatus.DECLINED);
                                         item.setRejectionReason(approval.getRejectionReason());
                                         log.debug("Line item {} declined - reason: {}", item.getId(),
                                                         approval.getRejectionReason());
@@ -393,7 +393,7 @@ public class EstimateServiceImpl implements EstimateService {
                         } else {
                                 // No explicit decision - default to approved
                                 item.setApprovalStatus(
-                                                com.positivity.workorder.internal.entity.ApprovalStatus.APPROVED);
+                                                com.positivity.workorder.internal.enums.ApprovalStatus.APPROVED);
                                 item.setApprovalTimestamp(LocalDateTime.now());
                                 log.debug("Line item {} implicitly approved (no explicit decision)", item.getId());
                         }
