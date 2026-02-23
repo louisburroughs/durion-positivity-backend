@@ -32,6 +32,7 @@ import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.service.EstimateServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -47,7 +48,7 @@ class EstimateServiceTest {
         private TaxClient taxClient;
 
         @InjectMocks
-        private EstimateService estimateService;
+        private EstimateServiceImpl estimateService;
 
         private CreateEstimateRequest validRequest;
         private ApprovalConfiguration defaultConfig;

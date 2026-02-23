@@ -1,4 +1,4 @@
-package com.positivity.workorder.service;
+package com.positivity.workorder.internal.service;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -23,6 +23,7 @@ import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.service.WorkorderDetailService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

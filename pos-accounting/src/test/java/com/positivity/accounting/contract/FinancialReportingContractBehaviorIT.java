@@ -13,7 +13,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,9 +58,8 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Generate Income Statement - Happy Path")
-        @WithMockUser(authorities = "reporting:view:financial-statements")
         void testGenerateIncomeStatement_Success() throws Exception {
-                MvcResult result = mockMvc.perform(get("/api/v1/reports/financial/income-statement")
+                MvcResult result = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
                                 .param("startDate", "2024-01-01")
                                 .param("endDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
@@ -83,9 +81,8 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Generate Balance Sheet - Happy Path")
-        @WithMockUser(authorities = "reporting:view:financial-statements")
         void testGenerateBalanceSheet_Success() throws Exception {
-                MvcResult result = mockMvc.perform(get("/api/v1/reports/financial/balance-sheet")
+                MvcResult result = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/balance-sheet"))
                                 .param("asOfDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isOk())
@@ -106,9 +103,9 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Generate Income Statement - Unauthorized (403)")
-        @WithMockUser(authorities = "some:other:permission")
         void testGenerateIncomeStatement_Unauthorized() throws Exception {
-                mockMvc.perform(get("/api/v1/reports/financial/income-statement")
+                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"),
+                                "some:other:permission")
                                 .param("startDate", "2024-01-01")
                                 .param("endDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
@@ -117,9 +114,9 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Generate Balance Sheet - Unauthorized (403)")
-        @WithMockUser(authorities = "some:other:permission")
         void testGenerateBalanceSheet_Unauthorized() throws Exception {
-                mockMvc.perform(get("/api/v1/reports/financial/balance-sheet")
+                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/balance-sheet"),
+                                "some:other:permission")
                                 .param("asOfDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isForbidden());
@@ -127,9 +124,8 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Generate Income Statement - Invalid Date Range (400)")
-        @WithMockUser(authorities = "reporting:view:financial-statements")
         void testGenerateIncomeStatement_InvalidDateRange() throws Exception {
-                mockMvc.perform(get("/api/v1/reports/financial/income-statement")
+                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
                                 .param("startDate", "2024-12-31")
                                 .param("endDate", "2024-01-01") // end before start
                                 .accept(MediaType.APPLICATION_JSON))
@@ -138,9 +134,8 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Drilldown to Accounts - Happy Path")
-        @WithMockUser(authorities = "reporting:view:financial-statements")
         void testDrilldownToAccounts_Success() throws Exception {
-                mockMvc.perform(get("/api/v1/reports/financial/drilldown/accounts/REVENUE_SALES")
+                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/accounts/REVENUE_SALES"))
                                 .param("startDate", "2024-01-01")
                                 .param("endDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
@@ -155,10 +150,9 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Drilldown to Journal Lines - Happy Path")
-        @WithMockUser(authorities = "reporting:view:financial-statements")
         void testDrilldownToJournalLines_Success() throws Exception {
                 // Use the revenue account ID from test data
-                mockMvc.perform(get("/api/v1/reports/financial/drilldown/journal-lines/" + REVENUE_ACCOUNT_ID)
+                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/journal-lines/" + REVENUE_ACCOUNT_ID))
                                 .param("startDate", "2024-01-01")
                                 .param("endDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
@@ -171,9 +165,8 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Drilldown to Accounts - Invalid Date Range (400)")
-        @WithMockUser(authorities = "reporting:view:financial-statements")
         void testDrilldownToAccounts_InvalidDateRange() throws Exception {
-                mockMvc.perform(get("/api/v1/reports/financial/drilldown/accounts/REVENUE_SALES")
+                mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/drilldown/accounts/REVENUE_SALES"))
                                 .param("startDate", "2024-12-31")
                                 .param("endDate", "2024-01-01") // end before start
                                 .accept(MediaType.APPLICATION_JSON))
@@ -182,17 +175,16 @@ class FinancialReportingContractBehaviorIT extends BaseContractIntegrationTest {
 
         @Test
         @DisplayName("Report Reproducibility - Same Params Return Same Results")
-        @WithMockUser(authorities = "reporting:view:financial-statements")
         void testReportReproducibility() throws Exception {
                 // Generate report twice with same parameters
-                MvcResult result1 = mockMvc.perform(get("/api/v1/reports/financial/income-statement")
+                MvcResult result1 = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
                                 .param("startDate", "2024-01-01")
                                 .param("endDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isOk())
                                 .andReturn();
 
-                MvcResult result2 = mockMvc.perform(get("/api/v1/reports/financial/income-statement")
+                MvcResult result2 = mockMvc.perform(withAuth(get("/v1/accounting/reports/financial/income-statement"))
                                 .param("startDate", "2024-01-01")
                                 .param("endDate", "2024-12-31")
                                 .accept(MediaType.APPLICATION_JSON))

@@ -76,7 +76,8 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
                 return adjustmentEventRepository.findById(existingEventId.get())
                         .map(this::toResponse)
                         .orElseThrow(
-                                () -> new IllegalStateException("Adjustment event not found: " + existingEventId.get()));
+                                () -> new IllegalStateException(
+                                        "Adjustment event not found: " + existingEventId.get()));
             }
         }
 

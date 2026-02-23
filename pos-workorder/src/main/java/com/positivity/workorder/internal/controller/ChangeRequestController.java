@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.dto.DeclineChangeRequestDTO;
 import com.positivity.workorder.internal.dto.EmergencyOverrideDTO;
 import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.service.ChangeRequestService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -106,6 +107,7 @@ public class ChangeRequestController {
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @PostMapping("/changeRequests/{changeId}/acknowledgeDenial")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE", apiVersion = "1")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> recordCustomerDenialAcknowledgment(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID changeId) {
         try {
@@ -169,6 +171,7 @@ public class ChangeRequestController {
     @Operation(summary = "Check if work order can be closed", description = "Verify all declined emergency/safety items have customer denial acknowledgment")
     @ApiResponse(responseCode = "200", description = "Returns true if work order can be closed, false otherwise")
     @GetMapping("/{workorderId}/canClose")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Boolean> canCloseWorkorder(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         boolean canClose = changeRequestService.canCloseWorkorder(workorderId);

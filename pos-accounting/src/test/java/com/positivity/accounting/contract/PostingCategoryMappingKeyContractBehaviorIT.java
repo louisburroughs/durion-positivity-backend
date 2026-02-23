@@ -51,7 +51,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 // Act: POST to Posting Category endpoint
                 mockMvc.perform(withAuth(post(API_V1 + "/posting-categories")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
+                                .content(objectMapper.writeValueAsString(request))))
                                 .andDo(print())
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.postingCategoryId").isNotEmpty())
@@ -70,7 +70,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                                 "Revenue transactions", "test-user");
 
                 // Act & Assert: GET the category by ID
-                mockMvc.perform(withAuth(get(API_V1 + "/posting-categories/" + categoryId))
+                mockMvc.perform(withAuth(get(API_V1 + "/posting-categories/" + categoryId)))
                                 .andDo(print())
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.postingCategoryId").value(categoryId.toString()));
@@ -92,7 +92,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 // Act & Assert: Expect BAD_REQUEST error
                 mockMvc.perform(withAuth(post(API_V1 + "/posting-categories")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(duplicate)))
+                                .content(objectMapper.writeValueAsString(duplicate))))
                                 .andDo(print())
                                 .andExpect(status().isBadRequest());
         }
@@ -113,7 +113,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 // Act & Assert: Expect BAD_REQUEST error due to uniqueness check
                 mockMvc.perform(withAuth(post(API_V1 + "/posting-categories")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(duplicate)))
+                                .content(objectMapper.writeValueAsString(duplicate))))
                                 .andDo(print())
                                 .andExpect(status().isBadRequest());
         }
@@ -125,7 +125,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 UUID nonExistentId = UUID.randomUUID();
 
                 // Act & Assert: Expect NOT_FOUND error
-                mockMvc.perform(withAuth(get(API_V1 + "/posting-categories/" + nonExistentId))
+                mockMvc.perform(withAuth(get(API_V1 + "/posting-categories/" + nonExistentId)))
                                 .andDo(print())
                                 .andExpect(status().isNotFound());
         }
@@ -151,7 +151,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 // Act: POST to Mapping Key endpoint
                 mockMvc.perform(withAuth(post(API_V1 + "/mapping-keys")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
+                                .content(objectMapper.writeValueAsString(request))))
                                 .andDo(print())
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.mappingKeyId").isNotEmpty())
@@ -171,7 +171,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 UUID keyId = createMappingKey(categoryId, "Steel", "Steel materials", "test-user");
 
                 // Act & Assert: GET the mapping key by ID
-                mockMvc.perform(withAuth(get(API_V1 + "/mapping-keys/" + keyId))
+                mockMvc.perform(withAuth(get(API_V1 + "/mapping-keys/" + keyId)))
                                 .andDo(print())
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.mappingKeyId").value(keyId.toString()))
@@ -195,7 +195,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 // Act & Assert: Expect NOT_FOUND error
                 mockMvc.perform(withAuth(post(API_V1 + "/mapping-keys")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
+                                .content(objectMapper.writeValueAsString(request))))
                                 .andDo(print())
                                 .andExpect(status().isNotFound());
         }
@@ -218,7 +218,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 // Act & Assert: Expect BAD_REQUEST error
                 mockMvc.perform(withAuth(post(API_V1 + "/mapping-keys")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(duplicate)))
+                                .content(objectMapper.writeValueAsString(duplicate))))
                                 .andDo(print())
                                 .andExpect(status().isBadRequest());
         }
@@ -246,7 +246,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
                 // categories)
                 mockMvc.perform(withAuth(post(API_V1 + "/mapping-keys")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
+                                .content(objectMapper.writeValueAsString(request))))
                                 .andDo(print())
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.keyName").value("CommonKey"));
@@ -264,7 +264,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
 
                 MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/posting-categories")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
+                                .content(objectMapper.writeValueAsString(request))))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 
@@ -286,7 +286,7 @@ class PostingCategoryMappingKeyContractBehaviorIT extends BaseContractIntegratio
 
                 MvcResult result = mockMvc.perform(withAuth(post(API_V1 + "/mapping-keys")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
+                                .content(objectMapper.writeValueAsString(request))))
                                 .andExpect(status().isCreated())
                                 .andReturn();
 

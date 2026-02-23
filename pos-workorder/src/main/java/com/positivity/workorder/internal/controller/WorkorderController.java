@@ -16,10 +16,10 @@ import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
+import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import com.positivity.workorder.internal.entity.WorkorderSnapshot;
 import com.positivity.workorder.service.WorkorderInvoiceService;
 import com.positivity.workorder.service.WorkorderService;
-import com.positivity.workorder.service.WorkorderStateMachine;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -79,6 +79,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Work order creation request", required = true, content = @Content(schema = @Schema(implementation = CreateWorkorderRequest.class), examples = @ExampleObject(name = "createWorkorder", value = "{\"estimateId\":\"550e8400-e29b-41d4-a716-446655440001\",\"customerId\":\"550e8400-e29b-41d4-a716-446655440010\"}")))
     @PostMapping
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<WorkorderResponse> createWorkorder(
             @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
             @Parameter(description = "Optional idempotency key to prevent duplicate creation (recommended for retries)", example = "workorder-create-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
@@ -95,6 +96,7 @@ public class WorkorderController {
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @DeleteMapping("/{workorderId}")
     @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deleteWorkorder(
             @Parameter(description = "ID of the work order to delete", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         workorderService.deleteWorkorder(workorderId);
@@ -137,6 +139,7 @@ public class WorkorderController {
     @Operation(summary = "Get transition history", description = "Retrieve the state transition history for a work order.")
     @ApiResponse(responseCode = "200", description = "Transition history returned successfully.")
     @GetMapping("/{workorderId}/transitions")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<WorkorderStateTransitionResponse>> getTransitionHistory(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         List<WorkorderStateTransition> history = workorderService.getTransitionHistory(workorderId);
@@ -148,6 +151,7 @@ public class WorkorderController {
     @Operation(summary = "Get snapshot history", description = "Retrieve the snapshot history for a work order.")
     @ApiResponse(responseCode = "200", description = "Snapshot history returned successfully.")
     @GetMapping("/{workorderId}/snapshots")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<WorkorderSnapshotResponse>> getSnapshotHistory(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId) {
         List<WorkorderSnapshot> history = workorderService.getSnapshotHistory(workorderId);
@@ -229,10 +233,8 @@ public class WorkorderController {
     @EmitEvent(id = "WORKORDER_INVOICE_GENERATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
     public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
-            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000")
-            @PathVariable UUID workorderId,
-            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000")
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID workorderId,
+            @Parameter(description = "Optional idempotency key to prevent duplicate invoice generation (recommended for retries)", example = "invoice-generate-550e8400-e29b-41d4-a716-446655440000") @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         InvoiceGenerationResponse response = workorderInvoiceService.generateInvoice(workorderId, idempotencyKey);
         return ResponseEntity.ok(response);

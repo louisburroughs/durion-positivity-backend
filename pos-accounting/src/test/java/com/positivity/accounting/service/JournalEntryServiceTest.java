@@ -281,7 +281,7 @@ class JournalEntryServiceTest {
         // Assert
         assertThat(reversal).isNotNull();
         assertThat(reversal.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
-        assertThat(reversal.getDescription()).contains("Reversal of");
+        assertThat(reversal.getDescription()).contains("REVERSAL of");
         assertThat(reversal.getDescription()).contains("CORRECTION");
         assertThat(reversal.getLines()).hasSize(2);
 

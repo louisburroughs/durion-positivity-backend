@@ -35,6 +35,8 @@ import com.positivity.workorder.internal.entity.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.service.IdempotencyServiceImpl;
+import com.positivity.workorder.internal.service.WorkorderInvoiceServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WorkorderInvoiceService Unit Tests")
@@ -52,13 +54,13 @@ class WorkorderInvoiceServiceTest {
         private WorkorderPartRepository workorderPartRepository;
 
         @Mock
-        private IdempotencyService idempotencyService;
+        private IdempotencyServiceImpl idempotencyService;
 
         @Mock
         private InvoiceClient invoiceClient;
 
         @InjectMocks
-        private WorkorderInvoiceService workorderInvoiceService;
+        private WorkorderInvoiceServiceImpl workorderInvoiceService;
 
         private UUID workorderId;
         private UUID estimateId;

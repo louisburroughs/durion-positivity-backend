@@ -26,6 +26,7 @@ import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.PagedResponse;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.service.EventIngestionService;
 import com.positivity.events.EmitEvent;
 
@@ -135,7 +136,10 @@ public class EventIngestionController {
 
                 try {
                         AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
-                        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+                        HttpStatus status = AccountingEventStatus.PROCESSED.equals(response.getStatus())
+                                        ? HttpStatus.OK
+                                        : HttpStatus.ACCEPTED;
+                        return ResponseEntity.status(status).body(response);
                 } catch (IllegalStateException e) {
                         // BR-3: Idempotency violation or invalid state - treat as conflict
                         return ResponseEntity.status(HttpStatus.CONFLICT).build();

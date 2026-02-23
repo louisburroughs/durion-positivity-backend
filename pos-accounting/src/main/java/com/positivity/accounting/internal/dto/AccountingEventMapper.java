@@ -20,6 +20,7 @@ public final class AccountingEventMapper {
     public static AccountingEventResponse toEventResponse(@NonNull AccountingEvent entity) {
         return AccountingEventResponse.builder()
                 .eventId(entity.getEventId())
+                .organizationId(entity.getOrganizationId())
                 .eventType(entity.getEventType())
                 .sourceSystem(entity.getSourceSystem())
                 .transactionDate(entity.getTransactionDate())

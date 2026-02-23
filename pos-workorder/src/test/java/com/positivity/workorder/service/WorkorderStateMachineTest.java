@@ -6,6 +6,8 @@ import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
+import com.positivity.workorder.internal.service.WorkorderStateMachine;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

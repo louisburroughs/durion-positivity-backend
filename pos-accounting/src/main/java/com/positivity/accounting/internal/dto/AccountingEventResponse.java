@@ -27,6 +27,7 @@ import lombok.experimental.Tolerate;
 public class AccountingEventResponse {
 
     private UUID eventId;
+    private UUID organizationId;
     private String eventType;
     private String sourceSystem;
     private LocalDateTime transactionDate;

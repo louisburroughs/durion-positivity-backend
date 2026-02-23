@@ -14,7 +14,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -43,12 +42,10 @@ public class StorageLocationServiceImpl implements StorageLocationService {
 
     public StorageLocationServiceImpl(StorageLocationRepository storageLocationRepository,
             LocationRepository locationRepository,
-            @Nullable StorageLocationInventoryTransferService storageLocationInventoryTransferService) {
+            StorageLocationInventoryTransferService storageLocationInventoryTransferService) {
         this.storageLocationRepository = storageLocationRepository;
         this.locationRepository = locationRepository;
-        this.storageLocationInventoryTransferService = storageLocationInventoryTransferService == null
-                ? new AtomicStorageLocationInventoryTransferServiceImpl(storageLocationRepository)
-                : storageLocationInventoryTransferService;
+        this.storageLocationInventoryTransferService = storageLocationInventoryTransferService;
     }
 
     /**

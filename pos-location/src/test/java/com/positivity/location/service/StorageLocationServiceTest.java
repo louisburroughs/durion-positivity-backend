@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 /**
@@ -52,6 +53,9 @@ class StorageLocationServiceTest {
 
     @Mock
     private LocationRepository locationRepository;
+
+    @Mock
+    private StorageLocationInventoryTransferService storageLocationInventoryTransferService;
 
     @InjectMocks
     private StorageLocationServiceImpl storageLocationService;
@@ -384,8 +388,14 @@ class StorageLocationServiceTest {
 
         when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
-        when(storageLocationRepository.save(any(StorageLocationEntity.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        doAnswer(inv -> {
+            StorageLocationEntity sourceArg = inv.getArgument(0);
+            StorageLocationEntity destinationArg = inv.getArgument(1);
+            destinationArg.setInventoryCount(destinationArg.getInventoryCount() + sourceArg.getInventoryCount());
+            sourceArg.setInventoryCount(0);
+            return null;
+        }).when(storageLocationInventoryTransferService).transferAll(any(StorageLocationEntity.class),
+                any(StorageLocationEntity.class));
         when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
