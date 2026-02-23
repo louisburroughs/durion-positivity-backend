@@ -12,8 +12,8 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -28,15 +28,29 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 @Transactional
-@RequiredArgsConstructor
 public class StorageLocationServiceImpl implements StorageLocationService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_INACTIVE = "INACTIVE";
     private static final String STORAGE_LOCATION_NOT_FOUND = "STORAGE_LOCATION_NOT_FOUND";
+    private static final String DESTINATION_REQUIRED = "DESTINATION_REQUIRED";
+    private static final String DESTINATION_NOT_FOUND = "DESTINATION_NOT_FOUND";
+    private static final String DESTINATION_INACTIVE = "DESTINATION_INACTIVE";
+    private static final String INVALID_DESTINATION = "INVALID_DESTINATION";
 
     private final StorageLocationRepository storageLocationRepository;
     private final LocationRepository locationRepository;
+    private final StorageLocationInventoryTransferService storageLocationInventoryTransferService;
+
+    public StorageLocationServiceImpl(StorageLocationRepository storageLocationRepository,
+            LocationRepository locationRepository,
+            @Nullable StorageLocationInventoryTransferService storageLocationInventoryTransferService) {
+        this.storageLocationRepository = storageLocationRepository;
+        this.locationRepository = locationRepository;
+        this.storageLocationInventoryTransferService = storageLocationInventoryTransferService == null
+                ? new AtomicStorageLocationInventoryTransferService(storageLocationRepository)
+                : storageLocationInventoryTransferService;
+    }
 
     /**
      * Creates a storage location after duplicate and parent validation.
@@ -140,7 +154,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         applyPatchedName(siteId, storageLocationId, patch, existing);
         applyPatchedBarcode(siteId, storageLocationId, patch, existing);
         applyPatchedParent(siteId, storageLocationId, patch, existing);
-        applyPatchedStatus(patch, existing);
+        applyPatchedStatus(siteId, storageLocationId, patch, existing);
 
         StorageLocationEntity saved = storageLocationRepository.saveAndFlush(existing);
         return toResponse(saved);
@@ -161,8 +175,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         StorageLocationEntity existing = storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
 
-        if (existing.getInventoryCount() > 0 && destinationStorageLocationId == null) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "DESTINATION_REQUIRED");
+        if (existing.getInventoryCount() > 0) {
+            transferInventory(siteId, existing, destinationStorageLocationId);
         }
 
         existing.setStatus(STATUS_INACTIVE);
@@ -262,18 +276,39 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         existing.setParentStorageLocationId(proposedParentId);
     }
 
-    private void applyPatchedStatus(StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+    private void applyPatchedStatus(UUID siteId, UUID storageLocationId,
+            StorageLocationPatchRequest patch, StorageLocationEntity existing) {
         String requestedStatus = normalizeOptional(patch.getStatus());
         if (requestedStatus == null) {
             return;
         }
         String normalizedStatus = requestedStatus.toUpperCase(Locale.ROOT);
-        if (STATUS_INACTIVE.equals(normalizedStatus)
-                && existing.getInventoryCount() > 0
-                && patch.getDestinationStorageLocationId() == null) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "DESTINATION_REQUIRED");
+        if (STATUS_INACTIVE.equals(normalizedStatus) && existing.getInventoryCount() > 0) {
+            UUID destinationStorageLocationId = patch.getDestinationStorageLocationId();
+            if (destinationStorageLocationId != null && destinationStorageLocationId.equals(storageLocationId)) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_DESTINATION);
+            }
+            transferInventory(siteId, existing, destinationStorageLocationId);
         }
         existing.setStatus(normalizedStatus);
+    }
+
+    // Issue CAP-214 #39: transfer on deactivate must be validated and atomic.
+    private void transferInventory(UUID siteId, StorageLocationEntity source, UUID destinationStorageLocationId) {
+        if (destinationStorageLocationId == null) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, DESTINATION_REQUIRED);
+        }
+        if (destinationStorageLocationId.equals(source.getId())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_DESTINATION);
+        }
+
+        StorageLocationEntity destination = storageLocationRepository.findByIdAndSiteId(destinationStorageLocationId, siteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DESTINATION_NOT_FOUND));
+        if (!STATUS_ACTIVE.equalsIgnoreCase(destination.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, DESTINATION_INACTIVE);
+        }
+
+        storageLocationInventoryTransferService.transferAll(source, destination);
     }
 
     private StorageLocationResponse toResponse(StorageLocationEntity entity) {
