@@ -11,7 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.positivity.customer.internal.enums.PreferredContactMethod;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -25,16 +25,11 @@ import lombok.ToString;
 @Schema(description = "Person that represents an organization-party.")
 public class Contact {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "contact_id", columnDefinition = "UUID", updatable = false, nullable = false)
     @Schema(description = "Unique identifier of the contact")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "party_id", nullable = false)

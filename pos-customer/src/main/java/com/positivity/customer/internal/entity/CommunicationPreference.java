@@ -8,7 +8,7 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
@@ -16,11 +16,11 @@ import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapKeyColumn;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
@@ -63,16 +63,11 @@ import lombok.NoArgsConstructor;
 public class CommunicationPreference {
 
         @Id
+        @GeneratedValue
+        @UUIDv7Id
         @Column(name = "preference_id", columnDefinition = "UUID", updatable = false, nullable = false)
         @Schema(description = "Unique identifier for the communication preference")
         private UUID preferenceId;
-
-        @PrePersist
-        public void generateId() {
-                if (preferenceId == null) {
-                        preferenceId = UUIDv7Generator.generate();
-                }
-        }
 
         @Column(name = "party_id", nullable = false, unique = true)
         @Schema(description = "Party UUID this preference belongs to", example = "550e8400-e29b-41d4-a716-446655440000")

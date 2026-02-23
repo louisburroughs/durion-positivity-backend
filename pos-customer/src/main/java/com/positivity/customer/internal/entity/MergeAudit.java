@@ -5,14 +5,14 @@ import java.util.UUID;
 
 import org.hibernate.annotations.CreationTimestamp;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -40,16 +40,11 @@ import lombok.NoArgsConstructor;
 public class MergeAudit {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "merge_audit_id", columnDefinition = "UUID", updatable = false, nullable = false)
     @Schema(description = "Unique identifier for the merge audit record")
     private UUID mergeAuditId;
-
-    @PrePersist
-    public void generateId() {
-        if (mergeAuditId == null) {
-            mergeAuditId = UUIDv7Generator.generate();
-        }
-    }
 
     @NotNull
     @Column(name = "survivor_party_id", nullable = false)
