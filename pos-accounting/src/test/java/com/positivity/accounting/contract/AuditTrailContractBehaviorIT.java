@@ -1,4 +1,4 @@
-package com.positivity.accounting;
+package com.positivity.accounting.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.audit.entity.AuditTrailEntry;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;

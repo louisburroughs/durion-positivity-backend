@@ -8,7 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.catalog.BaseContractIntegrationTest;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
-import com.positivity.catalog.service.CatalogService;
+import com.positivity.catalog.internal.service.CatalogServiceImpl;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
@@ -39,7 +40,7 @@ class ProductLifecycleContractBehaviorIT extends BaseContractIntegrationTest {
 
         private static final String LIFECYCLE_STATE = "lifecycleState";
         @Autowired
-        private CatalogService catalogService;
+        private CatalogServiceImpl catalogService;
 
         @Test
         @DisplayName("CP-165-010: Set product lifecycle to INACTIVE with effective date")
