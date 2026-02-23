@@ -1,310 +1,57 @@
 package com.positivity.location.service;
 
-import com.positivity.location.internal.client.PersonClient;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
+import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
-import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
+import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
-import com.positivity.location.internal.entity.LocationType;
 import com.positivity.location.internal.entity.ParentType;
-import com.positivity.location.internal.repository.LocationParentRepository;
-import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.LocationTypeRepository;
-import com.positivity.location.internal.dto.PersonDTO;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class LocationService {
-    private final LocationRepository locationRepository;
-    private final LocationParentRepository locationParentRepository;
-    private final LocationTypeRepository locationTypeRepository;
-    private final PersonClient personClient;
+public interface LocationService {
 
-    @Transactional(readOnly = true)
-    public List<LocationResponseDTO> getAllLocationsDto() {
-        return locationRepository.findAll().stream()
-                .map(this::toLocationResponse)
-                .toList();
-    }
+    List<LocationResponseDTO> getAllLocationsDto();
 
-    @Transactional(readOnly = true)
-    public Optional<LocationResponseDTO> getLocationByIdDto(UUID id) {
-        return locationRepository.findById(id).map(this::toLocationResponse);
-    }
+    Optional<LocationResponseDTO> getLocationByIdDto(UUID id);
 
-    @Transactional(readOnly = true)
-    public LocationValidationResponseDTO getLocationValidation(UUID id) {
-        return locationRepository.findById(id)
-                .map(location -> LocationValidationResponseDTO.builder()
-                        .locationId(id)
-                        .exists(true)
-                        .active(location.isActive())
-                        .build())
-                .orElseGet(() -> LocationValidationResponseDTO.builder()
-                        .locationId(id)
-                        .exists(false)
-                        .active(false)
-                        .build());
-    }
+    Page<LocationResponseDTO> listLocations(String status, Pageable pageable);
 
-    @Transactional
-    public LocationResponseDTO createLocation(LocationRequestDTO request) {
-        Location location = new Location();
-        applyLocationRequest(location, request);
-        Location saved = saveLocationInternal(location);
-        return toLocationResponse(saved);
-    }
+    LocationValidationResponseDTO getLocationValidation(UUID id);
 
-    @Transactional
-    public Optional<LocationResponseDTO> updateLocation(UUID id, LocationRequestDTO request) {
-        Optional<Location> existingLocation = locationRepository.findById(id);
-        if (existingLocation.isEmpty()) {
-            return Optional.empty();
-        }
-        Location location = existingLocation.get();
-        applyLocationRequest(location, request);
-        Location updated = saveLocationInternal(location);
-        return Optional.of(toLocationResponse(updated));
-    }
+    LocationResponseDTO createLocation(LocationRequestDTO request);
 
-    @Transactional
-    public LocationParentResponseDTO addParent(UUID childId, UUID parentId, String parentTypeValue) {
-        ParentType parentType = toParentType(parentTypeValue);
-        return toLocationParentResponse(addParentInternal(childId, parentId, parentType));
-    }
+    Optional<LocationResponseDTO> updateLocation(UUID id, LocationRequestDTO request);
 
-    @Transactional(readOnly = true)
-    public List<LocationParentResponseDTO> getAllParentsDto() {
-        return locationParentRepository.findAll().stream()
-                .map(this::toLocationParentResponse)
-                .toList();
-    }
+    LocationResponseDTO patchLocation(UUID id, LocationPatchRequest patch);
 
-    @Transactional(readOnly = true)
-    public List<LocationResponseDTO> getAllChildrenDto(UUID parentId, String parentTypeValue) {
-        ParentType parentType = null;
-        if (parentTypeValue != null && !parentTypeValue.isBlank()) {
-            parentType = toParentType(parentTypeValue);
-        }
-        return findChildren(parentId, parentType).stream().map(this::toLocationResponse).toList();
-    }
+    LocationParentResponseDTO addParent(UUID childId, UUID parentId, String parentTypeValue);
 
-    public List<Location> getAllLocations() {
-        return locationRepository.findAll();
-    }
+    List<LocationParentResponseDTO> getAllParentsDto();
 
-    public Optional<Location> getLocationById(UUID id) {
-        return locationRepository.findById(id);
-    }
+    List<LocationResponseDTO> getAllChildrenDto(UUID parentId, String parentTypeValue);
 
-    @Transactional
-    public Location saveLocation(Location location) {
-        return saveLocationInternal(location);
-    }
+    List<Location> getAllLocations();
 
-    private Location saveLocationInternal(Location location) {
-        try {
-            return locationRepository.saveAndFlush(location);
-        } catch (DataIntegrityViolationException e) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Location code already exists", e);
-        }
-    }
+    Optional<Location> getLocationById(UUID id);
 
-    public void deleteLocation(UUID id) {
-        locationRepository.deleteById(id);
-    }
+    Location saveLocation(Location location);
 
-    @Transactional
-    public LocationParent addParent(UUID childId, UUID parentId, ParentType parentType) {
-        return addParentInternal(childId, parentId, parentType);
-    }
+    void deleteLocation(UUID id);
 
-    private LocationParent addParentInternal(UUID childId, UUID parentId, ParentType parentType) {
-        if (childId.equals(parentId)) {
-            throw new IllegalArgumentException("A location cannot be its own parent");
-        }
+    LocationParent addParent(UUID childId, UUID parentId, ParentType parentType);
 
-        // Lock both rows in deterministic order to prevent race conditions when two
-        // requests attempt inverse links concurrently.
-        Location lockedFirst;
-        Location lockedSecond;
-        if (childId.compareTo(parentId) < 0) {
-            lockedFirst = locationRepository.findByIdForUpdate(childId).orElseThrow();
-            lockedSecond = locationRepository.findByIdForUpdate(parentId).orElseThrow();
-        } else {
-            lockedFirst = locationRepository.findByIdForUpdate(parentId).orElseThrow();
-            lockedSecond = locationRepository.findByIdForUpdate(childId).orElseThrow();
-        }
+    List<LocationParent> getAllParents();
 
-        Location child = childId.equals(lockedFirst.getId()) ? lockedFirst : lockedSecond;
-        Location parent = parentId.equals(lockedFirst.getId()) ? lockedFirst : lockedSecond;
+    List<Location> getAllChildren(UUID parentId);
 
-        if (locationParentRepository.existsByChild_IdAndParentType(childId, parentType)) {
-            throw new IllegalStateException("Location already has a parent for parentType " + parentType);
-        }
-        if (locationParentRepository.existsByChild_IdAndParent_Id(childId, parentId)) {
-            throw new IllegalStateException("Parent relationship already exists");
-        }
-        if (locationParentRepository.existsByChild_IdAndParent_Id(parentId, childId)) {
-            throw new IllegalStateException("Circular relationship detected: inverse relationship already exists");
-        }
-        if (isDescendant(childId, parentId)) {
-            throw new IllegalStateException("Circular relationship detected: parent is a descendant of child");
-        }
+    List<Location> getAllChildren(UUID parentId, ParentType parentType);
 
-        LocationParent locationParent = LocationParent.builder()
-                .child(child)
-                .parent(parent)
-                .parentType(parentType)
-                .build();
-        LocationParent saved = locationParentRepository.saveAndFlush(locationParent);
-
-        // Post-persist defensive validation for edge races across nodes.
-        if (locationParentRepository.existsByChild_IdAndParent_Id(parentId, childId)) {
-            throw new IllegalStateException("Circular relationship detected after save");
-        }
-        return saved;
-    }
-
-    @Transactional(readOnly = true)
-    public List<LocationParent> getAllParents() {
-        return locationParentRepository.findAll();
-    }
-
-    @Transactional(readOnly = true)
-    public List<Location> getAllChildren(UUID parentId) {
-        return findChildren(parentId, null);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Location> getAllChildren(UUID parentId, ParentType parentType) {
-        return findChildren(parentId, parentType);
-    }
-
-    public PersonDTO getResponsiblePerson(UUID locationId) {
-        Location location = locationRepository.findById(locationId).orElseThrow();
-        if (location.getResponsiblePersonId() == null)
-            return null;
-        return personClient.getPersonById(location.getResponsiblePersonId());
-    }
-
-    private boolean isDescendant(UUID ancestorId, UUID targetDescendantId) {
-        return locationParentRepository.isDescendant(ancestorId, targetDescendantId);
-    }
-
-    private List<Location> findChildren(UUID parentId, ParentType parentType) {
-        if (parentType == null) {
-            return locationParentRepository.findByParent_Id(parentId).stream()
-                    .map(LocationParent::getChild)
-                    .toList();
-        }
-        return locationParentRepository.findByParent_IdAndParentType(parentId, parentType).stream()
-                .map(LocationParent::getChild)
-                .toList();
-    }
-
-    private ParentType toParentType(String value) {
-        try {
-            return ParentType.valueOf(value.trim().toUpperCase(Locale.ROOT));
-        } catch (Exception exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parentType: " + value, exception);
-        }
-    }
-
-    private void applyLocationRequest(Location location, LocationRequestDTO request) {
-        location.setName(request.getName());
-        location.setCode(request.getCode());
-        location.setGeographicalLocationId(request.getGeographicalLocationId());
-        location.setAddressLine1(request.getAddressLine1());
-        location.setAddressLine2(request.getAddressLine2());
-        location.setCity(request.getCity());
-        location.setState(request.getState());
-        location.setPostalCode(request.getPostalCode());
-        location.setCountry(request.getCountry());
-        location.setMailingAddress(request.getMailingAddress());
-        if (request.getActive() != null) {
-            location.setActive(request.getActive());
-        } else if (location.getId() == null) {
-            location.setActive(true);
-        }
-        location.setResponsiblePersonId(request.getResponsiblePersonId());
-        location.setType(resolveLocationType(request.getType()));
-    }
-
-    private LocationType resolveLocationType(LocationTypeDTO locationTypeDto) {
-        if (locationTypeDto == null) {
-            return null;
-        }
-
-        if (locationTypeDto.getId() != null) {
-            return locationTypeRepository.findById(locationTypeDto.getId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Unknown location type id: " + locationTypeDto.getId()));
-        }
-
-        if (locationTypeDto.getName() == null || locationTypeDto.getName().isBlank()) {
-            return null;
-        }
-
-        return locationTypeRepository.findByNameIgnoreCase(locationTypeDto.getName())
-                .orElseGet(() -> locationTypeRepository.save(LocationType.builder()
-                        .name(locationTypeDto.getName())
-                        .description(locationTypeDto.getDescription())
-                        .build()));
-    }
-
-    private LocationResponseDTO toLocationResponse(Location location) {
-        return LocationResponseDTO.builder()
-                .id(location.getId())
-                .name(location.getName())
-                .code(location.getCode())
-                .geographicalLocationId(location.getGeographicalLocationId())
-                .addressLine1(location.getAddressLine1())
-                .addressLine2(location.getAddressLine2())
-                .city(location.getCity())
-                .state(location.getState())
-                .postalCode(location.getPostalCode())
-                .country(location.getCountry())
-                .mailingAddress(location.getMailingAddress())
-                .active(location.isActive())
-                .responsiblePersonId(location.getResponsiblePersonId())
-                .type(toLocationTypeDto(location.getType()))
-                .build();
-    }
-
-    private LocationTypeDTO toLocationTypeDto(LocationType locationType) {
-        if (locationType == null) {
-            return null;
-        }
-        return LocationTypeDTO.builder()
-                .id(locationType.getId())
-                .name(locationType.getName())
-                .description(locationType.getDescription())
-                .build();
-    }
-
-    private LocationParentResponseDTO toLocationParentResponse(LocationParent locationParent) {
-        return LocationParentResponseDTO.builder()
-                .id(locationParent.getId())
-                .parentId(locationParent.getParent() != null ? locationParent.getParent().getId() : null)
-                .childId(locationParent.getChild() != null ? locationParent.getChild().getId() : null)
-                .parentType(locationParent.getParentType() != null ? locationParent.getParentType().name() : null)
-                .build();
-    }
+    PersonDTO getResponsiblePerson(UUID locationId);
 }
