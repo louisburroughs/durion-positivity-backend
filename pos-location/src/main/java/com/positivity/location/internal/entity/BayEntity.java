@@ -1,9 +1,13 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -32,6 +36,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class BayEntity {
 
     @Id
@@ -67,11 +72,13 @@ public class BayEntity {
     @Column(name = "skill_requirement_ids", columnDefinition = "TEXT")
     private List<String> skillRequirementIds = new ArrayList<>();
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(name = "last_modified_at", nullable = false)
-    private Instant lastModifiedAt;
+    private Instant updatedAt;
 
     @PrePersist
     void onCreate() {
@@ -79,9 +86,6 @@ public class BayEntity {
             id = UUIDv7Generator.generate();
         }
         normalizedName = normalizeName(name);
-        Instant now = Instant.now();
-        createdAt = now;
-        lastModifiedAt = now;
         if (status == null || status.isBlank()) {
             status = "ACTIVE";
         }
@@ -96,7 +100,6 @@ public class BayEntity {
     @PreUpdate
     void onUpdate() {
         normalizedName = normalizeName(name);
-        lastModifiedAt = Instant.now();
     }
 
     private String normalizeName(String value) {

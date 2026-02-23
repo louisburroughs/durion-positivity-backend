@@ -1,6 +1,9 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -32,6 +35,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "vendor_bill", indexes = {
         @Index(name = "idx_vendor_bill_vendor", columnList = "vendor_id"),
         @Index(name = "idx_vendor_bill_status", columnList = "status"),
@@ -100,6 +104,7 @@ public class VendorBill {
     private UUID paymentTransactionId;
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

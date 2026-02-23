@@ -42,6 +42,9 @@ import com.positivity.accounting.internal.dto.InvoiceDetails;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
+import com.positivity.accounting.internal.service.CreditMemoServiceImpl;
+import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 
 /**
  * Unit tests for CreditMemoService
@@ -63,16 +66,16 @@ class CreditMemoServiceTest {
         private InvoiceServiceClient invoiceServiceClient;
 
         @Mock
-        private GLPostingService glPostingService;
+        private GLPostingServiceImpl glPostingService;
 
         @Mock
-        private AccountingPeriodService periodService;
+        private AccountingPeriodServiceImpl periodService;
 
         @Mock
         private CreditMemoGLConfig glConfig;
 
         @InjectMocks
-        private CreditMemoService service;
+        private CreditMemoServiceImpl service;
 
         private UUID testInvoiceId;
         private UUID testCustomerId;

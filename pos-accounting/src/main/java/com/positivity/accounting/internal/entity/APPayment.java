@@ -9,8 +9,12 @@ import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.shared.id.UUIDv7Generator;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -48,6 +52,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ap_payment", indexes = {
         @Index(name = "idx_ap_payment_vendor_bill", columnList = "vendor_bill_id"),
         @Index(name = "idx_ap_payment_vendor", columnList = "vendor_id"),
@@ -125,6 +130,7 @@ public class APPayment {
     private String memo;
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -140,7 +146,6 @@ public class APPayment {
         if (paymentId == null) {
             paymentId = UUIDv7Generator.generate();
         }
-        createdAt = Instant.now();
         if (status == null) {
             status = APPaymentStatus.INITIATED;
         }

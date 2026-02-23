@@ -40,9 +40,12 @@ import com.positivity.accounting.internal.enums.CancellationType;
 import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
-import com.positivity.accounting.service.AuditTrailService.AuthorizationException;
-import com.positivity.accounting.service.PriceOverrideAuthorizationService.AuthorizationResult;
-import com.positivity.accounting.service.RefundAuthorizationService.RefundAuthorizationResult;
+import com.positivity.accounting.internal.exception.AuditTrailAuthorizationException;
+import com.positivity.accounting.internal.service.AuditTrailServiceImpl;
+import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl;
+import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl;
+import com.positivity.accounting.internal.service.PriceOverrideAuthorizationServiceImpl.AuthorizationResult;
+import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl.RefundAuthorizationResult;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -60,10 +63,10 @@ class AuditTrailServiceTest {
     private AuditTrailEntryRepository auditRepository;
 
     @Mock
-    private PriceOverrideAuthorizationService overrideAuthService;
+    private PriceOverrideAuthorizationServiceImpl overrideAuthService;
 
     @Mock
-    private RefundAuthorizationService refundAuthService;
+    private RefundAuthorizationServiceImpl refundAuthService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -72,7 +75,7 @@ class AuditTrailServiceTest {
     private ObjectMapper objectMapper;
 
     @InjectMocks
-    private AuditTrailService service;
+    private AuditTrailServiceImpl service;
 
     private String testActorId;
     private UUID testOrderId;
@@ -111,7 +114,7 @@ class AuditTrailServiceTest {
                 .policyVersion("v1.0")
                 .authorizationLevel("STORE_MANAGER")
                 .build();
-        
+
         when(overrideAuthService.validate(any(), any(), any(), any())).thenReturn(authResult);
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
@@ -140,9 +143,9 @@ class AuditTrailServiceTest {
                 .policyVersion("v1.0")
                 .authorizationLevel("STORE_MANAGER")
                 .build();
-        
+
         when(overrideAuthService.validate(any(), any(), any(), any())).thenReturn(authResult);
-        
+
         ArgumentCaptor<AuditTrailEntry> entryCaptor = ArgumentCaptor.forClass(AuditTrailEntry.class);
         when(auditRepository.save(entryCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -166,14 +169,14 @@ class AuditTrailServiceTest {
                 .message("Exceeds threshold")
                 .policyVersion("v1.0")
                 .build();
-        
+
         when(overrideAuthService.validate(any(), any(), any(), any())).thenReturn(authResult);
 
         // Act & Assert
         assertThatThrownBy(() -> service.recordPriceOverride(request))
-                .isInstanceOf(AuthorizationException.class)
+                .isInstanceOf(AuditTrailAuthorizationException.class)
                 .hasMessageContaining("Exceeds threshold");
-        
+
         verify(eventPublisher).publishEvent(any(AuthorizationDenied.class));
     }
 
@@ -189,7 +192,7 @@ class AuditTrailServiceTest {
                 .refundMethod(RefundMethod.CREDIT_MEMO)
                 .policyVersion("v1.0")
                 .build();
-        
+
         when(refundAuthService.validate(any(), any(), any())).thenReturn(authResult);
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"invoiceId\":\"test\"}");
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
@@ -215,16 +218,16 @@ class AuditTrailServiceTest {
         // Arrange
         RefundRequest request = createRefundRequest();
         request.setRefundType(RefundType.REVERSAL);
-        
+
         RefundAuthorizationResult authResult = RefundAuthorizationResult.builder()
                 .authorized(true)
                 .refundMethod(RefundMethod.VOID)
                 .policyVersion("v1.0")
                 .build();
-        
+
         when(refundAuthService.validate(any(), any(), any())).thenReturn(authResult);
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        
+
         ArgumentCaptor<AuditTrailEntry> entryCaptor = ArgumentCaptor.forClass(AuditTrailEntry.class);
         when(auditRepository.save(entryCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -242,16 +245,16 @@ class AuditTrailServiceTest {
         // Arrange
         RefundRequest request = createRefundRequest();
         request.setRefundType(RefundType.CREDIT_MEMO);
-        
+
         RefundAuthorizationResult authResult = RefundAuthorizationResult.builder()
                 .authorized(true)
                 .refundMethod(RefundMethod.CREDIT_MEMO)
                 .policyVersion("v1.0")
                 .build();
-        
+
         when(refundAuthService.validate(any(), any(), any())).thenReturn(authResult);
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        
+
         ArgumentCaptor<AuditTrailEntry> entryCaptor = ArgumentCaptor.forClass(AuditTrailEntry.class);
         when(auditRepository.save(entryCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -269,16 +272,16 @@ class AuditTrailServiceTest {
         // Arrange
         RefundRequest request = createRefundRequest();
         request.setRefundType(RefundType.ADJUSTMENT);
-        
+
         RefundAuthorizationResult authResult = RefundAuthorizationResult.builder()
                 .authorized(true)
                 .refundMethod(RefundMethod.CASH_REFUND)
                 .policyVersion("v1.0")
                 .build();
-        
+
         when(refundAuthService.validate(any(), any(), any())).thenReturn(authResult);
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        
+
         ArgumentCaptor<AuditTrailEntry> entryCaptor = ArgumentCaptor.forClass(AuditTrailEntry.class);
         when(auditRepository.save(entryCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -300,14 +303,14 @@ class AuditTrailServiceTest {
                 .message("Not authorized")
                 .policyVersion("v1.0")
                 .build();
-        
+
         when(refundAuthService.validate(any(), any(), any())).thenReturn(authResult);
 
         // Act & Assert
         assertThatThrownBy(() -> service.recordRefund(request))
-                .isInstanceOf(AuthorizationException.class)
+                .isInstanceOf(AuditTrailAuthorizationException.class)
                 .hasMessageContaining("Not authorized");
-        
+
         verify(eventPublisher).publishEvent(any(AuthorizationDenied.class));
     }
 
@@ -319,7 +322,7 @@ class AuditTrailServiceTest {
         // Arrange
         CancellationRequest request = createCancellationRequest();
         request.setCancellationType(CancellationType.ORDER_CANCELLED);
-        
+
         when(auditRepository.save(any(AuditTrailEntry.class))).thenAnswer(inv -> {
             AuditTrailEntry entry = inv.getArgument(0);
             entry.setAuditId(UUID.randomUUID());
@@ -343,7 +346,7 @@ class AuditTrailServiceTest {
         // Arrange
         CancellationRequest request = createCancellationRequest();
         request.setCancellationType(CancellationType.ORDER_CANCELLED);
-        
+
         ArgumentCaptor<AuditTrailEntry> entryCaptor = ArgumentCaptor.forClass(AuditTrailEntry.class);
         when(auditRepository.save(entryCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -361,7 +364,7 @@ class AuditTrailServiceTest {
         // Arrange
         CancellationRequest request = createCancellationRequest();
         request.setCancellationType(CancellationType.PAYMENT_FAILED);
-        
+
         ArgumentCaptor<AuditTrailEntry> entryCaptor = ArgumentCaptor.forClass(AuditTrailEntry.class);
         when(auditRepository.save(entryCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -378,7 +381,7 @@ class AuditTrailServiceTest {
     void recordCancellation_setsCorrectStatus() {
         // Arrange
         CancellationRequest request = createCancellationRequest();
-        
+
         ArgumentCaptor<AuditTrailEntry> entryCaptor = ArgumentCaptor.forClass(AuditTrailEntry.class);
         when(auditRepository.save(entryCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 

@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,6 +21,8 @@ import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.service.DefaultGLMappingService;
+import com.positivity.accounting.service.GLAccountService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

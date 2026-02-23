@@ -1,6 +1,9 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.*;
 import lombok.*;
 import org.jspecify.annotations.NonNull;
@@ -35,6 +38,7 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "receivable_payment", 
     indexes = {
         @Index(name = "idx_receivable_payment_customer", columnList = "customer_id"),
@@ -58,8 +62,7 @@ public class ReceivablePayment {
             paymentId = UUIDv7Generator.generate();
         }
         if (createdAt == null) {
-            createdAt = Instant.now();
-        }
+            }
         if (status == null) {
             status = ReceivablePaymentStatus.AVAILABLE;
         }
@@ -88,6 +91,7 @@ public class ReceivablePayment {
     private UUID sourceEventId; // PaymentCleared event ID (idempotency)
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

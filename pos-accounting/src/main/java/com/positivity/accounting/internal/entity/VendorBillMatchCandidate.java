@@ -6,8 +6,12 @@ import java.util.UUID;
 
 import com.positivity.shared.id.UUIDv7Generator;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
@@ -48,6 +52,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "vendor_bill_match_candidate", indexes = {
         @Index(name = "idx_match_candidate_invoice_event", columnList = "invoice_event_id"),
         @Index(name = "idx_match_candidate_bill", columnList = "vendor_bill_id"),
@@ -66,8 +71,7 @@ public class VendorBillMatchCandidate {
             candidateId = UUIDv7Generator.generate();
         }
         if (createdAt == null) {
-            createdAt = Instant.now();
-        }
+            }
     }
 
     /** The invoice event that triggered the ambiguous match. */
@@ -118,6 +122,7 @@ public class VendorBillMatchCandidate {
     private boolean selected = false;
 
     // Audit
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }

@@ -2,11 +2,14 @@ package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,6 +32,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 @SuppressWarnings("java:S2166")
 /**
  * The business process sees this as an exception, but it's really just a record
@@ -52,6 +56,7 @@ public class DistributorFeedException {
     @Column(nullable = false, length = 4000)
     private String rawPayload;
 
+    @CreatedDate
     @Column(nullable = false)
     private Instant createdAt;
 
@@ -59,9 +64,6 @@ public class DistributorFeedException {
     protected void onCreate() {
         if (id == null) {
             id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
         }
     }
 }

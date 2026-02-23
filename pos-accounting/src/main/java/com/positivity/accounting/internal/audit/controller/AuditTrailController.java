@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.audit.controller;
 
 import com.positivity.accounting.internal.audit.dto.*;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
+import com.positivity.accounting.internal.exception.AuditTrailAuthorizationException;
 import com.positivity.accounting.service.AuditTrailQueryService;
 import com.positivity.accounting.service.AuditTrailService;
 import com.positivity.events.EmitEvent;
@@ -56,7 +57,7 @@ public class AuditTrailController {
         try {
             AuditTrailResponse response = auditService.recordPriceOverride(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (AuditTrailService.AuthorizationException e) {
+        } catch (AuditTrailAuthorizationException e) {
             log.warn("Price override authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", e.getMessage()));
@@ -85,7 +86,7 @@ public class AuditTrailController {
         try {
             AuditTrailResponse response = auditService.recordRefund(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (AuditTrailService.AuthorizationException e) {
+        } catch (AuditTrailAuthorizationException e) {
             log.warn("Refund authorization denied: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", e.getMessage()));
@@ -125,14 +126,14 @@ public class AuditTrailController {
      */
     @Operation(summary = "Get audit trail for order", description = "Retrieves all audit trail entries associated with a specific order")
     @ApiResponses(value = {
-    @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
-    @ApiResponse(responseCode = "404", description = "Order not found"),
-    @ApiResponse(responseCode = "500", description = "Internal server error")
-})
-@GetMapping("/order/{orderId}")
-@PreAuthorize("hasAuthority('accounting:events:view')")
-public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
-        @Parameter(description = "Order ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID orderId) {
+            @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Order not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/order/{orderId}")
+    @PreAuthorize("hasAuthority('accounting:events:view')")
+    public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
+            @Parameter(description = "Order ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID orderId) {
         List<AuditTrailResponse> entries = queryService.getByOrderId(orderId);
         return ResponseEntity.ok(entries);
     }
@@ -142,14 +143,14 @@ public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
      */
     @Operation(summary = "Get audit trail for invoice", description = "Retrieves all audit trail entries associated with a specific invoice")
     @ApiResponses(value = {
-    @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
-    @ApiResponse(responseCode = "404", description = "Invoice not found"),
-    @ApiResponse(responseCode = "500", description = "Internal server error")
-})
-@GetMapping("/invoice/{invoiceId}")
-@PreAuthorize("hasAuthority('accounting:events:view')")
-public ResponseEntity<List<AuditTrailResponse>> getByInvoiceId(
-        @Parameter(description = "Invoice ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID invoiceId) {
+            @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Invoice not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/invoice/{invoiceId}")
+    @PreAuthorize("hasAuthority('accounting:events:view')")
+    public ResponseEntity<List<AuditTrailResponse>> getByInvoiceId(
+            @Parameter(description = "Invoice ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000") @PathVariable UUID invoiceId) {
         List<AuditTrailResponse> entries = queryService.getByInvoiceId(invoiceId);
         return ResponseEntity.ok(entries);
     }
@@ -160,13 +161,13 @@ public ResponseEntity<List<AuditTrailResponse>> getByInvoiceId(
     @Operation(summary = "Get audit trail by exception type", description = "Retrieves audit trail entries filtered by exception type and date range")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
-    @ApiResponse(responseCode = "400", description = "Invalid date range or exception type"),
-    @ApiResponse(responseCode = "500", description = "Internal server error")
-})
-@GetMapping("/type/{type}")
-@PreAuthorize("hasAuthority('accounting:events:view')")
-public ResponseEntity<List<AuditTrailResponse>> getByType(
-        @Parameter(description = "Exception type", required = true) @PathVariable ExceptionType type,
+            @ApiResponse(responseCode = "400", description = "Invalid date range or exception type"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/type/{type}")
+    @PreAuthorize("hasAuthority('accounting:events:view')")
+    public ResponseEntity<List<AuditTrailResponse>> getByType(
+            @Parameter(description = "Exception type", required = true) @PathVariable ExceptionType type,
             @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         List<AuditTrailResponse> entries = queryService.getByTypeAndDateRange(type, startDate, endDate);
@@ -180,13 +181,13 @@ public ResponseEntity<List<AuditTrailResponse>> getByType(
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
             @ApiResponse(responseCode = "400", description = "Invalid date range or actor ID"),
-    @ApiResponse(responseCode = "404", description = "Actor not found"),
-    @ApiResponse(responseCode = "500", description = "Internal server error")
-})
-@GetMapping("/actor/{actorId}")
-@PreAuthorize("hasAuthority('accounting:events:view')")
-public ResponseEntity<List<AuditTrailResponse>> getByActor(
-        @Parameter(description = "Actor (User) ID", required = true, example = "person-12345") @PathVariable String actorId,
+            @ApiResponse(responseCode = "404", description = "Actor not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/actor/{actorId}")
+    @PreAuthorize("hasAuthority('accounting:events:view')")
+    public ResponseEntity<List<AuditTrailResponse>> getByActor(
+            @Parameter(description = "Actor (User) ID", required = true, example = "person-12345") @PathVariable String actorId,
             @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         List<AuditTrailResponse> entries = queryService.getByActorAndDateRange(actorId, startDate, endDate);
@@ -199,14 +200,14 @@ public ResponseEntity<List<AuditTrailResponse>> getByActor(
     @Operation(summary = "Get audit trail by date range", description = "Retrieves all audit trail entries within a specified date range")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Audit entries retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuditTrailResponse.class))),
-    @ApiResponse(responseCode = "400", description = "Invalid date range"),
-    @ApiResponse(responseCode = "500", description = "Internal server error")
-})
-@GetMapping("/range")
-@PreAuthorize("hasAuthority('accounting:events:view')")
-public ResponseEntity<List<AuditTrailResponse>> getByDateRange(
-        @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
-        @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+            @ApiResponse(responseCode = "400", description = "Invalid date range"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/range")
+    @PreAuthorize("hasAuthority('accounting:events:view')")
+    public ResponseEntity<List<AuditTrailResponse>> getByDateRange(
+            @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @Parameter(description = "End date in ISO 8601 format", required = true, example = "2026-01-28T23:59:59Z") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         List<AuditTrailResponse> entries = queryService.getByDateRange(startDate, endDate);
         return ResponseEntity.ok(entries);
     }

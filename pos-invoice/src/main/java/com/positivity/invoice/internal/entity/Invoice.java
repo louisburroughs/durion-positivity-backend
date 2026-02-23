@@ -5,6 +5,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -14,6 +15,9 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -24,6 +28,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "invoices")
 public class Invoice {
 
@@ -62,9 +67,11 @@ public class Invoice {
     @Column(name = "adjustments_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal adjustmentsAmount = BigDecimal.ZERO;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -92,12 +99,6 @@ public class Invoice {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = createdAt;
-        }
         if (status == null) {
             status = InvoiceStatus.DRAFT;
         }
@@ -120,7 +121,6 @@ public class Invoice {
 
     @PreUpdate
     public void preUpdate() {
-        updatedAt = Instant.now();
         if (adjustments == null) {
             adjustments = BigDecimal.ZERO;
         }

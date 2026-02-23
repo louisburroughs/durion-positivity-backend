@@ -8,8 +8,12 @@ import org.jspecify.annotations.Nullable;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
@@ -42,6 +46,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "default_gl_mapping", indexes = {
         @Index(name = "idx_default_gl_mapping_event_type", columnList = "event_type, organization_id"),
         @Index(name = "idx_default_gl_mapping_active", columnList = "active")
@@ -100,6 +105,7 @@ public class DefaultGLMapping {
     @Column(name = "active", nullable = false)
     private Boolean active = true;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

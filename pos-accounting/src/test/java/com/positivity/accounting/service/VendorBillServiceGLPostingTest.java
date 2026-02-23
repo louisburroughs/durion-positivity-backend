@@ -27,6 +27,7 @@ import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.service.VendorBillServiceImpl;
 
 /**
  * Unit tests for GL posting event emission in VendorBillServiceImpl.

@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -33,6 +33,8 @@ import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.service.APPaymentService;
+import com.positivity.accounting.service.OutboxService;
 
 import lombok.RequiredArgsConstructor;
 

@@ -39,6 +39,7 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.service.DefaultGLMappingServiceImpl;
 
 /**
  * Unit tests for DefaultGLMappingServiceImpl.

@@ -4,6 +4,7 @@ import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -18,12 +19,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "person_location_assignment", uniqueConstraints = @UniqueConstraint(columnNames = { "person_id",
         "location_id", "role", "effective_from" }))
 @Data
@@ -67,9 +72,11 @@ public class PersonLocationAssignment {
     @Builder.Default
     private AssignmentStatus status = AssignmentStatus.ACTIVE;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
 
@@ -81,14 +88,5 @@ public class PersonLocationAssignment {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        updatedAt = Instant.now();
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = Instant.now();
     }
 }

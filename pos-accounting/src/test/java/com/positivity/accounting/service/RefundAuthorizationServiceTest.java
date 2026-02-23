@@ -18,7 +18,7 @@ import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRep
 import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
-import com.positivity.accounting.service.RefundAuthorizationService.RefundAuthorizationResult;
+import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl.RefundAuthorizationResult;
 
 /**
  * Unit tests for RefundAuthorizationService
@@ -42,7 +42,7 @@ class RefundAuthorizationServiceTest {
     @BeforeEach
     void setUp() {
         testActorRole = "STORE_MANAGER";
-        
+
         testPolicy = new RefundPolicyConfig();
         testPolicy.setVersion("v1.0");
         testPolicy.setRequiresSeparateAuthorization(false);
@@ -58,10 +58,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole, 
-            RefundPaymentStatus.SETTLED, 
-            RefundType.CREDIT_MEMO
-        );
+                testActorRole,
+                RefundPaymentStatus.SETTLED,
+                RefundType.CREDIT_MEMO);
 
         // Assert
         assertThat(result.isAuthorized()).isTrue();
@@ -77,10 +76,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.SETTLED,
-            RefundType.CREDIT_MEMO
-        );
+                testActorRole,
+                RefundPaymentStatus.SETTLED,
+                RefundType.CREDIT_MEMO);
 
         // Assert
         assertThat(result.isAuthorized()).isFalse();
@@ -96,10 +94,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.SETTLED,
-            RefundType.CREDIT_MEMO
-        );
+                testActorRole,
+                RefundPaymentStatus.SETTLED,
+                RefundType.CREDIT_MEMO);
 
         // Assert
         assertThat(result.isAuthorized()).isTrue();
@@ -116,10 +113,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.SETTLED,
-            RefundType.CREDIT_MEMO
-        );
+                testActorRole,
+                RefundPaymentStatus.SETTLED,
+                RefundType.CREDIT_MEMO);
 
         // Assert
         assertThat(result.isAuthorized()).isTrue();
@@ -134,9 +130,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.SETTLED,
-            RefundType.REVERSAL // Not credit memo
+                testActorRole,
+                RefundPaymentStatus.SETTLED,
+                RefundType.REVERSAL // Not credit memo
         );
 
         // Assert
@@ -154,10 +150,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.PENDING,
-            RefundType.REVERSAL
-        );
+                testActorRole,
+                RefundPaymentStatus.PENDING,
+                RefundType.REVERSAL);
 
         // Assert
         assertThat(result.isAuthorized()).isTrue();
@@ -172,9 +167,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.AUTHORIZED,
-            RefundType.CREDIT_MEMO // Not reversal
+                testActorRole,
+                RefundPaymentStatus.AUTHORIZED,
+                RefundType.CREDIT_MEMO // Not reversal
         );
 
         // Assert
@@ -192,10 +187,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.SETTLED,
-            RefundType.CREDIT_MEMO
-        );
+                testActorRole,
+                RefundPaymentStatus.SETTLED,
+                RefundType.CREDIT_MEMO);
 
         // Assert
         assertThat(result.getRefundMethod()).isEqualTo(RefundMethod.CREDIT_MEMO);
@@ -209,10 +203,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.SETTLED,
-            RefundType.REVERSAL
-        );
+                testActorRole,
+                RefundPaymentStatus.SETTLED,
+                RefundType.REVERSAL);
 
         // Assert
         assertThat(result.getRefundMethod()).isEqualTo(RefundMethod.CASH_REFUND);
@@ -226,10 +219,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.AUTHORIZED,
-            RefundType.REVERSAL
-        );
+                testActorRole,
+                RefundPaymentStatus.AUTHORIZED,
+                RefundType.REVERSAL);
 
         // Assert
         assertThat(result.getRefundMethod()).isEqualTo(RefundMethod.VOID);
@@ -243,10 +235,9 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult result = service.validate(
-            testActorRole,
-            RefundPaymentStatus.PENDING,
-            RefundType.CREDIT_MEMO
-        );
+                testActorRole,
+                RefundPaymentStatus.PENDING,
+                RefundType.CREDIT_MEMO);
 
         // Assert
         assertThat(result.getRefundMethod()).isEqualTo(RefundMethod.CHARGEBACK);
@@ -262,16 +253,14 @@ class RefundAuthorizationServiceTest {
 
         // Act
         RefundAuthorizationResult managerResult = service.validate(
-            "STORE_MANAGER",
-            RefundPaymentStatus.SETTLED,
-            RefundType.CREDIT_MEMO
-        );
-        
+                "STORE_MANAGER",
+                RefundPaymentStatus.SETTLED,
+                RefundType.CREDIT_MEMO);
+
         RefundAuthorizationResult cashierResult = service.validate(
-            "CASHIER",
-            RefundPaymentStatus.SETTLED,
-            RefundType.CREDIT_MEMO
-        );
+                "CASHIER",
+                RefundPaymentStatus.SETTLED,
+                RefundType.CREDIT_MEMO);
 
         // Assert
         assertThat(managerResult.isAuthorized()).isTrue();

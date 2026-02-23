@@ -1,5 +1,8 @@
 package com.positivity.accounting.internal.entity;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Instant;
@@ -20,6 +23,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "idempotency_keys", indexes = {
         @Index(name = "idx_key_value", columnList = "keyValue", unique = true)
 })

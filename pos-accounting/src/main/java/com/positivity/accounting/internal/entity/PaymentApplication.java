@@ -2,6 +2,9 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Generator;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -31,6 +34,7 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "payment_application", indexes = {
         @Index(name = "idx_payment_application_payment", columnList = "payment_id"),
         @Index(name = "idx_payment_application_customer", columnList = "customer_id"),
@@ -106,6 +110,7 @@ public class PaymentApplication {
     private String traceId;
 
     // Audit fields (immutable)
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

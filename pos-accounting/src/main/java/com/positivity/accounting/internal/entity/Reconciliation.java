@@ -1,6 +1,9 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -37,6 +40,7 @@ import java.util.UUID;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString(exclude = { "statementLines", "glTransactions", "adjustments" })
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "reconciliation", indexes = {
         @Index(name = "idx_reconciliation_account", columnList = "gl_account_id"),
         @Index(name = "idx_reconciliation_status", columnList = "status"),
@@ -54,7 +58,6 @@ public class Reconciliation {
         if (reconciliationId == null) {
             reconciliationId = UUIDv7Generator.generate();
         }
-        createdAt = Instant.now();
         if (status == null) {
             status = ReconciliationStatus.IN_PROGRESS;
         }
@@ -107,6 +110,7 @@ public class Reconciliation {
     private List<Adjustment> adjustments = new ArrayList<>();
 
     // Audit fields
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

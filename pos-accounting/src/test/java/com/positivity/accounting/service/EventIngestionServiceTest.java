@@ -30,6 +30,7 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
 
 /**
  * Unit tests for EventIngestionService
@@ -56,7 +57,7 @@ class EventIngestionServiceTest {
         private PostingEngineOrchestrator postingEngineOrchestrator;
 
         @InjectMocks
-        private EventIngestionService service;
+        private EventIngestionServiceImpl service;
 
         private UUID testOrganizationId;
         private UUID testEventId;
