@@ -2,7 +2,7 @@ package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
-import com.positivity.catalog.service.CatalogService;
+import com.positivity.catalog.internal.service.CatalogServiceImpl;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Catalog Items API", description = "API for managing catalog items by type")
 public class CatalogItemController {
 
-    private final CatalogService catalogService;
+    private final CatalogServiceImpl catalogService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @PostMapping("/{type}")

@@ -35,6 +35,7 @@ import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 import com.positivity.accounting.service.GLPostingService;
 
 /**
@@ -62,7 +63,7 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         private InvoiceServiceClient invoiceServiceClient;
 
         @InjectMocks
-        private GLPostingService glPostingService;
+        private GLPostingServiceImpl glPostingService;
 
         private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
 

@@ -1,4 +1,4 @@
-package com.positivity.accounting;
+package com.positivity.accounting.contract;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
