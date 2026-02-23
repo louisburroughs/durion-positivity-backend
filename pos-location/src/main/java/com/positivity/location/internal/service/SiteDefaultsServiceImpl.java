@@ -1,20 +1,22 @@
 package com.positivity.location.internal.service;
 
-import com.positivity.location.internal.dto.SiteDefaultsRequest;
-import com.positivity.location.internal.dto.SiteDefaultsResponse;
-import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.StorageLocationEntity;
-import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.StorageLocationRepository;
-import com.positivity.location.service.SiteDefaultsService;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.positivity.location.internal.dto.SiteDefaultsRequest;
+import com.positivity.location.internal.dto.SiteDefaultsResponse;
+import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.repository.StorageLocationRepository;
+import com.positivity.location.service.SiteDefaultsService;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Service implementation for configuring and retrieving site default storage
@@ -61,7 +63,7 @@ public class SiteDefaultsServiceImpl implements SiteDefaultsService {
         boolean stagingBelongsToSite = storageLocationBelongsToSite(stagingId, siteId);
         boolean quarantineBelongsToSite = storageLocationBelongsToSite(quarantineId, siteId);
         if (!stagingBelongsToSite || !quarantineBelongsToSite) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, DEFAULT_LOCATION_NOT_BELONGS_TO_SITE);
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, DEFAULT_LOCATION_NOT_BELONGS_TO_SITE);
         }
 
         location.setDefaultStagingLocationId(stagingId);
@@ -95,19 +97,11 @@ public class SiteDefaultsServiceImpl implements SiteDefaultsService {
     }
 
     private Location resolveLocationOrThrow(UUID siteId) {
-        return locationRepository.findById(siteId).orElseGet(() -> {
-            if (!locationRepository.existsById(siteId)) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, SITE_NOT_FOUND);
-            }
-            return Location.builder().id(siteId).build();
-        });
+        return locationRepository.findById(siteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, SITE_NOT_FOUND));
     }
 
     private boolean storageLocationBelongsToSite(UUID storageLocationId, UUID siteId) {
-        StorageLocationEntity location = storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)
-                .orElseGet(() -> storageLocationRepository.findById(storageLocationId)
-                        .orElse(null));
-
-        return location != null && siteId.equals(location.getSiteId());
+        return storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId).isPresent();
     }
 }

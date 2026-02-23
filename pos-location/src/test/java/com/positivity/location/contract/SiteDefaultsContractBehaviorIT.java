@@ -125,7 +125,7 @@ class SiteDefaultsContractBehaviorIT extends BaseContractIntegrationTest {
         UUID foreignStorageId = UUID.randomUUID();
 
         when(siteDefaultsService.configureDefaults(eq(SITE_ID), any()))
-                .thenThrow(new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY));
+                .thenThrow(new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT));
 
         mockMvc.perform(withGatewayAuth(put("/v1/locations/{locationId}/defaults", SITE_ID)
                 .contentType(MediaType.APPLICATION_JSON)
