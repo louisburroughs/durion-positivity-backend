@@ -162,7 +162,7 @@ If asked to validate GREEN, return:
 - Verify at minimum:
   - tests adequately cover the requested behavior and edge cases
   - assertions are specific and deterministic (not weak/broad)
-  - test naming, structure, and fixtures align with `/home/louisb/Projects/durion/docs/TEST_EXEMPLARS.md`
+  - test naming, structure, and fixtures align with `$WORKSPACE/durion/docs/TEST_EXEMPLARS.md`
   - relevant documentation/comments/annotations in changed test code meet repository standards
 - If gaps are found, bring tests and related test documentation up to standard in the same change set.
 - If no gaps are found, explicitly report that the existing implementation was validated and meets standards.
@@ -256,6 +256,7 @@ Use focused commands first, then broaden only if needed.
 
 ## Test writing standards
 
+- Before authoring or modifying tests, read the relevant ADRs (docs/architecture/adr) for the module to align assertions with documented decisions and constraints.
 - Use JUnit 5 + AssertJ + Mockito.
 - Keep Arrange/Act/Assert structure clear.
 - Name tests with behavior intent (`when_x_then_y` or equivalent).
@@ -264,6 +265,7 @@ Use focused commands first, then broaden only if needed.
 - Keep tests isolated and order-independent.
 - Service-layer unit tests must cover happy path, edge cases, and failure/exception routing where applicable.
 - When existing service tests are present, extend them first; add a new test class only if no suitable class exists.
+- Controller tests must include security context details: use Spring Security test support (e.g., `@WithMockUser`, `SecurityMockMvcRequestPostProcessors.jwt()`, required auth headers) to assert both allowed and forbidden paths, and document the expected roles/claims in the test names or assertions. Treat missing or incorrect `@PreAuthorize` (or equivalent method security) on controller methods as a failing test condition—write tests that would 403/401 when authorization is absent/misalconfigured so that adding/removing the annotation changes the outcome.
 
 ## Service-Layer Checklist (Required Before RED Completion)
 
