@@ -2,8 +2,8 @@ package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -11,7 +11,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -32,6 +32,8 @@ import java.util.UUID;
 public class NormalizedAvailability {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     private UUID id;
 
     @Column(nullable = false)
@@ -73,10 +75,4 @@ public class NormalizedAvailability {
     @Column(nullable = false)
     private Integer schemaVersion;
 
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 }

@@ -11,7 +11,7 @@ import lombok.Builder;
 
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,6 +35,8 @@ import java.util.UUID;
 public class CycleCountAdjustment {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     private UUID adjustmentId;
 
     /**
@@ -155,13 +157,6 @@ public class CycleCountAdjustment {
      */
     @Column(length = 2000)
     private String errorMessage;
-
-    @PrePersist
-    protected void onCreate() {
-        if (adjustmentId == null) {
-            adjustmentId = UUIDv7Generator.generate();
-        }
-    }
 
     /**
      * Calculates the absolute monetary value of the variance.

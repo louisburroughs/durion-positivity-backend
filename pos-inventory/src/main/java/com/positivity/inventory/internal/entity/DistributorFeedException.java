@@ -5,8 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -16,7 +16,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import com.positivity.inventory.internal.enums.DistributorExceptionReason;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -42,6 +42,8 @@ import java.util.UUID;
 public class DistributorFeedException {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     private UUID id;
 
     @Column(nullable = false)
@@ -60,10 +62,4 @@ public class DistributorFeedException {
     @Column(nullable = false)
     private Instant createdAt;
 
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 }
