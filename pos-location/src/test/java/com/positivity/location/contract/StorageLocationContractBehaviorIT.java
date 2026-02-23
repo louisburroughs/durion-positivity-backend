@@ -249,7 +249,7 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("#39 - PATCH /storage-locations/{id} deactivate with inventory and no destination returns 422")
     void patchStorageLocation_deactivate_withInventory_noDestination_returns422() throws Exception {
         when(storageLocationService.patchStorageLocation(eq(SITE_ID), eq(STORAGE_ID), any()))
-                .thenThrow(new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "DESTINATION_REQUIRED"));
+                .thenThrow(new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "DESTINATION_REQUIRED"));
 
         mockMvc.perform(withGatewayAuth(
                 patch("/v1/locations/{siteId}/storage-locations/{id}", SITE_ID, STORAGE_ID)
