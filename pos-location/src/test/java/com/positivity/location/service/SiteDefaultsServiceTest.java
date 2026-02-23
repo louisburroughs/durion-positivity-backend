@@ -197,8 +197,6 @@ class SiteDefaultsServiceTest {
     @DisplayName("#38 - getDefaults with existing defaults returns populated response")
     void getDefaults_success_returnsResponse() {
         UUID siteId = UUID.randomUUID();
-        UUID stagingId = UUID.randomUUID();
-        UUID quarantineId = UUID.randomUUID();
 
         when(locationRepository.existsById(siteId)).thenReturn(true);
 
