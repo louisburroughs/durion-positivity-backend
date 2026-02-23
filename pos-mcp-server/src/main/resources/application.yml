@@ -3,9 +3,47 @@ spring:
     name: mcp-server
   jackson:
     default-property-inclusion: non_null
+  datasource:
+    url: jdbc:h2:mem:mcp;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  h2:
+    console:
+      enabled: false
+
+mcp:
+  server:
+    base-url: http://localhost:${server.port}
+    message-endpoint: /mcp/message
+    sse-endpoint: /mcp/sse
+    open-api-path: /v3/api-docs
+    discovery-timeout: 5s
+  llm:
+    apis:
+      - id: openai
+        model: gpt-4.1
+        base-url: https://api.openai.com/v1/chat/completions
+        api-key: ${OPENAI_API_KEY:}
+        headers:
+          Authorization: Bearer ${OPENAI_API_KEY:}
+          Content-Type: application/json
+      - id: azure-openai
+        model: gpt-4o
+        base-url: ${AZURE_OPENAI_CHAT_COMPLETIONS_URL:https://example.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-01-preview}
+        api-key: ${AZURE_OPENAI_API_KEY:}
+        headers:
+          api-key: ${AZURE_OPENAI_API_KEY:}
 
 server:
-  port: 0
+  port: 8086
   servlet:
     context-path: /
 

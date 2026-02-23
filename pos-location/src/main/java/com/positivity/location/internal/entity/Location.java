@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -22,12 +23,44 @@ public class Location {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
+        normalizeDerivedFields();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        normalizeDerivedFields();
+    }
+
+    private void normalizeDerivedFields() {
+        normalizedName = normalizeName(name);
+        if (status == null || status.isBlank()) {
+            status = active ? "ACTIVE" : "INACTIVE";
+        }
+    }
+
+    private String normalizeName(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.toLowerCase(Locale.ROOT).trim();
     }
 
     private String name;
+    @Column(name = "normalized_name")
+    private String normalizedName;
     /** Unique immutable business code for this location (e.g. "MAIN-WS-001"). */
     @Column(unique = true)
     private String code;
+    private String status;
+    private String timezone;
+    @Column(name = "operating_hours", columnDefinition = "TEXT")
+    private String operatingHours;
+    @Column(name = "holiday_closures", columnDefinition = "TEXT")
+    private String holidayClosures;
+    private Integer checkInBufferMinutes;
+    private Integer cleanupBufferMinutes;
+    @Version
+    private Long version;
 
     /**
      * Reference to the GeographicalLocation entity in pos-location (ADR-0016).

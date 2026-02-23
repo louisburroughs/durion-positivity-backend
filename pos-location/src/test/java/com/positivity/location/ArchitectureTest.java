@@ -85,6 +85,22 @@ public class ArchitectureTest {
                         .because("service layer is the public API of this module");
 
         @ArchTest
+        static final ArchRule service_package_should_only_contain_interfaces = classes()
+                        .that().resideInAPackage("com.positivity.location.service..")
+                        .should().beInterfaces()
+                        .allowEmptyShould(true)
+                        .because("service package defines module API contracts, not implementations");
+
+        @ArchTest
+        static final ArchRule internal_service_implementations_should_implement_service_interfaces = classes()
+                        .that().resideInAPackage("..internal.service..")
+                        .and().haveSimpleNameEndingWith("Impl")
+                        .should().implement(DescribedPredicate.describe("a service interface in com.positivity.location.service..",
+                                        javaClass -> javaClass.getPackageName().startsWith("com.positivity.location.service")))
+                        .allowEmptyShould(true)
+                        .because("internal service classes should implement interfaces from the public service package");
+
+        @ArchTest
         static final ArchRule mapped_controller_methods_should_require_authorization = methods()
                         .that().areAnnotatedWith("org.springframework.web.bind.annotation.RequestMapping")
                         .or().areAnnotatedWith("org.springframework.web.bind.annotation.GetMapping")

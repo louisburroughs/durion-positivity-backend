@@ -1,4 +1,4 @@
-package com.positivity.mcp.api;
+package com.positivity.mcp.internal.controller;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -51,6 +52,7 @@ public class McpChatController {
             @ApiResponse(responseCode = "500", description = "Tool execution failed", content = @Content(mediaType = "text/plain", examples = @ExampleObject(value = "Failed to execute MCP tool: Tool not found")))
     })
     @PostMapping("/chat")
+    @PreAuthorize("hasAnyRole('ADMIN','AGENT')")
     public ResponseEntity<?> chat(
             @RequestBody @Schema(name = "ChatRequest", description = "Request to execute an MCP tool", example = "{\"toolName\": \"positivity-ping\", \"arguments\": {}}") ChatRequest request) {
         if (request == null || request.toolName() == null || request.toolName().isBlank()) {

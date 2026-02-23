@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${POS_MCP_DB_HOST:localhost}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
+    driver-class-name: org.postgresql.Driver
+    username: ${POS_MCP_DB_USER:pos_mcp}
+    password: ${POS_MCP_DB_PASSWORD:password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+eureka:
+  client:
+    enabled: true
+
+server:
+  port: 8086
+
+mcp:
+  llm:
+    apis:
+      - id: openai
+        model: gpt-4.1
+        base-url: https://api.openai.com/v1/chat/completions
+        api-key: ${OPENAI_API_KEY:}
+        headers:
+          Authorization: Bearer ${OPENAI_API_KEY:}
+          Content-Type: application/json
+      - id: azure-openai
+        model: gpt-4o
+        base-url: ${AZURE_OPENAI_CHAT_COMPLETIONS_URL:https://example.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-01-preview}
+        api-key: ${AZURE_OPENAI_API_KEY:}
+        headers:
+          api-key: ${AZURE_OPENAI_API_KEY:}
