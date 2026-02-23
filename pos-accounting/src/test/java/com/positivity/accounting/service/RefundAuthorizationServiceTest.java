@@ -18,6 +18,7 @@ import com.positivity.accounting.internal.audit.repository.RefundPolicyConfigRep
 import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
+import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl;
 import com.positivity.accounting.internal.service.RefundAuthorizationServiceImpl.RefundAuthorizationResult;
 
 /**
@@ -34,7 +35,7 @@ class RefundAuthorizationServiceTest {
     private RefundPolicyConfigRepository policyRepository;
 
     @InjectMocks
-    private RefundAuthorizationService service;
+    private RefundAuthorizationServiceImpl service;
 
     private String testActorRole;
     private RefundPolicyConfig testPolicy;

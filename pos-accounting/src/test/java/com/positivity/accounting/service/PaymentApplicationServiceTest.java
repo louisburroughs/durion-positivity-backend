@@ -46,6 +46,8 @@ import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import com.positivity.accounting.internal.service.InvoicePaymentStatusServiceImpl;
+import com.positivity.accounting.internal.service.PaymentApplicationServiceImpl;
 
 /**
  * Unit tests for PaymentApplicationService
@@ -70,13 +72,13 @@ class PaymentApplicationServiceTest {
         private PaymentApplicationReversalRepository paymentApplicationReversalRepository;
 
         @Mock
-        private InvoicePaymentStatusService invoicePaymentStatusService;
+        private InvoicePaymentStatusServiceImpl invoicePaymentStatusService;
 
         @Mock
         private InvoiceServiceClient invoiceServiceClient;
 
         @InjectMocks
-        private PaymentApplicationService service;
+        private PaymentApplicationServiceImpl service;
 
         @Captor
         private ArgumentCaptor<PaymentApplication> paymentApplicationCaptor;

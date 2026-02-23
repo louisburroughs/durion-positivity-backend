@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.entity.IdempotencyKey;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
+import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 
 /**
  * Unit tests for IdempotencyService
@@ -35,7 +36,7 @@ class IdempotencyServiceTest {
     private IdempotencyKeyRepository repository;
 
     @InjectMocks
-    private IdempotencyService service;
+    private IdempotencyServiceImpl service;
 
     private String testKeyValue;
     private UUID testInvoiceId;

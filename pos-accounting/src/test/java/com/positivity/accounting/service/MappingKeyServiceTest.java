@@ -33,6 +33,7 @@ import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
+import com.positivity.accounting.internal.service.MappingKeyServiceImpl;
 
 /**
  * Unit tests for MappingKeyService
@@ -54,7 +55,7 @@ class MappingKeyServiceTest {
     private GLMappingRepository glMappingRepository;
 
     @InjectMocks
-    private MappingKeyService service;
+    private MappingKeyServiceImpl service;
 
     private UUID testCategoryId;
     private UUID testMappingKeyId;

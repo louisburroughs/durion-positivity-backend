@@ -20,7 +20,7 @@ import lombok.Setter;
  * for application.
  * 
  * @see com.positivity.accounting.internal.entity.ReceivablePayment
- * @see com.positivity.accounting.service.PaymentApplicationService#handlePaymentCleared
+ * @see com.positivity.accounting.internal.service.PaymentApplicationServiceImpl#handlePaymentCleared
  */
 @Getter
 @Setter

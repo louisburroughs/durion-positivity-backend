@@ -46,7 +46,7 @@ import lombok.Data;
  * </ul>
  * 
  * @see com.positivity.accounting.internal.entity.DefaultGLMapping
- * @see com.positivity.accounting.service.PostingRuleEvaluatorImpl
+ * @see com.positivity.accounting.internal.service.PostingRuleEvaluatorImpl
  */
 @Data
 @Configuration

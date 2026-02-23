@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
 
 /**
@@ -36,7 +37,7 @@ class GLPostingServiceTest {
     private JournalEntryServiceImpl journalEntryService;
 
     @InjectMocks
-    private GLPostingService service;
+    private GLPostingServiceImpl service;
 
     private UUID testCreditMemoId;
     private UUID testPaymentApplicationId;

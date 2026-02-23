@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
+import com.positivity.accounting.internal.service.GLMappingResolverImpl;
 
 /**
  * Unit tests for GLMappingResolver.
@@ -40,413 +41,413 @@ import com.positivity.accounting.internal.repository.GLMappingRepository;
 @DisplayName("GLMappingResolver Unit Tests")
 class GLMappingResolverTest {
 
-    @Mock
-    private GLMappingRepository mappingRepository;
+        @Mock
+        private GLMappingRepository mappingRepository;
 
-    @InjectMocks
-    private GLMappingResolver resolver;
+        @InjectMocks
+        private GLMappingResolverImpl resolver;
 
-    private UUID postingCategoryId;
-    private UUID mappingKeyId;
-    private LocalDateTime transactionDate;
+        private UUID postingCategoryId;
+        private UUID mappingKeyId;
+        private LocalDateTime transactionDate;
 
-    @BeforeEach
-    void setUp() {
-        postingCategoryId = UUID.randomUUID();
-        mappingKeyId = UUID.randomUUID();
-        transactionDate = LocalDateTime.of(2026, 1, 15, 12, 0);
-    }
-
-    // ========================================
-    // Exact Dimensional Matching Tests
-    // ========================================
-
-    @Nested
-    @DisplayName("Exact dimensional matching")
-    class ExactDimensionalMatching {
-
-        @Test
-        @DisplayName("Should resolve exact dimensional match when all dimensions match")
-        void shouldResolveExactDimensionalMatch() {
-            // Arrange
-            UUID expectedAccountId = UUID.randomUUID();
-            Map<String, String> dimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100",
-                    "departmentId", "DEPT-50",
-                    "costCenterId", "CC-200");
-
-            GLMapping mapping = createMapping(expectedAccountId, dimensions);
-
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(mapping));
-
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, dimensions);
-
-            // Assert
-            assertThat(result).isEqualTo(expectedAccountId);
+        @BeforeEach
+        void setUp() {
+                postingCategoryId = UUID.randomUUID();
+                mappingKeyId = UUID.randomUUID();
+                transactionDate = LocalDateTime.of(2026, 1, 15, 12, 0);
         }
 
-        @Test
-        @DisplayName("Should not match when dimensions differ")
-        void shouldNotMatchWhenDimensionsDiffer() {
-            // Arrange
-            UUID mappingAccountId = UUID.randomUUID();
-            UUID defaultAccountId = UUID.randomUUID();
+        // ========================================
+        // Exact Dimensional Matching Tests
+        // ========================================
 
-            Map<String, String> mappingDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100");
+        @Nested
+        @DisplayName("Exact dimensional matching")
+        class ExactDimensionalMatching {
 
-            Map<String, String> requestDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-999"); // Different location
+                @Test
+                @DisplayName("Should resolve exact dimensional match when all dimensions match")
+                void shouldResolveExactDimensionalMatch() {
+                        // Arrange
+                        UUID expectedAccountId = UUID.randomUUID();
+                        Map<String, String> dimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100",
+                                        "departmentId", "DEPT-50",
+                                        "costCenterId", "CC-200");
 
-            GLMapping dimensionedMapping = createMapping(mappingAccountId, mappingDimensions);
-            GLMapping defaultMapping = createMapping(defaultAccountId, null);
+                        GLMapping mapping = createMapping(expectedAccountId, dimensions);
 
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(dimensionedMapping));
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(mapping));
 
-            // Category default fallback
-            when(mappingRepository.findEffectiveMapping(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(Optional.of(defaultMapping));
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, dimensions);
 
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+                        // Assert
+                        assertThat(result).isEqualTo(expectedAccountId);
+                }
 
-            // Assert — falls through to category default
-            assertThat(result).isEqualTo(defaultAccountId);
+                @Test
+                @DisplayName("Should not match when dimensions differ")
+                void shouldNotMatchWhenDimensionsDiffer() {
+                        // Arrange
+                        UUID mappingAccountId = UUID.randomUUID();
+                        UUID defaultAccountId = UUID.randomUUID();
+
+                        Map<String, String> mappingDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100");
+
+                        Map<String, String> requestDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-999"); // Different location
+
+                        GLMapping dimensionedMapping = createMapping(mappingAccountId, mappingDimensions);
+                        GLMapping defaultMapping = createMapping(defaultAccountId, null);
+
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(dimensionedMapping));
+
+                        // Category default fallback
+                        when(mappingRepository.findEffectiveMapping(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(Optional.of(defaultMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+
+                        // Assert — falls through to category default
+                        assertThat(result).isEqualTo(defaultAccountId);
+                }
+
+                @Test
+                @DisplayName("Should skip null/empty dimension context and fall through")
+                void shouldSkipNullDimensionContext() {
+                        // Arrange
+                        UUID defaultAccountId = UUID.randomUUID();
+                        GLMapping defaultMapping = createMapping(defaultAccountId, null);
+
+                        when(mappingRepository.findEffectiveMapping(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(Optional.of(defaultMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, null);
+
+                        // Assert
+                        assertThat(result).isEqualTo(defaultAccountId);
+                }
+
+                @Test
+                @DisplayName("Should skip empty dimension context and fall through")
+                void shouldSkipEmptyDimensionContext() {
+                        // Arrange
+                        UUID defaultAccountId = UUID.randomUUID();
+                        GLMapping defaultMapping = createMapping(defaultAccountId, null);
+
+                        when(mappingRepository.findEffectiveMapping(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(Optional.of(defaultMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, Collections.emptyMap());
+
+                        // Assert
+                        assertThat(result).isEqualTo(defaultAccountId);
+                }
         }
 
-        @Test
-        @DisplayName("Should skip null/empty dimension context and fall through")
-        void shouldSkipNullDimensionContext() {
-            // Arrange
-            UUID defaultAccountId = UUID.randomUUID();
-            GLMapping defaultMapping = createMapping(defaultAccountId, null);
+        // ========================================
+        // Dimensional Fallback Tests
+        // ========================================
 
-            when(mappingRepository.findEffectiveMapping(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(Optional.of(defaultMapping));
+        @Nested
+        @DisplayName("Dimensional fallback")
+        class DimensionalFallback {
 
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, null);
+                @Test
+                @DisplayName("Should fall back when costCenterId removed matches a mapping")
+                void shouldFallBackByCostCenter() {
+                        // Arrange
+                        UUID fallbackAccountId = UUID.randomUUID();
 
-            // Assert
-            assertThat(result).isEqualTo(defaultAccountId);
+                        // Request has 4 dimensions, mapping has 3 (no costCenterId)
+                        Map<String, String> requestDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100",
+                                        "departmentId", "DEPT-50",
+                                        "costCenterId", "CC-200");
+
+                        Map<String, String> mappingDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100",
+                                        "departmentId", "DEPT-50");
+
+                        GLMapping fallbackMapping = createMapping(fallbackAccountId, mappingDimensions);
+
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(fallbackMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+
+                        // Assert — matched after removing costCenterId
+                        assertThat(result).isEqualTo(fallbackAccountId);
+                }
+
+                @Test
+                @DisplayName("Should fall back when costCenterId and departmentId removed matches")
+                void shouldFallBackTwoLevels() {
+                        // Arrange
+                        UUID fallbackAccountId = UUID.randomUUID();
+
+                        Map<String, String> requestDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100",
+                                        "departmentId", "DEPT-50",
+                                        "costCenterId", "CC-200");
+
+                        // Mapping only has businessUnitId + locationId
+                        Map<String, String> mappingDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100");
+
+                        GLMapping fallbackMapping = createMapping(fallbackAccountId, mappingDimensions);
+
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(fallbackMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+
+                        // Assert — matched after removing costCenterId + departmentId
+                        assertThat(result).isEqualTo(fallbackAccountId);
+                }
+
+                @Test
+                @DisplayName("Should fall back to businessUnitId only")
+                void shouldFallBackToBusinessUnitOnly() {
+                        // Arrange
+                        UUID fallbackAccountId = UUID.randomUUID();
+
+                        Map<String, String> requestDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100",
+                                        "departmentId", "DEPT-50");
+
+                        // Mapping only has businessUnitId
+                        Map<String, String> mappingDimensions = Map.of(
+                                        "businessUnitId", "BU-001");
+
+                        GLMapping fallbackMapping = createMapping(fallbackAccountId, mappingDimensions);
+
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(fallbackMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+
+                        // Assert
+                        assertThat(result).isEqualTo(fallbackAccountId);
+                }
+
+                @Test
+                @DisplayName("Should prefer more specific fallback over less specific")
+                void shouldPreferMoreSpecificFallback() {
+                        // Arrange
+                        UUID specificAccountId = UUID.randomUUID();
+                        UUID broadAccountId = UUID.randomUUID();
+
+                        Map<String, String> requestDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100",
+                                        "departmentId", "DEPT-50",
+                                        "costCenterId", "CC-200");
+
+                        // Two fallback mappings at different levels of specificity
+                        Map<String, String> specificDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100",
+                                        "departmentId", "DEPT-50"); // 3 dimensions
+
+                        Map<String, String> broadDimensions = Map.of(
+                                        "businessUnitId", "BU-001"); // 1 dimension
+
+                        GLMapping specificMapping = createMapping(specificAccountId, specificDimensions);
+                        GLMapping broadMapping = createMapping(broadAccountId, broadDimensions);
+
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(specificMapping, broadMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+
+                        // Assert — the more specific fallback (3 dims) wins over the broader one (1
+                        // dim)
+                        assertThat(result).isEqualTo(specificAccountId);
+                }
+
+                @Test
+                @DisplayName("Should fall through to category default when no fallback matches")
+                void shouldFallThroughToCategoryDefault() {
+                        // Arrange
+                        UUID defaultAccountId = UUID.randomUUID();
+                        UUID unrelatedAccountId = UUID.randomUUID();
+
+                        Map<String, String> requestDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100");
+
+                        // Mapping has completely different dimension values
+                        Map<String, String> unrelatedDimensions = Map.of(
+                                        "businessUnitId", "BU-999",
+                                        "locationId", "LOC-999");
+
+                        GLMapping unrelatedMapping = createMapping(unrelatedAccountId, unrelatedDimensions);
+                        GLMapping defaultMapping = createMapping(defaultAccountId, null);
+
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(unrelatedMapping));
+
+                        when(mappingRepository.findEffectiveMapping(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(Optional.of(defaultMapping));
+
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+
+                        // Assert
+                        assertThat(result).isEqualTo(defaultAccountId);
+                }
         }
 
-        @Test
-        @DisplayName("Should skip empty dimension context and fall through")
-        void shouldSkipEmptyDimensionContext() {
-            // Arrange
-            UUID defaultAccountId = UUID.randomUUID();
-            GLMapping defaultMapping = createMapping(defaultAccountId, null);
+        // ========================================
+        // Category Default & Error Tests
+        // ========================================
 
-            when(mappingRepository.findEffectiveMapping(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(Optional.of(defaultMapping));
+        @Nested
+        @DisplayName("Category default and error handling")
+        class CategoryDefaultAndErrors {
 
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, Collections.emptyMap());
+                @Test
+                @DisplayName("Should resolve category default when no dimensional match exists")
+                void shouldResolveCategoryDefault() {
+                        // Arrange
+                        UUID defaultAccountId = UUID.randomUUID();
+                        GLMapping defaultMapping = createMapping(defaultAccountId, null);
 
-            // Assert
-            assertThat(result).isEqualTo(defaultAccountId);
-        }
-    }
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(Collections.emptyList());
 
-    // ========================================
-    // Dimensional Fallback Tests
-    // ========================================
+                        when(mappingRepository.findEffectiveMapping(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(Optional.of(defaultMapping));
 
-    @Nested
-    @DisplayName("Dimensional fallback")
-    class DimensionalFallback {
+                        Map<String, String> dimensions = Map.of("businessUnitId", "BU-001");
 
-        @Test
-        @DisplayName("Should fall back when costCenterId removed matches a mapping")
-        void shouldFallBackByCostCenter() {
-            // Arrange
-            UUID fallbackAccountId = UUID.randomUUID();
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, dimensions);
 
-            // Request has 4 dimensions, mapping has 3 (no costCenterId)
-            Map<String, String> requestDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100",
-                    "departmentId", "DEPT-50",
-                    "costCenterId", "CC-200");
+                        // Assert
+                        assertThat(result).isEqualTo(defaultAccountId);
+                }
 
-            Map<String, String> mappingDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100",
-                    "departmentId", "DEPT-50");
+                @Test
+                @DisplayName("Should throw when no mapping found at any level")
+                void shouldThrowWhenNoMappingFound() {
+                        // Arrange
+                        when(mappingRepository.findAllEffectiveMappings(any(), any(), any()))
+                                        .thenReturn(Collections.emptyList());
+                        when(mappingRepository.findEffectiveMapping(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(Optional.empty());
 
-            GLMapping fallbackMapping = createMapping(fallbackAccountId, mappingDimensions);
+                        Map<String, String> dimensions = Map.of("businessUnitId", "BU-001");
 
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(fallbackMapping));
-
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
-
-            // Assert — matched after removing costCenterId
-            assertThat(result).isEqualTo(fallbackAccountId);
+                        // Act & Assert
+                        assertThatThrownBy(() -> resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, dimensions))
+                                        .isInstanceOf(IllegalArgumentException.class)
+                                        .hasMessageContaining("No GL mapping found");
+                }
         }
 
-        @Test
-        @DisplayName("Should fall back when costCenterId and departmentId removed matches")
-        void shouldFallBackTwoLevels() {
-            // Arrange
-            UUID fallbackAccountId = UUID.randomUUID();
+        // ========================================
+        // Resolution Priority Tests
+        // ========================================
 
-            Map<String, String> requestDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100",
-                    "departmentId", "DEPT-50",
-                    "costCenterId", "CC-200");
+        @Nested
+        @DisplayName("Resolution priority")
+        class ResolutionPriority {
 
-            // Mapping only has businessUnitId + locationId
-            Map<String, String> mappingDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100");
+                @Test
+                @DisplayName("Should prefer exact match over fallback and default")
+                void shouldPreferExactOverFallbackAndDefault() {
+                        // Arrange
+                        UUID exactAccountId = UUID.randomUUID();
+                        UUID fallbackAccountId = UUID.randomUUID();
+                        UUID defaultAccountId = UUID.randomUUID();
 
-            GLMapping fallbackMapping = createMapping(fallbackAccountId, mappingDimensions);
+                        Map<String, String> requestDimensions = Map.of(
+                                        "businessUnitId", "BU-001",
+                                        "locationId", "LOC-100");
 
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(fallbackMapping));
+                        GLMapping exactMapping = createMapping(exactAccountId,
+                                        Map.of("businessUnitId", "BU-001", "locationId", "LOC-100"));
+                        GLMapping fallbackMapping = createMapping(fallbackAccountId,
+                                        Map.of("businessUnitId", "BU-001"));
+                        GLMapping defaultMapping = createMapping(defaultAccountId, null);
 
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+                        when(mappingRepository.findAllEffectiveMappings(
+                                        eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
+                                        .thenReturn(List.of(exactMapping, fallbackMapping, defaultMapping));
 
-            // Assert — matched after removing costCenterId + departmentId
-            assertThat(result).isEqualTo(fallbackAccountId);
+                        // Act
+                        UUID result = resolver.resolveGLAccount(
+                                        postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
+
+                        // Assert — exact match wins
+                        assertThat(result).isEqualTo(exactAccountId);
+                }
         }
 
-        @Test
-        @DisplayName("Should fall back to businessUnitId only")
-        void shouldFallBackToBusinessUnitOnly() {
-            // Arrange
-            UUID fallbackAccountId = UUID.randomUUID();
+        // ========================================
+        // Helper Methods
+        // ========================================
 
-            Map<String, String> requestDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100",
-                    "departmentId", "DEPT-50");
-
-            // Mapping only has businessUnitId
-            Map<String, String> mappingDimensions = Map.of(
-                    "businessUnitId", "BU-001");
-
-            GLMapping fallbackMapping = createMapping(fallbackAccountId, mappingDimensions);
-
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(fallbackMapping));
-
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
-
-            // Assert
-            assertThat(result).isEqualTo(fallbackAccountId);
+        private GLMapping createMapping(UUID glAccountId, Map<String, String> dimensions) {
+                GLMapping mapping = new GLMapping();
+                mapping.setGlMappingId(UUID.randomUUID());
+                mapping.setPostingCategoryId(postingCategoryId);
+                mapping.setMappingKeyId(mappingKeyId);
+                mapping.setGlAccountId(glAccountId);
+                mapping.setEffectiveStartDate(LocalDateTime.of(2025, 1, 1, 0, 0));
+                mapping.setEffectiveEndDate(null);
+                mapping.setSourceSystem("POS");
+                mapping.setExternalCode("TEST-CODE");
+                mapping.setCreatedAt(Instant.now());
+                mapping.setCreatedBy("SYSTEM");
+                mapping.setDimensions(dimensions != null ? new HashMap<>(dimensions) : null);
+                return mapping;
         }
-
-        @Test
-        @DisplayName("Should prefer more specific fallback over less specific")
-        void shouldPreferMoreSpecificFallback() {
-            // Arrange
-            UUID specificAccountId = UUID.randomUUID();
-            UUID broadAccountId = UUID.randomUUID();
-
-            Map<String, String> requestDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100",
-                    "departmentId", "DEPT-50",
-                    "costCenterId", "CC-200");
-
-            // Two fallback mappings at different levels of specificity
-            Map<String, String> specificDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100",
-                    "departmentId", "DEPT-50"); // 3 dimensions
-
-            Map<String, String> broadDimensions = Map.of(
-                    "businessUnitId", "BU-001"); // 1 dimension
-
-            GLMapping specificMapping = createMapping(specificAccountId, specificDimensions);
-            GLMapping broadMapping = createMapping(broadAccountId, broadDimensions);
-
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(specificMapping, broadMapping));
-
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
-
-            // Assert — the more specific fallback (3 dims) wins over the broader one (1
-            // dim)
-            assertThat(result).isEqualTo(specificAccountId);
-        }
-
-        @Test
-        @DisplayName("Should fall through to category default when no fallback matches")
-        void shouldFallThroughToCategoryDefault() {
-            // Arrange
-            UUID defaultAccountId = UUID.randomUUID();
-            UUID unrelatedAccountId = UUID.randomUUID();
-
-            Map<String, String> requestDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100");
-
-            // Mapping has completely different dimension values
-            Map<String, String> unrelatedDimensions = Map.of(
-                    "businessUnitId", "BU-999",
-                    "locationId", "LOC-999");
-
-            GLMapping unrelatedMapping = createMapping(unrelatedAccountId, unrelatedDimensions);
-            GLMapping defaultMapping = createMapping(defaultAccountId, null);
-
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(unrelatedMapping));
-
-            when(mappingRepository.findEffectiveMapping(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(Optional.of(defaultMapping));
-
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
-
-            // Assert
-            assertThat(result).isEqualTo(defaultAccountId);
-        }
-    }
-
-    // ========================================
-    // Category Default & Error Tests
-    // ========================================
-
-    @Nested
-    @DisplayName("Category default and error handling")
-    class CategoryDefaultAndErrors {
-
-        @Test
-        @DisplayName("Should resolve category default when no dimensional match exists")
-        void shouldResolveCategoryDefault() {
-            // Arrange
-            UUID defaultAccountId = UUID.randomUUID();
-            GLMapping defaultMapping = createMapping(defaultAccountId, null);
-
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(Collections.emptyList());
-
-            when(mappingRepository.findEffectiveMapping(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(Optional.of(defaultMapping));
-
-            Map<String, String> dimensions = Map.of("businessUnitId", "BU-001");
-
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, dimensions);
-
-            // Assert
-            assertThat(result).isEqualTo(defaultAccountId);
-        }
-
-        @Test
-        @DisplayName("Should throw when no mapping found at any level")
-        void shouldThrowWhenNoMappingFound() {
-            // Arrange
-            when(mappingRepository.findAllEffectiveMappings(any(), any(), any()))
-                    .thenReturn(Collections.emptyList());
-            when(mappingRepository.findEffectiveMapping(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(Optional.empty());
-
-            Map<String, String> dimensions = Map.of("businessUnitId", "BU-001");
-
-            // Act & Assert
-            assertThatThrownBy(() -> resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, dimensions))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("No GL mapping found");
-        }
-    }
-
-    // ========================================
-    // Resolution Priority Tests
-    // ========================================
-
-    @Nested
-    @DisplayName("Resolution priority")
-    class ResolutionPriority {
-
-        @Test
-        @DisplayName("Should prefer exact match over fallback and default")
-        void shouldPreferExactOverFallbackAndDefault() {
-            // Arrange
-            UUID exactAccountId = UUID.randomUUID();
-            UUID fallbackAccountId = UUID.randomUUID();
-            UUID defaultAccountId = UUID.randomUUID();
-
-            Map<String, String> requestDimensions = Map.of(
-                    "businessUnitId", "BU-001",
-                    "locationId", "LOC-100");
-
-            GLMapping exactMapping = createMapping(exactAccountId,
-                    Map.of("businessUnitId", "BU-001", "locationId", "LOC-100"));
-            GLMapping fallbackMapping = createMapping(fallbackAccountId,
-                    Map.of("businessUnitId", "BU-001"));
-            GLMapping defaultMapping = createMapping(defaultAccountId, null);
-
-            when(mappingRepository.findAllEffectiveMappings(
-                    eq(postingCategoryId), eq(mappingKeyId), eq(transactionDate)))
-                    .thenReturn(List.of(exactMapping, fallbackMapping, defaultMapping));
-
-            // Act
-            UUID result = resolver.resolveGLAccount(
-                    postingCategoryId, mappingKeyId, transactionDate, requestDimensions);
-
-            // Assert — exact match wins
-            assertThat(result).isEqualTo(exactAccountId);
-        }
-    }
-
-    // ========================================
-    // Helper Methods
-    // ========================================
-
-    private GLMapping createMapping(UUID glAccountId, Map<String, String> dimensions) {
-        GLMapping mapping = new GLMapping();
-        mapping.setGlMappingId(UUID.randomUUID());
-        mapping.setPostingCategoryId(postingCategoryId);
-        mapping.setMappingKeyId(mappingKeyId);
-        mapping.setGlAccountId(glAccountId);
-        mapping.setEffectiveStartDate(LocalDateTime.of(2025, 1, 1, 0, 0));
-        mapping.setEffectiveEndDate(null);
-        mapping.setSourceSystem("POS");
-        mapping.setExternalCode("TEST-CODE");
-        mapping.setCreatedAt(Instant.now());
-        mapping.setCreatedBy("SYSTEM");
-        mapping.setDimensions(dimensions != null ? new HashMap<>(dimensions) : null);
-        return mapping;
-    }
 }

@@ -1,5 +1,8 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.service.GLAccountServiceImpl;
+import com.positivity.accounting.internal.service.JournalEntryServiceImpl;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,10 +51,10 @@ class JournalEntryServiceTest {
     private JournalEntryRepository journalEntryRepository;
 
     @Mock
-    private GLAccountService glAccountService;
+    private GLAccountServiceImpl glAccountService;
 
     @InjectMocks
-    private JournalEntryService service;
+    private JournalEntryServiceImpl service;
 
     private UUID testJournalEntryId;
     private UUID testGLAccountId1;

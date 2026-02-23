@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
+import com.positivity.accounting.service.OutboxService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -7,6 +7,8 @@ import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
+import com.positivity.accounting.internal.service.InvoicePaymentStatusServiceImpl;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class InvoicePaymentStatusServiceTest {
 
     @Autowired
-    private InvoicePaymentStatusService paymentStatusService;
+    private InvoicePaymentStatusServiceImpl paymentStatusService;
 
     @Autowired
     private PaymentAppliedEventRepository paymentEventRepository;

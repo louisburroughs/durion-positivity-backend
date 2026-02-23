@@ -1,4 +1,4 @@
-package com.positivity.accounting.service;
+package com.positivity.accounting.internal.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -30,6 +30,8 @@ import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import com.positivity.accounting.internal.config.DefaultGLMappingProperties;
+import com.positivity.accounting.service.GLMappingResolver;
+import com.positivity.accounting.service.PostingRuleEvaluator;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import lombok.RequiredArgsConstructor;

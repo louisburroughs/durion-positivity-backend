@@ -1,5 +1,7 @@
 package com.positivity.accounting.service;
 
+import com.positivity.accounting.internal.service.PostingEngineOrchestrator;
+import com.positivity.accounting.internal.service.IdempotencyServiceImpl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -63,7 +65,7 @@ class PostingEngineOrchestratorTest {
     private JournalEntryServiceImpl journalEntryService;
 
     @Mock
-    private IdempotencyService idempotencyService;
+    private IdempotencyServiceImpl idempotencyService;
 
     @Mock
     private AccountingEventRepository accountingEventRepository;
