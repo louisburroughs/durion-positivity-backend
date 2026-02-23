@@ -58,6 +58,12 @@ public class LocationController {
         return locationService.getAllLocationsDto();
     }
 
+    /**
+     * Alias controller for location roster endpoint used by contract behavior
+     * tests.
+     *
+     * Issue: CAP-214 #40
+     */
     @Operation(summary = "Get location roster", description = "Retrieve paginated location refs for sync consumers.")
     @ApiResponse(responseCode = "200", description = "Location roster returned successfully.")
     @PreAuthorize("hasAuthority('location:read')")
