@@ -1,4 +1,4 @@
-package com.positivity.location.internal.service;
+package com.positivity.location.service;
 
 import com.positivity.location.internal.entity.StorageLocationEntity;
 

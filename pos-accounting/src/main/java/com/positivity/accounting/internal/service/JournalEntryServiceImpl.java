@@ -64,6 +64,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         if (entry.getJournalEntryId() == null) {
             entry.setJournalEntryId(UUID.randomUUID());
         }
+        initializeLineMetadata(entry);
 
         // Validate balance
         validateBalance(entry);
@@ -139,6 +140,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         // For now, disallow line updates; require delete + recreate for complex changes
         if (updates.getLines() != null && !updates.getLines().isEmpty()) {
             entry.setLines(updates.getLines());
+            initializeLineMetadata(entry);
         }
 
         return journalEntryRepository.save(entry);
@@ -224,6 +226,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             reversalLines.add(reversalLine);
         }
         reversal.setLines(reversalLines);
+        initializeLineMetadata(reversal);
 
         JournalEntry saved = journalEntryRepository.save(reversal);
         log.info("Created reversal entry {} for original entry {}", saved.getJournalEntryId(), originalEntryId);
@@ -291,5 +294,21 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         }
 
         log.debug("Journal entry balance valid: debits={}, credits={}", totalDebits, totalCredits);
+    }
+
+    private void initializeLineMetadata(JournalEntry entry) {
+        if (entry.getLines() == null || entry.getLines().isEmpty()) {
+            return;
+        }
+        int lineNumber = 1;
+        for (JournalEntryLine line : entry.getLines()) {
+            if (line.getJournalEntryId() == null) {
+                line.setJournalEntryId(entry.getJournalEntryId());
+            }
+            if (line.getLineNumber() == null) {
+                line.setLineNumber(lineNumber);
+            }
+            lineNumber++;
+        }
     }
 }

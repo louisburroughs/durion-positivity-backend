@@ -94,7 +94,7 @@ public class EventIngestionController {
         @PostMapping
         @PreAuthorize("hasAuthority('accounting:events:submit')")
         @Operation(summary = "Submit event", description = "Submit a new accounting event for processing.")
-        @ApiResponse(responseCode = "201", description = "Event created for processing")
+        @ApiResponse(responseCode = "202", description = "Event accepted for processing")
         @ApiResponse(responseCode = "400", description = "Invalid request")
         @EmitEvent(id = "ACCOUNTING_EVENT_SUBMIT", apiVersion = "1")
         public ResponseEntity<AccountingEventResponse> submitEvent(
@@ -102,13 +102,13 @@ public class EventIngestionController {
                 log.info("Submitting accounting event: type={}, org={}", request.getEventType(),
                                 request.getOrganizationId());
                 AccountingEventResponse response = eventIngestionService.submitEvent(request.toMap());
-                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
         }
 
         @PostMapping("/{eventId}/retry")
         @PreAuthorize("hasAuthority('accounting:events:retry')")
         @Operation(summary = "Retry event processing", description = "Retry processing for a failed accounting event.")
-        @ApiResponse(responseCode = "200", description = "Retry requested")
+        @ApiResponse(responseCode = "202", description = "Retry requested")
         @ApiResponse(responseCode = "404", description = "Event not found")
         @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
         public ResponseEntity<AccountingEventResponse> retryEventProcessing(
@@ -116,13 +116,13 @@ public class EventIngestionController {
                         @RequestBody(required = false) Object request) {
                 log.info("Retrying event processing: {}", eventId);
                 AccountingEventResponse response = eventIngestionService.retryEvent(eventId);
-                return ResponseEntity.ok(response);
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
         }
 
         @PostMapping("/{eventId}/reprocess")
         @PreAuthorize("hasAuthority('accounting:events:reprocess')")
         @Operation(summary = "Reprocess suspended event", description = "Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.")
-        @ApiResponse(responseCode = "200", description = "Reprocessing completed successfully")
+        @ApiResponse(responseCode = "202", description = "Reprocessing accepted")
         @ApiResponse(responseCode = "400", description = "Invalid request")
         @ApiResponse(responseCode = "404", description = "Event not found")
         @ApiResponse(responseCode = "409", description = "Event already PROCESSED (idempotency violation)")
@@ -135,7 +135,7 @@ public class EventIngestionController {
 
                 try {
                         AccountingEventResponse response = eventIngestionService.reprocessEvent(eventId, request);
-                        return ResponseEntity.ok(response);
+                        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
                 } catch (IllegalStateException e) {
                         // BR-3: Idempotency violation or invalid state - treat as conflict
                         return ResponseEntity.status(HttpStatus.CONFLICT).build();

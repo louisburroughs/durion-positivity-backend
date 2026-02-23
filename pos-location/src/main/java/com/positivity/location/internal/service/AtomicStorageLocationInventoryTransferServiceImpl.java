@@ -2,6 +2,8 @@ package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.repository.StorageLocationRepository;
+import com.positivity.location.service.StorageLocationInventoryTransferService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -12,7 +14,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public class AtomicStorageLocationInventoryTransferService implements StorageLocationInventoryTransferService {
+public class AtomicStorageLocationInventoryTransferServiceImpl implements StorageLocationInventoryTransferService {
 
     private final StorageLocationRepository storageLocationRepository;
 

@@ -7,6 +7,8 @@ import com.positivity.customer.internal.entity.AbstractParty;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.AccountTier;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.service.AccountTierService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -36,7 +38,7 @@ import java.util.UUID;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class AccountTierServiceImpl {
+public class AccountTierServiceImpl implements AccountTierService {
 
     private final CommercialPartyRepository commercialPartyRepository;
 
@@ -59,6 +61,7 @@ public class AccountTierServiceImpl {
      * @return tier information response
      * @throws IllegalArgumentException if account not found
      */
+    @Override
     @Transactional(readOnly = true)
     public GetAccountTierResponse getAccountTier(@NonNull UUID accountId) {
         log.debug("Getting tier for account: {}", accountId);
@@ -78,6 +81,7 @@ public class AccountTierServiceImpl {
      * @return resolution result with recommended tier
      * @throws IllegalArgumentException if account not found
      */
+    @Override
     @Transactional
     public ResolveAccountTierResponse resolveAccountTier(@NonNull ResolveAccountTierRequest request) {
         log.info("Resolving tier for account: {} (apply={})", request.getAccountId(), request.isApplyTier());

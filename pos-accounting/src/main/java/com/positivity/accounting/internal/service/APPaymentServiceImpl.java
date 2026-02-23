@@ -96,6 +96,10 @@ public class APPaymentServiceImpl implements APPaymentService {
         payment = paymentRepository.save(payment);
 
         try {
+            String paymentSource = request.getPaymentSource();
+            if (paymentSource == null || paymentSource.isBlank()) {
+                paymentSource = "UNSPECIFIED";
+            }
             // Call payment gateway with idempotency key
             var gatewayRequest = new PaymentGatewayProvider.GatewayPaymentRequest(
                     request.getPaymentRef(), // Use paymentRef as idempotency key
@@ -103,7 +107,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                     request.getCurrency(),
                     request.getPaymentMethod(),
                     request.getVendorId().toString(),
-                    request.getPaymentSource(),
+                    paymentSource,
                     request.getMemo(),
                     "ap_payment"); // metadata tags
 
@@ -195,9 +199,8 @@ public class APPaymentServiceImpl implements APPaymentService {
         } catch (Exception e) {
             // Gateway-level failures: persist failure state in separate transaction for
             // audit/idempotency
-            // Use self-reference to invoke through Spring proxy for REQUIRES_NEW
-            // propagation
-            ((APPaymentServiceImpl) self).persistGatewayFailure(payment.getPaymentId(), e.getMessage());
+            // Best effort: keep failure state even when gateway call fails.
+            persistGatewayFailure(payment.getPaymentId(), e.getMessage());
             // Exception carries context and will be logged in exception handler
             throw new PaymentGatewayException(
                     "Payment gateway communication failure", request.getPaymentRef(), e);

@@ -15,19 +15,15 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.enums.AccountType;
-
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Contract Behavioral Integration Tests for Accounting Service
@@ -47,12 +43,6 @@ import tools.jackson.databind.ObjectMapper;
 @ActiveProfiles("test")
 @DisplayName("Accounting Backend Contract Behavioral Tests")
 public class ContractBehaviorIT extends BaseContractIntegrationTest {
-
-        @Autowired
-        private MockMvc mockMvc;
-
-        @Autowired
-        private ObjectMapper objectMapper;
 
         private static final String API_V1 = "/v1/accounting";
 
