@@ -24,5 +24,4 @@ public class StorageLocationRequest {
     private String barcode;
     private StorageLocationType type;
     private UUID parentStorageLocationId;
-    private UUID siteId;
 }

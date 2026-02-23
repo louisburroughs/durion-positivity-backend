@@ -3,6 +3,7 @@ package com.positivity.location.service;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -41,11 +42,13 @@ public interface StorageLocationService {
      *
      * @param siteId   site identifier from the route
      * @param type     optional type filter
+     * @param status   optional status filter
      * @param pageable pagination specification
      * @return page of storage locations
      */
     @NonNull
     Page<StorageLocationResponse> listStorageLocations(@NonNull UUID siteId, StorageLocationType type,
+            StorageLocationStatus status,
             @NonNull Pageable pageable);
 
     /**

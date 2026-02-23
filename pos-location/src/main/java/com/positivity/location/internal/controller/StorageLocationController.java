@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.service.StorageLocationService;
 import java.util.UUID;
@@ -47,8 +48,9 @@ public class StorageLocationController {
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_LIST", apiVersion = "1")
     public Page<StorageLocationResponse> list(@PathVariable UUID siteId,
             @RequestParam(required = false) StorageLocationType type,
+            @RequestParam(required = false) StorageLocationStatus status,
             Pageable pageable) {
-        return storageLocationService.listStorageLocations(siteId, type, pageable);
+        return storageLocationService.listStorageLocations(siteId, type, status, pageable);
     }
 
     @GetMapping("/{storageLocationId}")

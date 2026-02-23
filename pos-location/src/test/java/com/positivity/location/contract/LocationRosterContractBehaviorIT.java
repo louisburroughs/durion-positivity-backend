@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>
  * Verifies HTTP contract for:
  * <ul>
- * <li>GET /v1/location/locations/roster — paginated location refs for sync
+ * <li>GET /v1/locations/roster — paginated location refs for sync
  * consumers</li>
  * <li>Optional filter: status, sinceUpdatedAt</li>
  * <li>400 on malformed sinceUpdatedAt timestamp</li>
@@ -51,7 +51,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
     private LocationRosterService locationRosterService;
 
     // -------------------------------------------------------------------------
-    // GET /v1/location/locations/roster — no filter
+    // GET /v1/locations/roster — no filter
     // -------------------------------------------------------------------------
 
     /**
@@ -68,7 +68,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
 
         when(locationRosterService.getRoster(isNull(), isNull(), any())).thenReturn(page);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/location/locations/roster")))
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.content.length()").value(2))
@@ -80,7 +80,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // GET /v1/location/locations/roster?status=ACTIVE
+    // GET /v1/locations/roster?status=ACTIVE
     // -------------------------------------------------------------------------
 
     /**
@@ -96,7 +96,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
 
         when(locationRosterService.getRoster(eq("ACTIVE"), isNull(), any())).thenReturn(page);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/location/locations/roster")
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster")
                 .param("status", "ACTIVE")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
@@ -104,7 +104,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // GET /v1/location/locations/roster?sinceUpdatedAt=...
+    // GET /v1/locations/roster?sinceUpdatedAt=...
     // -------------------------------------------------------------------------
 
     /**
@@ -121,7 +121,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
 
         when(locationRosterService.getRoster(isNull(), any(Instant.class), any())).thenReturn(page);
 
-        mockMvc.perform(withGatewayAuth(get("/v1/location/locations/roster")
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster")
                 .param("sinceUpdatedAt", "2026-01-01T00:00:00Z")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
@@ -129,7 +129,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // GET /v1/location/locations/roster — invalid sinceUpdatedAt
+    // GET /v1/locations/roster — invalid sinceUpdatedAt
     // -------------------------------------------------------------------------
 
     /**
@@ -141,7 +141,7 @@ class LocationRosterContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("#40 - GET /locations/roster with invalid sinceUpdatedAt returns 400")
     void getRoster_invalidDateFormat_returns400() throws Exception {
-        mockMvc.perform(withGatewayAuth(get("/v1/location/locations/roster")
+        mockMvc.perform(withGatewayAuth(get("/v1/locations/roster")
                 .param("sinceUpdatedAt", "not-a-date")))
                 .andExpect(status().isBadRequest());
     }

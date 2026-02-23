@@ -1,6 +1,7 @@
 package com.positivity.location.internal.repository;
 
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,11 @@ public interface StorageLocationRepository extends JpaRepository<StorageLocation
     Page<StorageLocationEntity> findBySiteId(UUID siteId, Pageable pageable);
 
     Page<StorageLocationEntity> findBySiteIdAndType(UUID siteId, StorageLocationType type, Pageable pageable);
+
+    Page<StorageLocationEntity> findBySiteIdAndStatus(UUID siteId, StorageLocationStatus status, Pageable pageable);
+
+    Page<StorageLocationEntity> findBySiteIdAndTypeAndStatus(UUID siteId, StorageLocationType type,
+            StorageLocationStatus status, Pageable pageable);
 
     Optional<StorageLocationEntity> findByParentStorageLocationId(UUID parentId);
 

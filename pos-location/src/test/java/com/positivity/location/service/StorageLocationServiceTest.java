@@ -4,6 +4,7 @@ import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
@@ -175,7 +176,7 @@ class StorageLocationServiceTest {
      */
     @Test
     @DisplayName("#39 - patching parentStorageLocationId to create a cycle returns 409 CYCLE_DETECTED")
-    void createStorageLocation_cyclicParent_throwsCycleDetected() {
+    void updateStorageLocation_cyclicParent_throwsCycleDetected() {
         UUID siteId = UUID.randomUUID();
         UUID existingId = UUID.randomUUID();
         UUID parentId = UUID.randomUUID();
@@ -188,7 +189,7 @@ class StorageLocationServiceTest {
                 .siteId(siteId)
                 .name("Floor-C")
                 .type(StorageLocationType.FLOOR)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .build();
 
         StorageLocationEntity parent = StorageLocationEntity.builder()
@@ -255,7 +256,7 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.BIN)
                 .barcode("BIN-BC-001")
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .build();
 
         Page<StorageLocationEntity> page = new PageImpl<>(List.of(entity));
@@ -263,7 +264,7 @@ class StorageLocationServiceTest {
                 .thenReturn(page);
 
         Page<StorageLocationResponse> result = storageLocationService.listStorageLocations(siteId,
-                StorageLocationType.BIN, PageRequest.of(0, 20));
+                StorageLocationType.BIN, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getType()).isEqualTo(StorageLocationType.BIN);
@@ -278,14 +279,14 @@ class StorageLocationServiceTest {
                 .name("NO-TYPE-1")
                 .type(StorageLocationType.SHELF)
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .build();
 
         Page<StorageLocationEntity> page = new PageImpl<>(List.of(entity));
         when(storageLocationRepository.findBySiteId(siteId, PageRequest.of(0, 10))).thenReturn(page);
 
         Page<StorageLocationResponse> result = storageLocationService.listStorageLocations(siteId, null,
-                PageRequest.of(0, 10));
+                null, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getName()).isEqualTo("NO-TYPE-1");
@@ -311,7 +312,7 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.SHELF)
                 .barcode("SHF-BC-002")
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -319,7 +320,7 @@ class StorageLocationServiceTest {
         when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                 .thenAnswer(inv -> {
                     StorageLocationEntity e = inv.getArgument(0);
-                    e.setStatus("INACTIVE");
+                    e.setStatus(StorageLocationStatus.INACTIVE);
                     return e;
                 });
 
@@ -343,7 +344,7 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.FLOOR)
                 .barcode("FLR-BC-003")
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(5)
                 .build();
 
@@ -369,7 +370,7 @@ class StorageLocationServiceTest {
                 .name("Floor-C3")
                 .type(StorageLocationType.FLOOR)
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(5)
                 .build();
         StorageLocationEntity destination = StorageLocationEntity.builder()
@@ -377,7 +378,7 @@ class StorageLocationServiceTest {
                 .name("Shelf-Z9")
                 .type(StorageLocationType.SHELF)
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(3)
                 .build();
 
@@ -388,7 +389,8 @@ class StorageLocationServiceTest {
         when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        StorageLocationResponse response = storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId);
+        StorageLocationResponse response = storageLocationService.deactivateStorageLocation(siteId, sourceId,
+                destinationId);
 
         assertThat(response.getStatus()).isEqualTo("INACTIVE");
         assertThat(response.getInventoryCount()).isZero();
@@ -407,7 +409,7 @@ class StorageLocationServiceTest {
                 .name("Floor-C3")
                 .type(StorageLocationType.FLOOR)
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(2)
                 .build();
 
@@ -434,7 +436,7 @@ class StorageLocationServiceTest {
                 .name("Floor-C3")
                 .type(StorageLocationType.FLOOR)
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(2)
                 .build();
         StorageLocationEntity destination = StorageLocationEntity.builder()
@@ -442,7 +444,7 @@ class StorageLocationServiceTest {
                 .name("Shelf-Z9")
                 .type(StorageLocationType.SHELF)
                 .siteId(siteId)
-                .status("INACTIVE")
+                .status(StorageLocationStatus.INACTIVE)
                 .inventoryCount(1)
                 .build();
 
@@ -546,7 +548,7 @@ class StorageLocationServiceTest {
                 .barcode("BAR-OLD")
                 .type(StorageLocationType.BIN)
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -559,7 +561,7 @@ class StorageLocationServiceTest {
                 .name("Bin-New")
                 .barcode("BAR-NEW")
                 .parentStorageLocationId(parentId)
-                .status("inactive")
+                .status(StorageLocationStatus.INACTIVE)
                 .destinationStorageLocationId(UUID.randomUUID())
                 .build();
 
@@ -592,7 +594,7 @@ class StorageLocationServiceTest {
                 .id(storageLocationId)
                 .name("Bin-Old")
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -624,7 +626,7 @@ class StorageLocationServiceTest {
                 .name("Bin-Old")
                 .barcode("BAR-OLD")
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -655,7 +657,7 @@ class StorageLocationServiceTest {
                 .id(storageLocationId)
                 .name("Bin-Old")
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -706,7 +708,7 @@ class StorageLocationServiceTest {
                 .id(storageLocationId)
                 .siteId(siteId)
                 .name("Bin-A")
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -738,7 +740,7 @@ class StorageLocationServiceTest {
                 .id(storageLocationId)
                 .siteId(siteId)
                 .name("Bin-A")
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -775,7 +777,7 @@ class StorageLocationServiceTest {
                 .id(storageLocationId)
                 .siteId(siteId)
                 .name("Bin-A")
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -820,7 +822,7 @@ class StorageLocationServiceTest {
                 .siteId(siteId)
                 .name("Bin-A")
                 .barcode("HAS-BAR")
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(0)
                 .build();
 
@@ -870,12 +872,12 @@ class StorageLocationServiceTest {
                 .id(storageLocationId)
                 .name("Bin-Old")
                 .siteId(siteId)
-                .status("ACTIVE")
+                .status(StorageLocationStatus.ACTIVE)
                 .inventoryCount(2)
                 .build();
 
         StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
-                .status("INACTIVE")
+                .status(StorageLocationStatus.INACTIVE)
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)).thenReturn(Optional.of(existing));
