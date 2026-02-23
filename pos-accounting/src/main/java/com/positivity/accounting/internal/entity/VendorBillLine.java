@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -34,14 +34,13 @@ public class VendorBillLine {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "line_id", nullable = false, columnDefinition = "UUID")
     private UUID lineId;
 
     @PrePersist
     public void generateId() {
-        if (lineId == null) {
-            lineId = UUIDv7Generator.generate();
-        }
     }
 
     @Column(name = "vendor_bill_id", nullable = false)

@@ -5,7 +5,7 @@ import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -19,6 +19,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -55,6 +56,8 @@ public class EventOutbox {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "outbox_id", nullable = false, columnDefinition = "UUID")
     private UUID outboxId;
 
@@ -128,9 +131,6 @@ public class EventOutbox {
 
     @PrePersist
     protected void onCreate() {
-        if (outboxId == null) {
-            outboxId = UUIDv7Generator.generate();
-        }
         if (createdAt == null) {
             }
         if (status == null) {

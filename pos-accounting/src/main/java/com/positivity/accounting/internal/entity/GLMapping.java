@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
@@ -50,14 +50,13 @@ public class GLMapping {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "gl_mapping_id", nullable = false, columnDefinition = "UUID")
     private UUID glMappingId;
 
     @PrePersist
     public void onPrePersist() {
-        if (glMappingId == null) {
-            glMappingId = UUIDv7Generator.generate();
-        }
     }
 
     @Column(name = "source_system", length = 50, nullable = false)

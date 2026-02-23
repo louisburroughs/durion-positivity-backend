@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -37,14 +37,13 @@ public class PostingCategory {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "posting_category_id", nullable = false, columnDefinition = "UUID")
     private UUID postingCategoryId;
 
     @PrePersist
     public void onPrePersist() {
-        if (postingCategoryId == null) {
-            postingCategoryId = UUIDv7Generator.generate();
-        }
     }
 
     @Column(name = "category_name", length = 100, nullable = false)

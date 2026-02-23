@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -43,14 +43,13 @@ public class PaymentApplicationReversal {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "reversal_id", nullable = false, columnDefinition = "UUID")
     private UUID reversalId;
 
     @PrePersist
     public void onPrePersist() {
-        if (reversalId == null) {
-            reversalId = UUIDv7Generator.generate();
-        }
         if (reversedAt == null) {
             reversedAt = Instant.now();
         }

@@ -8,7 +8,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -51,14 +51,13 @@ public class JournalEntry {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "journal_entry_id", nullable = false, columnDefinition = "UUID")
     private UUID journalEntryId;
 
     @PrePersist
     public void onPrePersist() {
-        if (journalEntryId == null) {
-            journalEntryId = UUIDv7Generator.generate();
-        }
         Instant now = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated() 
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")

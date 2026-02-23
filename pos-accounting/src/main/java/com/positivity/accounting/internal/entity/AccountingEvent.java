@@ -9,7 +9,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,6 +20,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,6 +54,8 @@ public class AccountingEvent {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "event_id", nullable = false, columnDefinition = "UUID")
     private UUID eventId;
 
@@ -66,9 +69,6 @@ public class AccountingEvent {
 
     @PrePersist
     public void onPrePersist() {
-        if (eventId == null) {
-            eventId = UUIDv7Generator.generate();
-        }
         if (sourceSystem == null || sourceSystem.isBlank()) {
             sourceSystem = "POS_ACCOUNTING_API";
         }

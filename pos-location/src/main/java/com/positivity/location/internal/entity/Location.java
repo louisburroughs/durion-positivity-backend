@@ -35,11 +35,6 @@ import lombok.NoArgsConstructor;
  * Location aggregate representing physical sites, warehouses, or other operational locations.
  *
  * Issue: CAP-214 #38   
- * 
- * 
- * The @UUIDv7Id annotation is designed to work with the UUIDv7Generator, which automatically generates UUIDv7 values for the annotated field.
- * By simply annotating the id field with @UUIDv7Id, you are instructing Hibernate to use the UUIDv7Generator for generating values for that field. 
- * 
  */
 @Entity
 @Data
@@ -49,6 +44,7 @@ import lombok.NoArgsConstructor;
 @EntityListeners(AuditingEntityListener.class)
 public class Location {
     @Id
+    @GeneratedValue
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;

@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -47,14 +47,13 @@ public class CustomerCredit {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "credit_id", nullable = false, columnDefinition = "UUID")
     private UUID creditId;
 
     @PrePersist
     public void onPrePersist() {
-        if (creditId == null) {
-            creditId = UUIDv7Generator.generate();
-        }
         if (createdAt == null) {
             }
     }

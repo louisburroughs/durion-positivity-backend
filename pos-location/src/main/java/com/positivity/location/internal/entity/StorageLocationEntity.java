@@ -2,11 +2,12 @@ package com.positivity.location.internal.entity;
 
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.enums.StorageLocationStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -30,6 +31,8 @@ import lombok.NoArgsConstructor;
 public class StorageLocationEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -60,9 +63,6 @@ public class StorageLocationEntity {
 
     @PrePersist
     void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         if (status == null) {
             status = StorageLocationStatus.ACTIVE;
         }

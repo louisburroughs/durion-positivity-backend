@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -19,6 +19,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -55,14 +56,13 @@ public class DefaultGLMapping {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "mapping_id", nullable = false, columnDefinition = "UUID")
     private UUID mappingId;
 
     @PrePersist
     public void onPrePersist() {
-        if (mappingId == null) {
-            mappingId = UUIDv7Generator.generate();
-        }
         Instant now = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")

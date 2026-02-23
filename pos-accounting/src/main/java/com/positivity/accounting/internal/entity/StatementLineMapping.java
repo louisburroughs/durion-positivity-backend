@@ -6,7 +6,7 @@ import org.jspecify.annotations.NonNull;
 
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,6 +16,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.GeneratedValue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -53,6 +54,8 @@ public class StatementLineMapping {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "mapping_id", columnDefinition = "UUID")
     private UUID mappingId;
 
@@ -113,8 +116,5 @@ public class StatementLineMapping {
 
     @PrePersist
     protected void onCreate() {
-        if (mappingId == null) {
-            mappingId = UUIDv7Generator.generate();
-        }
     }
 }

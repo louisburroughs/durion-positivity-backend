@@ -3,7 +3,7 @@ package com.positivity.accounting.internal.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -46,14 +47,13 @@ public class AccountingAuditLog {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "audit_log_id", nullable = false, columnDefinition = "UUID")
     private UUID auditLogId;
 
     @PrePersist
     public void onPrePersist() {
-        if (auditLogId == null) {
-            auditLogId = UUIDv7Generator.generate();
-        }
         this.timestamp = Instant.now();
     }
 

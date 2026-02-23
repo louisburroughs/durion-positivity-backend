@@ -119,12 +119,13 @@ public class ArchitectureTest {
             .because("service package cycles make the module harder to maintain and evolve");
 
     @ArchTest
-    static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
+    static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
             .that().resideInAnyPackage("..internal.entity..", "..internal.model..")
             .and().areAnnotatedWith("jakarta.persistence.Entity")
-            .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+            .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
+            .orShould().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
             .allowEmptyShould(true)
-            .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
+            .because("ADR-0013 mandates UUID v7 IDs via shared generator strategy");
 
     @ArchTest
     static final ArchRule entities_should_not_call_uuid_random_uuid = noClasses()

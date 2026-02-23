@@ -5,7 +5,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -48,14 +48,13 @@ public class VendorBill {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "vendor_bill_id", nullable = false, columnDefinition = "UUID")
     private UUID vendorBillId;
 
     @PrePersist
     public void onPrePersist() {
-        if (vendorBillId == null) {
-            vendorBillId = UUIDv7Generator.generate();
-        }
         Instant now = Instant.now();
         this.createdAt = now;
         this.modifiedAt = now;

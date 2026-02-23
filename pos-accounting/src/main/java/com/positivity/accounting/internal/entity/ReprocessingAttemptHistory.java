@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,6 +19,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -55,14 +56,13 @@ public class ReprocessingAttemptHistory {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "attempt_id", nullable = false, columnDefinition = "UUID")
     private UUID attemptId;
 
     @PrePersist
     public void onPrePersist() {
-        if (attemptId == null) {
-            attemptId = UUIDv7Generator.generate();
-        }
         if (attemptedAt == null) {
             attemptedAt = Instant.now();
         }

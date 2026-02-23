@@ -1,9 +1,10 @@
 package com.positivity.location.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -31,6 +32,8 @@ import lombok.NoArgsConstructor;
 public class MobileUnitCoverageRuleEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -57,10 +60,4 @@ public class MobileUnitCoverageRuleEntity {
     @Column(name = "max_distance", precision = 10, scale = 2)
     private BigDecimal maxDistance;
 
-    @PrePersist
-    void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 }
