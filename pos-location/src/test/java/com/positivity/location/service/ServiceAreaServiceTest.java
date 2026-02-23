@@ -10,7 +10,10 @@ import static org.mockito.Mockito.when;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
 import com.positivity.location.internal.entity.ServiceAreaPostalCodeValue;
+import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
+import com.positivity.location.internal.service.ServiceAreaServiceImpl;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Service-layer RED tests for Service Area behavior.
@@ -34,171 +39,204 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ServiceAreaServiceTest {
 
-    @Mock
-    private ServiceAreaRepository serviceAreaRepository;
+        private static final String DOWNTOWN_AREA = "Downtown Area";
 
-    @InjectMocks
-    private ServiceAreaService service;
+        @Mock
+        private ServiceAreaRepository serviceAreaRepository;
 
-    @Test
-    @DisplayName("#76 - create service area with postal codes succeeds")
-    void shouldCreateServiceAreaWithPostalCodes() {
-        ServiceAreaEntity persisted = ServiceAreaEntity.builder()
-                .id(UUID.randomUUID())
-                .name("Downtown Area")
-                .description("core coverage")
-                .active(true)
-                .postalCodes(Set.of(
-                        ServiceAreaPostalCodeValue.builder().postalCode("94107").countryCode("US").build(),
-                        ServiceAreaPostalCodeValue.builder().postalCode("94110").countryCode("US").build()))
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
-        when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
+        @InjectMocks
+        private ServiceAreaServiceImpl service;
 
-        Map<String, Object> request = Map.of(
-                "name", "Downtown Area",
-                "description", "core coverage",
-                "active", true,
-                "postalCodes", List.of(
-                        Map.of("postalCode", "94107", "countryCode", "US"),
-                        Map.of("postalCode", "94110", "countryCode", "US")));
+        @Test
+        @DisplayName("#76 - create service area with postal codes succeeds")
+        void shouldCreateServiceAreaWithPostalCodes() {
+                ServiceAreaEntity persisted = ServiceAreaEntity.builder()
+                                .id(UUID.randomUUID())
+                                .name(DOWNTOWN_AREA)
+                                .description("core coverage")
+                                .active(true)
+                                .postalCodes(Set.of(
+                                                ServiceAreaPostalCodeValue.builder().postalCode("94107")
+                                                                .countryCode("US").build(),
+                                                ServiceAreaPostalCodeValue.builder().postalCode("94110")
+                                                                .countryCode("US").build()))
+                                .createdAt(Instant.now())
+                                .updatedAt(Instant.now())
+                                .build();
+                when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
 
-        ServiceAreaResponse created = service.create(request);
+                Map<String, Object> request = Map.of(
+                                "name", DOWNTOWN_AREA,
+                                "description", "core coverage",
+                                "active", true,
+                                "postalCodes", List.of(
+                                                Map.of("postalCode", "94107", "countryCode", "US"),
+                                                Map.of("postalCode", "94110", "countryCode", "US")));
 
-        assertThat(created).isNotNull();
-        assertThat(created.getName()).isEqualTo("Downtown Area");
-        assertThat(created.getPostalCodes()).hasSize(2);
-    }
+                ServiceAreaResponse created = service.create(request);
 
-    @Test
-    @DisplayName("#76 - patch service area updates active flag and description")
-    void shouldPatchServiceArea() {
-        UUID id = UUID.randomUUID();
-        ServiceAreaEntity existing = ServiceAreaEntity.builder()
-                .id(id)
-                .name("Downtown Area")
-                .description("old")
-                .active(true)
-                .build();
-        when(serviceAreaRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
-        when(serviceAreaRepository.save(existing)).thenReturn(existing);
+                assertThat(created).isNotNull();
+                assertThat(created.getName()).isEqualTo(DOWNTOWN_AREA);
+                assertThat(created.getPostalCodes()).hasSize(2);
+        }
 
-        ServiceAreaResponse updated = service.patch(id.toString(), Map.of(
-                "active", false,
-                "description", "temporarily paused"));
+        @Test
+        @DisplayName("#76 - create duplicate service area name maps to conflict code")
+        void shouldMapDuplicateNameConstraintToConflictCode() {
+                when(serviceAreaRepository.save(any(ServiceAreaEntity.class)))
+                                .thenThrow(new DataIntegrityViolationException("violates service_areas_name_key"));
 
-        assertThat(updated).isNotNull();
-        assertThat(updated.getActive()).isFalse();
-        assertThat(updated.getDescription()).isEqualTo("temporarily paused");
-    }
+                Map<String, Object> request = Map.of(
+                                "name", DOWNTOWN_AREA,
+                                "description", "core coverage",
+                                "active", true,
+                                "postalCodes", List.of(Map.of("postalCode", "94107", "countryCode", "US")));
 
-    @Test
-    @DisplayName("#76 - create service area rejects empty postal-code list")
-    void shouldRejectEmptyPostalCodeList() {
-        Map<String, Object> request = Map.of(
-                "name", "Invalid Area",
-                "active", true,
-                "postalCodes", List.of());
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(DuplicateResourceException.class)
+                                .hasMessage("SERVICE_AREA_NAME_TAKEN");
+        }
 
-        assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("service area must include at least one postal code");
-    }
+        @Test
+        @DisplayName("#76 - patch service area updates active flag and description")
+        void shouldPatchServiceArea() {
+                UUID id = UUID.randomUUID();
+                ServiceAreaEntity existing = ServiceAreaEntity.builder()
+                                .id(id)
+                                .name(DOWNTOWN_AREA)
+                                .description("old")
+                                .active(true)
+                                .build();
+                when(serviceAreaRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+                when(serviceAreaRepository.save(existing)).thenReturn(existing);
 
-    @Test
-    @DisplayName("#76 - create service area rejects missing countryCode")
-    void shouldRejectPostalCodeWithoutCountryCode() {
-        Map<String, Object> request = Map.of(
-                "name", "Invalid Country",
-                "active", true,
-                "postalCodes", List.of(Map.of("postalCode", "10001")));
+                ServiceAreaResponse updated = service.patch(id.toString(), Map.of(
+                                "active", false,
+                                "description", "temporarily paused"));
 
-        assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("postal code entries require countryCode");
-    }
+                assertThat(updated).isNotNull();
+                assertThat(updated.getActive()).isFalse();
+                assertThat(updated.getDescription()).isEqualTo("temporarily paused");
+        }
 
-    @Test
-    @DisplayName("#76 - create defaults active=true when omitted")
-    void shouldDefaultActiveToTrueWhenMissing() {
-        ServiceAreaEntity persisted = ServiceAreaEntity.builder()
-                .id(UUID.randomUUID())
-                .name("Default Active")
-                .description("desc")
-                .active(true)
-                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder()
-                        .postalCode("10001")
-                        .countryCode("US")
-                        .build()))
-                .build();
-        when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
+        @Test
+        @DisplayName("#76 - create service area rejects empty postal-code list")
+        void shouldRejectEmptyPostalCodeList() {
+                Map<String, Object> request = Map.of(
+                                "name", "Invalid Area",
+                                "active", true,
+                                "postalCodes", List.of());
 
-        ServiceAreaResponse created = service.create(Map.of(
-                "name", "Default Active",
-                "description", "desc",
-                "postalCodes", List.of(Map.of("postalCode", "10001", "countryCode", "US"))));
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessage("service area must include at least one postal code");
+        }
 
-        assertThat(created.getActive()).isTrue();
-    }
+        @Test
+        @DisplayName("#76 - create service area rejects missing countryCode")
+        void shouldRejectPostalCodeWithoutCountryCode() {
+                Map<String, Object> request = Map.of(
+                                "name", "Invalid Country",
+                                "active", true,
+                                "postalCodes", List.of(Map.of("postalCode", "10001")));
 
-    @Test
-    @DisplayName("#76 - patch not found returns synthesized response")
-    void shouldReturnFallbackResponseWhenPatchTargetMissing() {
-        when(serviceAreaRepository.findById(any(UUID.class))).thenReturn(java.util.Optional.empty());
+                assertThatThrownBy(() -> service.create(request))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessage("postal code entries require countryCode");
+        }
 
-        ServiceAreaResponse updated = service.patch("bad-id", Map.of(
-                "name", "Generated",
-                "description", "none",
-                "active", false));
+        @Test
+        @DisplayName("#76 - create defaults active=true when omitted")
+        void shouldDefaultActiveToTrueWhenMissing() {
+                ServiceAreaEntity persisted = ServiceAreaEntity.builder()
+                                .id(UUID.randomUUID())
+                                .name("Default Active")
+                                .description("desc")
+                                .active(true)
+                                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder()
+                                                .postalCode("10001")
+                                                .countryCode("US")
+                                                .build()))
+                                .build();
+                when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
 
-        assertThat(updated).isNotNull();
-        assertThat(updated.getName()).isEqualTo("Generated");
-        assertThat(updated.getActive()).isFalse();
-        verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
-    }
+                ServiceAreaResponse created = service.create(Map.of(
+                                "name", "Default Active",
+                                "description", "desc",
+                                "postalCodes", List.of(Map.of("postalCode", "10001", "countryCode", "US"))));
 
-    @Test
-    @DisplayName("#76 - list returns mapped service areas")
-    void shouldListServiceAreas() {
-        ServiceAreaEntity first = ServiceAreaEntity.builder()
-                .id(UUID.randomUUID())
-                .name("A")
-                .active(true)
-                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("11111").countryCode("US").build()))
-                .build();
-        ServiceAreaEntity second = ServiceAreaEntity.builder()
-                .id(UUID.randomUUID())
-                .name("B")
-                .active(false)
-                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("22222").countryCode("US").build()))
-                .build();
-        when(serviceAreaRepository.findAll()).thenReturn(List.of(first, second));
+                assertThat(created.getActive()).isTrue();
+        }
 
-        List<ServiceAreaResponse> result = service.list();
+        @Test
+        @DisplayName("#76 - patch with invalid id returns bad request")
+        void shouldRejectPatchWhenIdIsInvalid() {
+                assertThatThrownBy(() -> service.patch("bad-id", Map.of(
+                                "description", "none",
+                                "active", false)))
+                                .isInstanceOf(ResponseStatusException.class)
+                                .hasMessageContaining("400 BAD_REQUEST");
+                verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
+        }
 
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).getName()).isEqualTo("A");
-        assertThat(result.get(1).getActive()).isFalse();
-    }
+        @Test
+        @DisplayName("#76 - patch not found throws not found")
+        void shouldThrowWhenPatchTargetMissing() {
+                UUID id = UUID.randomUUID();
+                when(serviceAreaRepository.findById(id)).thenReturn(java.util.Optional.empty());
 
-    @Test
-    @DisplayName("#76 - create removes duplicate postal entries via set semantics")
-    void shouldDeduplicatePostalEntriesOnCreate() {
-        ServiceAreaEntity persisted = ServiceAreaEntity.builder()
-                .id(UUID.randomUUID())
-                .name("Dedup")
-                .active(true)
-                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("30301").countryCode("US").build()))
-                .build();
-        when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
+                assertThatThrownBy(() -> service.patch(id.toString(), Map.of(
+                                "description", "none",
+                                "active", false)))
+                                .isInstanceOf(ResourceNotFoundException.class)
+                                .hasMessage("Service area not found");
+                verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
+        }
 
-        ServiceAreaResponse created = service.create(Map.of(
-                "name", "Dedup",
-                "postalCodes", List.of(
-                        Map.of("postalCode", "30301", "countryCode", "US"),
-                        Map.of("postalCode", "30301", "countryCode", "US"))));
+        @Test
+        @DisplayName("#76 - list returns mapped service areas")
+        void shouldListServiceAreas() {
+                ServiceAreaEntity first = ServiceAreaEntity.builder()
+                                .id(UUID.randomUUID())
+                                .name("A")
+                                .active(true)
+                                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("11111")
+                                                .countryCode("US").build()))
+                                .build();
+                ServiceAreaEntity second = ServiceAreaEntity.builder()
+                                .id(UUID.randomUUID())
+                                .name("B")
+                                .active(false)
+                                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("22222")
+                                                .countryCode("US").build()))
+                                .build();
+                when(serviceAreaRepository.findAll()).thenReturn(List.of(first, second));
 
-        assertThat(created.getPostalCodes()).hasSize(1);
-    }
+                List<ServiceAreaResponse> result = service.list();
+
+                assertThat(result).hasSize(2);
+                assertThat(result.get(0).getName()).isEqualTo("A");
+                assertThat(result.get(1).getActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("#76 - create removes duplicate postal entries via set semantics")
+        void shouldDeduplicatePostalEntriesOnCreate() {
+                ServiceAreaEntity persisted = ServiceAreaEntity.builder()
+                                .id(UUID.randomUUID())
+                                .name("Dedup")
+                                .active(true)
+                                .postalCodes(Set.of(ServiceAreaPostalCodeValue.builder().postalCode("30301")
+                                                .countryCode("US").build()))
+                                .build();
+                when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenReturn(persisted);
+
+                ServiceAreaResponse created = service.create(Map.of(
+                                "name", "Dedup",
+                                "postalCodes", List.of(
+                                                Map.of("postalCode", "30301", "countryCode", "US"),
+                                                Map.of("postalCode", "30301", "countryCode", "US"))));
+
+                assertThat(created.getPostalCodes()).hasSize(1);
+        }
 }

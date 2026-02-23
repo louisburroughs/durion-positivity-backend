@@ -11,11 +11,15 @@ import com.positivity.location.internal.dto.BayCapacityRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
+import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
+import com.positivity.location.internal.service.BayServiceImpl;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,10 +30,12 @@ import java.util.Arrays;
 import java.util.List;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * RED tests for Bay service contract behaviors required by Story #77.
@@ -44,8 +50,29 @@ class BayServiceTest {
     BayRepository bayRepository;
     @Mock
     LocationRepository locationRepository;
+    @Mock
+    ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
     @InjectMocks
-    BayService bayService;
+    BayServiceImpl bayService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(serviceLocationCapabilityRepository.findByCodeIn(any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Collection<String> codes = (Collection<String>) invocation.getArgument(0);
+            if (codes == null) {
+                return List.of();
+            }
+            return codes.stream()
+                    .map(code -> ServiceLocationCapabilityEntity.builder()
+                            .id(UUID.randomUUID())
+                            .code(code)
+                            .name("Capability " + code)
+                            .active(true)
+                            .build())
+                    .toList();
+        });
+    }
 
     @Test
     @DisplayName("listBays_variousFilters_coversAllBranches")
@@ -117,7 +144,7 @@ class BayServiceTest {
         when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, "Bay2")).thenReturn(true);
         assertThatThrownBy(() -> bayService.patchBay(locationId, bayId, patch))
                 .isInstanceOf(DuplicateResourceException.class)
-                .hasMessageContaining("Bay name already exists");
+                .hasMessageContaining("BAY_NAME_TAKEN");
     }
 
     @Test
@@ -232,7 +259,25 @@ class BayServiceTest {
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
                 .isInstanceOf(DuplicateResourceException.class)
-                .hasMessageContaining("Bay name already exists");
+                .hasMessageContaining("BAY_NAME_TAKEN");
+    }
+
+    @Test
+    @DisplayName("createBay_nameConstraintViolation_mapsToBayNameTaken")
+    void createBay_nameConstraintViolation_mapsToBayNameTaken() {
+        UUID locationId = UUID.randomUUID();
+        BayRequest request = validCreateRequest();
+
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
+                .thenReturn(Optional.empty());
+        when(bayRepository.save(any(BayEntity.class)))
+                .thenThrow(new DataIntegrityViolationException("violates uq_bays_location_normalized_name"));
+
+        assertThatThrownBy(() -> bayService.createBay(locationId, request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("BAY_NAME_TAKEN");
     }
 
     @Test
@@ -304,6 +349,30 @@ class BayServiceTest {
         assertThat(response.getServiceCapabilityIds()).containsExactly("ALIGN", "TIRE");
         assertThat(response.getSkillRequirementIds()).containsExactly("ASE-A1");
         verify(bayRepository).save(any(BayEntity.class));
+    }
+
+    @Test
+    @DisplayName("createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException")
+    void createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException() {
+        UUID locationId = UUID.randomUUID();
+        BayRequest request = validCreateRequest();
+        request.setServiceCapabilityIds(List.of("ALIGN", "UNKNOWN_CAP"));
+
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName())).thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(locationId, request.getName().toLowerCase()))
+                .thenReturn(Optional.empty());
+        when(serviceLocationCapabilityRepository.findByCodeIn(any())).thenReturn(List.of(
+                ServiceLocationCapabilityEntity.builder()
+                        .id(UUID.randomUUID())
+                        .code("ALIGN")
+                        .name("Align")
+                        .active(true)
+                        .build()));
+
+        assertThatThrownBy(() -> bayService.createBay(locationId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid serviceCapabilityIds: UNKNOWN_CAP");
     }
 
     @Test

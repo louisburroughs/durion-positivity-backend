@@ -6,6 +6,7 @@ import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.dto.OperatingHoursRequest;
+import com.positivity.location.internal.dto.HolidayClosureRequest;
 import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
@@ -14,12 +15,14 @@ import com.positivity.location.internal.entity.ParentType;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
+import com.positivity.location.internal.service.LocationServiceImpl;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -28,6 +31,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -60,7 +64,7 @@ class LocationServiceTest {
     private PersonClient personClient;
 
     @InjectMocks
-    private LocationService locationService;
+    private LocationServiceImpl locationService;
 
     @Test
     void createLocation_validPayload_returnsLocationResponse() {
@@ -139,6 +143,39 @@ class LocationServiceTest {
     }
 
     @Test
+    void createLocation_serializesScheduleFieldsAsCanonicalJson() {
+        LocationRequestDTO request = validRequest("Json Shop", "JSON-001");
+        request.setOperatingHours(List.of(
+                OperatingHoursRequest.builder().dayOfWeek("TUESDAY").openTime(LocalTime.of(9, 0))
+                        .closeTime(LocalTime.of(18, 0)).build(),
+                OperatingHoursRequest.builder().dayOfWeek("MONDAY").openTime(LocalTime.of(8, 30))
+                        .closeTime(LocalTime.of(17, 0)).build()));
+        request.setHolidayClosures(List.of(
+                HolidayClosureRequest.builder().date(LocalDate.of(2026, 12, 25)).reason("Christmas").build(),
+                HolidayClosureRequest.builder().date(LocalDate.of(2026, 1, 1)).reason("New Year").build()));
+        LocationType locationType = LocationType.builder().id(UUID.randomUUID()).name("Shop").build();
+
+        when(locationTypeRepository.findByNameIgnoreCase("Shop")).thenReturn(Optional.of(locationType));
+        when(locationRepository.existsByNormalizedName("json shop")).thenReturn(false);
+        when(locationRepository.saveAndFlush(any(Location.class))).thenAnswer(invocation -> {
+            Location toSave = invocation.getArgument(0);
+            toSave.setId(UUID.randomUUID());
+            return toSave;
+        });
+
+        locationService.createLocation(request);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(Location.class);
+        verify(locationRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getOperatingHours()).isEqualTo(
+                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:30:00\",\"closeTime\":\"17:00:00\"},"
+                        + "{\"dayOfWeek\":\"TUESDAY\",\"openTime\":\"09:00:00\",\"closeTime\":\"18:00:00\"}]");
+        assertThat(captor.getValue().getHolidayClosures()).isEqualTo(
+                "[{\"date\":\"2026-01-01\",\"reason\":\"New Year\"},"
+                        + "{\"date\":\"2026-12-25\",\"reason\":\"Christmas\"}]");
+    }
+
+    @Test
     void createLocation_duplicateOperatingHoursDays_throwsValidationException() {
         LocationRequestDTO request = validRequest("Duplicate Days Shop", "OH-002");
         request.setOperatingHours(List.of(
@@ -159,6 +196,44 @@ class LocationServiceTest {
                     ResponseStatusException ex = (ResponseStatusException) error;
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
                     assertThat(ex.getReason()).contains("INVALID_OPERATING_HOURS");
+                });
+    }
+
+    @Test
+    void createLocation_nameUniqueConstraintViolation_mapsToLocationNameTaken() {
+        LocationRequestDTO request = validRequest("Race Name", "CODE-001");
+        LocationType locationType = LocationType.builder().id(UUID.randomUUID()).name("Shop").build();
+
+        when(locationTypeRepository.findByNameIgnoreCase("Shop")).thenReturn(Optional.of(locationType));
+        when(locationRepository.existsByNormalizedName("race name")).thenReturn(false);
+        when(locationRepository.saveAndFlush(any(Location.class)))
+                .thenThrow(new DataIntegrityViolationException("violates uq_location_normalized_name"));
+
+        assertThatThrownBy(() -> locationService.createLocation(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> {
+                    ResponseStatusException ex = (ResponseStatusException) error;
+                    assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(ex.getReason()).contains("LOCATION_NAME_TAKEN");
+                });
+    }
+
+    @Test
+    void createLocation_codeUniqueConstraintViolation_mapsToLocationCodeTaken() {
+        LocationRequestDTO request = validRequest("Race Code", "CODE-002");
+        LocationType locationType = LocationType.builder().id(UUID.randomUUID()).name("Shop").build();
+
+        when(locationTypeRepository.findByNameIgnoreCase("Shop")).thenReturn(Optional.of(locationType));
+        when(locationRepository.existsByNormalizedName("race code")).thenReturn(false);
+        when(locationRepository.saveAndFlush(any(Location.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates location_code_key"));
+
+        assertThatThrownBy(() -> locationService.createLocation(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> {
+                    ResponseStatusException ex = (ResponseStatusException) error;
+                    assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(ex.getReason()).contains("LOCATION_CODE_TAKEN");
                 });
     }
 
@@ -325,6 +400,36 @@ class LocationServiceTest {
 
         assertThat(response.getName()).isEqualTo("Renamed Location");
         assertThat(existing.getName()).isEqualTo("Renamed Location");
+    }
+
+    @Test
+    void patchLocation_serializesScheduleFieldsAsCanonicalJson() {
+        UUID id = UUID.randomUUID();
+        Location existing = savedLocation(id, validRequest("Patch Json", "PAT-JSON"),
+                LocationType.builder().id(UUID.randomUUID()).name("Shop").build());
+        LocationPatchRequest patch = LocationPatchRequest.builder()
+                .operatingHours(List.of(
+                        OperatingHoursRequest.builder().dayOfWeek("WEDNESDAY").openTime(LocalTime.of(10, 0))
+                                .closeTime(LocalTime.of(19, 0)).build(),
+                        OperatingHoursRequest.builder().dayOfWeek("MONDAY").openTime(LocalTime.of(8, 0))
+                                .closeTime(LocalTime.of(17, 0)).build()))
+                .holidayClosures(List.of(
+                        HolidayClosureRequest.builder().date(LocalDate.of(2026, 11, 26)).reason("Thanksgiving")
+                                .build(),
+                        HolidayClosureRequest.builder().date(LocalDate.of(2026, 1, 1)).reason("New Year").build()))
+                .build();
+
+        when(locationRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(locationRepository.saveAndFlush(any(Location.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        locationService.patchLocation(id, patch);
+
+        assertThat(existing.getOperatingHours()).isEqualTo(
+                "[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00:00\",\"closeTime\":\"17:00:00\"},"
+                        + "{\"dayOfWeek\":\"WEDNESDAY\",\"openTime\":\"10:00:00\",\"closeTime\":\"19:00:00\"}]");
+        assertThat(existing.getHolidayClosures()).isEqualTo(
+                "[{\"date\":\"2026-01-01\",\"reason\":\"New Year\"},"
+                        + "{\"date\":\"2026-11-26\",\"reason\":\"Thanksgiving\"}]");
     }
 
     @Test

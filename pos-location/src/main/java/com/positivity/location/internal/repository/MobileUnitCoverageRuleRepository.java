@@ -23,15 +23,13 @@ public interface MobileUnitCoverageRuleRepository extends JpaRepository<MobileUn
     @Query("""
             select r from MobileUnitCoverageRuleEntity r
             join r.mobileUnit mu
-            left join r.serviceArea sa
-            left join sa.postalCodes pc
+            join r.serviceArea sa
+            join sa.postalCodes pc
             where upper(mu.status) = 'ACTIVE'
               and (r.validFrom is null or r.validFrom <= :atDate)
               and (r.validTo is null or r.validTo >= :atDate)
-              and (
-                    upper(r.ruleType) = 'DISTANCE_TIER'
-                    or (pc.postalCode = :postalCode and upper(pc.countryCode) = upper(:countryCode))
-                  )
+              and pc.postalCode = :postalCode
+              and upper(pc.countryCode) = upper(:countryCode)
             order by r.priority asc
             """)
     List<MobileUnitCoverageRuleEntity> findEligibleCoverageRules(String postalCode, String countryCode,

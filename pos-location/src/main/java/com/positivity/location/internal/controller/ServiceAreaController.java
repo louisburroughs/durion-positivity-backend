@@ -54,6 +54,8 @@ public class ServiceAreaController {
 
     @Operation(summary = "Patch service area")
     @ApiResponse(responseCode = "200", description = "Service area patched")
+    @ApiResponse(responseCode = "400", description = "Invalid service area id")
+    @ApiResponse(responseCode = "404", description = "Service area not found")
     @PreAuthorize("hasAuthority('location.service-area.manage')")
     @PatchMapping("/{id}")
     public ResponseEntity<ServiceAreaResponse> patch(@PathVariable String id, @RequestBody Map<String, Object> patch) {

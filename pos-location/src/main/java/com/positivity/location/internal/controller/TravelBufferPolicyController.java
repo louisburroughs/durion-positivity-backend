@@ -54,6 +54,8 @@ public class TravelBufferPolicyController {
 
     @Operation(summary = "Patch travel buffer policy")
     @ApiResponse(responseCode = "200", description = "Travel buffer policy patched")
+    @ApiResponse(responseCode = "400", description = "Invalid travel buffer policy id")
+    @ApiResponse(responseCode = "404", description = "Travel buffer policy not found")
     @PreAuthorize("hasAuthority('location.travel-buffer-policy.manage')")
     @PatchMapping("/{id}")
     public ResponseEntity<TravelBufferPolicyResponse> patch(

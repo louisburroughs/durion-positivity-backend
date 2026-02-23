@@ -16,12 +16,16 @@ import com.positivity.location.internal.dto.MobileUnitResponse;
 import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
+import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
+import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
+import com.positivity.location.internal.service.MobileUnitServiceImpl;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -34,11 +38,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 /**
- * Unit tests for {@link MobileUnitService}.
+ * Unit tests for {@link MobileUnitServiceImpl}.
  *
  * Issue: #76
  */
@@ -57,8 +62,11 @@ class MobileUnitServiceTest {
     @Mock
     private TravelBufferPolicyRepository travelBufferPolicyRepository;
 
+    @Mock
+    private ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+
     @InjectMocks
-    private MobileUnitService service;
+    private MobileUnitServiceImpl service;
 
     @Test
     @DisplayName("#76 - ACTIVE mobile unit requires policy, capability, and active coverage")
@@ -109,52 +117,44 @@ class MobileUnitServiceTest {
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
                 .isInstanceOf(DuplicateResourceException.class)
-                .hasMessage("Mobile unit name already exists for base location");
+                .hasMessage("MOBILE_UNIT_NAME_TAKEN");
     }
 
     @Test
-    @DisplayName("#76 - duplicate name in same session returns conflict")
-    void shouldRejectDuplicateNameWithinSameSessionForBaseLocation() {
+    @DisplayName("#76 - duplicate name from db constraint maps to conflict")
+    void shouldMapDataIntegrityViolationToDuplicateResourceConflict() {
         UUID baseLocationId = UUID.randomUUID();
         when(mobileUnitRepository.existsByBaseLocationIdAndNameIgnoreCase(baseLocationId, "NorthVan"))
                 .thenReturn(false);
+        when(mobileUnitRepository.save(any(MobileUnitEntity.class)))
+                .thenThrow(new DataIntegrityViolationException("violates uq_mobile_unit_base_location_lower_name"));
 
-        MobileUnitEntity persisted = MobileUnitEntity.builder()
-                .id(UUID.randomUUID())
-                .name("NorthVan")
-                .baseLocationId(baseLocationId)
-                .status("INACTIVE")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
-        when(mobileUnitRepository.save(any(MobileUnitEntity.class))).thenReturn(persisted);
-
-        MobileUnitRequest first = MobileUnitRequest.builder()
-                .name("NorthVan")
-                .baseLocationId(baseLocationId)
-                .status("INACTIVE")
-                .build();
-        service.createMobileUnit(first);
-
-        MobileUnitRequest duplicate = MobileUnitRequest.builder()
+        MobileUnitRequest request = MobileUnitRequest.builder()
                 .name("NorthVan")
                 .baseLocationId(baseLocationId)
                 .status("INACTIVE")
                 .build();
 
-        assertThatThrownBy(() -> service.createMobileUnit(duplicate))
+        assertThatThrownBy(() -> service.createMobileUnit(request))
                 .isInstanceOf(DuplicateResourceException.class)
-                .hasMessage("Mobile unit name already exists for base location");
+                .hasMessage("MOBILE_UNIT_NAME_TAKEN");
     }
 
     @Test
     @DisplayName("#76 - invalid capability IDs are listed in validation error")
     void shouldListInvalidCapabilityIdsWhenCatalogValidationFails() {
+        ServiceLocationCapabilityEntity existing = ServiceLocationCapabilityEntity.builder()
+                .id(UUID.randomUUID())
+                .code("CAP-OK")
+                .name("Cap ok")
+                .active(true)
+                .build();
+        when(serviceLocationCapabilityRepository.findByCodeIn(anyList())).thenReturn(List.of(existing));
         List<String> capabilityIds = List.of("cap-ok", "cap-missing-1", "cap-missing-2");
 
         assertThatThrownBy(() -> service.validateCapabilityIds(capabilityIds))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid capabilityIds: cap-missing-1, cap-missing-2");
+                .hasMessage("Invalid capabilityIds: CAP-MISSING-1, CAP-MISSING-2");
     }
 
     @Test
@@ -193,6 +193,14 @@ class MobileUnitServiceTest {
                 .updatedAt(Instant.now())
                 .build();
         when(mobileUnitRepository.save(any(MobileUnitEntity.class))).thenReturn(savedEntity);
+        when(mobileUnitRepository.findById(savedId)).thenReturn(java.util.Optional.of(savedEntity));
+        when(serviceLocationCapabilityRepository.findAllById(any())).thenReturn(List.of(
+                ServiceLocationCapabilityEntity.builder()
+                        .id(UUID.fromString(requestCapabilityId()))
+                        .code("CAP-UUID")
+                        .name("Capability UUID")
+                        .active(true)
+                        .build()));
 
         List<MobileUnitCoverageRuleEntity> savedRules = List.of(
                 MobileUnitCoverageRuleEntity.builder()
@@ -217,7 +225,7 @@ class MobileUnitServiceTest {
                 .status("ACTIVE")
                 .travelBufferPolicyId(policyId)
                 .notes("ready")
-                .capabilityIds(List.of(UUID.randomUUID().toString()))
+                .capabilityIds(List.of(requestCapabilityId()))
                 .coverageRules(List.of(
                         CoverageRuleRequest.builder()
                                 .ruleType("DISTANCE_TIER")
@@ -238,6 +246,10 @@ class MobileUnitServiceTest {
         assertThat(response.getName()).isEqualTo("Unit-1");
         verify(coverageRuleRepository).deleteByMobileUnit_Id(savedId);
         verify(coverageRuleRepository).saveAll(anyList());
+    }
+
+    private static String requestCapabilityId() {
+        return "11111111-1111-1111-1111-111111111111";
     }
 
     @Test
@@ -342,6 +354,19 @@ class MobileUnitServiceTest {
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getMobileUnitId()).isEqualTo(unitId);
         assertThat(responses.get(0).getServiceAreaId()).isEqualTo(areaId);
+    }
+
+    @Test
+    @DisplayName("#76 - replace coverage rules missing mobile unit throws not found")
+    void shouldThrowWhenReplacingCoverageRulesForMissingMobileUnit() {
+        UUID unitId = UUID.randomUUID();
+        when(mobileUnitRepository.findById(unitId)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.replaceCoverageRules(unitId, List.of()))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Mobile unit not found");
+        verify(coverageRuleRepository, never()).deleteByMobileUnit_Id(unitId);
+        verify(coverageRuleRepository, never()).saveAll(anyList());
     }
 
     @Test
