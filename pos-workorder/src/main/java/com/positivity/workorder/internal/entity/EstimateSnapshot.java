@@ -3,12 +3,13 @@ package com.positivity.workorder.internal.entity;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -36,6 +37,8 @@ import lombok.ToString;
 public class EstimateSnapshot {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID", updatable = false)
     private UUID id;
 
@@ -60,9 +63,6 @@ public class EstimateSnapshot {
 
     @PrePersist
     protected void prePersist() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         if (capturedAt == null) {
             capturedAt = LocalDateTime.now();
         }

@@ -1,7 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -34,15 +34,10 @@ public class IdempotencyKey {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 
     @Column(nullable = false, unique = true, length = 255)
     private String keyValue;
@@ -71,10 +66,16 @@ public class IdempotencyKey {
     @Column(nullable = false)
     private Instant expiresAt;
 
+    @PrePersist
+    public void prePersist() {
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+    }
+
     public IdempotencyKey(String keyValue, UUID workorderId, Instant expiresAt) {
         this.keyValue = keyValue;
         this.workorderId = workorderId;
-        this.createdAt = Instant.now();
         this.expiresAt = expiresAt;
     }
 
@@ -82,7 +83,6 @@ public class IdempotencyKey {
         this.keyValue = keyValue;
         this.workorderId = workorderId;
         this.changeRequestId = changeRequestId;
-        this.createdAt = Instant.now();
         this.expiresAt = expiresAt;
     }
 }
