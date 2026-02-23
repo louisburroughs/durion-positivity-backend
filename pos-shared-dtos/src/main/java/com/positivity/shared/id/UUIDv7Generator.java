@@ -28,15 +28,8 @@ import com.github.f4b6a3.uuid.UuidCreator;
  *     &#64;code
  *     &#64;Entity
  *     public class MyEntity {
- *         &#64;Id
+ *         &#64;Id &#64;UUIDv7Id
  *         private UUID id;
- *
- *         @PrePersist
- *         public void generateId() {
- *             if (id == null) {
- *                 id = UUIDv7Generator.generate();
- *             }
- *         }
  *     }
  * }
  * </pre>
