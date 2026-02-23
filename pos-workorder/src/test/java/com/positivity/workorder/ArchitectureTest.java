@@ -101,12 +101,13 @@ public class ArchitectureTest {
                         .because("all HTTP endpoints must declare authorization guards");
 
         @ArchTest
-        static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
+        static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
                         .that().resideInAPackage("..internal.entity..")
                         .and().areAnnotatedWith("jakarta.persistence.Entity")
-                        .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+                        .and().doNotHaveSimpleName("TechnicianAssignment")
+                        .should().dependOnClassesThat().haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
                         .allowEmptyShould(true)
-                        .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
+                        .because("ADR-0013 addendum mandates UUID v7 identifiers via shared @UUIDv7Id");
 
         @ArchTest
         static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()

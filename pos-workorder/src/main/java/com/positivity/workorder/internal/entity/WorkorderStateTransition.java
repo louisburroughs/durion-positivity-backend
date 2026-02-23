@@ -1,8 +1,22 @@
 package com.positivity.workorder.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
-import jakarta.persistence.*;
-import lombok.*;
+import com.positivity.shared.id.UUIDv7Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -13,8 +27,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Table(name = "work_order_state_transitions")
+@EntityListeners(AuditingEntityListener.class)
 public class WorkorderStateTransition {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -32,6 +49,7 @@ public class WorkorderStateTransition {
     @Column(nullable = false)
     private Instant transitionedAt;
 
+    @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
@@ -46,19 +64,8 @@ public class WorkorderStateTransition {
 
     @PrePersist
     protected void prePersist() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         if (transitionedAt == null) {
             transitionedAt = Instant.now();
         }
-        if (updatedAt == null) {
-            updatedAt = LocalDateTime.now();
-        }
-    }
-
-    @PreUpdate
-    protected void preUpdate() {
-        updatedAt = LocalDateTime.now();
     }
 }

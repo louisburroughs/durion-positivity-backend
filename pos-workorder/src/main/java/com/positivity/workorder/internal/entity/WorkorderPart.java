@@ -1,10 +1,12 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.workorder.internal.enums.PriceLockStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.*;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -22,28 +24,17 @@ import java.util.UUID;
 }, check = {
         @CheckConstraint(name = "ck_workorder_part_has_reference", constraint = "work_order_service_id IS NOT NULL OR work_order_id IS NOT NULL")
 })
+@EntityListeners(AuditingEntityListener.class)
 public class WorkorderPart {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
+    @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-        if (updatedAt == null) {
-            updatedAt = LocalDateTime.now();
-        }
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "work_order_service_id", nullable = true) // Allow standalone parts not tied to a service

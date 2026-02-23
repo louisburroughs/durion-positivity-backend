@@ -1,10 +1,11 @@
 package com.positivity.workorder.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -29,6 +30,8 @@ import lombok.NoArgsConstructor;
 public class WorkOrderPartSubstitution {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID substitutionId;
 
@@ -64,9 +67,6 @@ public class WorkOrderPartSubstitution {
 
     @PrePersist
     public void prePersist() {
-        if (substitutionId == null) {
-            substitutionId = UUIDv7Generator.generate();
-        }
         if (selectedAt == null) {
             selectedAt = Instant.now();
         }

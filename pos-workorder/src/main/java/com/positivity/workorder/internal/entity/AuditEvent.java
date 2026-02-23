@@ -1,8 +1,20 @@
 package com.positivity.workorder.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
-import jakarta.persistence.*;
-import lombok.*;
+import com.positivity.shared.id.UUIDv7Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -13,8 +25,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Table(name = "audit_events")
+@EntityListeners(AuditingEntityListener.class)
 public class AuditEvent {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -30,6 +45,7 @@ public class AuditEvent {
     @Column(nullable = false)
     private Instant eventTimestamp;
 
+    @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
@@ -41,19 +57,8 @@ public class AuditEvent {
 
     @PrePersist
     protected void prePersist() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         if (eventTimestamp == null) {
             eventTimestamp = Instant.now();
         }
-        if (updatedAt == null) {
-            updatedAt = LocalDateTime.now();
-        }
-    }
-
-    @PreUpdate
-    protected void preUpdate() {
-        updatedAt = LocalDateTime.now();
     }
 }
