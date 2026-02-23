@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -61,13 +62,14 @@ public class MobileUnitController {
 
     @Operation(summary = "Get mobile unit", description = "Get a mobile unit by ID.")
     @ApiResponse(responseCode = "200", description = "Mobile unit returned.")
+    @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     @PreAuthorize("hasAuthority('location.mobile-unit.read')")
     @GetMapping("/{id}")
     public ResponseEntity<MobileUnitResponse> getMobileUnitById(
             @Parameter(description = "Mobile unit ID") @PathVariable UUID id) {
-        MobileUnitResponse response = mobileUnitService.getById(id)
-                .orElseGet(() -> MobileUnitResponse.builder().id(id).status("INACTIVE").build());
-        return ResponseEntity.ok(response);
+        return mobileUnitService.getById(id)
+                .map(ResponseEntity::ok)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mobile unit not found"));
     }
 
     @Operation(summary = "Patch mobile unit", description = "Partially update a mobile unit.")
@@ -83,6 +85,7 @@ public class MobileUnitController {
 
     @Operation(summary = "Replace coverage rules", description = "Atomically replace coverage rules for a mobile unit.")
     @ApiResponse(responseCode = "200", description = "Coverage rules replaced successfully.")
+    @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     @EmitEvent(id = "LOCATION_COVERAGE_RULES_REPLACE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location.mobile-unit.manage')")
     @PutMapping("/{id}/coverage-rules")

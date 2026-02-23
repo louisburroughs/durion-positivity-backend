@@ -10,7 +10,10 @@ import static org.mockito.Mockito.when;
 import com.positivity.location.internal.dto.TravelBufferPolicyRequest;
 import com.positivity.location.internal.dto.TravelBufferPolicyResponse;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
+import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
+import com.positivity.location.internal.service.TravelBufferPolicyServiceImpl;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -21,6 +24,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Service-layer RED tests for Travel Buffer Policy behavior.
@@ -37,7 +42,7 @@ class TravelBufferPolicyServiceTest {
     private TravelBufferPolicyRepository repository;
 
     @InjectMocks
-    private TravelBufferPolicyService service;
+    private TravelBufferPolicyServiceImpl service;
 
     @Test
     @DisplayName("#76 - create policy persists name, type and value")
@@ -65,6 +70,23 @@ class TravelBufferPolicyServiceTest {
         assertThat(created.getName()).isEqualTo("Standard Buffer");
         assertThat(created.getBufferType()).isEqualTo("FLAT_MINUTES");
         assertThat(created.getBufferValue()).isEqualByComparingTo("15");
+    }
+
+    @Test
+    @DisplayName("#76 - create duplicate travel buffer policy name maps to conflict code")
+    void shouldMapDuplicateNameConstraintToConflictCode() {
+        when(repository.save(any(TravelBufferPolicyEntity.class)))
+                .thenThrow(new DataIntegrityViolationException("violates travel_buffer_policies_name_key"));
+
+        Map<String, Object> request = Map.of(
+                "name", "Standard Buffer",
+                "bufferType", "FLAT_MINUTES",
+                "bufferValue", new BigDecimal("15"),
+                "notes", "default policy");
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessage("TRAVEL_BUFFER_POLICY_NAME_TAKEN");
     }
 
     @Test
@@ -151,18 +173,27 @@ class TravelBufferPolicyServiceTest {
     }
 
     @Test
-    @DisplayName("#76 - patch not found returns synthesized response")
-    void shouldReturnFallbackWhenPatchTargetMissing() {
-        when(repository.findById(any(java.util.UUID.class))).thenReturn(java.util.Optional.empty());
-
-        TravelBufferPolicyResponse updated = service.patch("not-a-uuid", Map.of(
+    @DisplayName("#76 - patch invalid id returns bad request")
+    void shouldRejectPatchWhenIdIsInvalid() {
+        assertThatThrownBy(() -> service.patch("not-a-uuid", Map.of(
                 "bufferType", "FLAT_MINUTES",
-                "bufferValue", 12,
-                "notes", "generated id"));
+                "bufferValue", 12)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST");
+        verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
+    }
 
-        assertThat(updated).isNotNull();
-        assertThat(updated.getBufferType()).isEqualTo("FLAT_MINUTES");
-        assertThat(updated.getBufferValue()).isEqualByComparingTo("12.0");
+    @Test
+    @DisplayName("#76 - patch missing policy throws not found")
+    void shouldThrowWhenPatchTargetMissing() {
+        java.util.UUID policyId = java.util.UUID.randomUUID();
+        when(repository.findById(policyId)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.patch(policyId.toString(), Map.of(
+                "bufferType", "FLAT_MINUTES",
+                "bufferValue", 12)))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Travel buffer policy not found");
         verify(repository, never()).save(any(TravelBufferPolicyEntity.class));
     }
 

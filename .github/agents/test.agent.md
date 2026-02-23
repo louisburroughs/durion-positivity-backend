@@ -1,7 +1,7 @@
 ---
 name: "Backend Testing Agent"
 description: "TDD test-first specialist for Spring Boot modules in durion-positivity-backend"
-model: GPT-5.3-Codex (copilot)
+model: Claude Opus 4.6 (copilot)
 tools:
   - 'vscode/getProjectSetupInfo'
   - 'vscode/installExtension'

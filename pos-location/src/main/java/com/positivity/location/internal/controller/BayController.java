@@ -50,10 +50,6 @@ public class BayController {
 
     private final BayService bayService;
 
-    public BayController() {
-        this.bayService = null;
-    }
-
     public BayController(BayService bayService) {
         this.bayService = bayService;
     }

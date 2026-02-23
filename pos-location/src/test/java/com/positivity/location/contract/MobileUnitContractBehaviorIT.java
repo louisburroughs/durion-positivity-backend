@@ -61,10 +61,10 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("#76 - GET /v1/mobile-units/{id} returns 200")
-    void shouldGetMobileUnitById() throws Exception {
+    @DisplayName("#76 - GET /v1/mobile-units/{id} returns 404 when missing")
+    void shouldReturnNotFoundWhenMobileUnitMissing() throws Exception {
         mockMvc.perform(withGatewayAuth(get("/v1/mobile-units/{id}", "018f1f5a-a222-7333-8222-222222222222")))
-                .andExpect(status().isOk());
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -84,8 +84,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("#76 - PUT /v1/mobile-units/{id}/coverage-rules returns 200 for atomic replace")
-    void shouldReplaceCoverageRulesAtomically() throws Exception {
+    @DisplayName("#76 - PUT /v1/mobile-units/{id}/coverage-rules returns 404 when mobile unit missing")
+    void shouldReturnNotFoundWhenReplacingCoverageRulesForMissingMobileUnit() throws Exception {
         String payload = """
                 {
                   "rules": [
@@ -104,7 +104,7 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                 withGatewayAuth(put("/v1/mobile-units/{id}/coverage-rules", "018f1f5a-a222-7333-8222-222222222222")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
-                .andExpect(status().isOk());
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -143,8 +143,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("#76 - PATCH /v1/service-areas/{id} returns 200")
-    void shouldPatchServiceArea() throws Exception {
+    @DisplayName("#76 - PATCH /v1/service-areas/{id} returns 404 when missing")
+    void shouldReturnNotFoundWhenPatchingMissingServiceArea() throws Exception {
         String payload = """
                 {
                   "active": false
@@ -154,7 +154,22 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withGatewayAuth(patch("/v1/service-areas/{id}", "018f1f5a-a555-7333-8222-555555555555")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)))
-                .andExpect(status().isOk());
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("#76 - PATCH /v1/service-areas/{id} returns 400 for invalid id")
+    void shouldReturnBadRequestForInvalidServiceAreaId() throws Exception {
+        String payload = """
+                {
+                  "active": false
+                }
+                """;
+
+        mockMvc.perform(withGatewayAuth(patch("/v1/service-areas/{id}", "bad-id")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -183,8 +198,8 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("#76 - PATCH /v1/travel-buffer-policies/{id} returns 200")
-    void shouldPatchTravelBufferPolicy() throws Exception {
+    @DisplayName("#76 - PATCH /v1/travel-buffer-policies/{id} returns 404 when missing")
+    void shouldReturnNotFoundWhenPatchingMissingTravelBufferPolicy() throws Exception {
         String payload = """
                 {
                   "bufferValue": 20
@@ -194,7 +209,22 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withGatewayAuth(patch("/v1/travel-buffer-policies/{id}", "018f1f5a-a666-7333-8222-666666666666")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)))
-                .andExpect(status().isOk());
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("#76 - PATCH /v1/travel-buffer-policies/{id} returns 400 for invalid id")
+    void shouldReturnBadRequestForInvalidTravelBufferPolicyId() throws Exception {
+        String payload = """
+                {
+                  "bufferValue": 20
+                }
+                """;
+
+        mockMvc.perform(withGatewayAuth(patch("/v1/travel-buffer-policies/{id}", "not-a-uuid")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

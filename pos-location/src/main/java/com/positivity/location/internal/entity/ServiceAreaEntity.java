@@ -47,7 +47,7 @@ public class ServiceAreaEntity {
     private Boolean active = Boolean.TRUE;
 
     @Builder.Default
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "service_area_postal_codes", joinColumns = @JoinColumn(name = "service_area_id"))
     private Set<ServiceAreaPostalCodeValue> postalCodes = new HashSet<>();
 
