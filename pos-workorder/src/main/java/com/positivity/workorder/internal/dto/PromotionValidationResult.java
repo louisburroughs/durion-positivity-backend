@@ -1,4 +1,4 @@
-package com.positivity.workorder.service;
+package com.positivity.workorder.internal.dto;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;

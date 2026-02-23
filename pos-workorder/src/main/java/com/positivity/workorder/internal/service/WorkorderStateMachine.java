@@ -1,10 +1,11 @@
-package com.positivity.workorder.service;
+package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.entity.*;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
+import com.positivity.workorder.service.ChangeRequestService;
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.AuditEventRepository;

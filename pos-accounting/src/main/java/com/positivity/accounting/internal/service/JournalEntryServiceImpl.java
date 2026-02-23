@@ -206,7 +206,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         JournalEntry reversal = new JournalEntry();
         reversal.setJournalEntryId(UUID.randomUUID());
         reversal.setTransactionDate(LocalDateTime.now());
-        reversal.setDescription("Reversal of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
+        reversal.setDescription("REVERSAL of " + original.getJournalEntryId() + " - Reason: " + reversalReason);
         reversal.setSourceEventId(original.getSourceEventId());
         reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
         reversal.setPostedAt(Instant.now());

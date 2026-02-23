@@ -47,6 +47,8 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
+import com.positivity.workorder.internal.service.WorkorderServiceImpl;
+import com.positivity.workorder.internal.service.WorkorderStateMachine;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -98,8 +100,7 @@ class WorkorderCompletionTest {
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
-    @InjectMocks
-    private WorkorderService workOrderService;
+    private WorkorderServiceImpl workOrderService;
 
     private Workorder testWorkorder;
     private UUID userId;
@@ -137,7 +138,7 @@ class WorkorderCompletionTest {
 
         // Re-inject mocks for WorkorderService since it has WorkorderStateMachine as
         // dependency
-        workOrderService = new WorkorderService(workOrderRepository, estimateRepository, estimateItemRepository,
+        workOrderService = new WorkorderServiceImpl(workOrderRepository, estimateRepository, estimateItemRepository,
                 workorderServiceRepository, workorderPartRepository, restClient, stateMachine,
                 auditEventRepository, idempotencyService, promotionValidationService);
     }

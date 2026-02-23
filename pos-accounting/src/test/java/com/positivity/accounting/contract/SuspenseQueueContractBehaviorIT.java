@@ -14,6 +14,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
@@ -22,6 +23,7 @@ import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 
 import java.time.Instant;
 
@@ -42,8 +44,16 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
 
         @Autowired
         private AccountingEventRepository accountingEventRepository;
+        @Autowired
+        private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
 
         private static final String API_V1 = "/v1/accounting/events";
+
+        @BeforeEach
+        void setUp() {
+                reprocessingAttemptHistoryRepository.deleteAll();
+                accountingEventRepository.deleteAll();
+        }
 
         // ===============================================
         // HAPPY PATH SCENARIOS
@@ -329,6 +339,7 @@ public class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest
                 AccountingEvent event = new AccountingEvent();
                 event.setEventType("INVOICE_RECEIVED");
                 event.setOrganizationId(UUID.randomUUID());
+                event.setSourceSystem("TEST_SYSTEM");
                 event.setTransactionDate(LocalDateTime.now());
                 event.setPayload(Map.of(
                                 "invoiceId", "INV-PROCESSED",

@@ -2,6 +2,8 @@ package com.positivity.accounting.internal.dto;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,5 +40,15 @@ public class PagedResponse<T> {
         this.pageSize = pageSize;
         this.totalCount = totalCount;
         this.totalPages = (int) Math.ceil((double) totalCount / pageSize);
+    }
+
+    @JsonProperty("content")
+    public List<T> getContent() {
+        return items;
+    }
+
+    @JsonProperty("totalElements")
+    public Long getTotalElements() {
+        return totalCount;
     }
 }

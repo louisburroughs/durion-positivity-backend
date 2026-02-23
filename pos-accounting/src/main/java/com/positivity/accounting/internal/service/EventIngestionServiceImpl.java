@@ -4,7 +4,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.HexFormat;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -105,26 +107,27 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      */
     @Override
     public AccountingEventResponse submitEvent(Map<String, Object> event) {
-        UUID organizationId = (UUID) event.get(ORGANIZATION_ID);
-        String sourceSystem = (String) event.get(SOURCE_SYSTEM);
-        LocalDateTime transactionDate = (LocalDateTime) event.get(TRANSACTION_DATE);
-        String eventType = (String) event.get(EVENT_TYPE);
+        Map<String, Object> mutableEvent = new HashMap<>(event);
+        UUID organizationId = parseUuid(mutableEvent.get(ORGANIZATION_ID));
+        String sourceSystem = (String) mutableEvent.get(SOURCE_SYSTEM);
+        LocalDateTime transactionDate = parseLocalDateTime(mutableEvent.get(TRANSACTION_DATE));
+        String eventType = (String) mutableEvent.get(EVENT_TYPE);
 
         // Keep backward compatibility for older clients that omit these fields.
         if (sourceSystem == null || sourceSystem.isBlank()) {
             sourceSystem = "POS_ACCOUNTING_API";
-            event.put(SOURCE_SYSTEM, sourceSystem);
+            mutableEvent.put(SOURCE_SYSTEM, sourceSystem);
         }
         if (transactionDate == null) {
             transactionDate = LocalDateTime.now();
-            event.put(TRANSACTION_DATE, transactionDate);
+            mutableEvent.put(TRANSACTION_DATE, transactionDate);
         }
 
         log.info("Processing event type {} for org {} from {} on {}",
                 eventType, organizationId, sourceSystem, transactionDate);
 
         // Validate event structure
-        List<String> errors = validateEvent(event);
+        List<String> errors = validateEvent(mutableEvent);
         if (!errors.isEmpty()) {
             String msg = "Event validation failed: " + String.join("; ", errors);
             log.warn(msg);
@@ -132,7 +135,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         }
 
         // Idempotency check — reject duplicate events based on content hash
-        String contentHash = computeEventHash(event);
+        String contentHash = computeEventHash(mutableEvent);
         if (idempotencyService.isKeyProcessed(contentHash)) {
             throw new DuplicateEventException(
                     "Duplicate event detected for org " + organizationId + " from " + sourceSystem);
@@ -140,7 +143,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         // Accept event with RECEIVED status and persist to database
         // Let @PrePersist generate UUIDv7 for time-ordered indexing unless provided
-        UUID eventId = (UUID) event.get("eventId");
+        UUID eventId = (UUID) mutableEvent.get("eventId");
 
         AccountingEvent accountingEvent = new AccountingEvent();
         if (eventId != null) {
@@ -150,7 +153,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         accountingEvent.setSourceSystem(sourceSystem);
         accountingEvent.setEventType(eventType);
         accountingEvent.setTransactionDate(transactionDate);
-        accountingEvent.setPayload(event);
+        accountingEvent.setPayload(mutableEvent);
         accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
 
         accountingEvent = accountingEventRepository.save(accountingEvent);
@@ -196,9 +199,14 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      */
     @Override
     public AccountingEventResponse retryEventProcessing(UUID eventId) {
-        Map<String, Object> eventRecord = getEvent(eventId);
+        AccountingEvent accountingEvent = accountingEventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
         log.info("Retrying event {}", eventId);
-        return submitEvent(eventRecord);
+
+        accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
+        accountingEvent.setErrorMessage(null);
+
+        return AccountingEventMapper.toEventResponse(accountingEventRepository.save(accountingEvent));
     }
 
     /**
@@ -517,6 +525,30 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         } catch (NoSuchAlgorithmException e) {
             // SHA-256 is always available in standard JDKs
             throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
+
+    private UUID parseUuid(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof UUID uuidValue) {
+            return uuidValue;
+        }
+        return UUID.fromString(String.valueOf(value));
+    }
+
+    private LocalDateTime parseLocalDateTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDateTime dateTimeValue) {
+            return dateTimeValue;
+        }
+        try {
+            return LocalDateTime.parse(String.valueOf(value));
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("transactionDate must be a valid ISO-8601 datetime", ex);
         }
     }
 }

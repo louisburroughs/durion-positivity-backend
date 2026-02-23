@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -35,6 +36,7 @@ public class WorkorderDetailController {
     private final WorkorderDetailService workorderDetailService;
 
     @GetMapping("/{workorderId}/detail")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get workorder detail with role-based visibility", description = "Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. "
             +
             "Capability flags indicate which actions the user can perform.", responses = {

@@ -59,9 +59,10 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         {
           "organizationId": "%s",
           "accountCode": "1000",
+          "accountName": "Cash",
           "description": "Cash - Operating Account",
           "accountType": "ASSET",
-          "postingCategory": "OPERATING"
+          "activationDate": "2025-01-01T00:00:00"
         }
         """.formatted(ORG_ID);
 
@@ -139,7 +140,9 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         {
           "organizationId": "%s",
           "accountCode": "4000",
-          "accountType": "ASSET"
+          "accountName": "Unauthorized Cash",
+          "accountType": "ASSET",
+          "activationDate": "2025-01-01T00:00:00"
         }
         """.formatted(ORG_ID);
 
@@ -542,7 +545,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     mockMvc.perform(withAuth(post(BASE_URL + "/events"))
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
-        .andExpect(status().isCreated())
+        .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.eventId", notNullValue()))
         .andExpect(jsonPath("$.status").value("RECEIVED"));
   }
@@ -564,7 +567,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     mockMvc.perform(withAuth(post(BASE_URL + "/events"))
         .contentType(MediaType.APPLICATION_JSON)
         .content(eventPayload))
-        .andExpect(status().isCreated())
+        .andExpect(status().isAccepted())
         .andReturn();
 
     // Submit duplicate

@@ -9,6 +9,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * DTO for creating a new GL Account.
@@ -23,10 +26,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GLAccountCreateRequest {
 
+    @NotBlank(message = "accountCode is required")
+    @Pattern(regexp = "^\\d{4}(-\\d{3})?$", message = "accountCode must match #### or ####-###")
     private String accountCode;
+
+    @NotBlank(message = "accountName is required")
     private String accountName;
+
+    @NotNull(message = "accountType is required")
     private AccountType accountType;
     private String description;
     private UUID parentAccountId;
+
+    @NotNull(message = "activationDate is required")
     private LocalDateTime activationDate;
 }

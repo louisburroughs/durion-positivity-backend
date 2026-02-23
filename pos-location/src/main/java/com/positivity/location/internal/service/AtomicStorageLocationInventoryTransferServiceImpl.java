@@ -3,7 +3,7 @@ package com.positivity.location.internal.service;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.service.StorageLocationInventoryTransferService;
-
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +22,6 @@ public class AtomicStorageLocationInventoryTransferServiceImpl implements Storag
     public void transferAll(StorageLocationEntity source, StorageLocationEntity destination) {
         destination.setInventoryCount(destination.getInventoryCount() + source.getInventoryCount());
         source.setInventoryCount(0);
-        storageLocationRepository.save(destination);
+        storageLocationRepository.saveAll(List.of(source, destination));
     }
 }

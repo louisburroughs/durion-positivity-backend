@@ -1,4 +1,4 @@
-package com.positivity.tax.internal.service;
+package com.positivity.tax.internal.exception;
 
 /**
  * Exception thrown when tax calculation fails.

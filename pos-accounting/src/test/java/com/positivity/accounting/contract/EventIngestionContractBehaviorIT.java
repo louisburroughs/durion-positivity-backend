@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 
 /**
  * Contract Behavioral Integration Tests for Event Ingestion operations.
@@ -48,6 +49,8 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private AccountingEventRepository accountingEventRepository;
+    @Autowired
+    private ReprocessingAttemptHistoryRepository reprocessingAttemptHistoryRepository;
 
     private static final String API_V1_EVENTS = "/v1/accounting/events";
 
@@ -57,12 +60,14 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
     @BeforeEach
     void setUp() {
         // Clean up before each test
+        reprocessingAttemptHistoryRepository.deleteAll();
         accountingEventRepository.deleteAll();
         testOrganizationId = UUID.randomUUID();
     }
 
     @AfterEach
     void tearDown() {
+        reprocessingAttemptHistoryRepository.deleteAll();
         accountingEventRepository.deleteAll();
     }
 

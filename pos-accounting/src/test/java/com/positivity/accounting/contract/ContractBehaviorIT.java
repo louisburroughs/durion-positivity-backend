@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -24,6 +26,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 
 /**
  * Contract Behavioral Integration Tests for Accounting Service
@@ -43,6 +47,10 @@ import com.positivity.accounting.internal.enums.AccountType;
 @ActiveProfiles("test")
 @DisplayName("Accounting Backend Contract Behavioral Tests")
 public class ContractBehaviorIT extends BaseContractIntegrationTest {
+        @Autowired
+        private JournalEntryRepository journalEntryRepository;
+        @Autowired
+        private GLAccountRepository glAccountRepository;
 
         private static final String API_V1 = "/v1/accounting";
 
@@ -64,6 +72,12 @@ public class ContractBehaviorIT extends BaseContractIntegrationTest {
                         "accounting:posting-category:edit", "accounting:posting-category:deactivate",
                         "accounting:mapping-key:view", "accounting:mapping-key:create",
                         "accounting:mapping-key:edit", "accounting:mapping-key:deactivate");
+
+        @BeforeEach
+        void cleanState() {
+                journalEntryRepository.deleteAll();
+                glAccountRepository.deleteAll();
+        }
 
         /**
          * Adds gateway authentication headers to a request builder.

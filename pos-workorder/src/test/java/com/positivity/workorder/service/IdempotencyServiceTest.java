@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.positivity.workorder.internal.entity.IdempotencyKey;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
+import com.positivity.workorder.internal.service.IdempotencyServiceImpl;
 
 /**
  * Unit tests for IdempotencyService
@@ -35,7 +36,7 @@ class IdempotencyServiceTest {
     private IdempotencyKeyRepository repository;
 
     @InjectMocks
-    private IdempotencyService service;
+    private IdempotencyServiceImpl service;
 
     private String testKeyValue;
     private UUID testWorkorderId;
@@ -117,12 +118,11 @@ class IdempotencyServiceTest {
         when(repository.save(any(IdempotencyKey.class))).thenAnswer(invocation -> {
             IdempotencyKey saved = invocation.getArgument(0);
             Instant expectedExpiry = beforeCall.plus(24, ChronoUnit.HOURS);
-            
+
             // Allow 1 second tolerance for test execution time
             assertThat(saved.getExpiresAt()).isBetween(
-                expectedExpiry.minus(1, ChronoUnit.SECONDS),
-                expectedExpiry.plus(1, ChronoUnit.SECONDS)
-            );
+                    expectedExpiry.minus(1, ChronoUnit.SECONDS),
+                    expectedExpiry.plus(1, ChronoUnit.SECONDS));
             assertThat(saved.getKeyValue()).isEqualTo(testKeyValue);
             assertThat(saved.getWorkorderId()).isEqualTo(testWorkorderId);
             return saved;
@@ -175,9 +175,8 @@ class IdempotencyServiceTest {
             Instant passedTime = invocation.getArgument(0);
             // Allow 1 second tolerance
             assertThat(passedTime).isBetween(
-                beforeCall.minus(1, ChronoUnit.SECONDS),
-                Instant.now().plus(1, ChronoUnit.SECONDS)
-            );
+                    beforeCall.minus(1, ChronoUnit.SECONDS),
+                    Instant.now().plus(1, ChronoUnit.SECONDS));
             return 0;
         });
 
