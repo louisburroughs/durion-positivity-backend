@@ -126,7 +126,7 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
                 response(UUID.randomUUID(), "Bin-A", StorageLocationType.BIN, "ACTIVE"),
                 response(UUID.randomUUID(), "Shelf-B", StorageLocationType.SHELF, "ACTIVE")));
 
-        when(storageLocationService.listStorageLocations(eq(SITE_ID), any(), any()))
+        when(storageLocationService.listStorageLocations(eq(SITE_ID), any(), any(), any()))
                 .thenReturn(page);
 
         mockMvc.perform(withGatewayAuth(get("/v1/locations/{siteId}/storage-locations", SITE_ID)))
@@ -145,7 +145,7 @@ class StorageLocationContractBehaviorIT extends BaseContractIntegrationTest {
         Page<StorageLocationResponse> page = new PageImpl<>(
                 List.of(response(UUID.randomUUID(), "Bin-A", StorageLocationType.BIN, "ACTIVE")));
 
-        when(storageLocationService.listStorageLocations(eq(SITE_ID), eq(StorageLocationType.BIN), any()))
+        when(storageLocationService.listStorageLocations(eq(SITE_ID), eq(StorageLocationType.BIN), any(), any()))
                 .thenReturn(page);
 
         mockMvc.perform(withGatewayAuth(get("/v1/locations/{siteId}/storage-locations", SITE_ID)

@@ -1,6 +1,7 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.location.internal.enums.StorageLocationType;
+import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -42,9 +43,10 @@ public class StorageLocationEntity {
     @Column(nullable = false, length = 50)
     private StorageLocationType type;
 
+    @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(nullable = false, length = 20)
-    private String status = "ACTIVE";
+    private StorageLocationStatus status = StorageLocationStatus.ACTIVE;
 
     @Column(name = "site_id", nullable = false, columnDefinition = "UUID")
     private UUID siteId;
@@ -61,8 +63,8 @@ public class StorageLocationEntity {
         if (id == null) {
             id = UUIDv7Generator.generate();
         }
-        if (status == null || status.isBlank()) {
-            status = "ACTIVE";
+        if (status == null) {
+            status = StorageLocationStatus.ACTIVE;
         }
     }
 }

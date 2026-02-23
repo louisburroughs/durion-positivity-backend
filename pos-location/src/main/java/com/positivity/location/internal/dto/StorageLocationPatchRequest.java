@@ -1,6 +1,7 @@
 package com.positivity.location.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.positivity.location.internal.enums.StorageLocationStatus;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +22,7 @@ public class StorageLocationPatchRequest {
 
     private String name;
     private String barcode;
-    private String status;
+    private StorageLocationStatus status;
     private UUID parentStorageLocationId;
     private UUID destinationStorageLocationId;
 }
