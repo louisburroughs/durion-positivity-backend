@@ -12,11 +12,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Id;
 
+import jakarta.annotation.Generated;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -29,6 +31,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Location aggregate representing physical sites, warehouses, or other operational locations.
+ *
+ * Issue: CAP-214 #38   
+ * 
+ * 
+ * The @UUIDv7Id annotation is designed to work with the UUIDv7Generator, which automatically generates UUIDv7 values for the annotated field.
+ * By simply annotating the id field with @UUIDv7Id, you are instructing Hibernate to use the UUIDv7Generator for generating values for that field. 
+ * 
+ */
 @Entity
 @Data
 @NoArgsConstructor
