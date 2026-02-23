@@ -6,7 +6,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.inventory.internal.enums.TaskStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -38,15 +38,10 @@ import java.util.UUID;
 public class CycleCountTask {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "task_id", updatable = false, nullable = false)
     private UUID taskId;
-
-    @PrePersist
-    public void generateId() {
-        if (taskId == null) {
-            taskId = UUIDv7Generator.generate();
-        }
-    }
 
     /**
      * Storage bin location identifier.

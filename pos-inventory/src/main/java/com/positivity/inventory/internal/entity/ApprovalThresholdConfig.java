@@ -10,7 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 
 import com.positivity.inventory.internal.enums.ApprovalTier;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,6 +35,8 @@ import java.util.UUID;
 public class ApprovalThresholdConfig {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     private UUID configId;
 
     /**
@@ -89,10 +91,4 @@ public class ApprovalThresholdConfig {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    @PrePersist
-    protected void onCreate() {
-        if (configId == null) {
-            configId = UUIDv7Generator.generate();
-        }
-    }
 }

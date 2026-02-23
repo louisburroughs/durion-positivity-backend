@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,6 +28,8 @@ import java.util.UUID;
 public class InventoryLedgerEntry {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     private UUID ledgerEntryId;
 
     /**
@@ -96,9 +98,6 @@ public class InventoryLedgerEntry {
 
     @PrePersist
     protected void onCreate() {
-        if (ledgerEntryId == null) {
-            ledgerEntryId = UUIDv7Generator.generate();
-        }
         if (timestamp == null) {
             timestamp = Instant.now();
         }
