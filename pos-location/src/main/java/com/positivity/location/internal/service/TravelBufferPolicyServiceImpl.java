@@ -77,9 +77,8 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         if (repository != null) {
             try {
                 TravelBufferPolicyEntity persisted = repository.save(entity);
-                if (persisted != null) {
-                    saved = persisted;
-                }
+                saved = persisted;
+
             } catch (DataIntegrityViolationException exception) {
                 throw toTravelBufferPolicyConflictException(exception);
             }
@@ -195,7 +194,9 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
         }
     }
 
-    private DuplicateResourceException toTravelBufferPolicyConflictException(DataIntegrityViolationException exception) {
+    private DuplicateResourceException toTravelBufferPolicyConflictException(
+
+            DataIntegrityViolationException exception) {
         if (isNameConstraintViolation(exception)) {
             return new DuplicateResourceException(TRAVEL_BUFFER_POLICY_NAME_TAKEN);
         }

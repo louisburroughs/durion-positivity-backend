@@ -2,9 +2,13 @@ package com.positivity.location.internal.controller;
 
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,12 +24,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.location.internal.dto.LocationRef;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
 import com.positivity.location.internal.dto.LocationPatchRequest;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.PersonDTO;
+import com.positivity.location.service.LocationRosterService;
 import com.positivity.location.service.LocationService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +48,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class LocationController {
     private final LocationService locationService;
+    private final LocationRosterService locationRosterService;
 
     @Operation(summary = "Get all locations", description = "Retrieve a list of all locations.")
     @ApiResponse(responseCode = "200", description = "List of locations returned successfully.")
@@ -49,6 +56,18 @@ public class LocationController {
     @GetMapping
     public List<LocationResponseDTO> getAllLocations() {
         return locationService.getAllLocationsDto();
+    }
+
+    @Operation(summary = "Get location roster", description = "Retrieve paginated location refs for sync consumers.")
+    @ApiResponse(responseCode = "200", description = "Location roster returned successfully.")
+    @PreAuthorize("hasAuthority('location:read')")
+    @EmitEvent(id = "LOCATION_ROSTER_GET", apiVersion = "1")
+    @GetMapping("/roster")
+    public Page<LocationRef> getRoster(
+            @Parameter(description = "Optional status filter", example = "ACTIVE") @RequestParam(required = false) String status,
+            @Parameter(description = "Optional since-updated-at filter", example = "2026-01-01T00:00:00Z") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant sinceUpdatedAt,
+            Pageable pageable) {
+        return locationRosterService.getRoster(status, sinceUpdatedAt, pageable);
     }
 
     @Operation(summary = "Get location by ID", description = "Retrieve a location by its unique ID.")

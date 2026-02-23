@@ -28,6 +28,9 @@ public final class LocationEventTypes {
         public static final EventTypeRegistration LOCATION_PARENT_ADD = EventTypeRegistration
                         .write("LOCATION_PARENT_ADD", "Add a parent relationship to a location").build();
 
+        public static final EventTypeRegistration LOCATION_ROSTER_GET = EventTypeRegistration
+                        .fastRead("LOCATION_ROSTER_GET", "Get location roster for sync").build();
+
         // Bay events
         public static final EventTypeRegistration LOCATION_BAY_CREATE = EventTypeRegistration
                         .write("LOCATION_BAY_CREATE", "Create a new bay for a location").build();
@@ -54,6 +57,26 @@ public final class LocationEventTypes {
         public static final EventTypeRegistration LOCATION_COVERAGE_RULES_REPLACE = EventTypeRegistration
                         .write("LOCATION_COVERAGE_RULES_REPLACE", "Replace mobile unit coverage rules").build();
 
+        // Storage Location events
+        public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_LIST = EventTypeRegistration
+                        .fastRead("LOCATION_STORAGE_LOCATION_LIST", "List storage locations").build();
+
+        public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_GET = EventTypeRegistration
+                        .fastRead("LOCATION_STORAGE_LOCATION_GET", "Get a storage location").build();
+
+        public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_CREATE = EventTypeRegistration
+                        .write("LOCATION_STORAGE_LOCATION_CREATE", "Create a storage location").build();
+
+        public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_UPDATE = EventTypeRegistration
+                        .write("LOCATION_STORAGE_LOCATION_UPDATE", "Update or deactivate a storage location").build();
+
+        // Site Defaults events
+        public static final EventTypeRegistration LOCATION_SITE_DEFAULTS_PUT = EventTypeRegistration
+                        .write("LOCATION_SITE_DEFAULTS_PUT", "Configure site default storage locations").build();
+
+        public static final EventTypeRegistration LOCATION_SITE_DEFAULTS_GET = EventTypeRegistration
+                        .fastRead("LOCATION_SITE_DEFAULTS_GET", "Get site default storage locations").build();
+
         /**
          * Returns all event types for registration with the event service.
          *
@@ -66,6 +89,7 @@ public final class LocationEventTypes {
                                 LOCATION_LOCATION_UPDATE,
                                 LOCATION_PATCH,
                                 LOCATION_PARENT_ADD,
+                                LOCATION_ROSTER_GET,
                                 // Bay events
                                 LOCATION_BAY_CREATE,
                                 LOCATION_BAY_UPDATE,
@@ -75,6 +99,14 @@ public final class LocationEventTypes {
                                 LOCATION_MOBILE_UNIT_MANAGE,
                                 LOCATION_SERVICE_AREA_CREATE,
                                 LOCATION_TRAVEL_BUFFER_POLICY_CREATE,
-                                LOCATION_COVERAGE_RULES_REPLACE);
+                                LOCATION_COVERAGE_RULES_REPLACE,
+                                // Storage Location events
+                                LOCATION_STORAGE_LOCATION_LIST,
+                                LOCATION_STORAGE_LOCATION_GET,
+                                LOCATION_STORAGE_LOCATION_CREATE,
+                                LOCATION_STORAGE_LOCATION_UPDATE,
+                                // Site Defaults events
+                                LOCATION_SITE_DEFAULTS_PUT,
+                                LOCATION_SITE_DEFAULTS_GET);
         }
 }
