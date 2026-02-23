@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,6 +11,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.GeneratedValue;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -54,6 +55,8 @@ public class CreditMemo {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "credit_memo_id", nullable = false, updatable = false)
     private UUID creditMemoId;
 
@@ -99,9 +102,6 @@ public class CreditMemo {
 
     @PrePersist
     protected void onCreate() {
-        if (creditMemoId == null) {
-            creditMemoId = UUIDv7Generator.generate();
-        }
         if (creationTimestamp == null) {
             creationTimestamp = Instant.now();
         }

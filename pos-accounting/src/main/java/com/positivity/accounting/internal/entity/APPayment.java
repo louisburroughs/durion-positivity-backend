@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -21,6 +21,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.GeneratedValue;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -63,6 +64,8 @@ public class APPayment {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "payment_id", nullable = false, columnDefinition = "UUID")
     private UUID paymentId;
 
@@ -143,9 +146,6 @@ public class APPayment {
 
     @PrePersist
     public void onPrePersist() {
-        if (paymentId == null) {
-            paymentId = UUIDv7Generator.generate();
-        }
         if (status == null) {
             status = APPaymentStatus.INITIATED;
         }

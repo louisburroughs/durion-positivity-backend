@@ -1,7 +1,7 @@
 package com.positivity.location.internal.entity;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import lombok.*;
 import java.util.UUID;
 
@@ -16,15 +16,10 @@ import java.util.UUID;
 })
 public class LocationParent {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
-
-    @PrePersist
-    public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")

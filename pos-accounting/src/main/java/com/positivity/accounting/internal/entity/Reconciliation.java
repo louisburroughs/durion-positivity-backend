@@ -5,7 +5,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -50,14 +50,13 @@ public class Reconciliation {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "reconciliation_id", nullable = false, columnDefinition = "UUID")
     private UUID reconciliationId;
 
     @PrePersist
     public void onPrePersist() {
-        if (reconciliationId == null) {
-            reconciliationId = UUIDv7Generator.generate();
-        }
         if (status == null) {
             status = ReconciliationStatus.IN_PROGRESS;
         }

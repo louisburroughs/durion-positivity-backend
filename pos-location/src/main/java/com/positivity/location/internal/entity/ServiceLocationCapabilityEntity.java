@@ -1,8 +1,9 @@
 package com.positivity.location.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -23,6 +24,8 @@ import lombok.NoArgsConstructor;
 public class ServiceLocationCapabilityEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -38,9 +41,6 @@ public class ServiceLocationCapabilityEntity {
 
     @PrePersist
     void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         normalizeCode();
     }
 

@@ -62,7 +62,8 @@ public class ReceivablePayment {
             paymentId = UUIDv7Generator.generate();
         }
         if (createdAt == null) {
-            }
+            createdAt = Instant.now();
+        }
         if (status == null) {
             status = ReceivablePaymentStatus.AVAILABLE;
         }

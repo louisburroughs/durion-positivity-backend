@@ -2,6 +2,7 @@ package com.positivity.location.service;
 
 import com.positivity.location.internal.dto.SiteDefaultsRequest;
 import com.positivity.location.internal.dto.SiteDefaultsResponse;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.LocationRepository;
@@ -68,10 +69,10 @@ class SiteDefaultsServiceTest {
         UUID stagingId = UUID.randomUUID();
         UUID quarantineId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(true);
-        when(storageLocationRepository.findById(stagingId))
+        when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
+        when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
                 .thenReturn(Optional.of(storageLocation(stagingId, siteId)));
-        when(storageLocationRepository.findById(quarantineId))
+        when(storageLocationRepository.findByIdAndSiteId(quarantineId, siteId))
                 .thenReturn(Optional.of(storageLocation(quarantineId, siteId)));
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(stagingId, quarantineId);
@@ -93,7 +94,7 @@ class SiteDefaultsServiceTest {
         UUID siteId = UUID.randomUUID();
         UUID sharedId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(true);
+        when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(sharedId, sharedId);
 
@@ -116,7 +117,7 @@ class SiteDefaultsServiceTest {
         UUID stagingId = UUID.randomUUID();
         UUID quarantineId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(false);
+        when(locationRepository.findById(siteId)).thenReturn(Optional.empty());
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(stagingId, quarantineId);
 
@@ -140,11 +141,10 @@ class SiteDefaultsServiceTest {
         UUID stagingId = UUID.randomUUID();
         UUID quarantineId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(true);
-        // staging belongs to a different site
-        when(storageLocationRepository.findById(stagingId))
-                .thenReturn(Optional.of(storageLocation(stagingId, otherSiteId)));
-        when(storageLocationRepository.findById(quarantineId))
+        when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
+        when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
+                .thenReturn(Optional.empty());
+        when(storageLocationRepository.findByIdAndSiteId(quarantineId, siteId))
                 .thenReturn(Optional.of(storageLocation(quarantineId, siteId)));
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(stagingId, quarantineId);
@@ -169,12 +169,11 @@ class SiteDefaultsServiceTest {
         UUID stagingId = UUID.randomUUID();
         UUID quarantineId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(true);
-        when(storageLocationRepository.findById(stagingId))
+        when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
+        when(storageLocationRepository.findByIdAndSiteId(stagingId, siteId))
                 .thenReturn(Optional.of(storageLocation(stagingId, siteId)));
-        // quarantine belongs to a different site
-        when(storageLocationRepository.findById(quarantineId))
-                .thenReturn(Optional.of(storageLocation(quarantineId, otherSiteId)));
+        when(storageLocationRepository.findByIdAndSiteId(quarantineId, siteId))
+                .thenReturn(Optional.empty());
 
         SiteDefaultsRequest request = new SiteDefaultsRequest(stagingId, quarantineId);
 
@@ -198,7 +197,10 @@ class SiteDefaultsServiceTest {
     void getDefaults_success_returnsResponse() {
         UUID siteId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(true);
+        Location location = site(siteId);
+        location.setDefaultStagingLocationId(UUID.randomUUID());
+        location.setDefaultQuarantineLocationId(UUID.randomUUID());
+        when(locationRepository.findById(siteId)).thenReturn(Optional.of(location));
 
         SiteDefaultsResponse response = siteDefaultsService.getDefaults(siteId);
 
@@ -214,7 +216,7 @@ class SiteDefaultsServiceTest {
     void getDefaults_siteNotFound_throwsNotFound() {
         UUID siteId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(false);
+        when(locationRepository.findById(siteId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> siteDefaultsService.getDefaults(siteId))
                 .isInstanceOf(ResponseStatusException.class)
@@ -233,7 +235,7 @@ class SiteDefaultsServiceTest {
     void getDefaults_noDefaultsConfigured_returnsEmptyDefaults() {
         UUID siteId = UUID.randomUUID();
 
-        when(locationRepository.existsById(siteId)).thenReturn(true);
+        when(locationRepository.findById(siteId)).thenReturn(Optional.of(site(siteId)));
 
         SiteDefaultsResponse response = siteDefaultsService.getDefaults(siteId);
 
@@ -253,6 +255,14 @@ class SiteDefaultsServiceTest {
                 .name("Location-" + id)
                 .type(StorageLocationType.BIN)
                 .siteId(siteId)
+                .build();
+    }
+
+    private Location site(UUID siteId) {
+        return Location.builder()
+                .id(siteId)
+                .name("Site-" + siteId)
+                .active(true)
                 .build();
     }
 }

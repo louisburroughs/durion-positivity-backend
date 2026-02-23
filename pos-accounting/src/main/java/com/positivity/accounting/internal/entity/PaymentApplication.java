@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.InvoiceStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -47,14 +47,13 @@ public class PaymentApplication {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "payment_application_id", nullable = false, columnDefinition = "UUID")
     private UUID paymentApplicationId;
 
     @PrePersist
     public void onPrePersist() {
-        if (paymentApplicationId == null) {
-            paymentApplicationId = UUIDv7Generator.generate();
-        }
         if (applicationTimestamp == null) {
             applicationTimestamp = Instant.now();
         }

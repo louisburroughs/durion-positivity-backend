@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import jakarta.persistence.*;
 import com.positivity.accounting.internal.enums.PaymentStatus;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -28,14 +28,13 @@ public class InvoiceStatusView {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
     @PrePersist
     public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
     }
 
     @Column(nullable = false, unique = true)

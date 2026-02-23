@@ -1,6 +1,6 @@
 package com.positivity.location.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -8,6 +8,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -40,6 +41,8 @@ import lombok.NoArgsConstructor;
 public class BayEntity {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -82,9 +85,6 @@ public class BayEntity {
 
     @PrePersist
     void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         normalizedName = normalizeName(name);
         if (status == null || status.isBlank()) {
             status = "ACTIVE";

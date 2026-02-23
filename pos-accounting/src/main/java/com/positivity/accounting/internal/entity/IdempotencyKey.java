@@ -4,7 +4,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -31,14 +31,13 @@ public class IdempotencyKey {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
     @PrePersist
     public void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
     }
 
     @Column(nullable = false, unique = true)

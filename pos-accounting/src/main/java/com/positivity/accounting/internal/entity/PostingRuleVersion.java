@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import jakarta.persistence.*;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -47,14 +47,13 @@ public class PostingRuleVersion {
 
     @EqualsAndHashCode.Include
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "version_id", nullable = false, columnDefinition = "UUID")
     private UUID versionId;
 
     @PrePersist
     public void onPrePersist() {
-        if (versionId == null) {
-            versionId = UUIDv7Generator.generate();
-        }
     }
 
     @ManyToOne(fetch = FetchType.LAZY)
