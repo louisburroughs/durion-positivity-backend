@@ -16,6 +16,7 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
@@ -24,6 +25,7 @@ import jakarta.persistence.Transient;
 import jakarta.validation.constraints.Email;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.positivity.shared.id.UUIDv7Id;
 
 /**
  * Abstract base class for individual customers implementing PartyEntity
@@ -37,6 +39,8 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Abstract base class for an individual customer (person). Use CommercialParty for organizations.")
 public abstract class AbstractParty implements Party {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "customer_id", columnDefinition = "UUID", updatable = false, nullable = false)
     private UUID partyId;
 

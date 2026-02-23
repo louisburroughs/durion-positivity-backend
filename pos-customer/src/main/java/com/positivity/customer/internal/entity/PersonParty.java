@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CascadeType;
@@ -80,9 +80,6 @@ public class PersonParty extends AbstractParty {
 
     @PrePersist
     public void generateId() {
-        if (getPartyId() == null) {
-            setPartyId(UUIDv7Generator.generate());
-        }
         validateNames();
         setCreatedAt(Instant.now());
         setModifiedAt(Instant.now());
@@ -137,6 +134,11 @@ public class PersonParty extends AbstractParty {
     @Transient
     public Instant getUpdatedAt() {
         return getModifiedAt();
+    }
+
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return UUIDv7Id.class;
     }
 
 }

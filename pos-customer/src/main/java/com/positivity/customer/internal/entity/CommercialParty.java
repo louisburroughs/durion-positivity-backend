@@ -103,9 +103,6 @@ public class CommercialParty extends AbstractParty {
 
     @PrePersist
     public void generateId() {
-        if (getPartyId() == null) {
-            setPartyId(UUIDv7Generator.generate());
-        }
         validateNames();
         ensureContactsPresent();
         setCreatedAt(Instant.now());

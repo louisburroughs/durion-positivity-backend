@@ -2,7 +2,7 @@ package com.positivity.invoice.internal.entity;
 
 import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -26,6 +26,8 @@ import java.util.UUID;
 public class BillingRules {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID id;
 
@@ -60,13 +62,6 @@ public class BillingRules {
 
     @Column(name = "updated_by", nullable = false, length = 36)
     private String updatedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 
     // Getters and Setters
 

@@ -10,7 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
@@ -20,11 +20,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.Data;
@@ -61,16 +61,11 @@ import lombok.ToString;
 public class PartyRelationship {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "party_relationship_id", columnDefinition = "UUID", updatable = false, nullable = false)
     @Schema(description = "Unique identifier for the party relationship")
     private UUID partyRelationshipId;
-
-    @PrePersist
-    public void generateId() {
-        if (partyRelationshipId == null) {
-            partyRelationshipId = UUIDv7Generator.generate();
-        }
-    }
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "from_party_id", nullable = false)
