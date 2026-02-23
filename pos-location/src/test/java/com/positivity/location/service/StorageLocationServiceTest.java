@@ -358,6 +358,106 @@ class StorageLocationServiceTest {
                 });
     }
 
+    @Test
+    @DisplayName("#39 - deactivate with inventory transfers stock to active destination and inactivates source")
+    void deactivateStorageLocation_withInventoryAndDestination_transfersInventory() {
+        UUID siteId = UUID.randomUUID();
+        UUID sourceId = UUID.randomUUID();
+        UUID destinationId = UUID.randomUUID();
+        StorageLocationEntity source = StorageLocationEntity.builder()
+                .id(sourceId)
+                .name("Floor-C3")
+                .type(StorageLocationType.FLOOR)
+                .siteId(siteId)
+                .status("ACTIVE")
+                .inventoryCount(5)
+                .build();
+        StorageLocationEntity destination = StorageLocationEntity.builder()
+                .id(destinationId)
+                .name("Shelf-Z9")
+                .type(StorageLocationType.SHELF)
+                .siteId(siteId)
+                .status("ACTIVE")
+                .inventoryCount(3)
+                .build();
+
+        when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
+        when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
+        when(storageLocationRepository.save(any(StorageLocationEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        StorageLocationResponse response = storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId);
+
+        assertThat(response.getStatus()).isEqualTo("INACTIVE");
+        assertThat(response.getInventoryCount()).isZero();
+        assertThat(source.getInventoryCount()).isZero();
+        assertThat(destination.getInventoryCount()).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("#39 - deactivate with inventory and missing destination location returns 404")
+    void deactivateStorageLocation_withInventoryAndUnknownDestination_throwsNotFound() {
+        UUID siteId = UUID.randomUUID();
+        UUID sourceId = UUID.randomUUID();
+        UUID destinationId = UUID.randomUUID();
+        StorageLocationEntity source = StorageLocationEntity.builder()
+                .id(sourceId)
+                .name("Floor-C3")
+                .type(StorageLocationType.FLOOR)
+                .siteId(siteId)
+                .status("ACTIVE")
+                .inventoryCount(2)
+                .build();
+
+        when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
+        when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException rse = (ResponseStatusException) ex;
+                    assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(rse.getReason()).contains("DESTINATION_NOT_FOUND");
+                });
+    }
+
+    @Test
+    @DisplayName("#39 - deactivate with inventory and inactive destination returns 422")
+    void deactivateStorageLocation_withInventoryAndInactiveDestination_throwsValidationError() {
+        UUID siteId = UUID.randomUUID();
+        UUID sourceId = UUID.randomUUID();
+        UUID destinationId = UUID.randomUUID();
+        StorageLocationEntity source = StorageLocationEntity.builder()
+                .id(sourceId)
+                .name("Floor-C3")
+                .type(StorageLocationType.FLOOR)
+                .siteId(siteId)
+                .status("ACTIVE")
+                .inventoryCount(2)
+                .build();
+        StorageLocationEntity destination = StorageLocationEntity.builder()
+                .id(destinationId)
+                .name("Shelf-Z9")
+                .type(StorageLocationType.SHELF)
+                .siteId(siteId)
+                .status("INACTIVE")
+                .inventoryCount(1)
+                .build();
+
+        when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
+        when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
+
+        assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> {
+                    ResponseStatusException rse = (ResponseStatusException) ex;
+                    assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                    assertThat(rse.getReason()).contains("DESTINATION_INACTIVE");
+                });
+    }
+
     // Issue CAP-214 #39: Additional targeted tests for uncovered
     // StorageLocationServiceImpl paths.
 
