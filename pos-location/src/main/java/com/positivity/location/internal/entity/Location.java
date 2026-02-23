@@ -3,6 +3,7 @@ package com.positivity.location.internal.entity;
 import jakarta.persistence.*;
 import com.positivity.shared.id.UUIDv7Generator;
 import lombok.*;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -24,11 +25,13 @@ public class Location {
             id = UUIDv7Generator.generate();
         }
         normalizeDerivedFields();
+        this.updatedAt = Instant.now();
     }
 
     @PreUpdate
     public void preUpdate() {
         normalizeDerivedFields();
+        this.updatedAt = Instant.now();
     }
 
     private void normalizeDerivedFields() {
@@ -52,6 +55,10 @@ public class Location {
     @Column(unique = true)
     private String code;
     private String status;
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+    @Column(name = "hr_location_id")
+    private String hrLocationId;
     private String timezone;
     @Column(name = "operating_hours", columnDefinition = "TEXT")
     private String operatingHours;
@@ -59,6 +66,11 @@ public class Location {
     private String holidayClosures;
     private Integer checkInBufferMinutes;
     private Integer cleanupBufferMinutes;
+    // Issue CAP-214 #38: Persist default storage role assignments at site level.
+    @Column(name = "default_staging_location_id", columnDefinition = "UUID")
+    private UUID defaultStagingLocationId;
+    @Column(name = "default_quarantine_location_id", columnDefinition = "UUID")
+    private UUID defaultQuarantineLocationId;
     @Version
     private Long version;
 

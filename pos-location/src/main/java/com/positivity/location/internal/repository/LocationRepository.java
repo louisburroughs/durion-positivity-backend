@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.Optional;
 
@@ -20,6 +21,10 @@ public interface LocationRepository extends JpaRepository<Location, UUID> {
     boolean existsByNormalizedName(String normalizedName);
 
     Page<Location> findByStatus(String status, Pageable pageable);
+
+    Page<Location> findByUpdatedAtAfter(Instant since, Pageable pageable);
+
+    Page<Location> findByStatusAndUpdatedAtAfter(String status, Instant since, Pageable pageable);
 
     Optional<Location> findByNormalizedNameAndIdNot(String normalizedName, UUID id);
 
