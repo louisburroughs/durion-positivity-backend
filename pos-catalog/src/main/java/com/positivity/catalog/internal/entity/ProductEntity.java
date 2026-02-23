@@ -1,10 +1,13 @@
 package com.positivity.catalog.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.List;
@@ -13,6 +16,7 @@ import java.util.UUID;
 @Setter
 @Getter
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "product", uniqueConstraints = {
         @UniqueConstraint(name = "uk_product_sku", columnNames = "sku"),
         @UniqueConstraint(name = "uk_product_manufacturer_mpn", columnNames = { "manufacturer_id",
@@ -24,20 +28,14 @@ import java.util.UUID;
 public class ProductEntity implements CatalogItem {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     @Schema(description = "Unique identifier of the product", example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
     private UUID id;
 
     @PrePersist
     public void generateId() {
-        Instant now = Instant.now();
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        updatedAt = now;
         if (status == null) {
             status = ProductStatus.ACTIVE;
         }
@@ -165,18 +163,15 @@ public class ProductEntity implements CatalogItem {
     @Schema(description = "Reason when discontinued override permission is used")
     private String lifecycleOverrideReason;
 
-    @Column(nullable = false)
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
     @Schema(description = "Timestamp when product was created")
     private Instant createdAt;
 
     @Column(nullable = false)
+    @LastModifiedDate
     @Schema(description = "Timestamp when product was last updated")
     private Instant updatedAt;
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = Instant.now();
-    }
 
     @PostLoad
     public void ensureDefaults() {

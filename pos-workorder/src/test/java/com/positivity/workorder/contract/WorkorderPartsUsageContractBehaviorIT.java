@@ -17,10 +17,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
 import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkorderItemStatus;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;

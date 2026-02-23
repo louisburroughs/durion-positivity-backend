@@ -1,4 +1,4 @@
-package com.positivity.workorder.internal.entity;
+package com.positivity.workorder.internal.enums;
 
 /**
  * Status values for part substitution lifecycle.

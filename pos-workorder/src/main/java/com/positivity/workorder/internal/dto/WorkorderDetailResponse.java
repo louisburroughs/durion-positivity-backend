@@ -1,7 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

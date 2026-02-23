@@ -1,7 +1,8 @@
 package com.positivity.workorder.internal.dto;
 
 import com.positivity.workorder.internal.entity.EstimateSnapshot;
-import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.enums.EstimateStatus;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

@@ -10,6 +10,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.workorder.internal.enums.ApprovalStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

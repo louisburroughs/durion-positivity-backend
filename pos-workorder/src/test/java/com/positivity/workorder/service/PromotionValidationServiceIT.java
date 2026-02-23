@@ -15,13 +15,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.workorder.internal.dto.PromotionValidationResult;
-import com.positivity.workorder.internal.entity.ApprovalStatus;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
-import com.positivity.workorder.internal.entity.EstimateStatus;
 import com.positivity.workorder.internal.entity.Workorder;
-import com.positivity.workorder.internal.entity.WorkorderStatus;
+import com.positivity.workorder.internal.enums.ApprovalStatus;
+import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.PromotionValidationException.PromotionErrorCode;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;

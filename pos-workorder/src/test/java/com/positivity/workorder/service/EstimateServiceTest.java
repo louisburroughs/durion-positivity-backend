@@ -28,7 +28,7 @@ import com.positivity.workorder.internal.dto.CreateEstimateRequest;
 import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.internal.entity.Estimate;
-import com.positivity.workorder.internal.entity.EstimateStatus;
+import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
