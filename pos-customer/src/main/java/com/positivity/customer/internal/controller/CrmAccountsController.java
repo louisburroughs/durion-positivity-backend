@@ -19,7 +19,7 @@ import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.internal.service.AccountTierServiceImpl;
+import com.positivity.customer.service.AccountTierService;
 import com.positivity.customer.service.PartyService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,9 +52,9 @@ public class CrmAccountsController {
         private static final Logger log = LoggerFactory.getLogger(CrmAccountsController.class);
 
         private final PartyService partyService;
-        private final AccountTierServiceImpl accountTierService;
+        private final AccountTierService accountTierService;
 
-        public CrmAccountsController(PartyService partyService, AccountTierServiceImpl accountTierService) {
+        public CrmAccountsController(PartyService partyService, AccountTierService accountTierService) {
                 this.partyService = partyService;
                 this.accountTierService = accountTierService;
         }

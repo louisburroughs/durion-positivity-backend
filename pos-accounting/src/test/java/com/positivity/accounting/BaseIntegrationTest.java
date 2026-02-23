@@ -88,6 +88,7 @@ public abstract class BaseIntegrationTest {
             "accounting:gl-mapping:resolve",
             "accounting:audit:view",
             "accounting:credit-memo:view",
+            "accounting:credit-memo:read",
             "accounting:credit-memo:create",
             "accounting:credit-memo:issue",
             "accounting:credit-memo:apply",
@@ -98,8 +99,15 @@ public abstract class BaseIntegrationTest {
             "accounting:payment:apply",
             "accounting:payment:reverse",
             "accounting:financial-reporting:view",
+            "reporting:view:financial-statements",
             "accounting:posting-category:view",
-            "accounting:posting-category:create");
+            "accounting:posting-category:create",
+            "accounting:posting-category:edit",
+            "accounting:posting-category:deactivate",
+            "accounting:mapping-key:view",
+            "accounting:mapping-key:create",
+            "accounting:mapping-key:edit",
+            "accounting:mapping-key:deactivate");
 
     /**
      * Initialize MockMvc with Spring Security integration before each test.

@@ -8,6 +8,7 @@ import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
+import com.positivity.location.service.StorageLocationInventoryTransferService;
 import com.positivity.location.service.StorageLocationService;
 import java.util.HashSet;
 import java.util.Set;
@@ -46,7 +47,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         this.storageLocationRepository = storageLocationRepository;
         this.locationRepository = locationRepository;
         this.storageLocationInventoryTransferService = storageLocationInventoryTransferService == null
-                ? new AtomicStorageLocationInventoryTransferService(storageLocationRepository)
+                ? new AtomicStorageLocationInventoryTransferServiceImpl(storageLocationRepository)
                 : storageLocationInventoryTransferService;
     }
 
@@ -307,7 +308,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_DESTINATION);
         }
 
-        StorageLocationEntity destination = storageLocationRepository.findByIdAndSiteId(destinationStorageLocationId, siteId)
+        StorageLocationEntity destination = storageLocationRepository
+                .findByIdAndSiteId(destinationStorageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DESTINATION_NOT_FOUND));
         if (destination.getStatus() != StorageLocationStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, DESTINATION_INACTIVE);

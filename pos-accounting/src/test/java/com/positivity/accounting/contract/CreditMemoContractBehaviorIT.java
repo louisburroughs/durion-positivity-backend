@@ -19,10 +19,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.positivity.accounting.BaseContractIntegrationTest;
@@ -35,8 +34,6 @@ import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
-import com.positivity.accounting.internal.service.GLPostingServiceImpl;
-import com.positivity.accounting.service.GLPostingService;
 
 /**
  * Contract Behavioral Integration Tests for Credit Memo (CAP-052)
@@ -59,11 +56,8 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         @Autowired
         private CreditMemoRepository creditMemoRepository;
 
-        @Mock
+        @MockitoBean
         private InvoiceServiceClient invoiceServiceClient;
-
-        @InjectMocks
-        private GLPostingServiceImpl glPostingService;
 
         private static final String API_V1_CREDIT_MEMOS = "/v1/accounting/credit-memos";
 

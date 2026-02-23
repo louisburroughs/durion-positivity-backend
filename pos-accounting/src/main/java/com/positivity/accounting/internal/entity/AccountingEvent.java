@@ -69,6 +69,12 @@ public class AccountingEvent {
         if (eventId == null) {
             eventId = UUIDv7Generator.generate();
         }
+        if (sourceSystem == null || sourceSystem.isBlank()) {
+            sourceSystem = "POS_ACCOUNTING_API";
+        }
+        if (transactionDate == null) {
+            transactionDate = LocalDateTime.now();
+        }
         this.receivedAt = Instant.now();
     }
 

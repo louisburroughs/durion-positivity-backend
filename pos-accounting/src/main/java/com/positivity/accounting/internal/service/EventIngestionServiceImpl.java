@@ -110,6 +110,16 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         LocalDateTime transactionDate = (LocalDateTime) event.get(TRANSACTION_DATE);
         String eventType = (String) event.get(EVENT_TYPE);
 
+        // Keep backward compatibility for older clients that omit these fields.
+        if (sourceSystem == null || sourceSystem.isBlank()) {
+            sourceSystem = "POS_ACCOUNTING_API";
+            event.put(SOURCE_SYSTEM, sourceSystem);
+        }
+        if (transactionDate == null) {
+            transactionDate = LocalDateTime.now();
+            event.put(TRANSACTION_DATE, transactionDate);
+        }
+
         log.info("Processing event type {} for org {} from {} on {}",
                 eventType, organizationId, sourceSystem, transactionDate);
 
@@ -479,12 +489,6 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         if (event.get(ORGANIZATION_ID) == null) {
             errors.add("organizationId is required");
-        }
-        if (event.get(SOURCE_SYSTEM) == null) {
-            errors.add("sourceSystem is required");
-        }
-        if (event.get(TRANSACTION_DATE) == null) {
-            errors.add("transactionDate is required");
         }
         if (event.get(EVENT_TYPE) == null) {
             errors.add("eventType is required");
