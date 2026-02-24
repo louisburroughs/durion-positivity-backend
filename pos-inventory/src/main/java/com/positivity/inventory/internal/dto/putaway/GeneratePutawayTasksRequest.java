@@ -2,7 +2,8 @@ package com.positivity.inventory.internal.dto.putaway;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,10 +18,19 @@ public class GeneratePutawayTasksRequest {
     @NotBlank
     private String sourceReceiptId;
 
-    @NotBlank
+    /**
+     * Legacy single-line request field.
+     * Prefer using lineItems for new integrations.
+     */
     private String productId;
 
-    @NotNull
+    /**
+     * Legacy single-line request field.
+     * Prefer using lineItems for new integrations.
+     */
     @Min(1)
     private Integer quantity;
+
+    @Valid
+    private List<PutawayLineItemRequest> lineItems;
 }
