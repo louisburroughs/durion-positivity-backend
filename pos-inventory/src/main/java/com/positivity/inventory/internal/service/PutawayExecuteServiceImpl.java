@@ -25,79 +25,84 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PutawayExecuteServiceImpl implements PutawayExecuteService {
 
-    private final PutawayTaskRepository putawayTaskRepository;
-    private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
-    private final PutawayValidationService putawayValidationService;
+        private final PutawayTaskRepository putawayTaskRepository;
+        private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+        private final PutawayValidationService putawayValidationService;
 
-    @Override
-    @Transactional
-    public @NonNull PutawayExecutionResponse executePutaway(
-            @NonNull String taskId,
-            @NonNull PutawayExecutionRequest request,
-            @NonNull String actorId) {
-        UUID parsedTaskId = parseRequiredUuid(taskId, "taskId");
+        @Override
+        @Transactional
+        public @NonNull PutawayExecutionResponse executePutaway(
+                        @NonNull String taskId,
+                        @NonNull PutawayExecutionRequest request,
+                        @NonNull String actorId) {
+                UUID parsedTaskId = parseRequiredUuid(taskId, "taskId");
 
-        PutawayTask task = putawayTaskRepository.findByIdForUpdate(parsedTaskId)
-                .or(() -> putawayTaskRepository.findById(parsedTaskId))
-                .orElseThrow(() -> new TaskNotFoundException(parsedTaskId));
+                PutawayTask task = putawayTaskRepository.findByIdForUpdate(parsedTaskId)
+                                .or(() -> putawayTaskRepository.findById(parsedTaskId))
+                                .orElseThrow(() -> new TaskNotFoundException(parsedTaskId));
 
-        putawayValidationService.validatePutawayExecution(request);
+                putawayValidationService.validatePutawayExecution(request);
 
-        Instant now = Instant.now();
-        InventoryLedgerEntry ledgerEntry = InventoryLedgerEntry.builder()
-                .stockItemId(request.getSkuId())
-                .eventType(InventoryLedgerEventType.PUTAWAY)
-                .changeInQuantity(-request.getQuantity())
-                .quantityAfter(0)
-                .transactionUserId(actorId)
-                .locationId(request.getSourceLocationId())
-                .notes("Putaway from " + request.getSourceLocationId() + " to " + request.getDestinationLocationId())
-                .timestamp(now)
-                .build();
+                Instant now = Instant.now();
+                InventoryLedgerEntry ledgerEntry = InventoryLedgerEntry.builder()
+                                .stockItemId(request.getSkuId())
+                                .eventType(InventoryLedgerEventType.PUTAWAY)
+                                .changeInQuantity(-request.getQuantity())
+                                // TODO(CAP-215): quantityAfter requires InventoryOnHand read model; 0 is a
+                                // placeholder
+                                .quantityAfter(0)
+                                .transactionUserId(actorId)
+                                .locationId(request.getSourceLocationId())
+                                .notes("Putaway from " + request.getSourceLocationId() + " to "
+                                                + request.getDestinationLocationId())
+                                .timestamp(now)
+                                .build();
 
-        InventoryLedgerEntry savedLedgerEntry = inventoryLedgerEntryRepository.save(ledgerEntry);
+                InventoryLedgerEntry savedLedgerEntry = inventoryLedgerEntryRepository.save(ledgerEntry);
 
-        InventoryLedgerEntry destinationLedgerEntry = InventoryLedgerEntry.builder()
-                .stockItemId(request.getSkuId())
-                .eventType(InventoryLedgerEventType.PUTAWAY)
-                .changeInQuantity(request.getQuantity())
-                .quantityAfter(0)
-                .transactionUserId(actorId)
-                .locationId(request.getDestinationLocationId())
-                .notes("Putaway destination receipt from " + request.getSourceLocationId() + " to "
-                        + request.getDestinationLocationId())
-                .timestamp(now)
-                .build();
-        inventoryLedgerEntryRepository.save(destinationLedgerEntry);
+                InventoryLedgerEntry destinationLedgerEntry = InventoryLedgerEntry.builder()
+                                .stockItemId(request.getSkuId())
+                                .eventType(InventoryLedgerEventType.PUTAWAY)
+                                .changeInQuantity(request.getQuantity())
+                                // TODO(CAP-215): quantityAfter requires InventoryOnHand read model; 0 is a
+                                // placeholder
+                                .quantityAfter(0)
+                                .transactionUserId(actorId)
+                                .locationId(request.getDestinationLocationId())
+                                .notes("Putaway destination receipt from " + request.getSourceLocationId() + " to "
+                                                + request.getDestinationLocationId())
+                                .timestamp(now)
+                                .build();
+                inventoryLedgerEntryRepository.save(destinationLedgerEntry);
 
-        task.setStatus(PutawayTaskStatus.COMPLETED);
-        task.setActualDestinationLocationId(request.getDestinationLocationId());
-        putawayTaskRepository.save(task);
+                task.setStatus(PutawayTaskStatus.COMPLETED);
+                task.setActualDestinationLocationId(request.getDestinationLocationId());
+                putawayTaskRepository.save(task);
 
-        return PutawayExecutionResponse.builder()
-                .ledgerEntryId(savedLedgerEntry.getLedgerEntryId() != null
-                        ? savedLedgerEntry.getLedgerEntryId().toString()
-                        : null)
-                .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
-                .skuId(request.getSkuId())
-                .sourceLocationId(request.getSourceLocationId())
-                .destinationLocationId(request.getDestinationLocationId())
-                .quantityMoved(request.getQuantity())
-                .transactionType("PUTAWAY")
-                .status(PutawayTaskStatus.COMPLETED.name())
-                .executedAt(now.toString())
-                .actorId(actorId)
-                .build();
-    }
-
-    private UUID parseRequiredUuid(String rawValue, String fieldName) {
-        if (rawValue == null || rawValue.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " is required");
+                return PutawayExecutionResponse.builder()
+                                .ledgerEntryId(savedLedgerEntry.getLedgerEntryId() != null
+                                                ? savedLedgerEntry.getLedgerEntryId().toString()
+                                                : null)
+                                .taskId(task.getTaskId() != null ? task.getTaskId().toString() : null)
+                                .skuId(request.getSkuId())
+                                .sourceLocationId(request.getSourceLocationId())
+                                .destinationLocationId(request.getDestinationLocationId())
+                                .quantityMoved(request.getQuantity())
+                                .transactionType("PUTAWAY")
+                                .status(PutawayTaskStatus.COMPLETED.name())
+                                .executedAt(now.toString())
+                                .actorId(actorId)
+                                .build();
         }
-        try {
-            return UUID.fromString(rawValue);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException(fieldName + " must be a valid UUID", ex);
+
+        private UUID parseRequiredUuid(String rawValue, String fieldName) {
+                if (rawValue == null || rawValue.isBlank()) {
+                        throw new IllegalArgumentException(fieldName + " is required");
+                }
+                try {
+                        return UUID.fromString(rawValue);
+                } catch (IllegalArgumentException ex) {
+                        throw new IllegalArgumentException(fieldName + " must be a valid UUID", ex);
+                }
         }
-    }
 }

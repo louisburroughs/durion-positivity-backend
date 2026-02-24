@@ -24,3 +24,8 @@ CREATE TABLE IF NOT EXISTS putaway_rule (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+-- Indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_putaway_task_source_receipt ON putaway_task(source_receipt_id);
+CREATE INDEX IF NOT EXISTS idx_putaway_task_status ON putaway_task(status);
+CREATE INDEX IF NOT EXISTS idx_putaway_task_product_dest_status ON putaway_task(product_id, suggested_destination_location_id, status);

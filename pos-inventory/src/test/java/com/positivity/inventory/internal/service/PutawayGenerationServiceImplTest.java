@@ -42,7 +42,8 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_withRules_createsUnassignedTask() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(UUID.randomUUID().toString());
+        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(), 5);
         PutawayRule rule = new PutawayRule();
         rule.setDestinationLocationId("DEST-A");
         when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
@@ -58,7 +59,8 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_noRules_createsUnassignedTaskWithDefaultLocation() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(UUID.randomUUID().toString());
+        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(), 5);
         when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
         when(putawayTaskRepository.save(any(PutawayTask.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -91,7 +93,7 @@ class PutawayGenerationServiceImplTest {
         task.setTaskId(taskId);
         task.setStatus(PutawayTaskStatus.UNASSIGNED);
 
-        when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
         when(putawayTaskRepository.save(any(PutawayTask.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PutawayTaskResponse response = service.claimTask(taskId.toString(), userId);
@@ -105,7 +107,7 @@ class PutawayGenerationServiceImplTest {
     void claimTask_invalidTask_throwsTaskNotFoundException() {
         UUID taskId = UUID.randomUUID();
         String userId = "user-123";
-        when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.empty());
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.claimTask(taskId.toString(), userId))
                 .isInstanceOf(TaskNotFoundException.class);
@@ -128,7 +130,8 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_withInvalidUuid_throwsIllegalArgumentException() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest("invalid-uuid");
+        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest("invalid-uuid",
+                UUID.randomUUID().toString(), 5);
 
         assertThatThrownBy(() -> service.generateTasksForReceipt(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -137,7 +140,7 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_withNullUuid_throwsIllegalArgumentException() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(null);
+        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(null, UUID.randomUUID().toString(), 5);
 
         assertThatThrownBy(() -> service.generateTasksForReceipt(request))
                 .isInstanceOf(IllegalArgumentException.class)

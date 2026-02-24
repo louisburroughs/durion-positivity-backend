@@ -52,7 +52,7 @@ class PutawayValidationServiceImplTest {
                 PutawayValidationServiceImpl service = Mockito.spy(new PutawayValidationServiceImpl());
                 PutawayExecutionRequest request = baseRequest();
 
-                Mockito.doThrow(NoOnHandAtSourceLocationException.class)
+                Mockito.doThrow(new NoOnHandAtSourceLocationException("SRC-1", "SKU-1"))
                                 .when(service)
                                 .validateSourceOnHand(anyString(), anyString(), anyInt());
 
@@ -66,7 +66,7 @@ class PutawayValidationServiceImplTest {
                 PutawayExecutionRequest request = baseRequest();
                 request.setOverrideLocationCompatibility(true);
 
-                Mockito.doThrow(NoOnHandAtSourceLocationException.class)
+                Mockito.doThrow(new NoOnHandAtSourceLocationException("SRC-1", "SKU-1"))
                                 .when(service)
                                 .validateSourceOnHand(anyString(), anyString(), anyInt());
 
@@ -81,7 +81,7 @@ class PutawayValidationServiceImplTest {
                 PutawayValidationServiceImpl service = Mockito.spy(new PutawayValidationServiceImpl());
                 PutawayExecutionRequest request = baseRequest();
 
-                Mockito.doThrow(LocationNotValidForSkuException.class)
+                Mockito.doThrow(new LocationNotValidForSkuException("DEST-1", "SKU-1", "incompatible"))
                                 .when(service)
                                 .validateLocationCompatibility(anyString(), anyString());
 
@@ -94,7 +94,7 @@ class PutawayValidationServiceImplTest {
                 PutawayValidationServiceImpl service = Mockito.spy(new PutawayValidationServiceImpl());
                 PutawayExecutionRequest request = baseRequest();
 
-                Mockito.doThrow(LocationAtCapacityException.class)
+                Mockito.doThrow(new LocationAtCapacityException("DEST-1", 100, 100))
                                 .when(service)
                                 .validateLocationCapacity(anyString(), anyInt());
 

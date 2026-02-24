@@ -36,10 +36,12 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 ? DEFAULT_LOCATION
                 : enabledRules.get(0).getDestinationLocationId();
 
+        // TODO(CAP-217): multi-line-item per receipt requires pos-receiving
+        // integration; currently creates one task per request
         PutawayTask task = PutawayTask.builder()
                 .sourceReceiptId(sourceReceiptId)
-                .productId(UUID.randomUUID())
-                .quantity(1)
+                .productId(UUID.fromString(request.getProductId()))
+                .quantity(request.getQuantity())
                 .sourceLocationId(STAGING_LOCATION)
                 .suggestedDestinationLocationId(suggestedDestination)
                 .status(PutawayTaskStatus.UNASSIGNED)
@@ -71,7 +73,7 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     public @NonNull PutawayTaskResponse claimTask(@NonNull String taskId, @NonNull String userId) {
         UUID putawayTaskId = parseRequiredUuid(taskId, "taskId");
 
-        PutawayTask task = putawayTaskRepository.findById(putawayTaskId)
+        PutawayTask task = putawayTaskRepository.findByIdForUpdate(putawayTaskId)
                 .orElseThrow(() -> new TaskNotFoundException(putawayTaskId));
 
         task.setStatus(PutawayTaskStatus.ASSIGNED);

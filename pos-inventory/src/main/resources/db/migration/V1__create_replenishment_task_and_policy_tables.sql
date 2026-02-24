@@ -23,3 +23,7 @@ CREATE TABLE IF NOT EXISTS replenishment_policy (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
     UNIQUE (location_id, item_sku)
 );
+
+-- Indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_replenishment_task_status ON replenishment_task(status);
+CREATE INDEX IF NOT EXISTS idx_replenishment_task_sku_dest_status ON replenishment_task(item_sku, destination_location_id, status);

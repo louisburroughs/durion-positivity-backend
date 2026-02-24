@@ -10,7 +10,6 @@ import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepositor
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.service.ReplenishmentService;
 import java.util.List;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -26,24 +25,9 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         @Override
         @Transactional(readOnly = true)
         public @NonNull List<ReplenishmentTaskResponse> getReplenishmentTasks() {
-                List<ReplenishmentTask> tasks = replenishmentTaskRepository
+                return replenishmentTaskRepository
                                 .findByStatusIn(List.of(ReplenishmentStatus.PENDING, ReplenishmentStatus.IN_PROGRESS))
                                 .stream()
-                                .toList();
-
-                if (tasks.isEmpty()) {
-                        tasks = Stream
-                                        .concat(
-                                                        replenishmentTaskRepository
-                                                                        .findByStatus(ReplenishmentStatus.PENDING)
-                                                                        .stream(),
-                                                        replenishmentTaskRepository
-                                                                        .findByStatus(ReplenishmentStatus.IN_PROGRESS)
-                                                                        .stream())
-                                        .toList();
-                }
-
-                return tasks.stream()
                                 .map(this::toTaskResponse)
                                 .toList();
         }
