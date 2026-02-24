@@ -35,9 +35,12 @@ public final class InventoryEventTypes {
                                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_RECOUNT",
                                                 "Submit a recount for a cycle count task").build(),
 
-                                // InventoryAvailabilityController - 1 event
+                                // InventoryAvailabilityController - 2 events
                                 EventTypeRegistration.write("INVENTORY_AVAILABILITY_UPDATE",
                                                 "Update inventory availability for a product").build(),
+                                EventTypeRegistration.fastRead("INVENTORY_AVAILABILITY_QUERY",
+                                                "Query on-hand and ATP availability by productSku and locationId")
+                                                .build(),
 
                                 // PickingListController - 1 event
                                 EventTypeRegistration.write("INVENTORY_PICKING_LIST_CONFIRM",

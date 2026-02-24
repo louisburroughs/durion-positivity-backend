@@ -102,6 +102,12 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .sum();
         int allocatedQty = allocationCreated - allocationReleased;
 
+        String derivedUom = locationEntries.stream()
+                .map(InventoryLedgerEntry::getUnitOfMeasure)
+                .filter(uom -> uom != null && !uom.isBlank())
+                .findFirst()
+                .orElse("EACH");
+
         return AvailabilityView.builder()
                 .productSku(productSku)
                 .locationId(locationId)
@@ -111,7 +117,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .onHandQuantity(onHand)
                 .allocatedQuantity(allocatedQty)
                 .availableToPromiseQuantity(onHand - allocatedQty)
-                .unitOfMeasure("EACH")
+                .unitOfMeasure(derivedUom)
                 .build();
     }
 

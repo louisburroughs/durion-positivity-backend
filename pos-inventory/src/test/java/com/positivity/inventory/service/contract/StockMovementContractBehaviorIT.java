@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -152,5 +154,29 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
         List<InventoryLedgerEntry> entries = inventoryLedgerEntryRepository.findAll();
         assertThat(entries).hasSize(1);
         assertThat(entries.get(0).getTransactionUserId()).isNotNull();
+    }
+
+    // AC-5: Test 1 — user with only approval authority cannot create adjustment
+    @Test
+    @DisplayName("AC-5a: createAdjustment_withoutCreateAuthority_returns403")
+    void createAdjustment_withoutCreateAuthority_returns403() throws Exception {
+        mockMvc.perform(withApproveOnlyAuth(post("/v1/inventory/adjustments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "productSku", "SKU-AUTH-TEST",
+                        "locationId", "LOC-AUTH",
+                        "quantity", 5,
+                        "reasonCode", "DAMAGED_GOODS"
+                )))))
+                .andExpect(status().isForbidden());
+    }
+
+    // AC-5: Test 2 — user with only create authority cannot approve adjustment
+    @Test
+    @DisplayName("AC-5b: approveAdjustment_withoutApproveAuthority_returns403")
+    void approveAdjustment_withoutApproveAuthority_returns403() throws Exception {
+        mockMvc.perform(withCreateOnlyAuth(post("/v1/inventory/adjustments/{id}/approve", UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)))
+                .andExpect(status().isForbidden());
     }
 }
