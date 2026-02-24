@@ -71,7 +71,7 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     void recordMovement_RECEIVE_createsGoodsReceiptLedgerEntry() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"productSku\":\"SKU-RECV-1\",\"locationId\":\"LOC-RECV\","
+                .content("{\"productSku\":\"SKU-RECV-1\",\"fromLocationId\":\"LOC-RECV\","
                         + "\"movementType\":\"RECEIVE\",\"quantity\":50,\"unitOfMeasure\":\"EACH\"}")))
                 .andExpect(status().isCreated());
     }
@@ -83,13 +83,25 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     void recordMovement_TRANSFER_createsTwoLedgerEntries() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"productSku\":\"SKU-XFER-1\",\"locationId\":\"LOC-SRC\","
+                .content("{\"productSku\":\"SKU-XFER-1\",\"fromLocationId\":\"LOC-SRC\","
                         + "\"toLocationId\":\"LOC-DST\",\"movementType\":\"TRANSFER\","
                         + "\"quantity\":25,\"unitOfMeasure\":\"EACH\"}")))
                 .andExpect(status().isCreated());
 
         List<InventoryLedgerEntry> entries = inventoryLedgerEntryRepository.findAll();
         assertThat(entries).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("AC-2b: recordMovement_TRANSFER_withoutToLocationId_returns400")
+    void recordMovement_TRANSFER_withoutToLocationId_returns400() throws Exception {
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"productSku\":\"SKU-XFER-2\",\"fromLocationId\":\"LOC-SRC\","
+                        + "\"movementType\":\"TRANSFER\",\"quantity\":25,\"unitOfMeasure\":\"EACH\"}")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     // Issue CAP-215: AC-3 — adjustment request without reasonCode returns 400
@@ -133,7 +145,7 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     void recordMovement_PICK_returns422_whenInsufficientStock() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"productSku\":\"SKU-PICK-1\",\"locationId\":\"LOC-PICK\","
+                .content("{\"productSku\":\"SKU-PICK-1\",\"fromLocationId\":\"LOC-PICK\","
                         + "\"movementType\":\"PICK\",\"quantity\":500,\"unitOfMeasure\":\"EACH\"}")))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -147,7 +159,7 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     void recordMovement_RECEIVE_recordsActorFromSecurityContext() throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"productSku\":\"SKU-ACTOR-1\",\"locationId\":\"LOC-ACTOR\","
+                .content("{\"productSku\":\"SKU-ACTOR-1\",\"fromLocationId\":\"LOC-ACTOR\","
                         + "\"movementType\":\"RECEIVE\",\"quantity\":10,\"unitOfMeasure\":\"EACH\"}")))
                 .andExpect(status().isCreated());
 

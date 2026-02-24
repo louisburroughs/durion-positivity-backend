@@ -64,4 +64,21 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
      */
     @Query("SELECT COALESCE(SUM(e.changeInQuantity), 0) FROM InventoryLedgerEntry e WHERE e.stockItemId = :stockItemId")
     Integer calculateOnHandQuantity(@Param("stockItemId") String stockItemId);
+
+    /**
+     * Calculate current on-hand quantity for a stock item at a specific location by
+     * summing location-scoped ledger entries.
+     *
+     * @param stockItemId the stock item ID
+     * @param locationId  the location bucket for quantity calculations
+     * @return current on-hand quantity at the location
+     */
+    @Query("""
+            SELECT COALESCE(SUM(e.changeInQuantity), 0)
+            FROM InventoryLedgerEntry e
+            WHERE e.stockItemId = :stockItemId
+              AND e.locationId = :locationId
+            """)
+    Integer calculateOnHandQuantityAtLocation(@Param("stockItemId") String stockItemId,
+            @Param("locationId") String locationId);
 }
