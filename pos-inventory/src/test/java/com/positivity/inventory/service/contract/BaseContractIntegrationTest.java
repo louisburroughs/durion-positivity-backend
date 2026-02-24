@@ -18,6 +18,7 @@ public abstract class BaseContractIntegrationTest {
                                 "inventory:availability:read",
                                 "inventory:adjustment:create",
                                 "inventory:adjustment:approve",
+                                "inventory:movement:create",
                                 "inventory:location:write",
                                 "inventory:picking:manage"));
     }

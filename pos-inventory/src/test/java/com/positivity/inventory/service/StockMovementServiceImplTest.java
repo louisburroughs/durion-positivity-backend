@@ -57,7 +57,6 @@ class StockMovementServiceImplTest {
     void recordMovement_pick_withSufficientStock_setsGoodsIssue_negativeDelta() {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 4);
-        when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(10);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
                 .thenReturn(10);
 
@@ -71,7 +70,8 @@ class StockMovementServiceImplTest {
     @Test
     void recordMovement_pick_withInsufficientStock_throwsInsufficientStockException() {
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 5);
-        when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(3);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
+                .thenReturn(3);
 
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 
@@ -82,7 +82,31 @@ class StockMovementServiceImplTest {
     @Test
     void recordMovement_issue_withInsufficientStock_throwsInsufficientStockException() {
         RecordMovementRequest request = baseMovementRequest(MovementType.ISSUE, 7);
-        when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(2);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
+                .thenReturn(2);
+
+        Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
+
+        assertThat(exception).isInstanceOf(InsufficientStockException.class);
+        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+    }
+
+    @Test
+    void recordMovement_adjust_throwsIllegalArgumentException() {
+        RecordMovementRequest request = baseMovementRequest(MovementType.ADJUST, 1);
+
+        Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
+
+        assertThat(exception).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ADJUST must use adjustment workflow");
+        verify(ledgerRepository, never()).save(any(InventoryLedgerEntry.class));
+    }
+
+    @Test
+    void recordMovement_pick_usesSourceLocationOnHand_notGlobalOnHand() {
+        RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 5);
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
+                .thenReturn(3);
 
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 

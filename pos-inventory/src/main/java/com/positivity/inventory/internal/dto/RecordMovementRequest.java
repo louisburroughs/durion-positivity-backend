@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.dto;
 
 import com.positivity.inventory.internal.enums.MovementType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -38,6 +39,9 @@ public class RecordMovementRequest {
     String toLocationId;
 
     @NotNull
+    @Schema(
+            description = "Direct ledger movement type. ADJUST is workflow-only and must use /v1/inventory/adjustments endpoints.",
+            allowableValues = { "RECEIVE", "PUT_AWAY", "PICK", "ISSUE", "RETURN", "TRANSFER" })
     MovementType movementType;
 
     @NotNull
@@ -55,5 +59,10 @@ public class RecordMovementRequest {
             return true;
         }
         return toLocationId != null && !toLocationId.isBlank();
+    }
+
+    @AssertTrue(message = "movementType ADJUST must use adjustment workflow endpoints")
+    boolean isDirectMovementTypeAllowed() {
+        return movementType == null || movementType != MovementType.ADJUST;
     }
 }
