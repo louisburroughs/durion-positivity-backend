@@ -56,7 +56,7 @@ class PermissionServiceImplTest {
             var result = sut.registerPermissions(request);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).getId()).isEqualTo("pricing:price_book:edit");
+            assertThat(result.get(0).getName()).isEqualTo("pricing:price_book:edit");
             verify(permissionRepository).save(any(Permission.class));
         }
 
@@ -133,7 +133,7 @@ class PermissionServiceImplTest {
 
             var result = sut.getPermission(permissionId);
 
-            assertThat(result.getId()).isEqualTo("pricing:price_book:edit");
+            assertThat(result.getName()).isEqualTo("pricing:price_book:edit");
             assertThat(result.getDomain()).isEqualTo("pricing");
         }
 

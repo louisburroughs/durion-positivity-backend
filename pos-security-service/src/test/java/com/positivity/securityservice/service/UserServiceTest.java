@@ -11,6 +11,8 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.service.UserServiceImpl;
+
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -32,7 +34,7 @@ class UserServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @InjectMocks
-    private UserService userService;
+    private UserServiceImpl userService;
 
     @Test
     void createUser_assignsRolesAndEncodedPassword() {

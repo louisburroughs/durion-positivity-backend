@@ -80,7 +80,7 @@ class RoleManagementServiceImplTest {
                                 new RolePermissionsRequest(roleId, Set.of("security:role:grant")));
 
                 assertThat(created.getCreatedBy()).isEqualTo("agent-user");
-                assertThat(updated.getPermissions()).extracting("id").contains("security:role:grant");
+                assertThat(updated.getPermissions()).extracting("name").contains("security:role:grant");
         }
 
         @Test

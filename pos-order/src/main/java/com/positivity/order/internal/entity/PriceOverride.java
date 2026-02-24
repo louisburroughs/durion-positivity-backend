@@ -1,6 +1,6 @@
 package com.positivity.order.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -32,6 +32,8 @@ import java.util.UUID;
 public class PriceOverride {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID overrideId;
 
@@ -145,13 +147,6 @@ public class PriceOverride {
      */
     @Column(nullable = false)
     private Boolean requiresApproval;
-
-    @PrePersist
-    protected void prePersist() {
-        if (overrideId == null) {
-            overrideId = UUIDv7Generator.generate();
-        }
-    }
 
     /**
      * Calculates the absolute discount amount.

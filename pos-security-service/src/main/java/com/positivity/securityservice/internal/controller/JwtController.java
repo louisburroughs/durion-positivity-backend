@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Set;
@@ -76,6 +77,7 @@ public class JwtController {
     @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @EmitEvent(id = "SECURITY_AUTH_LOGIN", apiVersion = "1")
+    @PreAuthorize("permitAll()")
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         log.info("Login request received: subject={}, rolesCount={}",
@@ -116,6 +118,7 @@ public class JwtController {
     @ApiResponse(responseCode = "400", description = "Invalid request (blank username or empty roles)", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @EmitEvent(id = "SECURITY_AUTH_TOKEN_PAIR", apiVersion = "1")
+    @PreAuthorize("permitAll()")
     @PostMapping("/token-pair")
     public ResponseEntity<TokenPairResponse> generateTokenPair(
             @Valid @RequestBody TokenPairRequest request) {
@@ -161,6 +164,7 @@ public class JwtController {
     @ApiResponse(responseCode = "409", description = "Concurrency conflict during token revocation", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @EmitEvent(id = "SECURITY_AUTH_REFRESH", apiVersion = "1")
+    @PreAuthorize("permitAll()")
     @PostMapping("/refresh")
     public ResponseEntity<TokenPairResponse> refreshAccessToken(
             @Valid @RequestBody RefreshTokenRequest request) {
@@ -191,6 +195,7 @@ public class JwtController {
      */
     @Operation(summary = "Validate JWT token", description = "Check if a JWT token is valid (signature, expiration, revocation)")
     @ApiResponse(responseCode = "200", description = "Validation result returned", content = @Content(schema = @Schema(implementation = ValidateResponse.class)))
+    @PreAuthorize("permitAll()")
     @GetMapping("/validate")
     public ResponseEntity<ValidateResponse> validateToken(@RequestParam String token) {
         boolean valid = jwtService.validateToken(token);
@@ -216,6 +221,7 @@ public class JwtController {
     @Operation(summary = "Revoke JWT token", description = "Revoke a JWT token immediately (Redis cache + database)")
     @ApiResponse(responseCode = "204", description = "Token revoked successfully")
     @EmitEvent(id = "SECURITY_AUTH_REVOKE", apiVersion = "1")
+    @PreAuthorize("isAuthenticated()")
     @DeleteMapping("/revoke")
     public ResponseEntity<Void> revokeToken(@RequestParam String token) {
         log.debug("Token revocation request received");
@@ -232,6 +238,7 @@ public class JwtController {
     @Operation(summary = "Extract roles from JWT token", description = "Get the roles claim from a JWT token")
     @ApiResponse(responseCode = "200", description = "Roles extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/roles")
     public ResponseEntity<Set<String>> getRoles(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {
@@ -250,6 +257,7 @@ public class JwtController {
     @Operation(summary = "Extract authorities from JWT token", description = "Get the authorities claim from a JWT token (expanded by gateway)")
     @ApiResponse(responseCode = "200", description = "Authorities extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/authorities")
     public ResponseEntity<Set<String>> getAuthorities(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {
@@ -268,6 +276,7 @@ public class JwtController {
     @Operation(summary = "Extract subject from JWT token", description = "Get the subject (username) from a JWT token")
     @ApiResponse(responseCode = "200", description = "Subject extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/subject")
     public ResponseEntity<String> getSubject(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {
@@ -286,6 +295,7 @@ public class JwtController {
     @Operation(summary = "Extract personId from JWT token", description = "Get the stable person identifier from a JWT token")
     @ApiResponse(responseCode = "200", description = "personId extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/person-id")
     public ResponseEntity<String> getPersonId(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {

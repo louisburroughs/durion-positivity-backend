@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.service.JwtServiceImpl;
+import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
+import com.positivity.securityservice.internal.service.TokenRevocationManager;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -31,7 +33,7 @@ class JwtServiceImplTest {
     @Mock
     private JwtTokenRepository jwtTokenRepository;
     @Mock
-    private RoleAuthorityService roleAuthorityService;
+    private RoleAuthorityServiceImpl roleAuthorityService;
     @Mock
     private TokenRevocationManager tokenRevocationManager;
 

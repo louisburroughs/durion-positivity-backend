@@ -23,6 +23,12 @@ public interface PriceOverrideService {
         ApplyPriceOverrideResponse applyPriceOverride(ApplyPriceOverrideRequest request, String userId);
 
         /**
+         * Approve a pending price override and return a view DTO.
+         */
+        PriceOverrideView approvePriceOverrideView(UUID overrideId, ApprovePriceOverrideRequest request,
+                        UUID approverUserId, String approverRole);
+
+        /**
          * Approve a pending price override.
          * 
          * @param overrideId     the ID of the override to approve
@@ -33,6 +39,12 @@ public interface PriceOverrideService {
          */
         PriceOverride approvePriceOverride(UUID overrideId, ApprovePriceOverrideRequest request,
                         UUID approverUserId, String approverRole);
+
+        /**
+         * Reject a pending price override and return a view DTO.
+         */
+        PriceOverrideView rejectPriceOverrideView(UUID overrideId, RejectPriceOverrideRequest request,
+                        UUID reviewerUserId, String approverRole);
 
         /**
          * Reject a pending price override.
@@ -47,12 +59,22 @@ public interface PriceOverrideService {
                         UUID reviewerUserId, String approverRole);
 
         /**
+         * Get a price override by ID as a view DTO.
+         */
+        PriceOverrideView getOverrideViewById(UUID overrideId);
+
+        /**
          * Get a price override by ID.
          * 
          * @param overrideId the override ID
          * @return the override
          */
         PriceOverride getOverrideById(UUID overrideId);
+
+        /**
+         * Get all overrides for an order as view DTOs.
+         */
+        List<PriceOverrideView> getOverrideViewsByOrderId(UUID orderId);
 
         /**
          * Get all overrides for an order.
@@ -63,11 +85,21 @@ public interface PriceOverrideService {
         List<PriceOverride> getOverridesByOrderId(UUID orderId);
 
         /**
+         * Get all pending approval overrides as view DTOs.
+         */
+        List<PriceOverrideView> getPendingApprovalViews();
+
+        /**
          * Get all pending approval overrides.
          * 
          * @return list of pending overrides
          */
         List<PriceOverride> getPendingApprovals();
+
+        /**
+         * Get overrides created within a date range as view DTOs.
+         */
+        List<PriceOverrideView> getOverrideViewsByDateRange(Instant startDate, Instant endDate);
 
         /**
          * Get overrides created within a date range.
@@ -77,6 +109,11 @@ public interface PriceOverrideService {
          * @return list of overrides
          */
         List<PriceOverride> getOverridesByDateRange(Instant startDate, Instant endDate);
+
+        /**
+         * Get overrides by status as view DTOs.
+         */
+        List<PriceOverrideView> getOverrideViewsByStatus(String status);
 
         /**
          * Get overrides by status.

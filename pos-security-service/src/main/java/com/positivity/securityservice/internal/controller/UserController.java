@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.UserService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +38,7 @@ public class UserController {
     @Operation(summary = "Create a new user", description = "Creates a new user with username, password, and roles.")
     @ApiResponse(responseCode = "201", description = "User created successfully.")
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<UserDto> createUser(@RequestBody Map<String, Object> payload) {
         String username = (String) payload.get("username");
@@ -50,6 +53,7 @@ public class UserController {
 
     @Operation(summary = "User login", description = "Authenticates a user and returns a JWT token.")
     @EmitEvent(id = "SECURITY_USER_LOGIN", apiVersion = "1")
+    @PreAuthorize("permitAll()")
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody Map<String, String> payload) {
         String username = payload.get("username");
@@ -71,6 +75,7 @@ public class UserController {
 
     @Operation(summary = "Get all users", description = "Retrieve a list of all users.")
     @ApiResponse(responseCode = "200", description = "List of users returned successfully.")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public List<UserDto> getAllUsers() {
         return userService.getAllUsers();
@@ -79,6 +84,7 @@ public class UserController {
     @Operation(summary = "Get user by ID", description = "Retrieve a user by their unique ID.")
     @ApiResponse(responseCode = "200", description = "User found and returned.")
     @ApiResponse(responseCode = "404", description = "User not found.")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<UserDto> getUserById(
             @Parameter(description = "ID of the user to retrieve", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
@@ -90,6 +96,7 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "User updated successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<UserDto> updateUser(
             @Parameter(description = "ID of the user to update", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id,
@@ -102,6 +109,7 @@ public class UserController {
     @ApiResponse(responseCode = "204", description = "User deleted successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_DELETE", apiVersion = "1")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(
             @Parameter(description = "ID of the user to delete", example = "123e4567-e89b-12d3-a456-426614174000") @PathVariable UUID id) {
@@ -110,8 +118,10 @@ public class UserController {
     }
 
     @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{username}/roles")
-    public ResponseEntity<UserDto> assignRoles(@PathVariable String username, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<UserDto> assignRoles(@PathVariable String username,
+            @RequestBody Map<String, Object> payload) {
         List<?> rolesList = (List<?>) payload.get("roles");
         Set<String> roles = rolesList.stream()
                 .map(Object::toString)

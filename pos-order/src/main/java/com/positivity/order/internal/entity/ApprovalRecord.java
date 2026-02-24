@@ -1,6 +1,6 @@
 package com.positivity.order.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -26,6 +26,8 @@ import java.util.UUID;
 public class ApprovalRecord {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID recordId;
 
@@ -72,9 +74,6 @@ public class ApprovalRecord {
 
     @PrePersist
     protected void prePersist() {
-        if (recordId == null) {
-            recordId = UUIDv7Generator.generate();
-        }
         if (actionTimestamp == null) {
             actionTimestamp = Instant.now();
         }
