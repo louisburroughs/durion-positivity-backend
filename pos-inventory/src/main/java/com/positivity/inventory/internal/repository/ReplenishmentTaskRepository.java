@@ -12,6 +12,8 @@ public interface ReplenishmentTaskRepository extends JpaRepository<Replenishment
 
     List<ReplenishmentTask> findByStatus(ReplenishmentStatus status);
 
+    List<ReplenishmentTask> findByStatusIn(List<ReplenishmentStatus> statuses);
+
     boolean existsByItemSKUAndDestinationLocationIdAndStatusIn(
             String itemSKU,
             String destinationLocationId,

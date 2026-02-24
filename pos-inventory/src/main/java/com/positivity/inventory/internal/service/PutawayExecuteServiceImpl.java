@@ -37,7 +37,8 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
             @NonNull String actorId) {
         UUID parsedTaskId = parseRequiredUuid(taskId, "taskId");
 
-        PutawayTask task = putawayTaskRepository.findById(parsedTaskId)
+        PutawayTask task = putawayTaskRepository.findByIdForUpdate(parsedTaskId)
+                .or(() -> putawayTaskRepository.findById(parsedTaskId))
                 .orElseThrow(() -> new TaskNotFoundException(parsedTaskId));
 
         putawayValidationService.validatePutawayExecution(request);
@@ -55,6 +56,19 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
                 .build();
 
         InventoryLedgerEntry savedLedgerEntry = inventoryLedgerEntryRepository.save(ledgerEntry);
+
+        InventoryLedgerEntry destinationLedgerEntry = InventoryLedgerEntry.builder()
+                .stockItemId(request.getSkuId())
+                .eventType(InventoryLedgerEventType.PUTAWAY)
+                .changeInQuantity(request.getQuantity())
+                .quantityAfter(0)
+                .transactionUserId(actorId)
+                .locationId(request.getDestinationLocationId())
+                .notes("Putaway destination receipt from " + request.getSourceLocationId() + " to "
+                        + request.getDestinationLocationId())
+                .timestamp(now)
+                .build();
+        inventoryLedgerEntryRepository.save(destinationLedgerEntry);
 
         task.setStatus(PutawayTaskStatus.COMPLETED);
         task.setActualDestinationLocationId(request.getDestinationLocationId());

@@ -21,6 +21,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -82,13 +83,26 @@ class PutawayExecuteServiceImplTest {
 
         // Then
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
-        InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
+        verify(inventoryLedgerEntryRepository, times(2)).save(ledgerCaptor.capture());
+        List<InventoryLedgerEntry> allCaptured = ledgerCaptor.getAllValues();
 
-        assertThat(savedLedgerEntry.getChangeInQuantity()).isEqualTo(-10);
-        assertThat(savedLedgerEntry.getStockItemId()).isEqualTo("sku-abc");
-        assertThat(savedLedgerEntry.getLocationId()).isEqualTo("source-loc");
-        assertThat(savedLedgerEntry.getTransactionUserId()).isEqualTo(actorId);
+        // Source decrement entry
+        InventoryLedgerEntry sourceEntry = allCaptured.stream()
+                .filter(e -> e.getChangeInQuantity() == -10)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No source decrement entry found"));
+        assertThat(sourceEntry.getStockItemId()).isEqualTo("sku-abc");
+        assertThat(sourceEntry.getLocationId()).isEqualTo("source-loc");
+        assertThat(sourceEntry.getTransactionUserId()).isEqualTo(actorId);
+
+        // Destination credit entry
+        InventoryLedgerEntry destinationEntry = allCaptured.stream()
+                .filter(e -> e.getChangeInQuantity() == 10)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No destination credit entry found"));
+        assertThat(destinationEntry.getStockItemId()).isEqualTo("sku-abc");
+        assertThat(destinationEntry.getLocationId()).isEqualTo("dest-loc");
+        assertThat(destinationEntry.getTransactionUserId()).isEqualTo(actorId);
 
         ArgumentCaptor<PutawayTask> taskCaptor = ArgumentCaptor.forClass(PutawayTask.class);
         verify(putawayTaskRepository).save(taskCaptor.capture());
