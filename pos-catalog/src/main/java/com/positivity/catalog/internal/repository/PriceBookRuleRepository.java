@@ -4,7 +4,7 @@ import com.positivity.catalog.internal.entity.PriceBookRuleEntity;
 import com.positivity.catalog.internal.entity.PriceBookRuleConditionType;
 import com.positivity.catalog.internal.entity.PriceBookRuleStatus;
 import com.positivity.catalog.internal.entity.PriceBookRuleTargetType;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -38,8 +38,8 @@ public interface PriceBookRuleRepository extends JpaRepository<PriceBookRuleEnti
             @Param("targetId") UUID targetId,
             @Param("conditionType") PriceBookRuleConditionType conditionType,
             @Param("conditionValue") String conditionValue,
-            @Param("windowStart") OffsetDateTime windowStart,
-            @Param("windowEnd") OffsetDateTime windowEnd,
+            @Param("windowStart") Instant windowStart,
+            @Param("windowEnd") Instant windowEnd,
             @Param("excludeRuleId") UUID excludeRuleId);
 
     @Query("""
@@ -52,5 +52,5 @@ public interface PriceBookRuleRepository extends JpaRepository<PriceBookRuleEnti
     List<PriceBookRuleEntity> findActiveRulesForBooks(
             @Param("priceBookIds") List<UUID> priceBookIds,
             @Param("status") PriceBookRuleStatus status,
-            @Param("asOf") OffsetDateTime asOf);
+            @Param("asOf") Instant asOf);
 }

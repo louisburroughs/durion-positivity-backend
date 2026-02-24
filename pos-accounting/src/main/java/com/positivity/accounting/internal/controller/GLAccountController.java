@@ -20,7 +20,6 @@ import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
-import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.events.EmitEvent;
 

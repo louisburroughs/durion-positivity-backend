@@ -121,7 +121,7 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
                 .getResponse()
                 .getContentAsString();
 
-        return UUID.fromString(objectMapper.readTree(createResponse).path("adjustmentId").asText());
+        return UUID.fromString(objectMapper.readTree(createResponse).path("adjustmentId").asString());
     }
 
     private void approveAdjustment(@NonNull UUID adjustmentId) throws Exception {
