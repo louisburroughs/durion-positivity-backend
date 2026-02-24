@@ -120,6 +120,12 @@ paths:
               $ref: "#/components/schemas/RejectPriceOverrideRequest"
         required: true
       responses:
+        "200":
+          description: Override rejected
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideView"
         "400":
           description: Invalid request or override not in pending state
           content:
@@ -134,12 +140,6 @@ paths:
                 $ref: "#/components/schemas/PriceOverrideView"
         "404":
           description: Override not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverrideView"
-        "200":
-          description: Override rejected
           content:
             '*/*':
               schema:

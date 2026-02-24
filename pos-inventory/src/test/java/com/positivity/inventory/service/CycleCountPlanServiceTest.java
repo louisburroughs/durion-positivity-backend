@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
+import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.service.CycleCountPlanServiceImpl;
 
@@ -240,11 +241,11 @@ class CycleCountPlanServiceTest {
      */
     @Test
     void getPlan_nonExistentId_throwsException() {
-        // Issue #176: unknown planId → empty → TaskNotFoundException → 404
+        // Issue #176: unknown planId → empty → CycleCountPlanNotFoundException → 404
         UUID unknownId = UUID.randomUUID();
         when(cycleCountPlanRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPlan(unknownId))
-                .isInstanceOf(com.positivity.inventory.internal.exception.TaskNotFoundException.class);
+                .isInstanceOf(CycleCountPlanNotFoundException.class);
     }
 }

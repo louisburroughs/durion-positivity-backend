@@ -45,19 +45,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Default locations returned
+        "501":
+          description: Not implemented
           content:
-            application/json:
+            '*/*':
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
-        "501":
-          description: Not implemented
+        "200":
+          description: Default locations returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -129,18 +129,18 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Availability returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LocationAvailabilityDto"
         "400":
           description: Invalid product identifier
           content:
             '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationAvailabilityDto"
+        "200":
+          description: Availability returned
+          content:
+            application/json:
               schema:
                 type: array
                 items:
@@ -176,6 +176,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryAvailabilityResponse"
+  /api/v1/inventory/cycleCountPlans:
+    post:
+      tags:
+      - cycle-count-plan-controller
+      operationId: createPlan
+      parameters:
+      - name: X-User-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCycleCountPlanRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
   /api/v1/inventory/cycleCountAdjustments:
     get:
       tags:
@@ -341,16 +365,16 @@ paths:
             schema:
               $ref: "#/components/schemas/DeactivateLocationRequest"
       responses:
-        "200":
-          description: Deactivation completed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeactivateLocationResponse"
         "400":
           description: Bad request - invalid parameters or destination required
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/DeactivateLocationResponse"
+        "200":
+          description: Deactivation completed
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
         "404":
@@ -439,6 +463,25 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
+  /api/v1/inventory/cycleCountPlans/{planId}:
+    get:
+      tags:
+      - cycle-count-plan-controller
+      operationId: getPlan
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
   /api/v1/inventory/cycleCountAdjustments/{adjustmentId}:
     get:
       tags:
@@ -624,6 +667,51 @@ components:
       - onHandQty
       - productId
       - uom
+    CreateCycleCountPlanRequest:
+      type: object
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        zoneIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        planName:
+          type: string
+        scheduledDate:
+          type: string
+          format: date
+    CycleCountPlanResponse:
+      type: object
+      properties:
+        planId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        zoneIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        planName:
+          type: string
+        scheduledDate:
+          type: string
+          format: date
+        status:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     CreateAdjustmentRequest:
       type: object
       properties:
