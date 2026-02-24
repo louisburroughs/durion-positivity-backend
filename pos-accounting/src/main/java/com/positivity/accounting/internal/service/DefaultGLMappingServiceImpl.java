@@ -23,7 +23,6 @@ import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.service.DefaultGLMappingService;
 import com.positivity.accounting.service.GLAccountService;
-import com.positivity.accounting.internal.service.GLAccountServiceImpl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

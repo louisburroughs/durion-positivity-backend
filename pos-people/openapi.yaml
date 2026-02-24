@@ -499,8 +499,8 @@ paths:
               $ref: "#/components/schemas/LinkUserToPersonRequest"
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -517,8 +517,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -543,8 +543,8 @@ paths:
               $ref: "#/components/schemas/CreateUserLinkRequest"
         required: true
       responses:
-        "200":
-          description: Link already exists and is returned
+        "201":
+          description: Link created successfully
           content:
             '*/*':
               schema:
@@ -561,8 +561,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/UserPersonLinkResponse"
-        "201":
-          description: Link created successfully
+        "200":
+          description: Link already exists and is returned
           content:
             '*/*':
               schema:
@@ -1379,14 +1379,14 @@ paths:
           type: string
           format: date-time
       responses:
-        "404":
-          description: Person or role assignment not found
+        "400":
+          description: Invalid request for revoking role assignment
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "400":
-          description: Invalid request for revoking role assignment
+        "404":
+          description: Person or role assignment not found
           content:
             application/problem+json:
               schema:

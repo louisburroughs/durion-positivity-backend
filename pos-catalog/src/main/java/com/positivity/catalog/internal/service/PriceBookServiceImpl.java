@@ -26,6 +26,7 @@ import com.positivity.catalog.service.PriceBookService;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -44,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
 public class PriceBookServiceImpl implements PriceBookService {
 
     private static final String PRICE_BASE_DATA_MISSING = "PRICE_BASE_DATA_MISSING";
-    private static final OffsetDateTime FAR_FUTURE_EFFECTIVE_END_AT = OffsetDateTime.parse("2099-12-31T23:59:59Z");
+    private static final Instant FAR_FUTURE_EFFECTIVE_END_AT = Instant.parse("2099-12-31T23:59:59Z");
 
     private final PriceBookRepository priceBookRepository;
     private final PriceBookRuleRepository priceBookRuleRepository;
@@ -122,8 +123,8 @@ public class PriceBookServiceImpl implements PriceBookService {
                 request.getConditionType() == null ? PriceBookRuleConditionType.NONE : request.getConditionType());
         entity.setConditionValue(request.getConditionValue());
         entity.setPriority(request.getPriority() == null ? 0 : request.getPriority());
-        entity.setEffectiveStartAt(request.getEffectiveStartAt());
-        entity.setEffectiveEndAt(request.getEffectiveEndAt());
+        entity.setEffectiveStartAt(toInstant(request.getEffectiveStartAt()));
+        entity.setEffectiveEndAt(toInstant(request.getEffectiveEndAt()));
         entity.setStatus(PriceBookRuleStatus.ACTIVE);
         entity.setCreatedByUserId(request.getCreatedByUserId());
 
@@ -153,8 +154,8 @@ public class PriceBookServiceImpl implements PriceBookService {
                 request.getConditionType() == null ? PriceBookRuleConditionType.NONE : request.getConditionType());
         entity.setConditionValue(request.getConditionValue());
         entity.setPriority(request.getPriority() == null ? 0 : request.getPriority());
-        entity.setEffectiveStartAt(request.getEffectiveStartAt());
-        entity.setEffectiveEndAt(request.getEffectiveEndAt());
+        entity.setEffectiveStartAt(toInstant(request.getEffectiveStartAt()));
+        entity.setEffectiveEndAt(toInstant(request.getEffectiveEndAt()));
         entity.setCreatedByUserId(request.getCreatedByUserId());
 
         return toPriceBookRuleDto(priceBookRuleRepository.save(entity));
@@ -189,7 +190,7 @@ public class PriceBookServiceImpl implements PriceBookService {
                 .orElseThrow(() -> new CatalogNotFoundException("Product not found: " + request.getProductId()));
 
         LocalDate asOfDate = request.getAsOf() == null ? LocalDate.now() : request.getAsOf();
-        OffsetDateTime asOf = asOfDate.atStartOfDay().atOffset(ZoneOffset.UTC);
+        Instant asOf = asOfDate.atStartOfDay().toInstant(ZoneOffset.UTC);
 
         List<UUID> priceBookIds = resolveCandidatePriceBookIds(request);
         if (!priceBookIds.isEmpty()) {
@@ -454,8 +455,8 @@ public class PriceBookServiceImpl implements PriceBookService {
         PriceBookRuleConditionType conditionType = request.getConditionType() == null ? PriceBookRuleConditionType.NONE
                 : request.getConditionType();
 
-        OffsetDateTime windowEnd = request.getEffectiveEndAt() == null ? FAR_FUTURE_EFFECTIVE_END_AT
-                : request.getEffectiveEndAt();
+        Instant windowEnd = request.getEffectiveEndAt() == null ? FAR_FUTURE_EFFECTIVE_END_AT
+                : toInstant(request.getEffectiveEndAt());
 
         var conflicts = priceBookRuleRepository.findConflicts(
                 priceBookId,
@@ -463,7 +464,7 @@ public class PriceBookServiceImpl implements PriceBookService {
                 request.getTargetId(),
                 conditionType,
                 request.getConditionValue(),
-                request.getEffectiveStartAt(),
+                toInstant(request.getEffectiveStartAt()),
                 windowEnd,
                 excludeRuleId);
 
@@ -495,8 +496,8 @@ public class PriceBookServiceImpl implements PriceBookService {
         dto.setScopeId(entity.getScopeId());
         dto.setDefault(entity.isDefault());
         dto.setStatus(entity.getStatus());
-        dto.setCreatedAt(entity.getCreatedAt());
-        dto.setUpdatedAt(entity.getUpdatedAt());
+        dto.setCreatedAt(toOffsetDateTime(entity.getCreatedAt()));
+        dto.setUpdatedAt(toOffsetDateTime(entity.getUpdatedAt()));
         dto.setVersion(entity.getVersion());
         return dto;
     }
@@ -511,14 +512,22 @@ public class PriceBookServiceImpl implements PriceBookService {
         dto.setConditionType(entity.getConditionType());
         dto.setConditionValue(entity.getConditionValue());
         dto.setPriority(entity.getPriority());
-        dto.setEffectiveStartAt(entity.getEffectiveStartAt());
-        dto.setEffectiveEndAt(entity.getEffectiveEndAt());
+        dto.setEffectiveStartAt(toOffsetDateTime(entity.getEffectiveStartAt()));
+        dto.setEffectiveEndAt(toOffsetDateTime(entity.getEffectiveEndAt()));
         dto.setStatus(entity.getStatus());
         dto.setCreatedByUserId(entity.getCreatedByUserId());
-        dto.setCreatedAt(entity.getCreatedAt());
-        dto.setUpdatedAt(entity.getUpdatedAt());
+        dto.setCreatedAt(toOffsetDateTime(entity.getCreatedAt()));
+        dto.setUpdatedAt(toOffsetDateTime(entity.getUpdatedAt()));
         dto.setVersion(entity.getVersion());
         return dto;
+    }
+
+    private Instant toInstant(OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
+    }
+
+    private OffsetDateTime toOffsetDateTime(Instant value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
     private record PricePayload(BigDecimal amount, String currency) {

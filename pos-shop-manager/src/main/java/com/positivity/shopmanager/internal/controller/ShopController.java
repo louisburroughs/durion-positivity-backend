@@ -1,12 +1,5 @@
 package com.positivity.shopmanager.internal.controller;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -18,8 +11,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.positivity.shopmanager.internal.dto.PersonDTO;
 import com.positivity.shopmanager.internal.dto.ServiceEntityDTO;
-import com.positivity.shopmanager.internal.service.ShopServiceImpl;
 import com.positivity.shopmanager.service.ShopService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Tag(name = "Shop API", description = "Endpoints for shop management, technicians, and services")
