@@ -34,8 +34,8 @@ import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.TokenRevocationManager;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

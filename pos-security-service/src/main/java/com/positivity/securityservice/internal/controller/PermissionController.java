@@ -111,6 +111,7 @@ public class PermissionController {
      */
     @GetMapping("/validate/{permissionName}")
     @Operation(summary = "Validate permission name format", description = "Checks if a permission name follows the domain:resource:action format")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<Boolean> validatePermissionName(@PathVariable String permissionName) {
         boolean isValid = permissionRegistryService.isValidPermissionName(permissionName);
         return ResponseEntity.ok(isValid);
@@ -121,6 +122,7 @@ public class PermissionController {
      */
     @GetMapping("/exists/{permissionName}")
     @Operation(summary = "Check if permission exists", description = "Returns true if the permission is registered")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     public ResponseEntity<Boolean> permissionExists(@PathVariable String permissionName) {
         boolean exists = permissionRegistryService.permissionExists(permissionName);
         return ResponseEntity.ok(exists);

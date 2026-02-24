@@ -34,7 +34,7 @@ import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.TokenRevocationManager;
+import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import com.positivity.shared.id.UUIDv7Generator;
 
 /**

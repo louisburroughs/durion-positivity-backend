@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
+
 class RoleAuthorityServiceTest {
 
-    private final RoleAuthorityService roleAuthorityService = new RoleAuthorityService();
+    private final RoleAuthorityServiceImpl roleAuthorityService = new RoleAuthorityServiceImpl();
 
     @Test
     void expandRolesToAuthorities_adminIncludesRoleAndDomainAuthorities() {

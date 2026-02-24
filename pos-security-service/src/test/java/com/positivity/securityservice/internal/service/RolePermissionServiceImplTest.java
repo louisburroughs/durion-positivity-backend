@@ -114,7 +114,7 @@ class RolePermissionServiceImplTest {
 
             RoleDto result = sut.grantPermission(roleId, permissionKey);
 
-            assertThat(result.getPermissions()).extracting("id").contains(permissionKey);
+            assertThat(result.getPermissions()).extracting("name").contains(permissionKey);
             verify(applicationEventPublisher).publishEvent(any());
         }
 
@@ -136,7 +136,7 @@ class RolePermissionServiceImplTest {
             RoleDto result = sut.grantPermission(roleId, permissionKey);
 
             assertThat(result.getPermissions()).hasSize(1);
-            assertThat(result.getPermissions().iterator().next().getId()).isEqualTo(permissionKey);
+            assertThat(result.getPermissions().iterator().next().getName()).isEqualTo(permissionKey);
             verify(permissionRepository).save(any(Permission.class));
         }
 

@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import java.util.ArrayList;
 import java.util.List;

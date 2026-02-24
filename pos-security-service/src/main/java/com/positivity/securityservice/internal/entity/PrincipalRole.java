@@ -1,8 +1,9 @@
 package com.positivity.securityservice.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -28,6 +29,8 @@ import lombok.NoArgsConstructor;
 public class PrincipalRole {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -43,9 +46,6 @@ public class PrincipalRole {
 
     @PrePersist
     protected void onCreate() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
         if (createdAt == null) {
             createdAt = Instant.now();
         }

@@ -1,7 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,6 +17,8 @@ import java.util.UUID;
 @Table(name = "users")
 public class User {
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
 
@@ -32,10 +34,4 @@ public class User {
     @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles = new HashSet<>();
 
-    @PrePersist
-    protected void generateId() {
-        if (id == null) {
-            id = UUIDv7Generator.generate();
-        }
-    }
 }

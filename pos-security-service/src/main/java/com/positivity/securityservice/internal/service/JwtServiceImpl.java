@@ -4,7 +4,6 @@ import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.RoleAuthorityService;
-import com.positivity.securityservice.service.TokenRevocationManager;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;

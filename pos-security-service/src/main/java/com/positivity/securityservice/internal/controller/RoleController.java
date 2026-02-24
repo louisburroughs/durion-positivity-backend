@@ -150,6 +150,7 @@ public class RoleController {
      * Check if a user has a specific permission
      */
     @GetMapping("/check-permission")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
     @Operation(summary = "Check user permission", description = "Checks if a user has a specific permission for a location")
     @ApiResponse(responseCode = "404", description = "User not found", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<Boolean> checkUserPermission(

@@ -108,6 +108,13 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
         @Override
         @Transactional
+        public PriceOverrideView approvePriceOverrideView(UUID overrideId, ApprovePriceOverrideRequest request,
+                        UUID approverUserId, String approverRole) {
+                return toView(approvePriceOverride(overrideId, request, approverUserId, approverRole));
+        }
+
+        @Override
+        @Transactional
         public PriceOverride approvePriceOverride(UUID overrideId, ApprovePriceOverrideRequest request,
                         UUID approverUserId, String approverRole) {
                 log.info("Approving price override {} by user {} with role {}",
@@ -142,6 +149,13 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 log.info("Price override {} approved by {} ({})", overrideId, approverUserId, approverRole);
 
                 return override;
+        }
+
+        @Override
+        @Transactional
+        public PriceOverrideView rejectPriceOverrideView(UUID overrideId, RejectPriceOverrideRequest request,
+                        UUID reviewerUserId, String reviewerRole) {
+                return toView(rejectPriceOverride(overrideId, request, reviewerUserId, reviewerRole));
         }
 
         @Override
@@ -186,6 +200,12 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
         @Override
         @Transactional(readOnly = true)
+        public PriceOverrideView getOverrideViewById(UUID overrideId) {
+                return toView(getOverrideById(overrideId));
+        }
+
+        @Override
+        @Transactional(readOnly = true)
         public PriceOverride getOverrideById(UUID overrideId) {
                 return priceOverrideRepository.findById(overrideId)
                                 .orElseThrow(() -> new PriceOverrideNotFoundException(overrideId));
@@ -193,8 +213,20 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
         @Override
         @Transactional(readOnly = true)
+        public List<PriceOverrideView> getOverrideViewsByOrderId(UUID orderId) {
+                return getOverridesByOrderId(orderId).stream().map(this::toView).toList();
+        }
+
+        @Override
+        @Transactional(readOnly = true)
         public List<PriceOverride> getOverridesByOrderId(UUID orderId) {
                 return priceOverrideRepository.findByOrderId(orderId);
+        }
+
+        @Override
+        @Transactional(readOnly = true)
+        public List<PriceOverrideView> getPendingApprovalViews() {
+                return getPendingApprovals().stream().map(this::toView).toList();
         }
 
         @Override
@@ -206,14 +238,65 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
 
         @Override
         @Transactional(readOnly = true)
+        public List<PriceOverrideView> getOverrideViewsByDateRange(Instant startDate, Instant endDate) {
+                return getOverridesByDateRange(startDate, endDate).stream().map(this::toView).toList();
+        }
+
+        @Override
+        @Transactional(readOnly = true)
         public List<PriceOverride> getOverridesByDateRange(Instant startDate, Instant endDate) {
                 return priceOverrideRepository.findByCreatedAtBetween(startDate, endDate);
         }
 
         @Override
         @Transactional(readOnly = true)
+        public List<PriceOverrideView> getOverrideViewsByStatus(String status) {
+                OverrideStatus parsedStatus;
+                try {
+                        parsedStatus = OverrideStatus.valueOf(status.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                        throw new InvalidPriceOverrideException("Invalid override status: " + status);
+                }
+                return getOverridesByStatus(parsedStatus).stream().map(this::toView).toList();
+        }
+
+        @Override
+        @Transactional(readOnly = true)
         public List<PriceOverride> getOverridesByStatus(OverrideStatus status) {
                 return priceOverrideRepository.findByStatus(status);
+        }
+
+        private PriceOverrideView toView(PriceOverride override) {
+                BigDecimal discountAmount = override.getOriginalPrice().subtract(override.getOverridePrice());
+                BigDecimal discountPercentage = calculateDiscountPercentage(
+                                override.getOriginalPrice(), override.getOverridePrice());
+
+                return PriceOverrideView.builder()
+                                .overrideId(override.getOverrideId())
+                                .orderId(override.getOrderId().toString())
+                                .orderLineId(override.getOrderLineId().toString())
+                                .productId(override.getProductId().toString())
+                                .originalPrice(override.getOriginalPrice())
+                                .overridePrice(override.getOverridePrice())
+                                .discountAmount(discountAmount)
+                                .discountPercentage(discountPercentage)
+                                .reasonCode(override.getReasonCode())
+                                .justification(override.getJustification())
+                                .status(override.getStatus())
+                                .requiresApproval(override.getRequiresApproval())
+                                .requestedByUserId(override.getRequestedByUserId() == null ? null
+                                                : override.getRequestedByUserId().toString())
+                                .approvedByUserId(override.getApprovedByUserId() == null ? null
+                                                : override.getApprovedByUserId().toString())
+                                .rejectedByUserId(override.getRejectedByUserId() == null ? null
+                                                : override.getRejectedByUserId().toString())
+                                .rejectionReason(override.getRejectionReason())
+                                .createdAt(override.getCreatedAt())
+                                .updatedAt(override.getUpdatedAt())
+                                .approvedAt(override.getApprovedAt())
+                                .rejectedAt(override.getRejectedAt())
+                                .appliedAt(override.getAppliedAt())
+                                .build();
         }
 
         /**
