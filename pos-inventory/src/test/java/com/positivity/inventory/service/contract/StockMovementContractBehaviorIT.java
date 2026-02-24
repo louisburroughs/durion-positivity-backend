@@ -166,8 +166,7 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
                         "productSku", "SKU-AUTH-TEST",
                         "locationId", "LOC-AUTH",
                         "quantity", 5,
-                        "reasonCode", "DAMAGED_GOODS"
-                )))))
+                        "reasonCode", "DAMAGED_GOODS")))))
                 .andExpect(status().isForbidden());
     }
 

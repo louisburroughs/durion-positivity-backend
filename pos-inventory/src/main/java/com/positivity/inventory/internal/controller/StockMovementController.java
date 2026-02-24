@@ -4,7 +4,6 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
-import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
 import com.positivity.inventory.service.StockMovementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -68,17 +67,7 @@ public class StockMovementController {
         String actorUserId = principal != null ? principal.getName() : "system";
         log.info("POST /v1/inventory/adjustments productSku={} actor={}", request.getProductSku(), actorUserId);
 
-        InventoryAdjustmentRequest adjustmentRequest = stockMovementService.createAdjustmentRequest(request,
-                actorUserId);
-
-        AdjustmentRequestResponse response = AdjustmentRequestResponse.builder()
-                .adjustmentRequestId(adjustmentRequest.getAdjustmentRequestId())
-                .productSku(adjustmentRequest.getProductSku())
-                .locationId(adjustmentRequest.getLocationId())
-                .quantity(adjustmentRequest.getQuantity())
-                .reasonCode(adjustmentRequest.getReasonCode())
-                .status(adjustmentRequest.getStatus().name())
-                .build();
+        AdjustmentRequestResponse response = stockMovementService.createAdjustmentRequest(request, actorUserId);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

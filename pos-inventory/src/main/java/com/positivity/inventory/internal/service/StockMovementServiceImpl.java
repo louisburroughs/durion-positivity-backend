@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
+import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
@@ -95,7 +96,7 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     @Override
     @Transactional
-    public @NonNull InventoryAdjustmentRequest createAdjustmentRequest(@NonNull CreateAdjustmentRequestDto request,
+    public @NonNull AdjustmentRequestResponse createAdjustmentRequest(@NonNull CreateAdjustmentRequestDto request,
             @NonNull String actorUserId) {
         InventoryAdjustmentRequest adjustmentRequest = InventoryAdjustmentRequest.builder()
                 .productSku(request.getProductSku())
@@ -107,7 +108,15 @@ public class StockMovementServiceImpl implements StockMovementService {
                 .requestedByUserId(actorUserId)
                 .requestedAt(Instant.now())
                 .build();
-        return adjustmentRepository.save(adjustmentRequest);
+        InventoryAdjustmentRequest savedRequest = adjustmentRepository.save(adjustmentRequest);
+        return AdjustmentRequestResponse.builder()
+                .adjustmentRequestId(savedRequest.getAdjustmentRequestId())
+                .productSku(savedRequest.getProductSku())
+                .locationId(savedRequest.getLocationId())
+                .quantity(savedRequest.getQuantity())
+                .reasonCode(savedRequest.getReasonCode())
+                .status(savedRequest.getStatus().name())
+                .build();
     }
 
     @Override
