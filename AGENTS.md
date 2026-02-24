@@ -42,12 +42,6 @@ cd durion-positivity-backend
 ./mvnw -pl pos-order -am test
 ```
 
-## Observability (backend-focused)
-
-- Prefer OpenTelemetry Java agent for baseline; use manual SDK instrumentation for high-value business metrics.
-- Attach attributes: `service.name`, `service.version`, `deployment.environment`, `container_id`, `component`, `status`.
-- Expose Actuator endpoints (`/actuator/health`, `/actuator/prometheus`) where applicable for monitoring.
-- Reference: `$WORKSPACE/durion/docs/architecture/observability/OBSERVABILITY.md` and `$WORKSPACE/durion/.github/agents/sre.agent.md`.
 
 ## Module Conventions & Intermodule Communication
 

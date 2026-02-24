@@ -153,15 +153,15 @@ public class EstimateController {
 @RestController
 @RequestMapping("/api/v1/workorders")
 public class WorkOrderController {
-    @PostMapping("/{workOrderId}/assign")
+    @PostMapping("/{workorderId}/assign")
     public ResponseEntity<WorkOrder> assignWorkOrder(
-        @PathVariable String workOrderId,
+        @PathVariable String workorderId,
         @Valid @RequestBody AssignWorkOrderRequest request
     );
     
-    @PutMapping("/{workOrderId}/status")
+    @PutMapping("/{workorderId}/status")
     public ResponseEntity<WorkOrder> updateStatus(
-        @PathVariable String workOrderId,
+        @PathVariable String workorderId,
         @Valid @RequestBody UpdateStatusRequest request
     );
     
@@ -263,7 +263,7 @@ public class Estimate {
 @Table(name = "work_orders")
 public class WorkOrder {
     @Id
-    private String workOrderId;
+    private String workorderId;
     private String estimateId;
     private String mechanicId;
     private String bayId;

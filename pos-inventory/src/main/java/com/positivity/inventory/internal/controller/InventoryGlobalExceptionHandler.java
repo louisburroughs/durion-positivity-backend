@@ -114,7 +114,7 @@ public class InventoryGlobalExceptionHandler {
     })
     public ResponseEntity<Map<String, Object>> handlePutawayValidation(PutawayValidationException ex) {
         return build(
-                HttpStatus.CONFLICT,
+                HttpStatus.valueOf(422),
                 ex.getErrorCode(),
                 ex.getMessage(),
                 putawayContext(ex));
