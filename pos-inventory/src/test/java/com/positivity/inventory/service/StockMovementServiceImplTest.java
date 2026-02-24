@@ -2,6 +2,7 @@ package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
+import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
@@ -11,7 +12,6 @@ import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.StockMovementServiceImpl;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,16 +39,9 @@ class StockMovementServiceImplTest {
     @InjectMocks
     private StockMovementServiceImpl service;
 
-    @BeforeEach
-    void setUp() {
-        when(ledgerRepository.save(any(InventoryLedgerEntry.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(adjustmentRepository.save(any(InventoryAdjustmentRequest.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-    }
-
     @Test
     void recordMovement_receive_setsGoodsReceipt_positiveDelta_andSavesEntry() {
+        stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RECEIVE, 5);
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(10);
 
@@ -61,6 +54,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_pick_withSufficientStock_setsGoodsIssue_negativeDelta() {
+        stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 4);
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(10, 10);
 
@@ -95,6 +89,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_transfer_savesTransferInAndTransferOut_withLocations() {
+        stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.TRANSFER, 6);
         request.setToLocationId("LOC-2");
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(20, 20);
@@ -122,6 +117,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_putAway_setsPutaway_positiveDelta() {
+        stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PUT_AWAY, 3);
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(8);
 
@@ -134,6 +130,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_return_setsReturnToStock_positiveDelta() {
+        stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RETURN, 2);
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(5);
 
@@ -146,6 +143,7 @@ class StockMovementServiceImplTest {
 
     @Test
     void recordMovement_storesActorUserIdInTransactionUserId() {
+        stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RECEIVE, 1);
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(0);
 
@@ -158,12 +156,12 @@ class StockMovementServiceImplTest {
 
     @Test
     void createAdjustmentRequest_happyPath_savesPendingRequest_withRequestedByActor() {
+        stubAdjustmentSaveReturnsRequest();
         CreateAdjustmentRequestDto request = baseAdjustmentRequest(7);
 
-        InventoryAdjustmentRequest result = service.createAdjustmentRequest(request, "requestor-1");
+        AdjustmentRequestResponse result = service.createAdjustmentRequest(request, "requestor-1");
 
-        assertThat(result.getStatus()).isEqualTo(AdjustmentRequestStatus.PENDING);
-        assertThat(result.getRequestedByUserId()).isEqualTo("requestor-1");
+        assertThat(result.getStatus()).isEqualTo(AdjustmentRequestStatus.PENDING.name());
 
         ArgumentCaptor<InventoryAdjustmentRequest> captor = ArgumentCaptor.forClass(InventoryAdjustmentRequest.class);
         verify(adjustmentRepository).save(captor.capture());
@@ -173,9 +171,10 @@ class StockMovementServiceImplTest {
 
     @Test
     void createAdjustmentRequest_returnsRequestMatchingInputFields() {
+        stubAdjustmentSaveReturnsRequest();
         CreateAdjustmentRequestDto request = baseAdjustmentRequest(11);
 
-        InventoryAdjustmentRequest result = service.createAdjustmentRequest(request, "requestor-1");
+        AdjustmentRequestResponse result = service.createAdjustmentRequest(request, "requestor-1");
 
         assertThat(result.getProductSku()).isEqualTo("SKU-123");
         assertThat(result.getLocationId()).isEqualTo("LOC-1");
@@ -185,6 +184,8 @@ class StockMovementServiceImplTest {
 
     @Test
     void approveAdjustmentRequest_positiveQuantity_savesAdjustmentInLedgerEntry() {
+        stubLedgerSaveReturnsEntry();
+        stubAdjustmentSaveReturnsRequest();
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(4);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(15);
@@ -198,6 +199,8 @@ class StockMovementServiceImplTest {
 
     @Test
     void approveAdjustmentRequest_negativeQuantity_savesAdjustmentOutLedgerEntry() {
+        stubLedgerSaveReturnsEntry();
+        stubAdjustmentSaveReturnsRequest();
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(-3);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(10);
@@ -235,6 +238,8 @@ class StockMovementServiceImplTest {
 
     @Test
     void approveAdjustmentRequest_setsApprovedStatusAndApproverUserId() {
+        stubLedgerSaveReturnsEntry();
+        stubAdjustmentSaveReturnsRequest();
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(5);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
         when(ledgerRepository.calculateOnHandQuantity(request.getProductSku())).thenReturn(20);
@@ -283,5 +288,15 @@ class StockMovementServiceImplTest {
                 .status(AdjustmentRequestStatus.PENDING)
                 .requestedByUserId("requestor-1")
                 .build();
+    }
+
+    private void stubLedgerSaveReturnsEntry() {
+        when(ledgerRepository.save(any(InventoryLedgerEntry.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private void stubAdjustmentSaveReturnsRequest() {
+        when(adjustmentRepository.save(any(InventoryAdjustmentRequest.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 }

@@ -2,7 +2,7 @@ package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
-import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
+import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import org.jspecify.annotations.NonNull;
 
@@ -50,10 +50,10 @@ public interface StockMovementService {
      *
      * @param request     the adjustment details (reasonCode is mandatory)
      * @param actorUserId the authenticated user creating this request
-     * @return the created adjustment request
+     * @return the created adjustment request response payload
      */
     @NonNull
-    InventoryAdjustmentRequest createAdjustmentRequest(@NonNull CreateAdjustmentRequestDto request,
+    AdjustmentRequestResponse createAdjustmentRequest(@NonNull CreateAdjustmentRequestDto request,
             @NonNull String actorUserId);
 
     /**
