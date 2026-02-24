@@ -38,9 +38,9 @@ public class SecurityConfig {
 
 Methods implemented:
 - `validateEstimateEligibility(String estimateId, String facilityId)`
-- `validateWorkOrderEligibility(String workOrderId, String facilityId)`
+- `validateWorkOrderEligibility(String workorderId, String facilityId)`
 - `getEstimateStatus(String estimateId, String facilityId)`
-- `getWorkOrderStatus(String workOrderId, String facilityId)`
+- `getWorkOrderStatus(String workorderId, String facilityId)`
 - `getExistingAppointmentId(String sourceType, String sourceId, String facilityId)`
 
 ### 3. ConflictDetectionServiceImpl.java

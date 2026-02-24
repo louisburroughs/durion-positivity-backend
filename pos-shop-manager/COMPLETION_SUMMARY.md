@@ -47,9 +47,9 @@ The module now includes:
 - **Size**: 1.8 KB
 - **Methods**: 5 interface methods implemented
   - `validateEstimateEligibility(String estimateId, String facilityId)`
-  - `validateWorkOrderEligibility(String workOrderId, String facilityId)`
+  - `validateWorkOrderEligibility(String workorderId, String facilityId)`
   - `getEstimateStatus(String estimateId, String facilityId)`
-  - `getWorkOrderStatus(String workOrderId, String facilityId)`
+  - `getWorkOrderStatus(String workorderId, String facilityId)`
   - `getExistingAppointmentId(String sourceType, String sourceId, String facilityId)`
 
 #### 2. ConflictDetectionServiceImpl.java
