@@ -47,13 +47,13 @@ cd durion-positivity-backend
 - Prefer OpenTelemetry Java agent for baseline; use manual SDK instrumentation for high-value business metrics.
 - Attach attributes: `service.name`, `service.version`, `deployment.environment`, `container_id`, `component`, `status`.
 - Expose Actuator endpoints (`/actuator/health`, `/actuator/prometheus`) where applicable for monitoring.
-- Reference: `../docs/architecture/observability/OBSERVABILITY.md` and `.github/agents/sre.agent.md`.
+- Reference: `$WORKSPACE/durion/docs/architecture/observability/OBSERVABILITY.md` and `$WORKSPACE/durion/.github/agents/sre.agent.md`.
 
 ## Module Conventions & Intermodule Communication
 
 Treat each `pos-*` directory as a standard Spring Boot service using existing module patterns:
 
-- `service/` – business logic orchestration (public API for cross-module calls)
+- `service/` – business logic orchestration (public API for cross-module calls) Interfaces only
 - `internal/controller/` – REST endpoints (keep controllers thin)
 - `internal/repository/` – Spring Data JPA data access
 - `internal/entity/` – JPA entities and domain types
@@ -66,7 +66,7 @@ Treat each `pos-*` directory as a standard Spring Boot service using existing mo
 
 **All code MUST reside in `com.positivity.{domain}.internal` packages EXCEPT service layer.** This is strictly enforced:
 
-- **ONLY `service/` packages** (e.g., `com.positivity.accounting.service`) are exposed as the public API for other modules
+- **ONLY `service/` packages** (e.g., `com.positivity.accounting.service`) are exposed as Interfaces to be the public API for other modules
 - **The `@SpringBootApplication` class** (e.g., `PosAccountingApplication.java`) MUST remain in the root `com.positivity.{domain}` package for proper component scanning
 - **ALL other packages MUST be under `internal/`**: `internal/controller`, `internal/repository`, `internal/entity`, `internal/dto`, `internal/config`, `internal/domain`, `internal/enums`, etc.
 - **Controllers, repositories, entities, DTOs, configs** are implementation details and MUST NOT be accessed directly by other modules
@@ -99,7 +99,7 @@ com.positivity.accounting/
 - **Tests verify layering** - controllers must not directly access repositories or entities
 - **Tests verify service layer exposure** - only service packages are public APIs
 - **Architecture tests run automatically** as part of Maven test phase
-- Reference the `pos-archunit/ArchitectureTests.java` for cross-module validation patterns
+- Reference the `$WORKSPACE/durion-positivity-backend/pos-archunit/ArchitectureTests.java` for cross-module validation patterns
 - Violating architecture rules will fail builds and prevent deployment
 
 **Inter-service Communication Patterns:**
@@ -278,30 +278,17 @@ public interface SomeService {
 - Use `@NotNull` (from `jakarta.validation.constraints.NotNull`) only for DTO/request validation contexts where Bean Validation is required
 - Do NOT combine `@NonNull` and `@NotNull` on the same parameter - use only `@NonNull` for service/DAO layer methods
 
-## Useful Commands
+## Additional Documentation
 
-```bash
-# Build and run gateway
-./mvnw -pl pos-api-gateway -am spring-boot:run
-# Run a module's tests
-./mvnw -pl pos-order -am test
-```
+- **Architecture Guide**: `$WORKSPACE/durion/docs/ARCHITECTURE_GUIDE.md` (Docker, ports, service communication, observability)
+- **Development Guide**: `$WORKSPACE/durion/docs/DEVELOPMENT_GUIDE.md` (OpenAPI, POM, version management, pos-events)
+- **Operations Runbook**: `$WORKSPACE/durion/docs/OPERATIONS_RUNBOOK.md` (operations, RBAC, permissions)
 
-## Documentation
+## Additional Agent Docs
 
-- **Architecture Guide**: `./docs/ARCHITECTURE_GUIDE.md` (Docker, ports, service communication, observability)
-- **Development Guide**: `./docs/DEVELOPMENT_GUIDE.md` (OpenAPI, POM, version management, pos-events)
-- **Operations Runbook**: `./docs/OPERATIONS_RUNBOOK.md` (operations, RBAC, permissions)
-
-## Agent Docs to Consult
-
-- `.github/agents/sre.agent.md` (observability)
-- `.github/agents/dev-deploy.agent.md` (deploy/CI guidance)
-- `../AGENTS.md` (workspace-level guidance)
-- Backend test agent: `.github/agents/test.agent.md`
-- Java instructions: `../.github/instructions/java.instructions.md` (Java code guidelines and best practices)
+- Backend test agent: `$WORKSPACE/durion-positivity-backend/.github/agents/test.agent.md`
+- Java instructions: `$WORKSPACE/durion/.github/instructions/java.instructions.md` (Java code guidelines and best practices)
 
 ## Notes for Agents
 
-- Do not hardcode credentials in CI or code. Use environment variables or secret stores.
 - For incidents, follow cross-stack triage: frontend → gateway → backend service → DB.

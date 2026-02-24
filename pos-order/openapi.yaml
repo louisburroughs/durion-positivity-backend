@@ -34,12 +34,6 @@ paths:
         required: false
         schema:
           type: string
-          enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
-          - APPLIED
-          - CANCELLED
       - name: startDate
         in: query
         description: Start date for date range filter
@@ -62,7 +56,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PriceOverride"
+                  $ref: "#/components/schemas/PriceOverrideView"
         "400":
           description: No filter parameter provided
           content:
@@ -70,7 +64,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PriceOverride"
+                  $ref: "#/components/schemas/PriceOverrideView"
     post:
       tags:
       - Price Overrides
@@ -131,25 +125,25 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
         "403":
           description: Insufficient rejection permissions
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
         "404":
           description: Override not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
         "200":
           description: Override rejected
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
   /v1/orders/price-overrides/{overrideId}/approve:
     post:
       tags:
@@ -174,30 +168,30 @@ paths:
               $ref: "#/components/schemas/ApprovePriceOverrideRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request or override not in pending state
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PriceOverride"
         "200":
           description: Override approved
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
+        "400":
+          description: Invalid request or override not in pending state
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceOverrideView"
         "404":
           description: Override not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
         "403":
           description: Insufficient approval permissions
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
   /v1/orders/price-overrides/{overrideId}:
     get:
       tags:
@@ -220,13 +214,13 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
         "404":
           description: Override not found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/PriceOverride"
+                $ref: "#/components/schemas/PriceOverrideView"
   /v1/orders/price-overrides/pending:
     get:
       tags:
@@ -242,7 +236,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PriceOverride"
+                  $ref: "#/components/schemas/PriceOverrideView"
 components:
   schemas:
     ApplyPriceOverrideRequest:
@@ -339,7 +333,7 @@ components:
           type: string
       required:
       - reason
-    PriceOverride:
+    PriceOverrideView:
       type: object
       properties:
         overrideId:
@@ -347,16 +341,17 @@ components:
           format: uuid
         orderId:
           type: string
-          format: uuid
         orderLineId:
           type: string
-          format: uuid
         productId:
           type: string
-          format: uuid
         originalPrice:
           type: number
         overridePrice:
+          type: number
+        discountAmount:
+          type: number
+        discountPercentage:
           type: number
         reasonCode:
           type: string
@@ -379,15 +374,14 @@ components:
           - REJECTED
           - APPLIED
           - CANCELLED
+        requiresApproval:
+          type: boolean
         requestedByUserId:
           type: string
-          format: uuid
         approvedByUserId:
           type: string
-          format: uuid
         rejectedByUserId:
           type: string
-          format: uuid
         rejectionReason:
           type: string
         createdAt:
@@ -405,12 +399,6 @@ components:
         appliedAt:
           type: string
           format: date-time
-        requiresApproval:
-          type: boolean
-        discountAmount:
-          type: number
-        discountPercentage:
-          type: number
     ApprovePriceOverrideRequest:
       type: object
       properties:

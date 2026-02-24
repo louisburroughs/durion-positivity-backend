@@ -65,16 +65,16 @@ paths:
               $ref: "#/components/schemas/CreateVehicleRequest"
         required: true
       responses:
-        "400":
-          description: Invalid request
-        "404":
-          description: Vehicle not found
         "200":
           description: Vehicle updated successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+        "400":
+          description: Invalid request
+        "404":
+          description: Vehicle not found
     delete:
       tags:
       - Vehicle Registry
@@ -111,14 +111,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "404":
-          description: No preferences found for this vehicle
+        "200":
+          description: Preferences found and returned
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleCarePreference"
-        "200":
-          description: Preferences found and returned
+        "404":
+          description: No preferences found for this vehicle
           content:
             '*/*':
               schema:
@@ -145,6 +145,12 @@ paths:
               $ref: "#/components/schemas/PreferencesUpsertDto"
         required: true
       responses:
+        "200":
+          description: Preferences updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/VehicleCarePreference"
         "400":
           description: Invalid preference data
           content:
@@ -159,12 +165,6 @@ paths:
                 $ref: "#/components/schemas/VehicleCarePreference"
         "201":
           description: Preferences created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/VehicleCarePreference"
-        "200":
-          description: Preferences updated successfully
           content:
             '*/*':
               schema:
@@ -401,17 +401,17 @@ paths:
               $ref: "#/components/schemas/CreateVehicleRequest"
         required: true
       responses:
-        "400":
-          description: "Invalid request - VIN format invalid, missing required fields,\
-            \ or duplicate VIN"
-        "409":
-          description: Conflict - VIN already exists for another active vehicle
         "201":
           description: Vehicle created successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/VehicleResponse"
+        "409":
+          description: Conflict - VIN already exists for another active vehicle
+        "400":
+          description: "Invalid request - VIN format invalid, missing required fields,\
+            \ or duplicate VIN"
   /v1/vehicles/search:
     get:
       tags:
