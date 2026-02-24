@@ -151,9 +151,6 @@ This repository participates in the workspace-wide agent ecosystem.
 - **Development Guide**: [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) (OpenAPI, POM, version management, pos-events)
 - **Operations Runbook**: [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md) (Operations, RBAC, permissions)
 - **Workspace Agents**: [../durion/AGENTS.md](../durion/AGENTS.md)
-- **Agent Roles & Runbooks**: [../durion/.github/agents/](../durion/.github/agents/)
-    - [SRE / Observability](../durion/.github/agents/sre.agent.md)
-    - [Developer / Deploy](../durion/.github/agents/dev-deploy.agent.md)
 
 Refer to the root [Durion](../durion/README.md) repository for governance, ADRs, and shared architectural standards.
 
