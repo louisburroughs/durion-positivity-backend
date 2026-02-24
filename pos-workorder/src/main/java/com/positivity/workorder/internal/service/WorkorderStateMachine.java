@@ -506,6 +506,6 @@ public class WorkorderStateMachine {
 
     private String resolveActorId(UUID fallbackUserId) {
         String fallback = fallbackUserId != null ? fallbackUserId.toString() : SYSTEM_ACTOR;
-        return SecurityContextHelper.getCurrentUserIdOrThrowIllegalStateException();
+        return SecurityContextHelper.getCurrentUserIdOrDefault(fallback);
     }
 }

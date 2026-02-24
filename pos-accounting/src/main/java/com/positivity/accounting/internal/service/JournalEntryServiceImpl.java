@@ -1,26 +1,26 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.dto.UnbalancedEntryException;
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
-import com.positivity.accounting.internal.enums.JournalEntryStatus;
-import com.positivity.accounting.internal.repository.JournalEntryRepository;
-import com.positivity.accounting.internal.service.GLAccountServiceImpl;
-import com.positivity.accounting.service.GLAccountService;
-import com.positivity.accounting.service.JournalEntryService;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.positivity.accounting.internal.dto.UnbalancedEntryException;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.service.GLAccountService;
+import com.positivity.accounting.service.JournalEntryService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for Journal Entry operations.

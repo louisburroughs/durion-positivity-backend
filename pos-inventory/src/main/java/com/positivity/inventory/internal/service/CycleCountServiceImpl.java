@@ -157,6 +157,7 @@ public class CycleCountServiceImpl implements CycleCountService {
                 // Update task
                 task.setLatestCountEntryId(recountEntry.getCountEntryId());
                 task.setCountEntriesCount(task.getCountEntriesCount() + 1);
+                task.setStatus(TaskStatus.COUNTED_PENDING_REVIEW);
 
                 // Check if this was the last allowed recount
                 boolean limitReached = task.getCountEntriesCount() >= MAX_TOTAL_COUNTS;

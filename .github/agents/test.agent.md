@@ -113,8 +113,13 @@ The orchestrator policy requires this agent to provide strict RED evidence befor
 - Do not modify `src/main/**` in RED phase.
 - RED must be intentional: failures must map directly to story behavior, not environment noise.
 - Handoff to coder only after RED evidence is complete and reproducible.
+- If RED is blocked by missing production symbols, return `BLOCKED` with a scaffold contract (exact missing symbols/types/signatures), not compile-failure RED proof.
 
-## Mandatory TDD workflow (Red -> Green -> Refactor)
+## Mandatory TDD workflow (Conditional Scaffold -> Red -> Green -> Refactor)
+
+0. Conditional Scaffold (performed by Coder when needed)
+- If tests cannot execute due to missing production symbols, emit `BLOCKED` scaffold contract and wait for coder scaffold handoff.
+- Do not edit `src/main/**` to create scaffolds in RED.
 
 1. Red
 - Read the story behavior and target module scope.
@@ -132,6 +137,7 @@ The orchestrator policy requires this agent to provide strict RED evidence befor
 - Re-run same command family used in RED.
 - Confirm failing tests now pass.
 - Confirm TDD-authored assertions were not removed/weakened without rationale.
+- Confirm tests still target intended production seam (no retargeting to alternate fake classes/paths without approved rationale).
 
 3. Refactor
 - Improve test clarity, naming, and duplication only after GREEN.
@@ -149,6 +155,12 @@ Return all of the following every time:
   - why failures map to story behavior
 - Suggested GREEN scope for coder (`src/main/**` targets)
 - Follow-up tests still needed (if any)
+
+If blocked by missing symbols, return additionally:
+- `BLOCKED scaffold contract`:
+  - missing file/class/interface/method signature list,
+  - minimal compile scaffold requirements only,
+  - confirmation that no RED behavior assertion can run until scaffold exists.
 
 If asked to validate GREEN, return:
 - GREEN command(s)
@@ -227,10 +239,11 @@ Multi-line block template (when a larger region is required):
 ## Orchestrator Template Compatibility
 
 This agent must be compatible with orchestrator prompt templates:
-- Template A (RED phase): orchestrator -> TDD Agent
-- Template B (GREEN phase): orchestrator -> Coder
+- Template A (conditional scaffold): orchestrator -> Coder
+- Template B (RED phase): orchestrator -> TDD Agent
+- Template C (GREEN phase): orchestrator -> Coder
 
-Template A requirements are strict:
+Template B requirements are strict:
 - tests first
 - `src/test/**` scope
 - RED evidence returned in structured format
@@ -285,6 +298,7 @@ Never:
 - edit production code in RED phase
 - delete or weaken existing assertions to make tests pass
 - return RED evidence based only on compile failures or environment setup issues
+- allow seam retargeting in GREEN validation without explicit approved rationale
 - claim completion without commands and output-backed evidence
 - modify architecture tests (for example `ArchitectureTest` / ArchUnit suites)
 - modify existing base contract tests or shared base contract test infrastructure
@@ -306,7 +320,7 @@ Use this exact shape when reporting:
 ```text
 Story: <ID>
 Module: <module>
-Phase: RED | GREEN validation
+Phase: RED | GREEN validation | BLOCKED (scaffold required)
 
 Changed test files:
 - <file>

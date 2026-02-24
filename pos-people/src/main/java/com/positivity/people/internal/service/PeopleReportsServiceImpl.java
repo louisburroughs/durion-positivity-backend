@@ -244,7 +244,8 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                             entry.getPersonId(),
                             entry.getLocationId().toString(),
                             localDate);
-                    minutesByKey.merge(key, segmentMinutes, Long::sum);
+                    long currentMinutes = minutesByKey.getOrDefault(key, 0L);
+                    minutesByKey.put(key, currentMinutes + segmentMinutes);
                 }
                 cursor = segmentEnd;
             }
@@ -266,7 +267,8 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                     row.getTechnicianId().toString(),
                     row.getLocationId().toString(),
                     row.getLocalDate());
-            minutesByKey.merge(key, row.getTotalJobMinutes().longValue(), Long::sum);
+            long currentMinutes = minutesByKey.getOrDefault(key, 0L);
+            minutesByKey.put(key, currentMinutes + row.getTotalJobMinutes().longValue());
         }
         return minutesByKey;
     }
