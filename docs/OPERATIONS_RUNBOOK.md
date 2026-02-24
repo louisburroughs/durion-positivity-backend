@@ -372,4 +372,3 @@ public class PartyController {
 - **Platform-level runbook**: `durion/docs/OPERATIONS_RUNBOOK.md`
 - **Architecture guide**: [ARCHITECTURE_GUIDE.md](ARCHITECTURE_GUIDE.md)
 - **Development guide**: [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)
-- **Agent docs**: `.github/agents/sre.agent.md`, `.github/agents/dev-deploy.agent.md`

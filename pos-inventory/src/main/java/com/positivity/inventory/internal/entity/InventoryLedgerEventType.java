@@ -43,6 +43,14 @@ public enum InventoryLedgerEventType {
     TRANSFER_IN(EventDirection.INBOUND, true),
 
     /**
+     * Put-away move: inventory relocated from staging to storage location.
+     * Direction: INBOUND (+) to destination location, recorded as TRANSFER_IN from
+     * source perspective.
+     * Affects On-Hand: YES (location-level tracking)
+     */
+    PUTAWAY(EventDirection.INBOUND, true),
+
+    /**
      * Customer return accepted back into inventory.
      * Direction: INBOUND (+)
      * Affects On-Hand: YES
