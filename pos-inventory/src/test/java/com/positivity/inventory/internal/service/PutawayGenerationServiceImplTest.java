@@ -42,7 +42,6 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_withRules_createsUnassignedTask() {
-        System.out.println("Running test: generateTasksForReceipt_withRules_createsUnassignedTask");
         GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(UUID.randomUUID().toString());
         PutawayRule rule = new PutawayRule();
         rule.setDestinationLocationId("DEST-A");
