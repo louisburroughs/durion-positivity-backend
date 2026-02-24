@@ -1,19 +1,87 @@
 openapi: 3.1.0
 info:
-  title: Location API
-  description: API for managing locations in the POS system
-  version: "1.0"
+  title: Positivity Location API
+  description: "API documentation for the Shop Location service, accessible via the\
+    \ API Gateway. Shop locations are Maintenance Bays and Mobile Shops."
+  contact:
+    name: Durion Team
+    email: louis.burroughs@gmail.com
+  version: v1
 servers:
 - url: http://api-gateway.local/api/location
   description: API Gateway
 tags:
 - name: Mobile Unit API
   description: Operations for managing mobile units within locations
+- name: Travel Buffer Policy API
+  description: Operations for managing travel buffer policies
 - name: Bay API
   description: Operations for managing bays within locations
+- name: Service Area API
+  description: Operations for managing service areas
 - name: Location API
   description: Operations related to locations and their relationships
 paths:
+  /v1/mobile-units/{id}/coverage-rules:
+    get:
+      tags:
+      - Mobile Unit API
+      summary: Get coverage rules
+      description: Get coverage rules for a mobile unit.
+      operationId: getCoverageRules
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Coverage rules returned.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoverageRuleResponse"
+    put:
+      tags:
+      - Mobile Unit API
+      summary: Replace coverage rules
+      description: Atomically replace coverage rules for a mobile unit.
+      operationId: replaceCoverageRules
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+        required: true
+      responses:
+        "200":
+          description: Coverage rules replaced successfully.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoverageRuleResponse"
+        "404":
+          description: Mobile unit not found.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoverageRuleResponse"
   /v1/locations/{locationId}:
     get:
       tags:
@@ -97,69 +165,197 @@ paths:
           description: Location not found.
         "204":
           description: Location deleted successfully.
-  /v1/locations/mobileUnit:
+    patch:
+      tags:
+      - Location API
+      summary: Patch a location
+      description: Patch selected fields for a location.
+      operationId: patchLocation
+      parameters:
+      - name: locationId
+        in: path
+        description: ID of the location to patch
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationPatchRequest"
+        required: true
+      responses:
+        "200":
+          description: Location patched successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationResponseDTO"
+        "404":
+          description: Location not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LocationResponseDTO"
+  /v1/locations/{locationId}/defaults:
+    get:
+      tags:
+      - site-defaults-controller
+      operationId: getDefaults
+      parameters:
+      - name: locationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+    put:
+      tags:
+      - site-defaults-controller
+      operationId: configureDefaults
+      parameters:
+      - name: locationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteDefaultsRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SiteDefaultsResponse"
+  /v1/travel-buffer-policies:
+    get:
+      tags:
+      - Travel Buffer Policy API
+      summary: List travel buffer policies
+      operationId: list
+      responses:
+        "200":
+          description: Travel buffer policies listed
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TravelBufferPolicyResponse"
+    post:
+      tags:
+      - Travel Buffer Policy API
+      summary: Create travel buffer policy
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TravelBufferPolicyRequest"
+        required: true
+      responses:
+        "201":
+          description: Travel buffer policy created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
+  /v1/service-areas:
+    get:
+      tags:
+      - Service Area API
+      summary: List service areas
+      operationId: list_1
+      responses:
+        "200":
+          description: Service areas listed
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceAreaResponse"
+    post:
+      tags:
+      - Service Area API
+      summary: Create service area
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceAreaRequest"
+        required: true
+      responses:
+        "201":
+          description: Service area created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceAreaResponse"
+  /v1/mobile-units:
     get:
       tags:
       - Mobile Unit API
-      summary: Get mobile units
-      description: List all mobile units or get a specific mobile unit detail by locationId
-        and unitId.
-      operationId: getMobileUnits
-      parameters: []
+      summary: List mobile units
+      description: List mobile units with pagination.
+      operationId: listMobileUnits
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
       responses:
         "200":
           description: Mobile units retrieved successfully.
           content:
             '*/*':
-              schema: {}
-    put:
+              schema:
+                $ref: "#/components/schemas/PageMobileUnitResponse"
+    post:
       tags:
       - Mobile Unit API
-      summary: Manage mobile units
-      description: Create or update mobile units in bulk.
-      operationId: manageMobileUnits
+      summary: Create mobile unit
+      description: Create a new mobile unit.
+      operationId: createMobileUnit
       requestBody:
         content:
           application/json:
             schema:
-              description: Mobile unit management request body
+              $ref: "#/components/schemas/MobileUnitRequest"
+        required: true
       responses:
-        "200":
-          description: Mobile units managed successfully.
+        "201":
+          description: Mobile unit created successfully.
           content:
             '*/*':
-              schema: {}
-  /v1/locations/bays:
-    get:
-      tags:
-      - Bay API
-      summary: Get bays
-      description: List all bays or get a specific bay detail by locationId and bayId.
-      operationId: getBays
-      parameters: []
-      responses:
-        "200":
-          description: Bays retrieved successfully.
-          content:
-            '*/*':
-              schema: {}
-    put:
-      tags:
-      - Bay API
-      summary: Manage bays
-      description: Create or update bays in bulk.
-      operationId: manageBays
-      requestBody:
-        content:
-          application/json:
-            schema:
-              description: Bay management request body
-      responses:
-        "200":
-          description: Bays managed successfully.
-          content:
-            '*/*':
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/MobileUnitResponse"
   /v1/locations:
     get:
       tags:
@@ -195,14 +391,82 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/LocationResponseDTO"
-  /v1/locations/{locationId}/mobileUnit:
+  /v1/locations/{siteId}/storage-locations:
+    get:
+      tags:
+      - storage-location-controller
+      operationId: list_2
+      parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - FLOOR
+          - SHELF
+          - BIN
+          - CAGE
+          - TRUCK
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - MAINTENANCE
+          - QUARANTINED
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageStorageLocationResponse"
     post:
       tags:
-      - Mobile Unit API
-      summary: Create mobile unit
-      description: Create a new mobile unit for a specific location. Validate baseLocationId
-        and capabilities.
-      operationId: createMobileUnit
+      - storage-location-controller
+      operationId: create_2
+      parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StorageLocationRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StorageLocationResponse"
+  /v1/locations/{locationId}/bays:
+    get:
+      tags:
+      - Bay API
+      summary: List bays
+      description: List bays for a location with optional status and bayType filters.
+      operationId: listBays
       parameters:
       - name: locationId
         in: path
@@ -210,20 +474,37 @@ paths:
         required: true
         schema:
           type: string
-          format: uuid
-        example: 1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              description: Mobile unit creation request body
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: bayType
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
       responses:
         "200":
-          description: Mobile unit created successfully.
+          description: Bays retrieved successfully.
           content:
             '*/*':
-              schema: {}
-  /v1/locations/{locationId}/bays:
+              schema:
+                $ref: "#/components/schemas/PageBayResponse"
     post:
       tags:
       - Bay API
@@ -236,20 +517,21 @@ paths:
         description: Location ID
         required: true
         schema:
-          type: integer
-          format: int64
+          type: string
         example: 1
       requestBody:
         content:
           application/json:
             schema:
-              description: Bay creation request body
+              $ref: "#/components/schemas/BayRequest"
+        required: true
       responses:
-        "200":
+        "201":
           description: Bay created successfully.
           content:
             '*/*':
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/BayResponse"
   /v1/locations/{childId}/parents/{parentId}:
     post:
       tags:
@@ -287,6 +569,288 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/LocationParentResponseDTO"
+  /v1/travel-buffer-policies/{id}:
+    patch:
+      tags:
+      - Travel Buffer Policy API
+      summary: Patch travel buffer policy
+      operationId: patch
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+        required: true
+      responses:
+        "200":
+          description: Travel buffer policy patched
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
+        "404":
+          description: Travel buffer policy not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
+        "400":
+          description: Invalid travel buffer policy id
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TravelBufferPolicyResponse"
+  /v1/service-areas/{id}:
+    patch:
+      tags:
+      - Service Area API
+      summary: Patch service area
+      operationId: patch_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+        required: true
+      responses:
+        "200":
+          description: Service area patched
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceAreaResponse"
+        "400":
+          description: Invalid service area id
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceAreaResponse"
+        "404":
+          description: Service area not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceAreaResponse"
+  /v1/mobile-units/{id}:
+    get:
+      tags:
+      - Mobile Unit API
+      summary: Get mobile unit
+      description: Get a mobile unit by ID.
+      operationId: getMobileUnitById
+      parameters:
+      - name: id
+        in: path
+        description: Mobile unit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Mobile unit returned.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MobileUnitResponse"
+        "404":
+          description: Mobile unit not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MobileUnitResponse"
+    patch:
+      tags:
+      - Mobile Unit API
+      summary: Patch mobile unit
+      description: Partially update a mobile unit.
+      operationId: patchMobileUnit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+        required: true
+      responses:
+        "200":
+          description: Mobile units managed successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MobileUnitResponse"
+  /v1/locations/{siteId}/storage-locations/{storageLocationId}:
+    get:
+      tags:
+      - storage-location-controller
+      operationId: get
+      parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: storageLocationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StorageLocationResponse"
+    patch:
+      tags:
+      - storage-location-controller
+      operationId: patch_2
+      parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: storageLocationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StorageLocationPatchRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StorageLocationResponse"
+  /v1/locations/{locationId}/bays/{bayId}:
+    get:
+      tags:
+      - Bay API
+      summary: Get bay
+      description: Get a bay by location and bay id.
+      operationId: getBay
+      parameters:
+      - name: locationId
+        in: path
+        description: Location ID
+        required: true
+        schema:
+          type: string
+      - name: bayId
+        in: path
+        description: Bay ID
+        required: true
+        schema:
+          type: string
+      responses:
+        "404":
+          description: Bay not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BayResponse"
+        "200":
+          description: Bay retrieved successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BayResponse"
+    patch:
+      tags:
+      - Bay API
+      summary: Patch bay
+      description: Patch bay fields including status transition and capacity.
+      operationId: patchBay
+      parameters:
+      - name: locationId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: bayId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BayPatchRequest"
+        required: true
+      responses:
+        "200":
+          description: Bay updated successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BayResponse"
+  /v1/mobile-units:eligible:
+    get:
+      tags:
+      - mobile-unit-eligibility-controller
+      summary: Find eligible mobile units
+      description: Return eligible active units for a service request.
+      operationId: findEligibleMobileUnits
+      parameters:
+      - name: postalCode
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: countryCode
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: at
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          description: Eligible mobile units returned.
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EligibleMobileUnitResponse"
   /v1/locations/{locationId}/validation:
     get:
       tags:
@@ -370,6 +934,41 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LocationResponseDTO"
+  /v1/locations/roster:
+    get:
+      tags:
+      - Location API
+      summary: Get location roster
+      description: Retrieve paginated location refs for sync consumers.
+      operationId: getRoster
+      parameters:
+      - name: status
+        in: query
+        description: Optional status filter
+        required: false
+        schema:
+          type: string
+        example: ACTIVE
+      - name: sinceUpdatedAt
+        in: query
+        description: Optional since-updated-at filter
+        required: false
+        schema:
+          type: string
+          format: date-time
+        example: 2026-01-01T00:00:00Z
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: "#/components/schemas/Pageable"
+      responses:
+        "200":
+          description: Location roster returned successfully.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageLocationRef"
   /v1/locations/parents:
     get:
       tags:
@@ -386,121 +985,56 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LocationParentResponseDTO"
-  /v1/locations/{locationId}/mobileUnit/{unitId}:
-    get:
-      tags:
-      - Mobile Unit API
-      summary: Get mobile units
-      description: List all mobile units or get a specific mobile unit detail by locationId
-        and unitId.
-      operationId: getMobileUnits_1
-      parameters:
-      - name: locationId
-        in: path
-        description: Location ID (optional for specific mobile unit)
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: unitId
-        in: path
-        description: Unit ID (optional for specific mobile unit)
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Mobile units retrieved successfully.
-          content:
-            '*/*':
-              schema: {}
-    delete:
-      tags:
-      - Mobile Unit API
-      summary: Delete mobile unit
-      description: Delete a specific mobile unit by locationId and unitId.
-      operationId: deleteMobileUnit
-      parameters:
-      - name: locationId
-        in: path
-        description: Location ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 1
-      - name: unitId
-        in: path
-        description: Unit ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 1
-      responses:
-        "204":
-          description: Mobile unit deleted successfully.
-        "404":
-          description: Mobile unit not found.
-  /v1/locations/{locationId}/bays/{bayId}:
-    get:
-      tags:
-      - Bay API
-      summary: Get bays
-      description: List all bays or get a specific bay detail by locationId and bayId.
-      operationId: getBays_1
-      parameters:
-      - name: locationId
-        in: path
-        description: Location ID (optional for specific bay)
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - name: bayId
-        in: path
-        description: Bay ID (optional for specific bay)
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          description: Bays retrieved successfully.
-          content:
-            '*/*':
-              schema: {}
-    delete:
-      tags:
-      - Bay API
-      summary: Delete bay
-      description: Delete a specific bay by locationId and bayId.
-      operationId: deleteBay
-      parameters:
-      - name: locationId
-        in: path
-        description: Location ID
-        required: true
-        schema:
-          type: integer
-          format: int64
-        example: 1
-      - name: bayId
-        in: path
-        description: Bay ID
-        required: true
-        schema:
-          type: integer
-          format: int64
-        example: 1
-      responses:
-        "404":
-          description: Bay not found.
-        "204":
-          description: Bay deleted successfully.
 components:
   schemas:
+    CoverageRuleResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mobileUnitId:
+          type: string
+          format: uuid
+        serviceAreaId:
+          type: string
+          format: uuid
+        ruleType:
+          type: string
+        priority:
+          type: integer
+          format: int32
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: string
+          format: date
+        maxDistance:
+          type: number
+    HolidayClosureRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        reason:
+          type: string
+    LocalTime:
+      type: object
+      properties:
+        hour:
+          type: integer
+          format: int32
+        minute:
+          type: integer
+          format: int32
+        second:
+          type: integer
+          format: int32
+        nano:
+          type: integer
+          format: int32
     LocationRequestDTO:
       type: object
       description: Location object to be created
@@ -531,6 +1065,22 @@ components:
         responsiblePersonId:
           type: integer
           format: int64
+        timezone:
+          type: string
+        operatingHours:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatingHoursRequest"
+        holidayClosures:
+          type: array
+          items:
+            $ref: "#/components/schemas/HolidayClosureRequest"
+        checkInBufferMinutes:
+          type: integer
+          format: int32
+        cleanupBufferMinutes:
+          type: integer
+          format: int32
         type:
           $ref: "#/components/schemas/LocationTypeDTO"
         parents:
@@ -550,6 +1100,15 @@ components:
           type: string
         description:
           type: string
+    OperatingHoursRequest:
+      type: object
+      properties:
+        dayOfWeek:
+          type: string
+        openTime:
+          $ref: "#/components/schemas/LocalTime"
+        closeTime:
+          $ref: "#/components/schemas/LocalTime"
     LocationResponseDTO:
       type: object
       properties:
@@ -584,6 +1143,286 @@ components:
           format: int64
         type:
           $ref: "#/components/schemas/LocationTypeDTO"
+    SiteDefaultsRequest:
+      type: object
+      properties:
+        defaultStagingLocationId:
+          type: string
+          format: uuid
+        defaultQuarantineLocationId:
+          type: string
+          format: uuid
+    SiteDefaultsResponse:
+      type: object
+      properties:
+        siteId:
+          type: string
+          format: uuid
+        defaultStagingLocationId:
+          type: string
+          format: uuid
+        defaultQuarantineLocationId:
+          type: string
+          format: uuid
+    TravelBufferPolicyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        bufferType:
+          type: string
+        bufferValue:
+          type: number
+        notes:
+          type: string
+    TravelBufferPolicyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        bufferType:
+          type: string
+        bufferValue:
+          type: number
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PostalCodeEntry:
+      type: object
+      properties:
+        postalCode:
+          type: string
+        countryCode:
+          type: string
+    ServiceAreaRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+        postalCodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostalCodeEntry"
+    ServiceAreaResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+        postalCodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostalCodeEntry"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CoverageRuleRequest:
+      type: object
+      properties:
+        serviceAreaId:
+          type: string
+          format: uuid
+        ruleType:
+          type: string
+        priority:
+          type: integer
+          format: int32
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: string
+          format: date
+        maxDistance:
+          type: number
+    MobileUnitRequest:
+      type: object
+      description: Mobile unit creation request body
+      properties:
+        name:
+          type: string
+        baseLocationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        travelBufferPolicyId:
+          type: string
+          format: uuid
+        notes:
+          type: string
+        capabilityIds:
+          type: array
+          items:
+            type: string
+        coverageRules:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoverageRuleRequest"
+    MobileUnitResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        baseLocationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        travelBufferPolicyId:
+          type: string
+          format: uuid
+        notes:
+          type: string
+        capabilityIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    StorageLocationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        barcode:
+          type: string
+        type:
+          type: string
+          enum:
+          - FLOOR
+          - SHELF
+          - BIN
+          - CAGE
+          - TRUCK
+        parentStorageLocationId:
+          type: string
+          format: uuid
+    StorageLocationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        barcode:
+          type: string
+        type:
+          type: string
+          enum:
+          - FLOOR
+          - SHELF
+          - BIN
+          - CAGE
+          - TRUCK
+        status:
+          type: string
+        siteId:
+          type: string
+          format: uuid
+        parentStorageLocationId:
+          type: string
+          format: uuid
+        inventoryCount:
+          type: integer
+          format: int32
+    BayCapacityRequest:
+      type: object
+      properties:
+        maxConcurrentVehicles:
+          type: integer
+          format: int32
+          minimum: 1
+      required:
+      - maxConcurrentVehicles
+    BayRequest:
+      type: object
+      description: Bay creation request body
+      properties:
+        name:
+          type: string
+        bayType:
+          type: string
+        capacity:
+          $ref: "#/components/schemas/BayCapacityRequest"
+        maxConcurrentVehicles:
+          type: integer
+          format: int32
+        serviceCapabilityIds:
+          type: array
+          items:
+            type: string
+        skillRequirementIds:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+      required:
+      - bayType
+      - capacity
+      - name
+    BayResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        bayType:
+          type: string
+        status:
+          type: string
+        maxConcurrentVehicles:
+          type: integer
+          format: int32
+        serviceCapabilityIds:
+          type: array
+          items:
+            type: string
+        skillRequirementIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastModifiedAt:
+          type: string
+          format: date-time
     LocationParentResponseDTO:
       type: object
       properties:
@@ -598,6 +1437,192 @@ components:
           format: uuid
         parentType:
           type: string
+    StorageLocationPatchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        barcode:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - MAINTENANCE
+          - QUARANTINED
+        parentStorageLocationId:
+          type: string
+          format: uuid
+        destinationStorageLocationId:
+          type: string
+          format: uuid
+    LocationPatchRequest:
+      type: object
+      description: Partial location payload
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        timezone:
+          type: string
+        operatingHours:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatingHoursRequest"
+        holidayClosures:
+          type: array
+          items:
+            $ref: "#/components/schemas/HolidayClosureRequest"
+        checkInBufferMinutes:
+          type: integer
+          format: int32
+        cleanupBufferMinutes:
+          type: integer
+          format: int32
+    BayPatchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        bayType:
+          type: string
+        status:
+          type: string
+        maxConcurrentVehicles:
+          type: integer
+          format: int32
+        capacity:
+          $ref: "#/components/schemas/BayCapacityRequest"
+        serviceCapabilityIds:
+          type: array
+          items:
+            type: string
+        skillRequirementIds:
+          type: array
+          items:
+            type: string
+    PageMobileUnitResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/MobileUnitResponse"
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    Pageablenull:
+      type: object
+      properties:
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int64
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        unpaged:
+          type: boolean
+    Sortnull:
+      type: object
+      properties:
+        sorted:
+          type: boolean
+        empty:
+          type: boolean
+        unsorted:
+          type: boolean
+    EligibleMobileUnitResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        baseLocationId:
+          type: string
+          format: uuid
+        priority:
+          type: integer
+          format: int32
+    Pageable:
+      type: object
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+        sort:
+          type: array
+          items:
+            type: string
+    PageStorageLocationResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/StorageLocationResponse"
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
     LocationValidationResponseDTO:
       type: object
       properties:
@@ -628,3 +1653,84 @@ components:
             type: string
         username:
           type: string
+    PageBayResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/BayResponse"
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
+    LocationRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: string
+        hrLocationId:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    PageLocationRef:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageablenull"
+        first:
+          type: boolean
+        last:
+          type: boolean
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocationRef"
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sortnull"
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
