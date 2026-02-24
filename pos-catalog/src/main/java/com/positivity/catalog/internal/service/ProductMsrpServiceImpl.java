@@ -13,7 +13,10 @@ import com.positivity.catalog.service.ProductMsrpService;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -179,10 +182,14 @@ public class ProductMsrpServiceImpl implements ProductMsrpService {
         dto.setCurrency(entity.getCurrency());
         dto.setEffectiveStartDate(entity.getEffectiveStartDate());
         dto.setEffectiveEndDate(entity.getEffectiveEndDate());
-        dto.setCreatedAt(entity.getCreatedAt());
-        dto.setUpdatedAt(entity.getUpdatedAt());
+        dto.setCreatedAt(toOffsetDateTime(entity.getCreatedAt()));
+        dto.setUpdatedAt(toOffsetDateTime(entity.getUpdatedAt()));
         dto.setUpdatedBy(entity.getUpdatedBy());
         dto.setVersion(entity.getVersion());
         return dto;
+    }
+
+    private OffsetDateTime toOffsetDateTime(Instant instant) {
+        return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
     }
 }

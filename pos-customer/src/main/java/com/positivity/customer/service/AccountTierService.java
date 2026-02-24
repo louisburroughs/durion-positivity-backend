@@ -2,9 +2,6 @@ package com.positivity.customer.service;
 
 import java.util.UUID;
 
-import org.jspecify.annotations.NonNull;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.positivity.customer.internal.dto.GetAccountTierResponse;
 import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
