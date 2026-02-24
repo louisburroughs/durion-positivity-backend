@@ -1,12 +1,15 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
+import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +66,53 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .map(entry -> toLocationAvailability(entry.getKey(), entry.getValue()))
                 .sorted(Comparator.comparing(LocationAvailabilityDto::getLocationId))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AvailabilityView queryAvailability(
+            @NonNull String productSku,
+            @NonNull String locationId,
+            @Nullable String storageLocationId) {
+        List<InventoryLedgerEntry> allProductEntries = inventoryLedgerEntryRepository
+                .findByStockItemIdOrderByTimestampAsc(productSku);
+        if (allProductEntries.isEmpty()) {
+            throw new ProductNotFoundException(productSku);
+        }
+
+        String scopeLocationId = (storageLocationId != null && !storageLocationId.isBlank())
+                ? storageLocationId
+                : locationId;
+        List<InventoryLedgerEntry> locationEntries = inventoryLedgerEntryRepository
+                .findByStockItemIdAndLocationIdOrderByTimestampAsc(
+                        productSku, scopeLocationId);
+
+        int onHand = locationEntries.stream()
+                .filter(e -> e.getEventType() != null && e.getEventType().affectsOnHand())
+                .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
+                .sum();
+
+        int allocationCreated = locationEntries.stream()
+                .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_CREATED)
+                .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
+                .sum();
+        int allocationReleased = locationEntries.stream()
+                .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)
+                .mapToInt(e -> e.getChangeInQuantity() != null ? e.getChangeInQuantity() : 0)
+                .sum();
+        int allocatedQty = allocationCreated - allocationReleased;
+
+        return AvailabilityView.builder()
+                .productSku(productSku)
+                .locationId(locationId)
+                .storageLocationId(storageLocationId != null && !storageLocationId.isBlank()
+                        ? storageLocationId
+                        : null)
+                .onHandQuantity(onHand)
+                .allocatedQuantity(allocatedQty)
+                .availableToPromiseQuantity(onHand - allocatedQty)
+                .unitOfMeasure("EACH")
+                .build();
     }
 
     private boolean isProcessableEntry(InventoryLedgerEntry ledgerEntry) {

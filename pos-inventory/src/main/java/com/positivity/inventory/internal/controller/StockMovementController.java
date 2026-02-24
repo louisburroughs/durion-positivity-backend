@@ -1,0 +1,98 @@
+package com.positivity.inventory.internal.controller;
+
+import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
+import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
+import com.positivity.inventory.internal.dto.RecordMovementRequest;
+import com.positivity.inventory.internal.entity.InventoryAdjustmentRequest;
+import com.positivity.inventory.service.StockMovementService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.security.Principal;
+import java.util.UUID;
+
+/**
+ * Endpoints for recording inventory stock movements and managing adjustment
+ * requests.
+ *
+ * Issue: CAP-215 Story #37
+ */
+@Slf4j
+@RestController
+@Tag(name = "Stock Movements", description = "Inventory ledger movement recording and adjustment endpoints")
+@PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:adjustment:approve','inventory:availability:read')")
+public class StockMovementController {
+
+    private final StockMovementService stockMovementService;
+
+    public StockMovementController(StockMovementService stockMovementService) {
+        this.stockMovementService = stockMovementService;
+    }
+
+    @PostMapping("/v1/inventory/stock-movements")
+    @EmitEvent(id = "INVENTORY_STOCK_MOVEMENT_CREATE", apiVersion = "1")
+    @Operation(summary = "Record a stock movement", description = "Records a RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movement in the inventory ledger.")
+    @ApiResponse(responseCode = "201", description = "Movement recorded")
+    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(responseCode = "422", description = "Insufficient stock")
+    public ResponseEntity<Void> recordMovement(
+            @Valid @RequestBody RecordMovementRequest request,
+            Principal principal) {
+        String actorUserId = principal != null ? principal.getName() : "system";
+        log.info("POST /v1/inventory/stock-movements movementType={} productSku={} actor={}",
+                request.getMovementType(), request.getProductSku(), actorUserId);
+        stockMovementService.recordMovement(request, actorUserId);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @PostMapping("/v1/inventory/adjustments")
+    @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_CREATE", apiVersion = "1")
+    @Operation(summary = "Create adjustment request", description = "Creates a pending adjustment request for approval before posting to the inventory ledger.")
+    @ApiResponse(responseCode = "201", description = "Adjustment request created")
+    @ApiResponse(responseCode = "400", description = "Validation failure")
+    public ResponseEntity<AdjustmentRequestResponse> createAdjustmentRequest(
+            @Valid @RequestBody CreateAdjustmentRequestDto request,
+            Principal principal) {
+        String actorUserId = principal != null ? principal.getName() : "system";
+        log.info("POST /v1/inventory/adjustments productSku={} actor={}", request.getProductSku(), actorUserId);
+
+        InventoryAdjustmentRequest adjustmentRequest = stockMovementService.createAdjustmentRequest(request,
+                actorUserId);
+
+        AdjustmentRequestResponse response = AdjustmentRequestResponse.builder()
+                .adjustmentRequestId(adjustmentRequest.getAdjustmentRequestId())
+                .productSku(adjustmentRequest.getProductSku())
+                .locationId(adjustmentRequest.getLocationId())
+                .quantity(adjustmentRequest.getQuantity())
+                .reasonCode(adjustmentRequest.getReasonCode())
+                .status(adjustmentRequest.getStatus().name())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/v1/inventory/adjustments/{adjustmentRequestId}/approve")
+    @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_APPROVE", apiVersion = "1")
+    @Operation(summary = "Approve adjustment request", description = "Approves a pending adjustment request and posts the resulting movement to the inventory ledger.")
+    @ApiResponse(responseCode = "200", description = "Adjustment approved")
+    @ApiResponse(responseCode = "400", description = "Validation failure")
+    public ResponseEntity<Void> approveAdjustmentRequest(
+            @PathVariable UUID adjustmentRequestId,
+            Principal principal) {
+        String actorUserId = principal != null ? principal.getName() : "system";
+        log.info("POST /v1/inventory/adjustments/{}/approve actor={}", adjustmentRequestId, actorUserId);
+        stockMovementService.approveAdjustmentRequest(adjustmentRequestId, actorUserId);
+        return ResponseEntity.ok().build();
+    }
+}

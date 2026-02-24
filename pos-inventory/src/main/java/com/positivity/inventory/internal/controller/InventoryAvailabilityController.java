@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.dto.InventoryAvailabilityResponse;
 import com.positivity.inventory.service.InventoryAvailabilityService;
@@ -42,6 +43,21 @@ public class InventoryAvailabilityController {
             @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId) {
         log.info("GET /v1/inventory/availability/{}", productId);
         return ResponseEntity.ok(availabilityService.getAvailabilityByProduct(productId));
+    }
+
+    @GetMapping("/query")
+    @EmitEvent(id = "INVENTORY_AVAILABILITY_QUERY", apiVersion = "1")
+    @Operation(summary = "Query inventory availability by SKU and location", description = "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.")
+    @ApiResponse(responseCode = "200", description = "Availability view returned", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AvailabilityView.class)))
+    @ApiResponse(responseCode = "404", description = "Product SKU or location not found")
+    // Issue: CAP-215 Story #36
+    public ResponseEntity<AvailabilityView> queryAvailabilityBySku(
+            @Parameter(description = "Product SKU", required = true) @RequestParam String productSku,
+            @Parameter(description = "Location identifier", required = true) @RequestParam String locationId,
+            @Parameter(description = "Storage location identifier (optional; narrows to sub-location)") @RequestParam(required = false) String storageLocationId) {
+        log.info("GET /v1/inventory/availability/query productSku={} locationId={}", productSku, locationId);
+        return ResponseEntity.ok(
+                availabilityService.queryAvailability(productSku, locationId, storageLocationId));
     }
 
     @PostMapping("/{productId}")

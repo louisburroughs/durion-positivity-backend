@@ -8,9 +8,12 @@ import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingExcept
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
+import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
+import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
+import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
@@ -75,9 +78,19 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
+    @ExceptionHandler({ ProductNotFoundException.class, LocationNotFoundException.class })
+    public ResponseEntity<Map<String, String>> handleResourceNotFound(RuntimeException ex) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+    }
+
     @ExceptionHandler(InvalidCountQuantityException.class)
     public ResponseEntity<Map<String, String>> handleInvalidCountQuantity(InvalidCountQuantityException ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<Map<String, String>> handleInsufficientStock(InsufficientStockException ex) {
+        return build(HttpStatus.valueOf(422), "INSUFFICIENT_STOCK", ex.getMessage());
     }
 
     @ExceptionHandler(RecountLimitExceededException.class)
