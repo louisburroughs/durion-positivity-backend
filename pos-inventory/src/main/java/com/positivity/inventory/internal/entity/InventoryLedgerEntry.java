@@ -87,6 +87,15 @@ public class InventoryLedgerEntry {
 
     // Issue #48: Add location-level inventory tracking for per-location
     // availability.
+    /**
+     * Posting bucket for the ledger row, used for location-level availability
+     * reads.
+     *
+     * <p>
+     * This is distinct from directional metadata (`fromLocationId`,
+     * `toLocationId`). For example, a TRANSFER_IN row posts to the destination, so
+     * `locationId` and `toLocationId` are intentionally the same value.
+     */
     @Column
     private String locationId;
 

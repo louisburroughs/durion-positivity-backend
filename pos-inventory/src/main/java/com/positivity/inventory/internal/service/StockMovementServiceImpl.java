@@ -49,19 +49,24 @@ public class StockMovementServiceImpl implements StockMovementService {
             Integer currentOnHand = ledgerRepository.calculateOnHandQuantity(request.getProductSku());
             int onHand = currentOnHand != null ? currentOnHand : 0;
             if (onHand < request.getQuantity()) {
-                throw new InsufficientStockException(request.getProductSku(), request.getLocationId());
+                throw new InsufficientStockException(request.getProductSku(), request.getFromLocationId());
             }
         }
 
         if (movementType == MovementType.TRANSFER) {
+            if (request.getToLocationId() == null || request.getToLocationId().isBlank()) {
+                throw new IllegalArgumentException("toLocationId is required for TRANSFER movements");
+            }
+
             InventoryLedgerEntry transferInEntry = InventoryLedgerEntry.builder()
                     .stockItemId(request.getProductSku())
                     .locationId(request.getToLocationId())
-                    .fromLocationId(request.getLocationId())
+                    .fromLocationId(request.getFromLocationId())
                     .toLocationId(request.getToLocationId())
                     .eventType(InventoryLedgerEventType.TRANSFER_IN)
                     .changeInQuantity(request.getQuantity())
-                    .quantityAfter(calculateQuantityAfter(request.getProductSku(), request.getQuantity()))
+                    .quantityAfter(calculateQuantityAfter(request.getProductSku(), request.getToLocationId(),
+                            request.getQuantity()))
                     .unitOfMeasure(request.getUnitOfMeasure())
                     .sourceTransactionId(request.getSourceTransactionId())
                     .transactionUserId(actorUserId)
@@ -75,14 +80,15 @@ public class StockMovementServiceImpl implements StockMovementService {
 
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(request.getProductSku())
-                .locationId(request.getLocationId())
-                .fromLocationId(movementType == MovementType.TRANSFER ? request.getLocationId()
-                        : isOutbound(movementType) ? request.getLocationId() : null)
+                .locationId(request.getFromLocationId())
+                .fromLocationId(movementType == MovementType.TRANSFER ? request.getFromLocationId()
+                        : isOutbound(movementType) ? request.getFromLocationId() : null)
                 .toLocationId(movementType == MovementType.TRANSFER ? request.getToLocationId()
-                        : isOutbound(movementType) ? null : request.getLocationId())
+                        : isOutbound(movementType) ? null : request.getFromLocationId())
                 .eventType(eventType)
                 .changeInQuantity(quantityDelta)
-                .quantityAfter(calculateQuantityAfter(request.getProductSku(), quantityDelta))
+                .quantityAfter(calculateQuantityAfter(request.getProductSku(), request.getFromLocationId(),
+                        quantityDelta))
                 .unitOfMeasure(request.getUnitOfMeasure())
                 .sourceTransactionId(request.getSourceTransactionId())
                 .transactionUserId(actorUserId)
@@ -143,7 +149,8 @@ public class StockMovementServiceImpl implements StockMovementService {
                 .adjustmentId(adjustmentRequest.getAdjustmentRequestId())
                 .eventType(eventType)
                 .changeInQuantity(quantityDelta)
-                .quantityAfter(calculateQuantityAfter(adjustmentRequest.getProductSku(), quantityDelta))
+                .quantityAfter(calculateQuantityAfter(adjustmentRequest.getProductSku(),
+                        adjustmentRequest.getLocationId(), quantityDelta))
                 .reasonCode(adjustmentRequest.getReasonCode())
                 .unitOfMeasure(adjustmentRequest.getUnitOfMeasure())
                 .transactionUserId(approverUserId)
@@ -175,8 +182,8 @@ public class StockMovementServiceImpl implements StockMovementService {
                 || movementType == MovementType.TRANSFER;
     }
 
-    private int calculateQuantityAfter(String stockItemId, int quantityDelta) {
-        Integer currentOnHand = ledgerRepository.calculateOnHandQuantity(stockItemId);
+    private int calculateQuantityAfter(String stockItemId, String locationId, int quantityDelta) {
+        Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
         int onHand = currentOnHand != null ? currentOnHand : 0;
         return onHand + quantityDelta;
     }
