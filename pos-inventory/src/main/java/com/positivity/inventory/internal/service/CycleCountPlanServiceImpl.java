@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
+import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.service.CycleCountPlanService;
@@ -31,7 +32,7 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
                 .zoneIds(request.getZoneIds())
                 .planName(request.getPlanName())
                 .scheduledDate(request.getScheduledDate())
-                .status("PLANNED")
+                .status(CycleCountPlanStatus.PLANNED)
                 .createdBy(createdBy)
                 .build());
 
@@ -65,7 +66,7 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
                 .zoneIds(plan.getZoneIds())
                 .planName(plan.getPlanName())
                 .scheduledDate(plan.getScheduledDate())
-                .status(plan.getStatus())
+                .status(plan.getStatus().name())
                 .createdBy(plan.getCreatedBy())
                 .createdAt(plan.getCreatedAt())
                 .updatedAt(plan.getUpdatedAt())
