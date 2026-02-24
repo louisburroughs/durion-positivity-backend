@@ -46,7 +46,9 @@ public class StockMovementServiceImpl implements StockMovementService {
         MovementType movementType = request.getMovementType();
 
         if (movementType == MovementType.PICK || movementType == MovementType.ISSUE) {
-            Integer currentOnHand = ledgerRepository.calculateOnHandQuantity(request.getProductSku());
+            Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(
+                    request.getProductSku(),
+                    request.getFromLocationId());
             int onHand = currentOnHand != null ? currentOnHand : 0;
             if (onHand < request.getQuantity()) {
                 throw new InsufficientStockException(request.getProductSku(), request.getFromLocationId());

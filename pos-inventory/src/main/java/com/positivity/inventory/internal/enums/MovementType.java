@@ -18,6 +18,12 @@ public enum MovementType {
     RETURN,
     /** Stock transferred between locations. */
     TRANSFER,
-    /** Manual stock adjustment (requires approval). */
+    /**
+     * Manual stock adjustment (requires approval workflow).
+     *
+     * <p>
+     * Not valid for direct /v1/inventory/stock-movements requests. Use
+     * /v1/inventory/adjustments create + approve endpoints instead.
+     */
     ADJUST
 }

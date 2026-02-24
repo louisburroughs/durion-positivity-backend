@@ -39,7 +39,7 @@ public class StockMovementController {
     }
 
     @PostMapping("/v1/inventory/stock-movements")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('inventory:movement:create')")
     @EmitEvent(id = "INVENTORY_STOCK_MOVEMENT_CREATE", apiVersion = "1")
     @Operation(summary = "Record a stock movement", description = "Records a RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movement in the inventory ledger.")
     @ApiResponse(responseCode = "201", description = "Movement recorded")

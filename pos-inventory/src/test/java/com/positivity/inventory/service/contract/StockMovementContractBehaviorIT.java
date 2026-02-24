@@ -104,6 +104,18 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
+    @Test
+    @DisplayName("AC-2c: recordMovement_ADJUST_returns400")
+    void recordMovement_ADJUST_returns400() throws Exception {
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"productSku\":\"SKU-ADJ-1\",\"fromLocationId\":\"LOC-ADJ\","
+                        + "\"movementType\":\"ADJUST\",\"quantity\":3,\"unitOfMeasure\":\"EACH\"}")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
     // Issue CAP-215: AC-3 — adjustment request without reasonCode returns 400
     // VALIDATION_ERROR
     @Test
