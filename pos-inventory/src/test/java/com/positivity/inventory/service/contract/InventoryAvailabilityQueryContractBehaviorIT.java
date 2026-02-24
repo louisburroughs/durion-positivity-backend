@@ -62,7 +62,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .andExpect(jsonPath("$.onHandQuantity").value(100))
                 .andExpect(jsonPath("$.allocatedQuantity").value(20))
                 .andExpect(jsonPath("$.availableToPromiseQuantity").value(80))
-                .andExpect(jsonPath("$.unitOfMeasure").exists());
+                .andExpect(jsonPath("$.unitOfMeasure").value("EACH"));
     }
 
     // Issue CAP-215: AC-2 — known product with no stock at queried location returns

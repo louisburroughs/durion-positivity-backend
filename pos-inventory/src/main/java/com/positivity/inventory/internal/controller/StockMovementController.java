@@ -31,7 +31,6 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @Tag(name = "Stock Movements", description = "Inventory ledger movement recording and adjustment endpoints")
-@PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:adjustment:approve','inventory:availability:read')")
 public class StockMovementController {
 
     private final StockMovementService stockMovementService;
@@ -41,6 +40,7 @@ public class StockMovementController {
     }
 
     @PostMapping("/v1/inventory/stock-movements")
+    @PreAuthorize("isAuthenticated()")
     @EmitEvent(id = "INVENTORY_STOCK_MOVEMENT_CREATE", apiVersion = "1")
     @Operation(summary = "Record a stock movement", description = "Records a RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movement in the inventory ledger.")
     @ApiResponse(responseCode = "201", description = "Movement recorded")
@@ -57,6 +57,7 @@ public class StockMovementController {
     }
 
     @PostMapping("/v1/inventory/adjustments")
+    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_CREATE", apiVersion = "1")
     @Operation(summary = "Create adjustment request", description = "Creates a pending adjustment request for approval before posting to the inventory ledger.")
     @ApiResponse(responseCode = "201", description = "Adjustment request created")
@@ -83,6 +84,7 @@ public class StockMovementController {
     }
 
     @PostMapping("/v1/inventory/adjustments/{adjustmentRequestId}/approve")
+    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
     @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_APPROVE", apiVersion = "1")
     @Operation(summary = "Approve adjustment request", description = "Approves a pending adjustment request and posts the resulting movement to the inventory ledger.")
     @ApiResponse(responseCode = "200", description = "Adjustment approved")
