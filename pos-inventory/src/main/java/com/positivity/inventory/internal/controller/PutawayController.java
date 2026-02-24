@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.service.PutawayGenerationService;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +28,7 @@ public class PutawayController {
 
     @PostMapping("/generate")
     public ResponseEntity<List<PutawayTaskResponse>> generateTasks(
-            @RequestBody GeneratePutawayTasksRequest request) {
+            @Valid @RequestBody GeneratePutawayTasksRequest request) {
         List<PutawayTaskResponse> response = putawayGenerationService.generateTasksForReceipt(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

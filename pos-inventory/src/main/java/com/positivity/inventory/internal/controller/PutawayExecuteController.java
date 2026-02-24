@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,7 +29,7 @@ public class PutawayExecuteController {
     @EmitEvent(id = "INVENTORY_PUTAWAY_EXECUTE", apiVersion = "1")
     public ResponseEntity<PutawayExecutionResponse> executePutaway(
             @PathVariable String taskId,
-            @RequestBody PutawayExecutionRequest request,
+            @Valid @RequestBody PutawayExecutionRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-User", required = false) String gatewayUser) {
         String actorId = (userId != null && !userId.isBlank())
