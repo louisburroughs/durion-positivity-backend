@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
-import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.service.CycleCountPlanService;
 
@@ -43,7 +43,7 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
     public CycleCountPlanResponse getPlan(UUID planId) {
         return cycleCountPlanRepository.findById(planId)
                 .map(this::toResponse)
-                .orElseThrow(() -> new TaskNotFoundException(planId));
+                .orElseThrow(() -> new CycleCountPlanNotFoundException(planId));
     }
 
     private void validate(CreateCycleCountPlanRequest request) {

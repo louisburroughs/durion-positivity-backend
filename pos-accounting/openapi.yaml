@@ -1981,16 +1981,16 @@ paths:
           format: date
         example: 2024-12-31
       responses:
-        "200":
-          description: Journal line drilldown successful
+        "403":
+          description: Forbidden - missing reporting:view:financial-statements
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/JournalLineDrilldownResponse"
-        "403":
-          description: Forbidden - missing reporting:view:financial-statements
+        "200":
+          description: Journal line drilldown successful
           content:
             application/json:
               schema:
@@ -2754,12 +2754,6 @@ paths:
           format: date-time
         example: 2026-01-28T23:59:59Z
       responses:
-        "200":
-          description: Audit entries retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditTrailResponse"
         "404":
           description: Actor not found
           content:
@@ -2768,6 +2762,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AuditTrailResponse"
+        "200":
+          description: Audit entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTrailResponse"
         "500":
           description: Internal server error
           content:

@@ -759,14 +759,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "404":
-          description: Workorder or part not found
+        "201":
+          description: Unused quantity returned successfully
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/WorkorderPartAdjustmentEventResponse"
-        "201":
-          description: Unused quantity returned successfully
+        "404":
+          description: Workorder or part not found
           content:
             '*/*':
               schema:
