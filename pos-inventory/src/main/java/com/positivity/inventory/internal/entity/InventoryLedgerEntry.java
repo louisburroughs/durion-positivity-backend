@@ -91,6 +91,42 @@ public class InventoryLedgerEntry {
     private String locationId;
 
     /**
+     * Source location for TRANSFER movements.
+     * Issue: CAP-215 Story #37
+     */
+    @Column
+    private String fromLocationId;
+
+    /**
+     * Destination location for TRANSFER movements.
+     * Issue: CAP-215 Story #37
+     */
+    @Column
+    private String toLocationId;
+
+    /**
+     * Mandatory reason code for ADJUST movements.
+     * Issue: CAP-215 Story #37
+     */
+    @Column(length = 100)
+    private String reasonCode;
+
+    /**
+     * Optional reference to originating transaction (e.g., purchase order, work
+     * order).
+     * Issue: CAP-215 Story #37
+     */
+    @Column(length = 255)
+    private String sourceTransactionId;
+
+    /**
+     * Unit of measure code for the quantity (e.g. EACH, KG, L).
+     * Issue: CAP-215 Story #37
+     */
+    @Column(length = 50)
+    private String unitOfMeasure;
+
+    /**
      * Optional notes or context for this transaction.
      */
     @Column(length = 2000)

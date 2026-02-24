@@ -36,6 +36,18 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
     List<InventoryLedgerEntry> findByStockItemIdOrderByTimestampAsc(String stockItemId);
 
     /**
+     * Find all ledger entries for a specific stock item at a specific parent
+     * location
+     * (or any storage location within it), ordered oldest-to-newest.
+     *
+     * @param stockItemId the stock item ID
+     * @param locationId  the location or storage location ID
+     * @return list of ledger entries ordered by timestamp ascending
+     */
+    // Issue: CAP-215 Story #36
+    List<InventoryLedgerEntry> findByStockItemIdAndLocationIdOrderByTimestampAsc(String stockItemId, String locationId);
+
+    /**
      * Find ledger entry by adjustment ID.
      * 
      * @param adjustmentId the adjustment ID
