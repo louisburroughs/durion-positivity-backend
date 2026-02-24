@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
+import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.service.CycleCountPlanServiceImpl;
@@ -221,7 +222,7 @@ class CycleCountPlanServiceTest {
                 .zoneIds(zoneIds)
                 .planName("Test Plan")
                 .scheduledDate(LocalDate.now().plusDays(5))
-                .status("PLANNED")
+                .status(CycleCountPlanStatus.PLANNED)
                 .createdBy(ACTOR_USER_ID)
                 .build();
 
