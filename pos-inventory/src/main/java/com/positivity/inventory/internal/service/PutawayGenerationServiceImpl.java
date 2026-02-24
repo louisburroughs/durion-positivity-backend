@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
+import com.positivity.inventory.internal.dto.putaway.PutawayLineItemRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
@@ -11,6 +12,7 @@ import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.service.PutawayGenerationService;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -36,19 +38,22 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 ? DEFAULT_LOCATION
                 : enabledRules.get(0).getDestinationLocationId();
 
-        // TODO(CAP-217): multi-line-item per receipt requires pos-receiving
-        // integration; currently creates one task per request
-        PutawayTask task = PutawayTask.builder()
-                .sourceReceiptId(sourceReceiptId)
-                .productId(UUID.fromString(request.getProductId()))
-                .quantity(request.getQuantity())
-                .sourceLocationId(STAGING_LOCATION)
-                .suggestedDestinationLocationId(suggestedDestination)
-                .status(PutawayTaskStatus.UNASSIGNED)
-                .build();
+        List<ParsedPutawayLineItem> lineItems = resolveLineItems(request);
 
-        PutawayTask savedTask = putawayTaskRepository.save(task);
-        return List.of(toResponse(savedTask));
+        List<PutawayTask> tasks = lineItems.stream()
+                .map(lineItem -> PutawayTask.builder()
+                        .sourceReceiptId(sourceReceiptId)
+                        .productId(lineItem.productId())
+                        .quantity(lineItem.quantity())
+                        .sourceLocationId(STAGING_LOCATION)
+                        .suggestedDestinationLocationId(suggestedDestination)
+                        .status(PutawayTaskStatus.UNASSIGNED)
+                        .build())
+                .toList();
+
+        return putawayTaskRepository.saveAll(tasks).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override
@@ -92,6 +97,55 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException(fieldName + " must be a valid UUID", ex);
         }
+    }
+
+    private List<ParsedPutawayLineItem> resolveLineItems(GeneratePutawayTasksRequest request) {
+        boolean hasLineItems = request.getLineItems() != null && !request.getLineItems().isEmpty();
+        boolean hasLegacyProductId = request.getProductId() != null && !request.getProductId().isBlank();
+        boolean hasLegacyQuantity = request.getQuantity() != null;
+
+        if (hasLineItems && (hasLegacyProductId || hasLegacyQuantity)) {
+            throw new IllegalArgumentException("Provide either lineItems or productId/quantity, not both");
+        }
+
+        if (hasLineItems) {
+            return IntStream.range(0, request.getLineItems().size())
+                    .mapToObj(index -> parseLineItem(request.getLineItems().get(index), index))
+                    .toList();
+        }
+
+        if (hasLegacyProductId || hasLegacyQuantity) {
+            if (!hasLegacyProductId || !hasLegacyQuantity) {
+                throw new IllegalArgumentException("Both productId and quantity are required when lineItems is not provided");
+            }
+            return List.of(new ParsedPutawayLineItem(
+                    parseRequiredUuid(request.getProductId(), "productId"),
+                    parseRequiredPositiveQuantity(request.getQuantity(), "quantity")));
+        }
+
+        throw new IllegalArgumentException("Either lineItems or productId/quantity is required");
+    }
+
+    private ParsedPutawayLineItem parseLineItem(PutawayLineItemRequest lineItem, int index) {
+        if (lineItem == null) {
+            throw new IllegalArgumentException("lineItems[" + index + "] is required");
+        }
+        UUID productId = parseRequiredUuid(lineItem.getProductId(), "lineItems[" + index + "].productId");
+        Integer quantity = parseRequiredPositiveQuantity(lineItem.getQuantity(), "lineItems[" + index + "].quantity");
+        return new ParsedPutawayLineItem(productId, quantity);
+    }
+
+    private Integer parseRequiredPositiveQuantity(Integer value, String fieldName) {
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " is required");
+        }
+        if (value < 1) {
+            throw new IllegalArgumentException(fieldName + " must be greater than 0");
+        }
+        return value;
+    }
+
+    private record ParsedPutawayLineItem(UUID productId, Integer quantity) {
     }
 
     private PutawayTaskResponse toResponse(PutawayTask task) {

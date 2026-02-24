@@ -3,9 +3,11 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
+import com.positivity.inventory.internal.dto.putaway.PutawayLineItemRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
@@ -42,12 +44,15 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_withRules_createsUnassignedTask() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(), 5);
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(UUID.randomUUID().toString())
+                .productId(UUID.randomUUID().toString())
+                .quantity(5)
+                .build();
         PutawayRule rule = new PutawayRule();
         rule.setDestinationLocationId("DEST-A");
         when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
-        when(putawayTaskRepository.save(any(PutawayTask.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
 
@@ -59,10 +64,13 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_noRules_createsUnassignedTaskWithDefaultLocation() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(), 5);
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(UUID.randomUUID().toString())
+                .productId(UUID.randomUUID().toString())
+                .quantity(5)
+                .build();
         when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-        when(putawayTaskRepository.save(any(PutawayTask.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
 
@@ -70,6 +78,51 @@ class PutawayGenerationServiceImplTest {
         PutawayTaskResponse response = responses.get(0);
         assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.UNASSIGNED.toString());
         assertThat(response.getSuggestedDestinationLocationId()).isEqualTo("DEFAULT-LOCATION");
+    }
+
+    @Test
+    void generateTasksForReceipt_withLineItems_createsTaskPerLineItem() {
+        UUID receiptId = UUID.randomUUID();
+        UUID productId1 = UUID.randomUUID();
+        UUID productId2 = UUID.randomUUID();
+
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(receiptId.toString())
+                .lineItems(List.of(
+                        PutawayLineItemRequest.builder().productId(productId1.toString()).quantity(5).build(),
+                        PutawayLineItemRequest.builder().productId(productId2.toString()).quantity(3).build()))
+                .build();
+
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
+        when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses).extracting(PutawayTaskResponse::getProductId)
+                .containsExactly(productId1.toString(), productId2.toString());
+        assertThat(responses).extracting(PutawayTaskResponse::getQuantity).containsExactly(5, 3);
+        assertThat(responses).extracting(PutawayTaskResponse::getSourceReceiptId)
+                .containsExactly(receiptId.toString(), receiptId.toString());
+    }
+
+    @Test
+    void generateTasksForReceipt_withLineItemsAndLegacyFields_throwsIllegalArgumentException() {
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(UUID.randomUUID().toString())
+                .productId(UUID.randomUUID().toString())
+                .quantity(5)
+                .lineItems(List.of(PutawayLineItemRequest.builder()
+                        .productId(UUID.randomUUID().toString())
+                        .quantity(2)
+                        .build()))
+                .build();
+
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> service.generateTasksForReceipt(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Provide either lineItems or productId/quantity, not both");
     }
 
     @Test
@@ -130,8 +183,11 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_withInvalidUuid_throwsIllegalArgumentException() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest("invalid-uuid",
-                UUID.randomUUID().toString(), 5);
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId("invalid-uuid")
+                .productId(UUID.randomUUID().toString())
+                .quantity(5)
+                .build();
 
         assertThatThrownBy(() -> service.generateTasksForReceipt(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -140,10 +196,27 @@ class PutawayGenerationServiceImplTest {
 
     @Test
     void generateTasksForReceipt_withNullUuid_throwsIllegalArgumentException() {
-        GeneratePutawayTasksRequest request = new GeneratePutawayTasksRequest(null, UUID.randomUUID().toString(), 5);
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(null)
+                .productId(UUID.randomUUID().toString())
+                .quantity(5)
+                .build();
 
         assertThatThrownBy(() -> service.generateTasksForReceipt(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("sourceReceiptId is required");
+    }
+
+    @Test
+    void generateTasksForReceipt_withNoLineItemsAndNoLegacyFields_throwsIllegalArgumentException() {
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(UUID.randomUUID().toString())
+                .build();
+
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> service.generateTasksForReceipt(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Either lineItems or productId/quantity is required");
     }
 }
