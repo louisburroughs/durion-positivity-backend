@@ -13,14 +13,24 @@ servers:
 tags:
 - name: Inventory Management
   description: Operations related to inventory location management
-- name: Cycle Count Adjustments
-  description: Manage inventory adjustments from cycle counts
+- name: Cycle Count Plans
+  description: Cycle count plan management endpoints
 - name: Picking Lists
   description: Picking list command endpoints
+- name: Putaway
+  description: Putaway task generation and claiming endpoints
 - name: Inventory Availability
   description: Inventory availability read/write endpoints
 - name: Cycle Count API
   description: API for cycle count operations and variance tracking
+- name: Replenishment
+  description: Replenishment task and policy endpoints
+- name: Cycle Count Query
+  description: Query endpoints for cycle count tasks and history
+- name: Putaway
+  description: Putaway task execution endpoints
+- name: Cycle Count Adjustments
+  description: Manage inventory adjustments from cycle counts
 - name: Inventory Sites
   description: Site inventory configuration endpoints. Inventory Sites represent physical
     locations that hold inventory.
@@ -28,8 +38,6 @@ tags:
   description: Inventory ledger movement recording and adjustment endpoints
 - name: Cycle Count Operations
   description: Cycle count submission and recount operations
-- name: Cycle Count Query
-  description: Query endpoints for cycle count tasks and history
 paths:
   /v1/inventory/sites/{siteId}/defaultLocations:
     get:
@@ -47,19 +55,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: Default locations returned
+        "501":
+          description: Not implemented
           content:
-            application/json:
+            '*/*':
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
-        "501":
-          description: Not implemented
+        "200":
+          description: Default locations returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
@@ -113,6 +121,167 @@ paths:
           description: Insufficient stock
         "201":
           description: Movement recorded
+  /v1/inventory/replenishment/policies:
+    get:
+      tags:
+      - Replenishment
+      summary: List replenishment policies
+      description: Returns configured replenishment policies.
+      operationId: getReplenishmentPolicies
+      responses:
+        "200":
+          description: Replenishment policies returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReplenishmentPolicyResponse"
+    post:
+      tags:
+      - Replenishment
+      summary: Create replenishment policy
+      description: Creates a replenishment policy used to generate replenishment tasks.
+      operationId: createReplenishmentPolicy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReplenishmentPolicyRequest"
+        required: true
+      responses:
+        "400":
+          description: Validation failure
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReplenishmentPolicyResponse"
+        "201":
+          description: Replenishment policy created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplenishmentPolicyResponse"
+  /v1/inventory/putaway/tasks/{taskId}/execute:
+    post:
+      tags:
+      - Putaway
+      summary: Execute putaway task
+      description: Executes a putaway task and records destination inventory placement.
+      operationId: executePutaway
+      parameters:
+      - name: taskId
+        in: path
+        description: Putaway task identifier
+        required: true
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        description: Preferred actor identifier from gateway context
+        required: false
+        schema:
+          type: string
+      - name: X-User
+        in: header
+        description: Fallback actor identifier from gateway context
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutawayExecutionRequest"
+        required: true
+      responses:
+        "400":
+          description: Validation failure
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PutawayExecutionResponse"
+        "404":
+          description: Putaway task not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PutawayExecutionResponse"
+        "200":
+          description: Putaway task executed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PutawayExecutionResponse"
+  /v1/inventory/putaway/tasks/{taskId}/claim:
+    post:
+      tags:
+      - Putaway
+      summary: Claim a putaway task
+      description: Claims an available putaway task for the current actor.
+      operationId: claimTask
+      parameters:
+      - name: taskId
+        in: path
+        description: Putaway task identifier
+        required: true
+        schema:
+          type: string
+      - name: X-User-Id
+        in: header
+        description: Preferred actor identifier from gateway context
+        required: false
+        schema:
+          type: string
+      - name: X-User
+        in: header
+        description: Fallback actor identifier from gateway context
+        required: false
+        schema:
+          type: string
+      responses:
+        "404":
+          description: Putaway task not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PutawayTaskResponse"
+        "200":
+          description: Putaway task claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PutawayTaskResponse"
+  /v1/inventory/putaway/tasks/generate:
+    post:
+      tags:
+      - Putaway
+      summary: Generate putaway tasks
+      description: Generates putaway tasks for received inventory lines.
+      operationId: generateTasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeneratePutawayTasksRequest"
+        required: true
+      responses:
+        "400":
+          description: Validation failure
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PutawayTaskResponse"
+        "201":
+          description: Putaway tasks generated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PutawayTaskResponse"
   /v1/inventory/pickingLists/{id}/confirm:
     post:
       tags:
@@ -136,271 +305,17 @@ paths:
           description: Not implemented
         "200":
           description: Picking list confirmed
-  /v1/inventory/availability/{productId}:
-    get:
-      tags:
-      - Inventory Availability
-      summary: Query inventory availability
-      description: Returns per-location availability for a product.
-      operationId: queryInventoryAvailability
-      parameters:
-      - name: productId
-        in: path
-        description: Product identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Availability returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LocationAvailabilityDto"
-        "400":
-          description: Invalid product identifier
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LocationAvailabilityDto"
+  /v1/inventory/cycleCountPlans:
     post:
       tags:
-      - Inventory Availability
-      summary: Update inventory availability
-      description: Updates availability for a product. Stub implementation.
-      operationId: updateInventoryAvailability
-      parameters:
-      - name: productId
-        in: path
-        description: Product identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema: {}
-      responses:
-        "200":
-          description: Availability updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryAvailabilityResponse"
-        "501":
-          description: Not implemented
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/InventoryAvailabilityResponse"
-  /v1/inventory/adjustments:
-    post:
-      tags:
-      - Stock Movements
-      summary: Create adjustment request
-      description: Creates a pending adjustment request for approval before posting
-        to the inventory ledger.
-      operationId: createAdjustmentRequest
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateAdjustmentRequestDto"
-        required: true
-      responses:
-        "201":
-          description: Adjustment request created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdjustmentRequestResponse"
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "403":
-          description: User lacks required create permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-  /v1/inventory/adjustments/{adjustmentRequestId}/approve:
-    post:
-      tags:
-      - Stock Movements
-      summary: Approve adjustment request
-      description: Approves a pending adjustment request and posts the resulting movement
-        to the inventory ledger.
-      operationId: approveAdjustmentRequest
-      parameters:
-      - name: adjustmentRequestId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "400":
-          description: Validation failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "200":
-          description: Adjustment approved
-        "403":
-          description: User lacks required approval permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Referenced resource not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "409":
-          description: Adjustment request is in a conflicting state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Business rule validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
-  /api/v1/inventory/replenishment/policies:
-    get:
-      tags:
-      - replenishment-controller
-      operationId: getReplenishmentPolicies
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ReplenishmentPolicyResponse"
-    post:
-      tags:
-      - replenishment-controller
-      operationId: createReplenishmentPolicy
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateReplenishmentPolicyRequest"
-        required: true
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/ReplenishmentPolicyResponse"
-  /api/v1/inventory/putaway/tasks/{taskId}/execute:
-    post:
-      tags:
-      - putaway-execute-controller
-      operationId: executePutaway
-      parameters:
-      - name: taskId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: X-User
-        in: header
-        required: false
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PutawayExecutionRequest"
-        required: true
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PutawayExecutionResponse"
-  /api/v1/inventory/putaway/tasks/{taskId}/claim:
-    post:
-      tags:
-      - putaway-controller
-      operationId: claimTask
-      parameters:
-      - name: taskId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: X-User-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: X-User
-        in: header
-        required: false
-        schema:
-          type: string
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PutawayTaskResponse"
-  /api/v1/inventory/putaway/tasks/generate:
-    post:
-      tags:
-      - putaway-controller
-      operationId: generateTasks
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GeneratePutawayTasksRequest"
-        required: true
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PutawayTaskResponse"
-  /api/v1/inventory/cycleCountPlans:
-    post:
-      tags:
-      - cycle-count-plan-controller
+      - Cycle Count Plans
+      summary: Create cycle count plan
+      description: Creates a cycle count plan and returns its configuration details.
       operationId: createPlan
       parameters:
       - name: X-User-Id
         in: header
+        description: Actor identifier from gateway context
         required: false
         schema:
           type: string
@@ -411,13 +326,25 @@ paths:
               $ref: "#/components/schemas/CreateCycleCountPlanRequest"
         required: true
       responses:
-        "200":
-          description: OK
+        "400":
+          description: Validation failure
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
-  /api/v1/inventory/cycleCountAdjustments:
+        "403":
+          description: User lacks required permission
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
+        "201":
+          description: Cycle count plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
+  /v1/inventory/cycleCountAdjustments:
     get:
       tags:
       - Cycle Count Adjustments
@@ -473,7 +400,7 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
-  /api/v1/inventory/cycleCountAdjustments/{adjustmentId}/reject:
+  /v1/inventory/cycleCountAdjustments/{adjustmentId}/reject:
     post:
       tags:
       - Cycle Count Adjustments
@@ -514,7 +441,7 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
-  /api/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve:
+  /v1/inventory/cycleCountAdjustments/{adjustmentId}/approve:
     post:
       tags:
       - Cycle Count Adjustments
@@ -559,6 +486,150 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/AdjustmentResponse"
+  /v1/inventory/availability/{productId}:
+    get:
+      tags:
+      - Inventory Availability
+      summary: Query inventory availability
+      description: Returns per-location availability for a product.
+      operationId: queryInventoryAvailability
+      parameters:
+      - name: productId
+        in: path
+        description: Product identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Availability returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationAvailabilityDto"
+        "400":
+          description: Invalid product identifier
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationAvailabilityDto"
+    post:
+      tags:
+      - Inventory Availability
+      summary: Update inventory availability
+      description: Updates availability for a product. Stub implementation.
+      operationId: updateInventoryAvailability
+      parameters:
+      - name: productId
+        in: path
+        description: Product identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "501":
+          description: Not implemented
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InventoryAvailabilityResponse"
+        "200":
+          description: Availability updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAvailabilityResponse"
+  /v1/inventory/adjustments:
+    post:
+      tags:
+      - Stock Movements
+      summary: Create adjustment request
+      description: Creates a pending adjustment request for approval before posting
+        to the inventory ledger.
+      operationId: createAdjustmentRequest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdjustmentRequestDto"
+        required: true
+      responses:
+        "201":
+          description: Adjustment request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdjustmentRequestResponse"
+        "403":
+          description: User lacks required create permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+  /v1/inventory/adjustments/{adjustmentRequestId}/approve:
+    post:
+      tags:
+      - Stock Movements
+      summary: Approve adjustment request
+      description: Approves a pending adjustment request and posts the resulting movement
+        to the inventory ledger.
+      operationId: approveAdjustmentRequest
+      parameters:
+      - name: adjustmentRequestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "403":
+          description: User lacks required approval permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "409":
+          description: Adjustment request is in a conflicting state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "200":
+          description: Adjustment approved
+        "404":
+          description: Referenced resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "422":
+          description: Business rule validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
   /api/inventory/locations/{locationId}/deactivate:
     post:
       tags:
@@ -622,12 +693,6 @@ paths:
               $ref: "#/components/schemas/SubmitCountRequest"
         required: true
       responses:
-        "200":
-          description: Count submitted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CountResponse"
         "404":
           description: Task not found
           content:
@@ -638,6 +703,12 @@ paths:
           description: Invalid request or quantity
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+        "200":
+          description: Count submitted successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
   /api/inventory/cycleCount/recount:
@@ -656,16 +727,16 @@ paths:
               $ref: "#/components/schemas/SubmitRecountRequest"
         required: true
       responses:
-        "404":
-          description: Task not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CountResponse"
         "200":
           description: Recount submitted successfully
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+        "404":
+          description: Task not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
         "400":
@@ -680,6 +751,125 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CountResponse"
+  /v1/inventory/replenishment/tasks:
+    get:
+      tags:
+      - Replenishment
+      summary: List replenishment tasks
+      description: Returns replenishment tasks that should be fulfilled.
+      operationId: getReplenishmentTasks
+      responses:
+        "200":
+          description: Replenishment tasks returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReplenishmentTaskResponse"
+  /v1/inventory/putaway/tasks:
+    get:
+      tags:
+      - Putaway
+      summary: List available putaway tasks
+      description: Returns all currently available putaway tasks.
+      operationId: getAvailableTasks
+      responses:
+        "200":
+          description: Available putaway tasks returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PutawayTaskResponse"
+  /v1/inventory/cycleCountPlans/{planId}:
+    get:
+      tags:
+      - Cycle Count Plans
+      summary: Get cycle count plan
+      description: Returns a cycle count plan by identifier.
+      operationId: getPlan
+      parameters:
+      - name: planId
+        in: path
+        description: Cycle count plan identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Cycle count plan returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
+        "404":
+          description: Cycle count plan not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
+  /v1/inventory/cycleCountAdjustments/{adjustmentId}:
+    get:
+      tags:
+      - Cycle Count Adjustments
+      summary: Get adjustment details
+      description: Retrieves details of a specific cycle count adjustment
+      operationId: getAdjustment
+      parameters:
+      - name: adjustmentId
+        in: path
+        description: Adjustment ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Adjustment found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdjustmentResponse"
+        "404":
+          description: Adjustment not found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdjustmentResponse"
+  /v1/inventory/cycleCountAdjustments/pending:
+    get:
+      tags:
+      - Cycle Count Adjustments
+      summary: List pending approvals
+      description: Lists all adjustments awaiting approval
+      operationId: listPendingApprovals
+      responses:
+        "200":
+          description: Pending adjustments retrieved
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdjustmentResponse"
+  /v1/inventory/cycleCountAdjustments/pending/count:
+    get:
+      tags:
+      - Cycle Count Adjustments
+      summary: Count pending approvals
+      description: Returns the count of adjustments awaiting approval
+      operationId: countPendingApprovals
+      responses:
+        "200":
+          description: Count retrieved
+          content:
+            '*/*':
+              schema:
+                type: integer
+                format: int64
   /v1/inventory/availability/query:
     get:
       tags:
@@ -711,18 +901,18 @@ paths:
           type: string
           format: uuid
       responses:
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
         "200":
           description: Availability view returned
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityView"
-        "400":
-          description: Invalid request parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "403":
           description: User lacks required read permission
           content:
@@ -735,118 +925,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "500":
-          description: Unexpected server error
+        "400":
+          description: Invalid request parameters
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-  /api/v1/inventory/replenishment/tasks:
-    get:
-      tags:
-      - replenishment-controller
-      operationId: getReplenishmentTasks
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ReplenishmentTaskResponse"
-  /api/v1/inventory/putaway/tasks:
-    get:
-      tags:
-      - putaway-controller
-      operationId: getAvailableTasks
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PutawayTaskResponse"
-  /api/v1/inventory/cycleCountPlans/{planId}:
-    get:
-      tags:
-      - cycle-count-plan-controller
-      operationId: getPlan
-      parameters:
-      - name: planId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: OK
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/CycleCountPlanResponse"
-  /api/v1/inventory/cycleCountAdjustments/{adjustmentId}:
-    get:
-      tags:
-      - Cycle Count Adjustments
-      summary: Get adjustment details
-      description: Retrieves details of a specific cycle count adjustment
-      operationId: getAdjustment
-      parameters:
-      - name: adjustmentId
-        in: path
-        description: Adjustment ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Adjustment found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AdjustmentResponse"
-        "404":
-          description: Adjustment not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/AdjustmentResponse"
-  /api/v1/inventory/cycleCountAdjustments/pending:
-    get:
-      tags:
-      - Cycle Count Adjustments
-      summary: List pending approvals
-      description: Lists all adjustments awaiting approval
-      operationId: listPendingApprovals
-      responses:
-        "200":
-          description: Pending adjustments retrieved
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AdjustmentResponse"
-  /api/v1/inventory/cycleCountAdjustments/pending/count:
-    get:
-      tags:
-      - Cycle Count Adjustments
-      summary: Count pending approvals
-      description: Returns the count of adjustments awaiting approval
-      operationId: countPendingApprovals
-      responses:
-        "200":
-          description: Count retrieved
-          content:
-            '*/*':
-              schema:
-                type: integer
-                format: int64
   /api/inventory/cycleCount/task/{taskId}:
     get:
       tags:
@@ -937,6 +1021,8 @@ components:
           format: uuid
         movementType:
           type: string
+          description: Direct ledger movement type. ADJUST is workflow-only and must
+            use /v1/inventory/adjustments endpoints.
           enum:
           - RECEIVE
           - PUT_AWAY
@@ -944,7 +1030,6 @@ components:
           - ISSUE
           - RETURN
           - TRANSFER
-          - ADJUST
         quantity:
           type: integer
           format: int32
@@ -957,110 +1042,6 @@ components:
       - movementType
       - productSku
       - quantity
-    InventoryAvailabilityResponse:
-      type: object
-      description: "Inventory availability response including on-hand, allocations,\
-        \ and ATP"
-      properties:
-        productId:
-          type: string
-          format: uuid
-          description: Product identifier
-          example: 550e8400-e29b-41d4-a716-446655440000
-        locationId:
-          type: string
-          format: uuid
-          description: Location identifier
-          example: 660e8400-e29b-41d4-a716-446655440000
-        onHandQty:
-          type: number
-          description: Physical on-hand quantity (net sum of ledger events)
-          example: 100.0
-        allocatedQty:
-          type: number
-          description: Total quantity allocated (hard commitments)
-          example: 25.0
-        atpQty:
-          type: number
-          description: Available-to-promise quantity (On-Hand - Allocations)
-          example: 75.0
-        uom:
-          type: string
-          description: Base unit of measure for all quantities
-          example: EACH
-        asOfTimestamp:
-          type: string
-          format: date-time
-          description: Timestamp when this calculation was performed
-          example: 2026-01-12T22:00:00Z
-        expectedReceiptsQty:
-          type: number
-          description: "Expected receipts quantity (optional, not included in ATP\
-            \ for v1)"
-          example: 50.0
-      required:
-      - allocatedQty
-      - asOfTimestamp
-      - atpQty
-      - locationId
-      - onHandQty
-      - productId
-      - uom
-    CreateAdjustmentRequestDto:
-      type: object
-      properties:
-        productSku:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        quantity:
-          type: integer
-          format: int32
-        reasonCode:
-          type: string
-        unitOfMeasure:
-          type: string
-      required:
-      - locationId
-      - productSku
-      - quantity
-      - reasonCode
-    AdjustmentRequestResponse:
-      type: object
-      properties:
-        adjustmentRequestId:
-          type: string
-          format: uuid
-        productSku:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        quantity:
-          type: integer
-          format: int32
-        reasonCode:
-          type: string
-        status:
-          type: string
-    InventoryErrorResponse:
-      type: object
-      properties:
-        timestamp:
-          type: string
-          format: date-time
-        code:
-          type: string
-        message:
-          type: string
-        context:
-          type: object
-          additionalProperties: {}
-      required:
-      - code
-      - message
-      - timestamp
     CreateReplenishmentPolicyRequest:
       type: object
       properties:
@@ -1381,6 +1362,112 @@ components:
           type: string
         notes:
           type: string
+    InventoryAvailabilityResponse:
+      type: object
+      description: "Inventory availability response including on-hand, allocations,\
+        \ and ATP"
+      properties:
+        productId:
+          type: string
+          format: uuid
+          description: Product identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
+        locationId:
+          type: string
+          format: uuid
+          description: Location identifier
+          example: 660e8400-e29b-41d4-a716-446655440000
+        onHandQty:
+          type: number
+          description: Physical on-hand quantity (net sum of ledger events)
+          example: 100.0
+        allocatedQty:
+          type: number
+          description: Total quantity allocated (hard commitments)
+          example: 25.0
+        atpQty:
+          type: number
+          description: Available-to-promise quantity (On-Hand - Allocations)
+          example: 75.0
+        uom:
+          type: string
+          description: Base unit of measure for all quantities
+          example: EACH
+        asOfTimestamp:
+          type: string
+          format: date-time
+          description: Timestamp when this calculation was performed
+          example: 2026-01-12T22:00:00Z
+        expectedReceiptsQty:
+          type: number
+          description: "Expected receipts quantity (optional, not included in ATP\
+            \ for v1)"
+          example: 50.0
+      required:
+      - allocatedQty
+      - asOfTimestamp
+      - atpQty
+      - locationId
+      - onHandQty
+      - productId
+      - uom
+    CreateAdjustmentRequestDto:
+      type: object
+      properties:
+        productSku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+        reasonCode:
+          type: string
+        unitOfMeasure:
+          type: string
+      required:
+      - locationId
+      - productSku
+      - quantity
+      - reasonCode
+    AdjustmentRequestResponse:
+      type: object
+      properties:
+        adjustmentRequestId:
+          type: string
+          format: uuid
+        productSku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+        reasonCode:
+          type: string
+        status:
+          type: string
+    InventoryErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          description: Timestamp when the error occurred
+          example: 2026-02-24T17:25:43.511Z
+        code:
+          type: string
+          description: Stable error code
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: Human-readable error message
+          example: reasonCode must not be blank
+        context:
+          type: object
+          additionalProperties: {}
+          description: Optional structured context for specific business errors
     DeactivateLocationRequest:
       type: object
       properties:
@@ -1489,6 +1576,34 @@ components:
       - auditorId
       - permission
       - taskId
+    ReplenishmentTaskResponse:
+      type: object
+      properties:
+        taskId:
+          type: string
+        itemSKU:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        sourceLocationId:
+          type: string
+          format: uuid
+        destinationLocationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        triggerType:
+          type: string
+        decisionReason:
+          type: string
+        sourcingReason:
+          type: string
+        assignedTo:
+          type: string
+        createdAt:
+          type: string
     LocationAvailabilityDto:
       type: object
       properties:
@@ -1524,34 +1639,6 @@ components:
           type: integer
           format: int32
         unitOfMeasure:
-          type: string
-    ReplenishmentTaskResponse:
-      type: object
-      properties:
-        taskId:
-          type: string
-        itemSKU:
-          type: string
-        quantity:
-          type: integer
-          format: int32
-        sourceLocationId:
-          type: string
-          format: uuid
-        destinationLocationId:
-          type: string
-          format: uuid
-        status:
-          type: string
-        triggerType:
-          type: string
-        decisionReason:
-          type: string
-        sourcingReason:
-          type: string
-        assignedTo:
-          type: string
-        createdAt:
           type: string
     CycleCountTaskResponse:
       type: object
