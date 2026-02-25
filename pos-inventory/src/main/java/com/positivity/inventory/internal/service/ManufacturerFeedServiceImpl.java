@@ -3,7 +3,7 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.dto.ManufacturerFeedItemDto;
 import com.positivity.inventory.internal.entity.NormalizedAvailability;
 import com.positivity.inventory.internal.entity.UnmappedManufacturerPart;
-import com.positivity.inventory.internal.entity.UnmappedPartStatus;
+import com.positivity.inventory.internal.enums.UnmappedPartStatus;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import com.positivity.inventory.internal.repository.UnmappedManufacturerPartRepository;
 import com.positivity.inventory.service.ManufacturerFeedService;
@@ -12,6 +12,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
 
@@ -28,11 +29,14 @@ public class ManufacturerFeedServiceImpl implements ManufacturerFeedService {
 
     private final NormalizedAvailabilityRepository normalizedAvailabilityRepository;
     private final UnmappedManufacturerPartRepository unmappedManufacturerPartRepository;
+    private final Clock clock;
 
     public ManufacturerFeedServiceImpl(NormalizedAvailabilityRepository normalizedAvailabilityRepository,
-            UnmappedManufacturerPartRepository unmappedManufacturerPartRepository) {
+            UnmappedManufacturerPartRepository unmappedManufacturerPartRepository,
+            Clock clock) {
         this.normalizedAvailabilityRepository = normalizedAvailabilityRepository;
         this.unmappedManufacturerPartRepository = unmappedManufacturerPartRepository;
+        this.clock = clock;
     }
 
     @Override
@@ -40,7 +44,7 @@ public class ManufacturerFeedServiceImpl implements ManufacturerFeedService {
     public void processFeed(@NonNull Collection<ManufacturerFeedItemDto> feedItems) {
         // Issue #46: Stub ingestion path with normalization + unmapped queue routing.
         log.info("Processing manufacturer feed with {} items", feedItems.size());
-        Instant receivedAt = Instant.now();
+        Instant receivedAt = Instant.now(clock);
 
         for (ManufacturerFeedItemDto item : feedItems) {
             if (item.getProductId() == null) {

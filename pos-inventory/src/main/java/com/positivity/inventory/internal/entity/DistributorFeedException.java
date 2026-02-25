@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -57,9 +58,17 @@ public class DistributorFeedException {
 
     @Column(nullable = false, length = 4000)
     private String rawPayload;
-
+    /**
+     * Timestamp when this configuration was created.
+     */
     @CreatedDate
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * Timestamp when this configuration was last updated.
+     */
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
 }

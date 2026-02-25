@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.dto.replenishment.CreateReplenishmentPo
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 public interface ReplenishmentService {
@@ -11,7 +12,7 @@ public interface ReplenishmentService {
     @NonNull
     ReplenishmentTaskResponse evaluatePickFaceForReplenishment(
             @NonNull String productId,
-            @NonNull String pickFaceLocationId);
+            @NonNull UUID pickFaceLocationId);
 
     @NonNull
     List<ReplenishmentTaskResponse> runBatchReplenishmentScan();

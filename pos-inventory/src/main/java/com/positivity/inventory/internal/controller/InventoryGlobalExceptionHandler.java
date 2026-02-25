@@ -1,19 +1,25 @@
 package com.positivity.inventory.internal.controller;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
+import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
+import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
+import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -23,6 +29,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import jakarta.validation.ConstraintViolationException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -30,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @RestControllerAdvice(basePackages = "com.positivity.inventory.internal.controller")
 @Slf4j
+@RequiredArgsConstructor
 public class InventoryGlobalExceptionHandler {
 
     private static final String SKU_ID = "skuId";
@@ -38,6 +46,7 @@ public class InventoryGlobalExceptionHandler {
     private static final String TIMESTAMP = "timestamp";
     private static final String CODE = "code";
     private static final String MESSAGE = "message";
+    private final Clock clock;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidationError(MethodArgumentNotValidException ex) {
@@ -75,9 +84,19 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
+    @ExceptionHandler({ ProductNotFoundException.class, LocationNotFoundException.class })
+    public ResponseEntity<Map<String, String>> handleResourceNotFound(RuntimeException ex) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+    }
+
     @ExceptionHandler(InvalidCountQuantityException.class)
     public ResponseEntity<Map<String, String>> handleInvalidCountQuantity(InvalidCountQuantityException ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<Map<String, String>> handleInsufficientStock(InsufficientStockException ex) {
+        return build(HttpStatus.valueOf(422), "INSUFFICIENT_STOCK", ex.getMessage());
     }
 
     @ExceptionHandler(RecountLimitExceededException.class)
@@ -120,6 +139,11 @@ public class InventoryGlobalExceptionHandler {
                 putawayContext(ex));
     }
 
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpected(Exception ex) {
         log.error("Unhandled inventory exception", ex);
@@ -129,7 +153,7 @@ public class InventoryGlobalExceptionHandler {
     private ResponseEntity<Map<String, String>> build(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status)
                 .body(Map.of(
-                        TIMESTAMP, Instant.now().toString(),
+                        TIMESTAMP, Instant.now(clock).toString(),
                         CODE, code,
                         MESSAGE, message != null ? message : ""));
     }
@@ -141,7 +165,7 @@ public class InventoryGlobalExceptionHandler {
             Map<String, Object> extra) {
         return ResponseEntity.status(status)
                 .body(Map.of(
-                        TIMESTAMP, Instant.now().toString(),
+                        TIMESTAMP, Instant.now(clock).toString(),
                         CODE, code,
                         MESSAGE, message != null ? message : "",
                         "context", extra));
@@ -166,6 +190,10 @@ public class InventoryGlobalExceptionHandler {
                     SKU_ID, safe(specific.getSkuId()));
         }
         return Map.of();
+    }
+
+    private String safe(UUID value) {
+        return value == null ? "" : value.toString();
     }
 
     private String safe(String value) {

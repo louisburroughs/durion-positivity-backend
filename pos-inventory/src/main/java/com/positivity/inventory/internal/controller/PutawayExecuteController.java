@@ -1,6 +1,12 @@
 package com.positivity.inventory.internal.controller;
 
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,8 +24,9 @@ import com.positivity.inventory.service.PutawayExecuteService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/v1/inventory/putaway")
+@RequestMapping("/v1/inventory/putaway")
 @RequiredArgsConstructor
+@Tag(name = "Putaway", description = "Putaway task execution endpoints")
 @PreAuthorize("hasAuthority('inventory:picking:manage')")
 public class PutawayExecuteController {
 
@@ -27,10 +34,24 @@ public class PutawayExecuteController {
 
     @PostMapping("/tasks/{taskId}/execute")
     @EmitEvent(id = "INVENTORY_PUTAWAY_EXECUTE", apiVersion = "1")
+    @Operation(
+            summary = "Execute putaway task",
+            description = "Executes a putaway task and records destination inventory placement.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Putaway task executed",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = PutawayExecutionResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(responseCode = "404", description = "Putaway task not found")
     public ResponseEntity<PutawayExecutionResponse> executePutaway(
+            @Parameter(description = "Putaway task identifier", required = true)
             @PathVariable String taskId,
             @Valid @RequestBody PutawayExecutionRequest request,
+            @Parameter(description = "Preferred actor identifier from gateway context")
             @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @Parameter(description = "Fallback actor identifier from gateway context")
             @RequestHeader(value = "X-User", required = false) String gatewayUser) {
         String actorId = (userId != null && !userId.isBlank())
                 ? userId

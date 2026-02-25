@@ -17,13 +17,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 
 // Issue CAP-170: Place contract behavior test in ..service.. namespace to
 // satisfy repository access architecture rule for test seeding.
 @DisplayName("Inventory Availability Contract Behavior")
 class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID LOC_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID LOC_ATP = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     @Autowired
     private MockMvc mockMvc;
@@ -41,8 +44,8 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     void getAvailability_returnsPerLocationList_whenProductHasStock() throws Exception {
         UUID productId = UUID.randomUUID();
 
-        seedOnHand(productId, "LOC-1", 40);
-        seedOnHand(productId, "LOC-2", 60);
+        seedOnHand(productId, LOC_1, 40);
+        seedOnHand(productId, LOC_2, 60);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
                 .andExpect(status().isOk())
@@ -92,12 +95,12 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     void getAvailability_calculatesAtp_excludingInactiveReservations() throws Exception {
         UUID productId = UUID.randomUUID();
 
-        seedOnHand(productId, "LOC-ATP", 100);
+        seedOnHand(productId, LOC_ATP, 100);
 
-        seedReservationCreated(productId, "LOC-ATP", 30);
+        seedReservationCreated(productId, LOC_ATP, 30);
 
-        seedReservationCreated(productId, "LOC-ATP", 20);
-        seedReservationReleased(productId, "LOC-ATP", 20);
+        seedReservationCreated(productId, LOC_ATP, 20);
+        seedReservationReleased(productId, LOC_ATP, 20);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
                 .andExpect(status().isOk())
@@ -107,7 +110,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .andExpect(jsonPath("$[0].availableToPromiseQuantity").value(70));
     }
 
-    private void seedOnHand(UUID productId, String locationId, int quantity) {
+    private void seedOnHand(UUID productId, UUID locationId, int quantity) {
         inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
@@ -120,7 +123,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .build());
     }
 
-    private void seedReservationCreated(UUID productId, String locationId, int quantity) {
+    private void seedReservationCreated(UUID productId, UUID locationId, int quantity) {
         inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
@@ -133,7 +136,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .build());
     }
 
-    private void seedReservationReleased(UUID productId, String locationId, int quantity) {
+    private void seedReservationReleased(UUID productId, UUID locationId, int quantity) {
         inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)

@@ -2,6 +2,8 @@ package com.positivity.inventory.internal.dto;
 
 import com.positivity.inventory.internal.enums.OverrideReasonCode;
 
+import java.util.UUID;
+
 /**
  * Request DTO for executing a putaway move from staging to storage.
  * 
@@ -10,8 +12,8 @@ import com.positivity.inventory.internal.enums.OverrideReasonCode;
  */
 public class PutawayExecutionRequest {
     private String skuId;
-    private String sourceLocationId;
-    private String destinationLocationId;
+    private UUID sourceLocationId;
+    private UUID destinationLocationId;
     private int quantity;
 
     // Override fields (optional)
@@ -24,8 +26,8 @@ public class PutawayExecutionRequest {
     public PutawayExecutionRequest() {
     }
 
-    public PutawayExecutionRequest(String skuId, String sourceLocationId,
-            String destinationLocationId, int quantity) {
+    public PutawayExecutionRequest(String skuId, UUID sourceLocationId,
+            UUID destinationLocationId, int quantity) {
         this.skuId = skuId;
         this.sourceLocationId = sourceLocationId;
         this.destinationLocationId = destinationLocationId;
@@ -41,19 +43,19 @@ public class PutawayExecutionRequest {
         this.skuId = skuId;
     }
 
-    public String getSourceLocationId() {
+    public UUID getSourceLocationId() {
         return sourceLocationId;
     }
 
-    public void setSourceLocationId(String sourceLocationId) {
+    public void setSourceLocationId(UUID sourceLocationId) {
         this.sourceLocationId = sourceLocationId;
     }
 
-    public String getDestinationLocationId() {
+    public UUID getDestinationLocationId() {
         return destinationLocationId;
     }
 
-    public void setDestinationLocationId(String destinationLocationId) {
+    public void setDestinationLocationId(UUID destinationLocationId) {
         this.destinationLocationId = destinationLocationId;
     }
 

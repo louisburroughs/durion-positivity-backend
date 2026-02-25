@@ -11,6 +11,8 @@ import com.positivity.inventory.internal.exception.LocationNotValidForSkuExcepti
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.service.PutawayValidationService;
 
+import java.util.UUID;
+
 /**
  * Default implementation of PutawayValidationService.
  * 
@@ -36,7 +38,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     private static final double CAPACITY_TOLERANCE_PERCENT = 0.10; // 10% tolerance
 
     @Override
-    public ValidationResult validateLocationCompatibility(String destinationLocationId, String skuId) {
+    public ValidationResult validateLocationCompatibility(UUID destinationLocationId, String skuId) {
         log.debug("Validating location compatibility: location={}, sku={}", destinationLocationId, skuId);
 
         // TODO: Integrate with actual location and SKU repositories
@@ -60,7 +62,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validateLocationCapacity(String destinationLocationId, int quantity) {
+    public ValidationResult validateLocationCapacity(UUID destinationLocationId, int quantity) {
         log.debug("Validating location capacity: location={}, quantity={}", destinationLocationId, quantity);
 
         // TODO: Integrate with actual location repository
@@ -93,7 +95,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validateSourceOnHand(String sourceLocationId, String skuId, int quantity) {
+    public ValidationResult validateSourceOnHand(UUID sourceLocationId, String skuId, int quantity) {
         log.debug("Validating source on-hand: location={}, sku={}, quantity={}",
                 sourceLocationId, skuId, quantity);
 

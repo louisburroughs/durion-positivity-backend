@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.dto.putaway;
 
 import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,11 +17,11 @@ public class PutawayTaskResponse {
     private String sourceReceiptId;
     private String productId;
     private Integer quantity;
-    private String sourceLocationId;
-    private String suggestedDestinationLocationId;
-    private String originalSuggestedLocationId;
-    private String finalSuggestedLocationId;
-    private String actualDestinationLocationId;
+    private UUID sourceLocationId;
+    private UUID suggestedDestinationLocationId;
+    private UUID originalSuggestedLocationId;
+    private UUID finalSuggestedLocationId;
+    private UUID actualDestinationLocationId;
     private String fallbackReason;
     private String status;
     private String assigneeId;
