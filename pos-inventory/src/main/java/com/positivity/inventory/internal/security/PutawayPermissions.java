@@ -14,7 +14,8 @@ public final class PutawayPermissions {
      * <p>Requires: mandatory reason code and free-text justification.
      * Emits audit event: PutawayOverrideLocationRule
      */
-    public static final String OVERRIDE_LOCATION_COMPATIBILITY = "OVERRIDE_LOCATION_COMPATIBILITY";
+    public static final String OVERRIDE_LOCATION_COMPATIBILITY =
+            InventoryPermissionRegistry.PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY;
     
     /**
      * Permission to override location capacity limits.
@@ -30,7 +31,8 @@ public final class PutawayPermissions {
      * - overrideReasonCode = CAPACITY_OVERRIDE
      * - approvedBy
      */
-    public static final String OVERRIDE_LOCATION_CAPACITY = "OVERRIDE_LOCATION_CAPACITY";
+    public static final String OVERRIDE_LOCATION_CAPACITY =
+            InventoryPermissionRegistry.PUTAWAY_OVERRIDE_LOCATION_CAPACITY;
     
     /**
      * Permission to initiate a cycle count for reconciliation.

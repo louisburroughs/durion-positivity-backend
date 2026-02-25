@@ -16,7 +16,6 @@ public interface PutawayExecuteService {
      *
      * @param taskId  the PutawayTask to execute
      * @param request the execution request with scan data
-     * @param actorId the ID of the actor executing the move (from X-User-Id header)
      * @return PutawayExecutionResponse with result details
      * @throws com.positivity.inventory.internal.exception.LocationNotValidForSkuException   if
      *                                                                                       destination
@@ -29,6 +28,5 @@ public interface PutawayExecuteService {
      *                                                                                       empty
      */
     @NonNull
-    PutawayExecutionResponse executePutaway(@NonNull String taskId, @NonNull PutawayExecutionRequest request,
-            @NonNull String actorId);
+    PutawayExecutionResponse executePutaway(@NonNull String taskId, @NonNull PutawayExecutionRequest request);
 }

@@ -1,29 +1,26 @@
 package com.positivity.inventory.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import com.positivity.shared.id.UUIDv7Id;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
-
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Normalized manufacturer availability snapshot.
- *
- * Issue: CAP-170 (#46)
  */
 @Entity
 @Table(name = "normalized_availability", uniqueConstraints = @UniqueConstraint(columnNames = { "product_id",
@@ -32,6 +29,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class NormalizedAvailability {
 
     @Id
@@ -78,16 +76,10 @@ public class NormalizedAvailability {
     @Column(nullable = false)
     private Integer schemaVersion;
 
-    /**
-     * Timestamp when this configuration was created.
-     */
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    /**
-     * Timestamp when this configuration was last updated.
-     */
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;

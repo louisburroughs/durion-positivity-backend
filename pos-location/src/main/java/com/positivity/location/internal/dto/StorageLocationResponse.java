@@ -1,6 +1,7 @@
 package com.positivity.location.internal.dto;
 
 import com.positivity.location.internal.enums.StorageLocationType;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,5 +26,7 @@ public class StorageLocationResponse {
     private String status;
     private UUID siteId;
     private UUID parentStorageLocationId;
+    private Map<String, Object> capacity;
+    private Map<String, Object> temperature;
     private int inventoryCount;
 }
