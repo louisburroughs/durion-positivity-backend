@@ -11,5 +11,5 @@ public interface PutawayRuleRepository extends JpaRepository<PutawayRule, UUID> 
 
     List<PutawayRule> findAllByIsEnabledTrueOrderByPriorityAsc();
 
-    boolean existsByDestinationLocationIdAndIsEnabledTrue(String destinationLocationId);
+    boolean existsByDestinationLocationIdAndIsEnabledTrue(UUID destinationLocationId);
 }

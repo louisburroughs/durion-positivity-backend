@@ -1,7 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
-import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.service.LocationInventoryInquiryService;
 import java.util.Arrays;
@@ -31,7 +31,7 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     @NonNull
     public LocationInventoryInquiryResponse getLocationInventory(@NonNull UUID locationId) {
         Integer onHandQuantity = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
-                locationId.toString(),
+                locationId,
                 ON_HAND_EVENT_TYPES);
 
         return LocationInventoryInquiryResponse.builder()

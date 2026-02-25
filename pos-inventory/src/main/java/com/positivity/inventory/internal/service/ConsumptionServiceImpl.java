@@ -4,7 +4,7 @@ import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.entity.PickTaskEntity;
 import com.positivity.inventory.internal.enums.PickTaskStatus;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
