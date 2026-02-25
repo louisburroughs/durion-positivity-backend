@@ -4,6 +4,7 @@ import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
@@ -13,8 +14,12 @@ import java.util.UUID;
 
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry", indexes = {
         @Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
         @Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
@@ -66,6 +71,14 @@ public class TimeEntry {
 
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
+
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     public UUID getTimeEntryId() {
         return timeEntryId;
@@ -161,5 +174,21 @@ public class TimeEntry {
 
     public void setRejectionReason(String rejectionReason) {
         this.rejectionReason = rejectionReason;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

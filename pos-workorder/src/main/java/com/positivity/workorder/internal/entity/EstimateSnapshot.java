@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -20,6 +21,9 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable snapshot of an estimate's complete state at a point in time.
@@ -35,6 +39,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class EstimateSnapshot {
 
     @Id
@@ -56,6 +61,14 @@ public class EstimateSnapshot {
     @Column(nullable = false, updatable = false)
     private LocalDateTime capturedAt;
 
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
     @Column(nullable = false, updatable = false)
     private String capturedById; // User who created the snapshot
 
@@ -66,6 +79,12 @@ public class EstimateSnapshot {
     protected void prePersist() {
         if (capturedAt == null) {
             capturedAt = LocalDateTime.now();
+        }
+        if (createdAt == null) {
+            createdAt = capturedAt;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

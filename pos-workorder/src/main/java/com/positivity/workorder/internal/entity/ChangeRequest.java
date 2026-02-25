@@ -13,6 +13,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -44,6 +45,10 @@ public class ChangeRequest {
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -109,6 +114,12 @@ public class ChangeRequest {
         }
         if (status == null) {
             status = ChangeRequestStatus.AWAITING_ADVISOR_REVIEW;
+        }
+        if (createdAt == null) {
+            createdAt = requestedAt;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

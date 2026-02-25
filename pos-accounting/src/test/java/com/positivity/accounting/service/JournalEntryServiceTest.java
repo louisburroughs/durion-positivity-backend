@@ -89,7 +89,7 @@ class JournalEntryServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.DRAFT);
         assertThat(result.getCreatedAt()).isNotNull();
-        assertThat(result.getModifiedAt()).isNotNull();
+        assertThat(result.getUpdatedAt()).isNotNull();
         verify(journalEntryRepository).save(any(JournalEntry.class));
         verify(glAccountService).validateAccountForPosting(eq(testGLAccountId1), eq(testTransactionDate));
         verify(glAccountService).validateAccountForPosting(eq(testGLAccountId2), eq(testTransactionDate));
@@ -203,7 +203,7 @@ class JournalEntryServiceTest {
 
         // Assert
         assertThat(result.getDescription()).isEqualTo("Updated description");
-        assertThat(result.getModifiedAt()).isNotNull();
+        assertThat(result.getUpdatedAt()).isNotNull();
         verify(journalEntryRepository).save(any(JournalEntry.class));
     }
 
@@ -244,7 +244,7 @@ class JournalEntryServiceTest {
         // Assert
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         assertThat(result.getPostedAt()).isNotNull();
-        assertThat(result.getModifiedAt()).isNotNull();
+        assertThat(result.getUpdatedAt()).isNotNull();
         verify(journalEntryRepository).save(any(JournalEntry.class));
     }
 

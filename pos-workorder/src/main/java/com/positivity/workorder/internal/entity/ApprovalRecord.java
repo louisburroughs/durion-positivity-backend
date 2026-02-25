@@ -15,6 +15,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -60,6 +61,10 @@ public class ApprovalRecord {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     @Column(nullable = false)
     private String resolvedBy;
 
@@ -79,6 +84,12 @@ public class ApprovalRecord {
     protected void prePersist() {
         if (resolvedAt == null) {
             resolvedAt = LocalDateTime.now();
+        }
+        if (createdAt == null) {
+            createdAt = resolvedAt;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

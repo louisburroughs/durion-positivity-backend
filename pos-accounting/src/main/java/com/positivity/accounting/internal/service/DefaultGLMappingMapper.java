@@ -40,7 +40,7 @@ public final class DefaultGLMappingMapper {
                 .active(mapping.getActive())
                 .createdAt(mapping.getCreatedAt())
                 .createdBy(mapping.getCreatedBy())
-                .modifiedAt(mapping.getModifiedAt())
+                .modifiedAt(mapping.getUpdatedAt())
                 .modifiedBy(mapping.getModifiedBy())
                 .build();
     }

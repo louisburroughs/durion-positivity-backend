@@ -4,6 +4,9 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,6 +19,7 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "permissions", uniqueConstraints = @UniqueConstraint(columnNames = "name"))
 public class Permission {
     @Id
@@ -79,10 +83,24 @@ public class Permission {
     @Column(nullable = false)
     private String version = "1.0";
 
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
     protected void onCreate() {
         if (registeredAt == null) {
             registeredAt = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = registeredAt;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 

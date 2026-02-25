@@ -5,6 +5,9 @@ import com.positivity.shared.id.UUIDv7Generator;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -16,6 +19,7 @@ import java.util.List;
  * Contains a collection of fitment tags that describe vehicle compatibility.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "vehicle_applicability_hints")
 @Data
 @NoArgsConstructor
@@ -32,9 +36,11 @@ public class VehicleApplicabilityHint {
     @OneToMany(mappedBy = "hint", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<FitmentTag> fitmentTags = new ArrayList<>();
 
+    @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
@@ -49,8 +55,12 @@ public class VehicleApplicabilityHint {
         if (hintId == null) {
             hintId = UUIDv7Generator.generate();
         }
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
     }
 
     @PreUpdate

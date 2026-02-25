@@ -11,10 +11,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable rule-evaluation step tied to a pricing snapshot.
@@ -25,6 +30,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
+@jakarta.persistence.EntityListeners(AuditingEntityListener.class)
 @Table(name = "pricing_rule_trace_entries")
 public class PricingRuleTraceEntry {
 
@@ -49,5 +55,23 @@ public class PricingRuleTraceEntry {
 
     @Column(name = "outputs", columnDefinition = "TEXT", nullable = false, updatable = false)
     private String outputs;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
+    }
 
 }

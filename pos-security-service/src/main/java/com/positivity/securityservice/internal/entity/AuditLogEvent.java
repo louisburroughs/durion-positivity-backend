@@ -13,6 +13,9 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable audit event record for price/cost and rule evaluation changes.
@@ -23,6 +26,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
+@jakarta.persistence.EntityListeners(AuditingEntityListener.class)
 @Table(name = "audit_log_events", indexes = {
         @Index(name = "idx_audit_log_events_timestamp", columnList = "timestamp"),
         @Index(name = "idx_audit_log_events_actor_id", columnList = "actor_id"),
@@ -60,10 +64,24 @@ public class AuditLogEvent {
     @Column(name = "context", columnDefinition = "TEXT", updatable = false)
     private String context;
 
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {
             timestamp = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = timestamp;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

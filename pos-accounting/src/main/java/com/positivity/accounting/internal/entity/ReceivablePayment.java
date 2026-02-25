@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.*;
@@ -99,15 +100,16 @@ public class ReceivablePayment {
     @Column(name = "created_by", length = 50, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at")
-    private Instant modifiedAt;
+    private Instant updatedAt;
 
     @Column(name = "modified_by", length = 50)
     private String modifiedBy;
 
     @PreUpdate
     protected void onUpdate() {
-        this.modifiedAt = Instant.now();
+        this.updatedAt = Instant.now();
     }
 
     /**

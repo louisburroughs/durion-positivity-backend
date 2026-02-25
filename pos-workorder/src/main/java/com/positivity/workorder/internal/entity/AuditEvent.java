@@ -12,6 +12,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -49,6 +50,10 @@ public class AuditEvent {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     @Column(nullable = false)
     private String userId;
 
@@ -59,6 +64,12 @@ public class AuditEvent {
     protected void prePersist() {
         if (eventTimestamp == null) {
             eventTimestamp = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

@@ -11,11 +11,15 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,6 +39,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "workorder_part_usage_event", indexes = {
         @Index(name = "idx_workorder_part_usage_part_id", columnList = "workorder_part_id"),
         @Index(name = "idx_workorder_part_usage_workorder_id", columnList = "workorder_id"),
@@ -52,6 +57,12 @@ public class WorkorderPartUsageEvent {
     public void generateId() {
         if (performedAt == null) {
             performedAt = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = performedAt;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 
@@ -94,6 +105,14 @@ public class WorkorderPartUsageEvent {
     @Column(nullable = false)
     @NonNull
     private Instant performedAt;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
 
     /**
      * Optional notes about this event

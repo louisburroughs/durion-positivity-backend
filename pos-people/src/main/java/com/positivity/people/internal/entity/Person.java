@@ -3,6 +3,10 @@ package com.positivity.people.internal.entity;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -10,6 +14,7 @@ import java.util.UUID;
 import com.positivity.people.internal.enums.EmployeeStatus;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -56,6 +61,14 @@ public class Person {
 
     @Column(name = "status_effective_at")
     private Instant statusEffectiveAt;
+
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     private String primaryEmail;
     private String secondaryEmail;

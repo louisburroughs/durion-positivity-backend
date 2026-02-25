@@ -411,7 +411,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         response.setStatus(GLAccountStatus.valueOf(account.getDerivedStatus()));
         response.setCreatedAt(account.getCreatedAt());
         response.setCreatedBy(account.getCreatedBy());
-        response.setModifiedAt(account.getModifiedAt());
+        response.setModifiedAt(account.getUpdatedAt());
         response.setModifiedBy(account.getModifiedBy());
         response.setVersion(account.getVersion());
         return response;
