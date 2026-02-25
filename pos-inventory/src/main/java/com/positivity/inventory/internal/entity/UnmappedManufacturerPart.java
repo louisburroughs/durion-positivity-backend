@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -12,10 +13,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.positivity.inventory.internal.enums.UnmappedPartStatus;
 import com.positivity.shared.id.UUIDv7Id;
 
 import java.time.Instant;
 import java.util.UUID;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Tracks manufacturer part numbers that could not be mapped to a product.
@@ -28,6 +34,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class UnmappedManufacturerPart {
 
     @Id
@@ -36,7 +43,7 @@ public class UnmappedManufacturerPart {
     private UUID id;
 
     @Column(nullable = false)
-    private String manufacturerId;
+    private UUID manufacturerId;
 
     @Column(nullable = false)
     private String manufacturerPartNumber;
@@ -53,5 +60,13 @@ public class UnmappedManufacturerPart {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UnmappedPartStatus status;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
 
 }

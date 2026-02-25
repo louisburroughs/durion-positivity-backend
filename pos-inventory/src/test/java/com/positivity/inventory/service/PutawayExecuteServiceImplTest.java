@@ -75,6 +75,10 @@ class PutawayExecuteServiceImplTest {
     void executePutaway_happyPath() {
         // Given
         when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("sku-abc", sourceLocationId))
+                .thenReturn(50);
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("sku-abc", destinationLocationId))
+                .thenReturn(5);
         when(inventoryLedgerEntryRepository.save(any(InventoryLedgerEntry.class)))
                 .thenAnswer(invocation -> {
                     InventoryLedgerEntry entry = invocation.getArgument(0);
@@ -98,6 +102,7 @@ class PutawayExecuteServiceImplTest {
         assertThat(sourceEntry.getStockItemId()).isEqualTo("sku-abc");
         assertThat(sourceEntry.getLocationId()).isEqualTo(sourceLocationId);
         assertThat(sourceEntry.getTransactionUserId()).isEqualTo(actorId);
+        assertThat(sourceEntry.getQuantityAfter()).isEqualTo(40);
 
         // Destination credit entry
         InventoryLedgerEntry destinationEntry = allCaptured.stream()
@@ -107,6 +112,7 @@ class PutawayExecuteServiceImplTest {
         assertThat(destinationEntry.getStockItemId()).isEqualTo("sku-abc");
         assertThat(destinationEntry.getLocationId()).isEqualTo(destinationLocationId);
         assertThat(destinationEntry.getTransactionUserId()).isEqualTo(actorId);
+        assertThat(destinationEntry.getQuantityAfter()).isEqualTo(15);
 
         ArgumentCaptor<PutawayTask> taskCaptor = ArgumentCaptor.forClass(PutawayTask.class);
         verify(putawayTaskRepository).save(taskCaptor.capture());

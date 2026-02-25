@@ -14,6 +14,6 @@ import java.util.UUID;
  */
 public interface UnmappedManufacturerPartRepository extends JpaRepository<UnmappedManufacturerPart, UUID> {
 
-    Optional<UnmappedManufacturerPart> findByManufacturerIdAndManufacturerPartNumber(String manufacturerId,
+    Optional<UnmappedManufacturerPart> findByManufacturerIdAndManufacturerPartNumber(UUID manufacturerId,
             String manufacturerPartNumber);
 }

@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.enums.AdjustmentRequestStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -15,6 +16,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -36,6 +40,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class InventoryAdjustmentRequest {
 
     @Id
@@ -77,11 +82,22 @@ public class InventoryAdjustmentRequest {
     @Column
     private Instant approvedAt;
 
+    /**
+     * Timestamp when this configuration was created.
+     */
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /**
+     * Timestamp when this configuration was last updated.
+     */
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
     protected void onCreate() {
-        if (requestedAt == null) {
-            requestedAt = Instant.now();
-        }
         if (status == null) {
             status = AdjustmentRequestStatus.PENDING;
         }
