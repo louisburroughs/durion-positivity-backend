@@ -55,19 +55,19 @@ paths:
           type: string
           format: uuid
       responses:
-        "501":
-          description: Not implemented
+        "200":
+          description: Default locations returned
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   type: string
                   format: uuid
-        "200":
-          description: Default locations returned
+        "501":
+          description: Not implemented
           content:
-            application/json:
+            '*/*':
               schema:
                 type: array
                 items:
@@ -240,16 +240,16 @@ paths:
         schema:
           type: string
       responses:
-        "404":
-          description: Putaway task not found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/PutawayTaskResponse"
         "200":
           description: Putaway task claimed
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/PutawayTaskResponse"
+        "404":
+          description: Putaway task not found
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/PutawayTaskResponse"
   /v1/inventory/putaway/tasks/generate:
@@ -326,6 +326,12 @@ paths:
               $ref: "#/components/schemas/CreateCycleCountPlanRequest"
         required: true
       responses:
+        "201":
+          description: Cycle count plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleCountPlanResponse"
         "400":
           description: Validation failure
           content:
@@ -336,12 +342,6 @@ paths:
           description: User lacks required permission
           content:
             '*/*':
-              schema:
-                $ref: "#/components/schemas/CycleCountPlanResponse"
-        "201":
-          description: Cycle count plan created
-          content:
-            application/json:
               schema:
                 $ref: "#/components/schemas/CycleCountPlanResponse"
   /v1/inventory/cycleCountAdjustments:
@@ -564,24 +564,24 @@ paths:
               $ref: "#/components/schemas/CreateAdjustmentRequestDto"
         required: true
       responses:
-        "201":
-          description: Adjustment request created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdjustmentRequestResponse"
-        "403":
-          description: User lacks required create permission
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InventoryErrorResponse"
         "400":
           description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
+        "403":
+          description: User lacks required create permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryErrorResponse"
+        "201":
+          description: Adjustment request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdjustmentRequestResponse"
   /v1/inventory/adjustments/{adjustmentRequestId}/approve:
     post:
       tags:
@@ -598,14 +598,14 @@ paths:
           type: string
           format: uuid
       responses:
-        "403":
-          description: User lacks required approval permission
+        "400":
+          description: Validation failure
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "409":
-          description: Adjustment request is in a conflicting state
+        "422":
+          description: Business rule validation failed
           content:
             application/json:
               schema:
@@ -618,14 +618,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "422":
-          description: Business rule validation failed
+        "403":
+          description: User lacks required approval permission
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "400":
-          description: Validation failure
+        "409":
+          description: Adjustment request is in a conflicting state
           content:
             application/json:
               schema:
@@ -653,16 +653,16 @@ paths:
             schema:
               $ref: "#/components/schemas/DeactivateLocationRequest"
       responses:
-        "400":
-          description: Bad request - invalid parameters or destination required
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DeactivateLocationResponse"
         "200":
           description: Deactivation completed
           content:
             application/json:
+              schema:
+                $ref: "#/components/schemas/DeactivateLocationResponse"
+        "400":
+          description: Bad request - invalid parameters or destination required
+          content:
+            '*/*':
               schema:
                 $ref: "#/components/schemas/DeactivateLocationResponse"
         "404":
@@ -727,12 +727,6 @@ paths:
               $ref: "#/components/schemas/SubmitRecountRequest"
         required: true
       responses:
-        "200":
-          description: Recount submitted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CountResponse"
         "404":
           description: Task not found
           content:
@@ -749,6 +743,12 @@ paths:
           description: Insufficient permission
           content:
             '*/*':
+              schema:
+                $ref: "#/components/schemas/CountResponse"
+        "200":
+          description: Recount submitted successfully
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/CountResponse"
   /v1/inventory/replenishment/tasks:
@@ -901,8 +901,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "500":
-          description: Unexpected server error
+        "403":
+          description: User lacks required read permission
           content:
             application/json:
               schema:
@@ -913,14 +913,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityView"
-        "403":
-          description: User lacks required read permission
+        "404":
+          description: Product SKU or location not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryErrorResponse"
-        "404":
-          description: Product SKU or location not found
+        "500":
+          description: Unexpected server error
           content:
             application/json:
               schema:
@@ -1431,24 +1431,6 @@ components:
       - productSku
       - quantity
       - reasonCode
-    AdjustmentRequestResponse:
-      type: object
-      properties:
-        adjustmentRequestId:
-          type: string
-          format: uuid
-        productSku:
-          type: string
-        locationId:
-          type: string
-          format: uuid
-        quantity:
-          type: integer
-          format: int32
-        reasonCode:
-          type: string
-        status:
-          type: string
     InventoryErrorResponse:
       type: object
       properties:
@@ -1468,6 +1450,24 @@ components:
           type: object
           additionalProperties: {}
           description: Optional structured context for specific business errors
+    AdjustmentRequestResponse:
+      type: object
+      properties:
+        adjustmentRequestId:
+          type: string
+          format: uuid
+        productSku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+        reasonCode:
+          type: string
+        status:
+          type: string
     DeactivateLocationRequest:
       type: object
       properties:
