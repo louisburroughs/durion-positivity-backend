@@ -17,6 +17,8 @@ import com.positivity.shared.id.UUIDv7Id;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -56,5 +58,13 @@ public class UnmappedManufacturerPart {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UnmappedPartStatus status;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
 
 }
