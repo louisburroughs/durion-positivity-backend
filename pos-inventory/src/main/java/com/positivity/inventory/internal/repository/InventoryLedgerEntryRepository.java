@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.repository;
 
+import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +17,11 @@ import java.util.UUID;
  */
 @Repository
 public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryLedgerEntry, UUID> {
+
+    List<InventoryLedgerEntry> findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+            String stockItemId,
+            InventoryLedgerEventType eventType,
+            String notesFragment);
 
     /**
      * Find all ledger entries for a specific stock item.

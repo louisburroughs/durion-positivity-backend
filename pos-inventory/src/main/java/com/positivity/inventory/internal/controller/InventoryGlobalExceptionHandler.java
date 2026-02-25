@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.Map;
 
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
+import com.positivity.inventory.internal.exception.InsufficientAtpException;
+import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
@@ -13,7 +15,10 @@ import com.positivity.inventory.internal.exception.LocationNotValidForSkuExcepti
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
+import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -75,6 +80,11 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
     }
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleResourceNotFound(ResourceNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage());
+    }
+
     @ExceptionHandler(InvalidCountQuantityException.class)
     public ResponseEntity<Map<String, String>> handleInvalidCountQuantity(InvalidCountQuantityException ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
@@ -95,6 +105,26 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(InsufficientPermissionException.class)
     public ResponseEntity<Map<String, String>> handleInsufficientPermission(InsufficientPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage());
+    }
+
+    @ExceptionHandler(InsufficientAtpException.class)
+    public ResponseEntity<Map<String, String>> handleInsufficientAtp(InsufficientAtpException ex) {
+        return build(HttpStatus.valueOf(422), "INSUFFICIENT_ATP", ex.getMessage());
+    }
+
+    @ExceptionHandler(PickScanMismatchException.class)
+    public ResponseEntity<Map<String, String>> handlePickScanMismatch(PickScanMismatchException ex) {
+        return build(HttpStatus.valueOf(422), "PICK_SCAN_MISMATCH", ex.getMessage());
+    }
+
+    @ExceptionHandler(WorkorderConsumptionException.class)
+    public ResponseEntity<Map<String, String>> handleWorkorderConsumption(WorkorderConsumptionException ex) {
+        return build(HttpStatus.valueOf(422), "WORKORDER_CONSUMPTION_ERROR", ex.getMessage());
+    }
+
+    @ExceptionHandler(ReturnQuantityExceededException.class)
+    public ResponseEntity<Map<String, String>> handleReturnQuantityExceeded(ReturnQuantityExceededException ex) {
+        return build(HttpStatus.valueOf(422), "RETURN_QUANTITY_EXCEEDED", ex.getMessage());
     }
 
     @ExceptionHandler(AdjustmentLedgerPostingException.class)
