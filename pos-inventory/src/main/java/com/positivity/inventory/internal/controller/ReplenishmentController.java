@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/inventory/replenishment")
+@RequestMapping("/v1/inventory/replenishment")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyAuthority('inventory:stock:view','inventory:stock:adjust','inventory:availability:read','inventory:adjustment:create')")
 public class ReplenishmentController {

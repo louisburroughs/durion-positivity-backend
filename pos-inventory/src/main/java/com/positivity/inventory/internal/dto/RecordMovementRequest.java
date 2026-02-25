@@ -11,6 +11,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 /**
  * Request body for recording a stock movement in the inventory ledger.
  *
@@ -32,11 +34,11 @@ public class RecordMovementRequest {
     @NotBlank
     String productSku;
 
-    @NotBlank
-    String fromLocationId;
+    @NotNull
+    UUID fromLocationId;
 
     /** Destination location — required for TRANSFER movements. */
-    String toLocationId;
+    UUID toLocationId;
 
     @NotNull
     @Schema(
@@ -58,7 +60,7 @@ public class RecordMovementRequest {
         if (movementType == null || movementType != MovementType.TRANSFER) {
             return true;
         }
-        return toLocationId != null && !toLocationId.isBlank();
+        return toLocationId != null;
     }
 
     @AssertTrue(message = "movementType ADJUST must use adjustment workflow endpoints")

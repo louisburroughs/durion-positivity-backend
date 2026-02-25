@@ -3,6 +3,8 @@ package com.positivity.inventory.internal.dto;
 import lombok.Builder;
 import lombok.Value;
 
+import java.util.UUID;
+
 /**
  * Read-only view of on-hand and available-to-promise quantities for a product
  * at a specific location scope.
@@ -20,10 +22,10 @@ public class AvailabilityView {
     String productSku;
 
     /** Location identifier for the scope of this availability view. */
-    String locationId;
+    UUID locationId;
 
     /** Optional sub-location identifier (null when scoped to full location). */
-    String storageLocationId;
+    UUID storageLocationId;
 
     /** Net on-hand quantity (sum of affectsOnHand entries). */
     int onHandQuantity;

@@ -51,6 +51,6 @@ public interface InventoryAvailabilityService {
     @NonNull
     AvailabilityView queryAvailability(
             @NonNull String productSku,
-            @NonNull String locationId,
-            @Nullable String storageLocationId);
+            @NonNull UUID locationId,
+            @Nullable UUID storageLocationId);
 }

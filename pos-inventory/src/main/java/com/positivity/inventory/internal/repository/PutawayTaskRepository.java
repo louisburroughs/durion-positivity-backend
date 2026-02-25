@@ -25,6 +25,6 @@ public interface PutawayTaskRepository extends JpaRepository<PutawayTask, UUID> 
 
     boolean existsByProductIdAndSuggestedDestinationLocationIdAndStatusIn(
             UUID productId,
-            String locationId,
+            UUID locationId,
             List<PutawayTaskStatus> statuses);
 }

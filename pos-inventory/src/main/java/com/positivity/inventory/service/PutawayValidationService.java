@@ -6,6 +6,8 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 
+import java.util.UUID;
+
 /**
  * Service for validating putaway operations according to business rules.
  * 
@@ -36,7 +38,7 @@ public interface PutawayValidationService {
      * @throws LocationNotValidForSkuException if location is invalid and no
      *                                         override
      */
-    ValidationResult validateLocationCompatibility(String destinationLocationId, String skuId);
+    ValidationResult validateLocationCompatibility(UUID destinationLocationId, String skuId);
 
     /**
      * Validates that the destination location has sufficient capacity.
@@ -56,7 +58,7 @@ public interface PutawayValidationService {
      * @return validation result
      * @throws LocationAtCapacityException if location is full and no override
      */
-    ValidationResult validateLocationCapacity(String destinationLocationId, int quantity);
+    ValidationResult validateLocationCapacity(UUID destinationLocationId, int quantity);
 
     /**
      * Validates that the source location has on-hand inventory for the SKU.
@@ -78,7 +80,7 @@ public interface PutawayValidationService {
      * @return validation result
      * @throws NoOnHandAtSourceLocationException if no on-hand inventory found
      */
-    ValidationResult validateSourceOnHand(String sourceLocationId, String skuId, int quantity);
+    ValidationResult validateSourceOnHand(UUID sourceLocationId, String skuId, int quantity);
 
     /**
      * Performs comprehensive validation for a putaway execution request.

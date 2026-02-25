@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 /**
  * Request body for creating a draft inventory adjustment request.
  *
@@ -21,8 +23,8 @@ public class CreateAdjustmentRequestDto {
     @NotBlank
     String productSku;
 
-    @NotBlank
-    String locationId;
+    @NotNull
+    UUID locationId;
 
     @NotNull
     Integer quantity;

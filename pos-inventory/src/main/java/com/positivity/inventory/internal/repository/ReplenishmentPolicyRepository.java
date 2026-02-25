@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReplenishmentPolicyRepository extends JpaRepository<ReplenishmentPolicy, UUID> {
 
-    Optional<ReplenishmentPolicy> findByItemSKUAndLocationId(String itemSKU, String locationId);
+    Optional<ReplenishmentPolicy> findByItemSKUAndLocationId(String itemSKU, UUID locationId);
 
-    List<ReplenishmentPolicy> findByLocationId(String locationId);
+    List<ReplenishmentPolicy> findByLocationId(UUID locationId);
 }

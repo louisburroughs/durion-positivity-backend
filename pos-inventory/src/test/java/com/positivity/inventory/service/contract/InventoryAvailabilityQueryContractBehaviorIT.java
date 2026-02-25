@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,12 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
  */
 @DisplayName("Inventory Availability Query Contract Behavior")
 class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrationTest {
+    private static final UUID LOC_ALPHA = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID LOC_OTHER = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID LOC_ZERO = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID LOC_ANY = UUID.fromString("44444444-4444-4444-4444-444444444444");
+    private static final UUID LOC_BETA = UUID.fromString("55555555-5555-5555-5555-555555555555");
+    private static final UUID LOC_GAMMA = UUID.fromString("66666666-6666-6666-6666-666666666666");
 
     @Autowired
     private MockMvc mockMvc;
@@ -49,16 +56,16 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("AC-1: queryAvailability_returns200_withCorrectOnHandAndAtp")
     void queryAvailability_returns200_withCorrectOnHandAndAtp() throws Exception {
-        seedGoodsReceipt("SKU-TEST-1", "LOC-ALPHA", 100);
-        seedAllocationCreated("SKU-TEST-1", "LOC-ALPHA", 20);
+        seedGoodsReceipt("SKU-TEST-1", LOC_ALPHA, 100);
+        seedAllocationCreated("SKU-TEST-1", LOC_ALPHA, 20);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
                 .param("productSku", "SKU-TEST-1")
-                .param("locationId", "LOC-ALPHA")))
+                .param("locationId", LOC_ALPHA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-TEST-1"))
-                .andExpect(jsonPath("$.locationId").value("LOC-ALPHA"))
+                .andExpect(jsonPath("$.locationId").value(LOC_ALPHA.toString()))
                 .andExpect(jsonPath("$.onHandQuantity").value(100))
                 .andExpect(jsonPath("$.allocatedQuantity").value(20))
                 .andExpect(jsonPath("$.availableToPromiseQuantity").value(80))
@@ -72,15 +79,15 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     void queryAvailability_returnsZeroQuantities_whenProductKnownButNoStockAtLocation() throws Exception {
         // Seed an entry for SKU-ZERO at a DIFFERENT location so the product is
         // "known" in the system; the queried location has no stock.
-        seedGoodsReceipt("SKU-ZERO", "LOC-OTHER", 50);
+        seedGoodsReceipt("SKU-ZERO", LOC_OTHER, 50);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
                 .param("productSku", "SKU-ZERO")
-                .param("locationId", "LOC-ZERO")))
+                .param("locationId", LOC_ZERO.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-ZERO"))
-                .andExpect(jsonPath("$.locationId").value("LOC-ZERO"))
+                .andExpect(jsonPath("$.locationId").value(LOC_ZERO.toString()))
                 .andExpect(jsonPath("$.onHandQuantity").value(0))
                 .andExpect(jsonPath("$.allocatedQuantity").value(0))
                 .andExpect(jsonPath("$.availableToPromiseQuantity").value(0));
@@ -93,7 +100,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     void queryAvailability_returns404_whenProductSkuNotFound() throws Exception {
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
                 .param("productSku", "NONEXISTENT-SKU")
-                .param("locationId", "LOC-ANY")))
+                .param("locationId", LOC_ANY.toString())))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
@@ -104,16 +111,16 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("AC-4: queryAvailability_aggregatesAllStorageLocations_whenNoStorageLocationId")
     void queryAvailability_aggregatesAllStorageLocations_whenNoStorageLocationId() throws Exception {
-        seedGoodsReceipt("SKU-BETA", "LOC-BETA", 40);
-        seedGoodsReceipt("SKU-BETA", "LOC-BETA", 60);
+        seedGoodsReceipt("SKU-BETA", LOC_BETA, 40);
+        seedGoodsReceipt("SKU-BETA", LOC_BETA, 60);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
                 .param("productSku", "SKU-BETA")
-                .param("locationId", "LOC-BETA")))
+                .param("locationId", LOC_BETA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.productSku").value("SKU-BETA"))
-                .andExpect(jsonPath("$.locationId").value("LOC-BETA"))
+                .andExpect(jsonPath("$.locationId").value(LOC_BETA.toString()))
                 .andExpect(jsonPath("$.onHandQuantity").value(100))
                 .andExpect(jsonPath("$.storageLocationId").isEmpty());
     }
@@ -124,17 +131,17 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("AC-5: queryAvailability_atpReflectsAllocations_notReservations")
     void queryAvailability_atpReflectsAllocations_notReservations() throws Exception {
-        seedGoodsReceipt("SKU-ATP", "LOC-GAMMA", 200);
-        seedAllocationCreated("SKU-ATP", "LOC-GAMMA", 50);
-        seedAllocationReleased("SKU-ATP", "LOC-GAMMA", 10);
+        seedGoodsReceipt("SKU-ATP", LOC_GAMMA, 200);
+        seedAllocationCreated("SKU-ATP", LOC_GAMMA, 50);
+        seedAllocationReleased("SKU-ATP", LOC_GAMMA, 10);
         // RESERVATION_CREATED must NOT count toward allocatedQuantity or ATP
-        seedReservationCreated("SKU-ATP", "LOC-GAMMA", 30);
+        seedReservationCreated("SKU-ATP", LOC_GAMMA, 30);
 
         // allocatedQuantity = 50 (ALLOCATION_CREATED) - 10 (ALLOCATION_RELEASED) = 40
         // ATP = 200 (onHand) - 40 (allocated) = 160
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/query")
                 .param("productSku", "SKU-ATP")
-                .param("locationId", "LOC-GAMMA")))
+                .param("locationId", LOC_GAMMA.toString())))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.onHandQuantity").value(200))
@@ -146,7 +153,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     // Seed helpers
     // -------------------------------------------------------------------------
 
-    private void seedGoodsReceipt(String productSku, String locationId, int quantity) {
+    private void seedGoodsReceipt(String productSku, UUID locationId, int quantity) {
         inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
@@ -159,7 +166,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .build());
     }
 
-    private void seedAllocationCreated(String productSku, String locationId, int quantity) {
+    private void seedAllocationCreated(String productSku, UUID locationId, int quantity) {
         inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
@@ -172,7 +179,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .build());
     }
 
-    private void seedAllocationReleased(String productSku, String locationId, int quantity) {
+    private void seedAllocationReleased(String productSku, UUID locationId, int quantity) {
         inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
@@ -185,7 +192,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .build());
     }
 
-    private void seedReservationCreated(String productSku, String locationId, int quantity) {
+    private void seedReservationCreated(String productSku, UUID locationId, int quantity) {
         inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)

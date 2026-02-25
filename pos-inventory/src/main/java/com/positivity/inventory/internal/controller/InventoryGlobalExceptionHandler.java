@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
@@ -185,6 +186,10 @@ public class InventoryGlobalExceptionHandler {
                     SKU_ID, safe(specific.getSkuId()));
         }
         return Map.of();
+    }
+
+    private String safe(UUID value) {
+        return value == null ? "" : value.toString();
     }
 
     private String safe(String value) {

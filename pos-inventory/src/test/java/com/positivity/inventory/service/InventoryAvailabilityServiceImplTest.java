@@ -27,6 +27,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class InventoryAvailabilityServiceImplTest {
 
+        private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        private static final UUID LOC_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        private static final UUID LOC_OTHER = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        private static final UUID SLOC_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
         @Mock
         private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
@@ -50,23 +55,20 @@ class InventoryAvailabilityServiceImplTest {
         }
 
         @Test
-        void getAvailabilityByProduct_usesDefaultLocationWhenLocationIsBlank() {
+        void getAvailabilityByProduct_skipsEntryWhenLocationIsMissing() {
                 UUID productId = UUID.randomUUID();
                 InventoryLedgerEntry onHandEntry = ledgerEntry(
                                 productId.toString(),
                                 InventoryLedgerEventType.GOODS_RECEIPT,
                                 5,
-                                " ");
+                                null);
 
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(List.of(onHandEntry));
 
                 List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
-                assertThat(result).hasSize(1);
-                assertThat(result.getFirst().getLocationId()).isEqualTo("DEFAULT");
-                assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(5);
-                assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(5);
+                assertThat(result).isEmpty();
         }
 
         @Test
@@ -76,12 +78,12 @@ class InventoryAvailabilityServiceImplTest {
                                 productId.toString(),
                                 InventoryLedgerEventType.GOODS_RECEIPT,
                                 2,
-                                "LOC-1");
+                                LOC_1);
                 InventoryLedgerEntry reservationEntry = ledgerEntry(
                                 productId.toString(),
                                 InventoryLedgerEventType.RESERVATION_CREATED,
                                 5,
-                                "LOC-1");
+                                LOC_1);
 
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(List.of(onHandEntry, reservationEntry));
@@ -89,7 +91,7 @@ class InventoryAvailabilityServiceImplTest {
                 List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
                 assertThat(result).hasSize(1);
-                assertThat(result.getFirst().getLocationId()).isEqualTo("LOC-1");
+                assertThat(result.getFirst().getLocationId()).isEqualTo(LOC_1);
                 assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(2);
                 assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(-3);
         }
@@ -117,7 +119,7 @@ class InventoryAvailabilityServiceImplTest {
                 UUID productId = UUID.randomUUID();
                 InventoryLedgerEntry invalidEntry = ledgerEntry(productId.toString(),
                                 InventoryLedgerEventType.GOODS_RECEIPT, 1,
-                                "LOC-1");
+                                LOC_1);
                 invalidEntry.setChangeInQuantity(null);
 
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
@@ -133,7 +135,7 @@ class InventoryAvailabilityServiceImplTest {
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(java.util.Arrays.asList(
                                                 ledgerEntry(productId.toString(),
-                                                                InventoryLedgerEventType.GOODS_RECEIPT, 1, "LOC-1"),
+                                                                InventoryLedgerEventType.GOODS_RECEIPT, 1, LOC_1),
                                                 null));
 
                 List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
@@ -144,7 +146,7 @@ class InventoryAvailabilityServiceImplTest {
         @Test
         void getAvailabilityByProduct_handlesNullEventType() {
                 UUID productId = UUID.randomUUID();
-                InventoryLedgerEntry entry = ledgerEntry(productId.toString(), null, 5, "LOC-1");
+                InventoryLedgerEntry entry = ledgerEntry(productId.toString(), null, 5, LOC_1);
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(List.of(entry));
 
@@ -158,7 +160,7 @@ class InventoryAvailabilityServiceImplTest {
         @Test
         void queryAvailability_handlesNullChangeInQuantity() {
                 String productSku = "SKU-123";
-                String locationId = "LOC-1";
+                UUID locationId = LOC_1;
                 InventoryLedgerEntry entry = ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 10,
                                 locationId);
                 entry.setChangeInQuantity(null);
@@ -183,7 +185,7 @@ class InventoryAvailabilityServiceImplTest {
                                 productId.toString(),
                                 InventoryLedgerEventType.RESERVATION_RELEASED,
                                 5,
-                                "LOC-1");
+                                LOC_1);
 
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                                 .thenReturn(List.of(reservationEntry));
@@ -199,7 +201,7 @@ class InventoryAvailabilityServiceImplTest {
                 UUID productId = UUID.randomUUID();
                 InventoryLedgerEntry entry = ledgerEntry(productId.toString(),
                                 InventoryLedgerEventType.RESERVATION_CREATED, 1,
-                                "LOC-1");
+                                LOC_1);
                 entry.setChangeInQuantity(null);
 
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
@@ -214,7 +216,7 @@ class InventoryAvailabilityServiceImplTest {
                 when(inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc("SKU-123"))
                                 .thenReturn(List.of());
 
-                assertThatThrownBy(() -> service.queryAvailability("SKU-123", "LOC-1", null))
+                assertThatThrownBy(() -> service.queryAvailability("SKU-123", LOC_1, null))
                                 .isInstanceOf(ProductNotFoundException.class)
                                 .hasMessage("Product not found: SKU-123");
         }
@@ -222,8 +224,8 @@ class InventoryAvailabilityServiceImplTest {
         @Test
         void queryAvailability_calculatesCorrectly_withLocationAndStorageLocation() {
                 String productSku = "SKU-123";
-                String locationId = "LOC-1";
-                String storageLocationId = "SLOC-A";
+                UUID locationId = LOC_1;
+                UUID storageLocationId = SLOC_A;
 
                 List<InventoryLedgerEntry> productEntries = List.of(
                                 ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 10, locationId));
@@ -249,7 +251,7 @@ class InventoryAvailabilityServiceImplTest {
         @Test
         void queryAvailability_calculatesCorrectly_withOnlyLocationId() {
                 String productSku = "SKU-123";
-                String locationId = "LOC-1";
+                UUID locationId = LOC_1;
 
                 List<InventoryLedgerEntry> productEntries = List.of(
                                 ledgerEntry(productSku, InventoryLedgerEventType.GOODS_RECEIPT, 10, locationId));
@@ -264,7 +266,7 @@ class InventoryAvailabilityServiceImplTest {
                                 locationId))
                                 .thenReturn(locationEntries);
 
-                AvailabilityView result = service.queryAvailability(productSku, locationId, " "); // blank storage id
+                AvailabilityView result = service.queryAvailability(productSku, locationId, null);
 
                 assertThat(result.getOnHandQuantity()).isEqualTo(10);
                 assertThat(result.getAllocatedQuantity()).isEqualTo(2); // 3 created - 1 released
@@ -274,7 +276,7 @@ class InventoryAvailabilityServiceImplTest {
 
         private InventoryLedgerEntry ledgerEntry(String stockItemId, InventoryLedgerEventType eventType,
                         int changeInQuantity,
-                        String locationId) {
+                        UUID locationId) {
                 return InventoryLedgerEntry.builder()
                                 .stockItemId(stockItemId)
                                 .eventType(eventType)

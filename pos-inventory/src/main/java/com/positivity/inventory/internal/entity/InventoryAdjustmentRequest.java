@@ -49,7 +49,7 @@ public class InventoryAdjustmentRequest {
 
     @NonNull
     @Column(nullable = false)
-    private String locationId;
+    private UUID locationId;
 
     @Column(nullable = false)
     private Integer quantity;

@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -14,8 +16,8 @@ public class ReplenishmentTaskResponse {
     private String taskId;
     private String itemSKU;
     private int quantity;
-    private String sourceLocationId;
-    private String destinationLocationId;
+    private UUID sourceLocationId;
+    private UUID destinationLocationId;
     private String status;
     private String triggerType;
     private String decisionReason;

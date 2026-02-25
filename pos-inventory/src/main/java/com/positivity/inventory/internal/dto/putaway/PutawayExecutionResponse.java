@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -14,8 +16,8 @@ public class PutawayExecutionResponse {
     private String ledgerEntryId;
     private String taskId;
     private String skuId;
-    private String sourceLocationId;
-    private String destinationLocationId;
+    private UUID sourceLocationId;
+    private UUID destinationLocationId;
     private int quantityMoved;
     private String transactionType;
     private String status;
