@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import com.positivity.inventory.service.ReturnService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,11 +28,6 @@ public class ReturnServiceImpl implements ReturnService {
     private final InventoryReturnRepository inventoryReturnRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
-    ReturnServiceImpl(InventoryReturnRepository inventoryReturnRepository) {
-        this(inventoryReturnRepository, null);
-    }
-
-    @Autowired
     public ReturnServiceImpl(
             InventoryReturnRepository inventoryReturnRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
@@ -61,16 +55,11 @@ public class ReturnServiceImpl implements ReturnService {
             ledgerEntries.add(buildReturnLedgerEntry(request, item));
         }
 
-        List<UUID> ledgerEntryIds;
-        if (inventoryLedgerEntryRepository != null) {
-            List<InventoryLedgerEntry> savedLedgerEntries = inventoryLedgerEntryRepository.saveAll(ledgerEntries);
-            ledgerEntryIds = savedLedgerEntries.stream()
-                    .map(InventoryLedgerEntry::getLedgerEntryId)
-                    .filter(Objects::nonNull)
-                    .toList();
-        } else {
-            ledgerEntryIds = ledgerEntries.stream().map(entry -> UUID.randomUUID()).toList();
-        }
+        List<InventoryLedgerEntry> savedLedgerEntries = inventoryLedgerEntryRepository.saveAll(ledgerEntries);
+        List<UUID> ledgerEntryIds = savedLedgerEntries.stream()
+                .map(InventoryLedgerEntry::getLedgerEntryId)
+                .filter(Objects::nonNull)
+                .toList();
 
         UUID returnId = persistedReturn.getReturnId() != null ? persistedReturn.getReturnId() : UUID.randomUUID();
         Instant createdAt = persistedReturn.getCreatedAt() != null ? persistedReturn.getCreatedAt() : Instant.now();
@@ -85,9 +74,6 @@ public class ReturnServiceImpl implements ReturnService {
     }
 
     private int calculateTotalItemsReturned(List<ReturnItemLine> items) {
-        if (inventoryLedgerEntryRepository == null) {
-            return items.size();
-        }
         return items.stream().mapToInt(ReturnItemLine::getQuantityReturned).sum();
     }
 
@@ -129,13 +115,6 @@ public class ReturnServiceImpl implements ReturnService {
     private void validateReturnQuantity(UUID workorderId, ReturnItemLine item) {
         if (item.getQuantityReturned() <= 0) {
             throw new IllegalArgumentException("quantityReturned must be positive");
-        }
-
-        if (inventoryLedgerEntryRepository == null) {
-            if (item.getQuantityReturned() > 100) {
-                throw new ReturnQuantityExceededException(item.getSkuId(), item.getQuantityReturned(), 100);
-            }
-            return;
         }
 
         List<InventoryLedgerEntry> consumptionEntries = inventoryLedgerEntryRepository

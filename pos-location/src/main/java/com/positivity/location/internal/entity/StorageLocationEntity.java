@@ -57,9 +57,11 @@ public class StorageLocationEntity {
     @Column(name = "parent_storage_location_id", columnDefinition = "UUID")
     private UUID parentStorageLocationId;
 
-    @Builder.Default
-    @Column(name = "inventory_count", nullable = false)
-    private int inventoryCount = 0;
+    @Column(name = "capacity", columnDefinition = "TEXT")
+    private String capacity;
+
+    @Column(name = "temperature", columnDefinition = "TEXT")
+    private String temperature;
 
     @PrePersist
     void onCreate() {

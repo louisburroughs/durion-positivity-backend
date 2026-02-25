@@ -8,16 +8,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
+import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.dto.putaway.PutawayExecutionResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
 import com.positivity.inventory.internal.entity.PutawayTask;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
+import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.service.PutawayExecuteService;
 import com.positivity.inventory.service.PutawayValidationService;
+import com.positivity.security.common.SecurityContextHelper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,15 +36,16 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
         @Transactional
         public @NonNull PutawayExecutionResponse executePutaway(
                         @NonNull String taskId,
-                        @NonNull PutawayExecutionRequest request,
-                        @NonNull String actorId) {
+                        @NonNull PutawayExecutionRequest request) {
+                String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("System");
                 UUID parsedTaskId = parseRequiredUuid(taskId, "taskId");
 
                 PutawayTask task = putawayTaskRepository.findByIdForUpdate(parsedTaskId)
                                 .or(() -> putawayTaskRepository.findById(parsedTaskId))
                                 .orElseThrow(() -> new TaskNotFoundException(parsedTaskId));
 
-                putawayValidationService.validatePutawayExecution(request);
+                ValidationResult validationResult = putawayValidationService.validatePutawayExecution(request);
+                ensureValidationPassed(validationResult);
 
                 Instant now = Instant.now();
                 InventoryLedgerEntry ledgerEntry = InventoryLedgerEntry.builder()
@@ -104,5 +108,22 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
                 } catch (IllegalArgumentException ex) {
                         throw new IllegalArgumentException(fieldName + " must be a valid UUID", ex);
                 }
+        }
+
+        private void ensureValidationPassed(ValidationResult validationResult) {
+                if (validationResult == null) {
+                        throw new IllegalStateException("Putaway validation returned no result");
+                }
+                if (validationResult.isValid()) {
+                        return;
+                }
+
+                ValidationResult.ValidationError firstError = validationResult.getErrors().isEmpty()
+                                ? null
+                                : validationResult.getErrors().getFirst();
+                String errorCode = firstError != null ? firstError.getErrorCode() : "PUTAWAY_VALIDATION_FAILED";
+                String message = firstError != null ? firstError.getMessage()
+                                : "Putaway validation failed";
+                throw new PutawayValidationException(errorCode, message);
         }
 }

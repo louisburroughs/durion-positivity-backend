@@ -3,6 +3,7 @@ package com.positivity.location.service;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import java.util.UUID;
@@ -36,6 +37,15 @@ public interface StorageLocationService {
      */
     @NonNull
     StorageLocationResponse getStorageLocation(@NonNull UUID siteId, @NonNull UUID storageLocationId);
+
+    /**
+     * Retrieves existence/active validation details for a storage location.
+     *
+     * @param storageLocationId storage location identifier
+     * @return validation details
+     */
+    @NonNull
+    StorageLocationValidationResponseDTO getStorageLocationValidation(@NonNull UUID storageLocationId);
 
     /**
      * Lists storage locations for a site with optional type filtering.

@@ -130,7 +130,8 @@ public class PickListServiceImpl implements PickListService {
 
         task.setStatus(PickTaskStatus.PICKED);
         task.setQuantityPicked(quantityPicked);
-        task.setSuggestedLocationId(scannedLocationId);
+        UUID actualLocationId = scannedLocationId;
+        task.setSuggestedLocationId(actualLocationId);
         PickTaskEntity savedTask = pickTaskRepository.save(task);
 
         List<PickTaskEntity> allTasks = pickTaskRepository.findByPickListOrderBySortOrderAsc(pickList);

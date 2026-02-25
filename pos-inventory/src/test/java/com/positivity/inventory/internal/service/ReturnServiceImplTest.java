@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,7 +66,7 @@ class ReturnServiceImplTest {
     private ArgumentCaptor<InventoryReturnEntity> entityCaptor;
 
     private ReturnServiceImpl service() {
-        return new ReturnServiceImpl(inventoryReturnRepository);
+        return new ReturnServiceImpl(inventoryReturnRepository, inventoryLedgerEntryRepository);
     }
 
     private ReturnServiceImpl serviceWithLedgerRepository() {
@@ -96,12 +97,15 @@ class ReturnServiceImplTest {
                 "Leftover brake pads",
                 List.of(new ReturnItemLine(skuId, 2)));
 
-        // RED: ReturnServiceImpl throws UnsupportedOperationException — test fails here
+        when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+                anyString(), any(), anyString()))
+                .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
+
         ReturnResponse result = service().returnItemsToStock(request);
 
         assertThat(result.getReturnId()).isNotNull();
         assertThat(result.getWorkorderId()).isEqualTo(workorderId);
-        assertThat(result.getTotalItemsReturned()).isEqualTo(1);
+        assertThat(result.getTotalItemsReturned()).isEqualTo(2); // sum of quantityReturned
         assertThat(result.getCreatedAt()).isNotNull();
     }
 
@@ -132,10 +136,12 @@ class ReturnServiceImplTest {
                 "End of job surplus",
                 List.of(new ReturnItemLine(skuId1, 3), new ReturnItemLine(skuId2, 1)));
 
-        // RED: throws UnsupportedOperationException before save is called
+        when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+                anyString(), any(), anyString()))
+                .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
+
         service().returnItemsToStock(request);
 
-        // Assertions below are unreachable in RED — they define the GREEN contract
         verify(inventoryReturnRepository).save(entityCaptor.capture());
         InventoryReturnEntity captured = entityCaptor.getValue();
         assertThat(captured.getWorkorderId()).isEqualTo(workorderId);
@@ -171,7 +177,13 @@ class ReturnServiceImplTest {
                         new ReturnItemLine(UUID.randomUUID(), 1),
                         new ReturnItemLine(UUID.randomUUID(), 2)));
 
-        // RED: throws UnsupportedOperationException — test fails here
+        when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+                anyString(), any(), anyString()))
+                .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
+        when(inventoryLedgerEntryRepository.saveAll(anyList())).thenReturn(List.of(
+                InventoryLedgerEntry.builder().ledgerEntryId(UUID.randomUUID()).build(),
+                InventoryLedgerEntry.builder().ledgerEntryId(UUID.randomUUID()).build()));
+
         ReturnResponse result = service().returnItemsToStock(request);
 
         assertThat(result.getLedgerEntryIds()).hasSize(2).doesNotContainNull();
@@ -310,6 +322,11 @@ class ReturnServiceImplTest {
                 "Fallback return",
                 List.of(new ReturnItemLine(UUID.randomUUID(), 1)));
 
+        when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
+                anyString(), any(), anyString()))
+                .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
+        when(inventoryLedgerEntryRepository.saveAll(anyList())).thenReturn(List.of(
+                InventoryLedgerEntry.builder().ledgerEntryId(UUID.randomUUID()).build()));
         when(inventoryReturnRepository.save(entityCaptor.capture())).thenReturn(null);
 
         ReturnResponse result = service().returnItemsToStock(request);

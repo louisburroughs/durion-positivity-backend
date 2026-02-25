@@ -39,7 +39,7 @@ public class AllocationEntity {
     @JoinColumn(name = "reservation_id", nullable = false)
     private ReservationEntity reservation;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private UUID locationId;
 
     @Column(nullable = false)

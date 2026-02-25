@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.reservation.CreateReservationReques
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
 import com.positivity.inventory.service.ReservationService;
+import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ public class ReservationController {
     @PostMapping("/")
     @EmitEvent(id = "INVENTORY_RESERVATION_CREATE_OR_UPDATE", apiVersion = "1")
     public ResponseEntity<ReservationResponse> createOrUpdateReservation(
-            @RequestBody CreateReservationRequest request) {
+            @Valid @RequestBody CreateReservationRequest request) {
         ReservationResponse response = reservationService.createOrUpdateReservation(request);
         return ResponseEntity.created(URI.create("/v1/inventory/reservations/" + response.getReservationId()))
                 .body(response);
@@ -38,7 +39,7 @@ public class ReservationController {
     @EmitEvent(id = "INVENTORY_ALLOCATION_PROMOTE_HARD", apiVersion = "1")
     public ResponseEntity<ReservationResponse> promoteToHard(
             @PathVariable UUID allocationId,
-            @RequestBody PromoteAllocationRequest request) {
+            @Valid @RequestBody PromoteAllocationRequest request) {
         return ResponseEntity.ok(reservationService.promoteToHard(allocationId, request));
     }
 

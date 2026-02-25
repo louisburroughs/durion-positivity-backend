@@ -1,15 +1,27 @@
 package com.positivity.inventory.internal.service;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.positivity.inventory.internal.client.StorageLocationValidationClient;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.ValidationResult;
+import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
+import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
+import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.PutawayRuleRepository;
+import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
+import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.service.PutawayValidationService;
+import com.positivity.security.common.SecurityContextHelper;
 
 /**
  * Default implementation of PutawayValidationService.
@@ -34,60 +46,138 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
 
     private static final Logger log = LoggerFactory.getLogger(PutawayValidationServiceImpl.class);
     private static final double CAPACITY_TOLERANCE_PERCENT = 0.10; // 10% tolerance
+    private static final List<InventoryLedgerEventType> ON_HAND_EVENT_TYPES = Arrays.stream(
+            InventoryLedgerEventType.values())
+            .filter(InventoryLedgerEventType::affectsOnHand)
+            .toList();
+
+    private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final PutawayRuleRepository putawayRuleRepository;
+    private final ReplenishmentPolicyRepository replenishmentPolicyRepository;
+    private final StorageLocationValidationClient storageLocationValidationClient;
+
+    @Autowired
+    public PutawayValidationServiceImpl(
+            InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            PutawayRuleRepository putawayRuleRepository,
+            ReplenishmentPolicyRepository replenishmentPolicyRepository,
+            StorageLocationValidationClient storageLocationValidationClient) {
+        this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+        this.putawayRuleRepository = putawayRuleRepository;
+        this.replenishmentPolicyRepository = replenishmentPolicyRepository;
+        this.storageLocationValidationClient = storageLocationValidationClient;
+    }
+
+    public PutawayValidationServiceImpl() {
+        this.inventoryLedgerEntryRepository = null;
+        this.putawayRuleRepository = null;
+        this.replenishmentPolicyRepository = null;
+        this.storageLocationValidationClient = null;
+    }
 
     @Override
     public ValidationResult validateLocationCompatibility(String destinationLocationId, String skuId) {
-        log.debug("Validating location compatibility: location={}, sku={}", destinationLocationId, skuId);
+        if (log.isDebugEnabled()) {
+            log.debug("Validating location compatibility: location(mask)={}, sku(mask)={}",
+                    maskForLog(destinationLocationId), maskForLog(skuId));
+        }
 
-        // TODO: Integrate with actual location and SKU repositories
-        // For now, stub implementation that always passes
-        // In production, this would check:
-        // - Zone restrictions
-        // - Temperature class compatibility
-        // - Hazardous/non-hazardous rules
-        // - Authorized bin status
+        if (putawayRuleRepository == null || replenishmentPolicyRepository == null) {
+            return ValidationResult.success();
+        }
 
-        ValidationResult result = ValidationResult.success();
+        if (!putawayRuleRepository.existsByDestinationLocationIdAndIsEnabledTrue(destinationLocationId)) {
+            throw new LocationNotValidForSkuException(
+                    destinationLocationId,
+                    skuId,
+                    "Destination location is not enabled for putaway");
+        }
 
-        // Example validation logic (to be replaced with actual implementation):
-        // if (!locationRepository.isCompatibleWith(destinationLocationId, skuId)) {
-        // String reason = determineIncompatibilityReason(destinationLocationId, skuId);
-        // throw new LocationNotValidForSkuException(destinationLocationId, skuId,
-        // reason);
-        // }
+        if (!replenishmentPolicyRepository.existsByItemSKU(skuId)) {
+            throw new LocationNotValidForSkuException(
+                    destinationLocationId,
+                    skuId,
+                    "SKU is not configured in replenishment policies");
+        }
 
-        return result;
+        if (!replenishmentPolicyRepository.existsByItemSKUAndLocationId(skuId, destinationLocationId)) {
+            throw new LocationNotValidForSkuException(
+                    destinationLocationId,
+                    skuId,
+                    "SKU is not allowed at destination location");
+        }
+
+        return ValidationResult.success();
     }
 
     @Override
     public ValidationResult validateLocationCapacity(String destinationLocationId, int quantity) {
-        log.debug("Validating location capacity: location={}, quantity={}", destinationLocationId, quantity);
-
-        // TODO: Integrate with actual location repository
-        // For now, stub implementation
-        // In production, this would:
-        // 1. Get current capacity from location
-        // 2. Get max capacity from location
-        // 3. Calculate if adding quantity exceeds capacity
-        // 4. Check tolerance if near capacity
+        if (log.isDebugEnabled()) {
+            log.debug("Validating location capacity: location(mask)={}, quantity={}", maskForLog(destinationLocationId),
+                    quantity);
+        }
 
         ValidationResult result = ValidationResult.success();
+        if (inventoryLedgerEntryRepository == null) {
+            return result;
+        }
 
-        // Example validation logic (to be replaced with actual implementation):
-        // Location location = locationRepository.findById(destinationLocationId);
-        // int currentCapacity = location.getCurrentCapacity();
-        // int maxCapacity = location.getMaxCapacity();
-        // int newCapacity = currentCapacity + quantity;
-        //
-        // if (newCapacity > maxCapacity) {
-        // double overfillPercent = (double)(newCapacity - maxCapacity) / maxCapacity;
-        // if (overfillPercent > CAPACITY_TOLERANCE_PERCENT) {
-        // throw new LocationAtCapacityException(destinationLocationId, currentCapacity,
-        // maxCapacity);
-        // }
-        // result.addWarning("CAPACITY_NEAR_LIMIT",
-        // "Location is near capacity. Override may be required.");
-        // }
+        StorageLocationValidationClient.StorageLocationValidation locationValidation = null;
+        if (storageLocationValidationClient != null) {
+            locationValidation = storageLocationValidationClient
+                    .getStorageLocationValidation(destinationLocationId);
+
+            if (!locationValidation.isExists()) {
+                throw new IllegalArgumentException("Destination storage location does not exist");
+            }
+            if (!locationValidation.isActive()) {
+                throw new IllegalArgumentException("Destination storage location is inactive");
+            }
+        }
+
+        int currentCapacity = safeInt(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
+                destinationLocationId,
+                ON_HAND_EVENT_TYPES));
+        int maxCapacity = locationValidation != null && locationValidation.getMaxUnitCapacity() != null
+                ? locationValidation.getMaxUnitCapacity()
+                : 0;
+        if (maxCapacity <= 0 && replenishmentPolicyRepository != null) {
+            maxCapacity = safeInt(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(destinationLocationId));
+        }
+
+        if (maxCapacity <= 0) {
+            throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
+        }
+
+        int projectedCapacity = currentCapacity + quantity;
+        if (projectedCapacity >= maxCapacity) {
+            if (projectedCapacity == maxCapacity) {
+                throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
+            }
+
+            int overfillUnits = projectedCapacity - maxCapacity;
+            double overfillPercent = (double) overfillUnits / maxCapacity;
+            if (overfillPercent > CAPACITY_TOLERANCE_PERCENT) {
+                throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
+            }
+
+            result.addWarning(
+                    "CAPACITY_NEAR_LIMIT",
+                    String.format(
+                            "Projected capacity exceeds configured limit by %d units (%.2f%%). Override may be required.",
+                            overfillUnits,
+                            overfillPercent * 100.0));
+            return result;
+        }
+
+        double utilizationPercent = (double) projectedCapacity / maxCapacity;
+        if (utilizationPercent >= 1.0 - CAPACITY_TOLERANCE_PERCENT) {
+            result.addWarning(
+                    "CAPACITY_NEAR_LIMIT",
+                    String.format(
+                            "Projected capacity is near limit (%.2f%% utilized).",
+                            utilizationPercent * 100.0));
+        }
 
         return result;
     }
@@ -97,38 +187,37 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         log.debug("Validating source on-hand: location={}, sku={}, quantity={}",
                 sourceLocationId, skuId, quantity);
 
-        // TODO: Integrate with actual inventory repository
-        // For now, stub implementation
-        // In production, this would:
-        // 1. Query inventory ledger for on-hand at source location
-        // 2. Verify sufficient quantity exists
-        // 3. Block transaction if zero or insufficient quantity
-
         ValidationResult result = ValidationResult.success();
+        if (inventoryLedgerEntryRepository == null) {
+            return result;
+        }
 
-        // Example validation logic (to be replaced with actual implementation):
-        // int onHandQuantity = inventoryRepository.getOnHandQuantity(sourceLocationId,
-        // skuId);
-        //
-        // if (onHandQuantity == 0) {
-        // throw new NoOnHandAtSourceLocationException(sourceLocationId, skuId);
-        // }
-        //
-        // if (onHandQuantity < quantity) {
-        // result.addError("INSUFFICIENT_QUANTITY",
-        // String.format("Insufficient on-hand quantity. Available: %d, Required: %d",
-        // onHandQuantity, quantity));
-        // }
+        int onHandQuantity = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
+                skuId,
+                sourceLocationId,
+                ON_HAND_EVENT_TYPES);
+
+        if (onHandQuantity <= 0) {
+            throw new NoOnHandAtSourceLocationException(sourceLocationId, skuId);
+        }
+
+        if (onHandQuantity < quantity) {
+            result.addError("INSUFFICIENT_QUANTITY",
+                    String.format("Insufficient on-hand quantity. Available: %d, Required: %d",
+                            onHandQuantity,
+                            quantity));
+        }
 
         return result;
     }
 
     @Override
     public ValidationResult validatePutawayExecution(PutawayExecutionRequest request) {
-        log.info("Validating putaway execution: sku={}, from={}, to={}, qty={}",
-                request.getSkuId(),
-                request.getSourceLocationId(),
-                request.getDestinationLocationId(),
+
+        log.info("Validating putaway execution: sku(mask)={}, from(mask)={}, to(mask)={}, qty={}",
+                maskForLog(request.getSkuId()),
+                maskForLog(request.getSourceLocationId()),
+                maskForLog(request.getDestinationLocationId()),
                 request.getQuantity());
 
         ValidationResult result = ValidationResult.success();
@@ -165,12 +254,22 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                 throw e; // Re-throw - no override
             }
         } else {
-            log.warn("Location compatibility override requested for location={}, sku={}, reason={}",
-                    request.getDestinationLocationId(),
-                    request.getSkuId(),
+            log.warn("Location compatibility override requested for location(mask)={}, sku(mask)={}, reason={}",
+                    maskForLog(request.getDestinationLocationId()),
+                    maskForLog(request.getSkuId()),
                     request.getOverrideReasonCode());
 
-            // TODO: Verify permission and audit override
+            enforceOverridePermission(PutawayPermissions.OVERRIDE_LOCATION_COMPATIBILITY);
+            validateOverrideAuditFields(result, request, "COMPATIBILITY");
+            String actorId = SecurityContextHelper.getCurrentUserIdOrDefault("system");
+            log.info(
+                    "Audit compatibility override: location={}, sku={}, reason={}, approvedBy={}, actor={}, permission={}",
+                    maskForLog(request.getDestinationLocationId()),
+                    maskForLog(request.getSkuId()),
+                    request.getOverrideReasonCode(),
+                    maskForLog(request.getApprovedBy()),
+                    maskForLog(actorId),
+                    PutawayPermissions.OVERRIDE_LOCATION_COMPATIBILITY);
             result.addWarning("COMPATIBILITY_OVERRIDDEN",
                     "Location compatibility check was overridden");
         }
@@ -192,15 +291,103 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                 throw e; // Re-throw - no override
             }
         } else {
-            log.warn("Location capacity override requested for location={}, reason={}",
-                    request.getDestinationLocationId(),
-                    request.getOverrideReasonCode());
+            if (log.isWarnEnabled()) {
+                log.warn("Location capacity override requested for location(mask)={}, reason={}",
+                        maskForLog(request.getDestinationLocationId()),
+                        request.getOverrideReasonCode());
+            }
 
-            // TODO: Verify permission, check tolerance, and audit override
+            enforceOverridePermission(PutawayPermissions.OVERRIDE_LOCATION_CAPACITY);
+            validateOverrideAuditFields(result, request, "CAPACITY");
+
+            if (request.getApprovedBy() == null || request.getApprovedBy().isBlank()) {
+                result.addError(
+                        "CAPACITY_OVERRIDE_APPROVAL_REQUIRED",
+                        "Capacity override requires approvedBy");
+            }
+
+            try {
+                ValidationResult toleranceValidation = validateLocationCapacity(
+                        request.getDestinationLocationId(),
+                        request.getQuantity());
+                toleranceValidation.getWarnings().forEach(warn -> result.addWarning(warn.getCode(), warn.getMessage()));
+                if (!toleranceValidation.isValid()) {
+                    toleranceValidation.getErrors()
+                            .forEach(err -> result.addError(err.getErrorCode(), err.getMessage()));
+                }
+            } catch (LocationAtCapacityException e) {
+                if (e.getMaxCapacity() <= 0) {
+                    result.addError(
+                            "CAPACITY_OVERRIDE_TOLERANCE_UNCHECKABLE",
+                            "Cannot evaluate capacity override tolerance because max capacity is not configured");
+                } else {
+                    int projectedCapacity = e.getCurrentCapacity() + request.getQuantity();
+                    int overfillUnits = projectedCapacity - e.getMaxCapacity();
+                    double overfillPercent = overfillUnits <= 0
+                            ? 0.0
+                            : (double) overfillUnits / e.getMaxCapacity();
+                    if (overfillPercent > CAPACITY_TOLERANCE_PERCENT) {
+                        result.addError(
+                                "CAPACITY_OVERRIDE_EXCEEDS_TOLERANCE",
+                                String.format(
+                                        "Capacity override exceeds tolerance (%.2f%% > %.2f%%)",
+                                        overfillPercent * 100.0,
+                                        CAPACITY_TOLERANCE_PERCENT * 100.0));
+                    }
+                }
+            }
+
+            log.info(
+                    "Audit capacity override: location={}, qty={}, reason={}, approvedBy={}, actor={}, permission={}",
+                    maskForLog(request.getDestinationLocationId()),
+                    request.getQuantity(),
+                    request.getOverrideReasonCode(),
+                    maskForLog(request.getApprovedBy()),
+                    maskForLog(SecurityContextHelper.getCurrentUserIdOrDefault("system")),
+                    PutawayPermissions.OVERRIDE_LOCATION_CAPACITY);
             result.addWarning("CAPACITY_OVERRIDDEN",
                     "Location capacity check was overridden");
         }
 
         return result;
+    }
+
+    private String maskForLog(String value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value
+                .replace('\r', '_')
+                .replace('\n', '_')
+                .replace('\t', '_');
+        int length = sanitized.length();
+        if (length <= 4) {
+            return "****";
+        }
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
+    }
+
+    private int safeInt(Integer value) {
+        return value != null ? value : 0;
+    }
+
+    private void enforceOverridePermission(String requiredPermission) {
+        if (SecurityContextHelper.hasAuthority(requiredPermission)) {
+            return;
+        }
+        throw new InsufficientPermissionException(
+                SecurityContextHelper.getCurrentUserIdOrDefault("unknown"),
+                requiredPermission);
+    }
+
+    private void validateOverrideAuditFields(ValidationResult result, PutawayExecutionRequest request, String scope) {
+        if (request.getOverrideReasonCode() == null) {
+            result.addError(scope + "_OVERRIDE_REASON_REQUIRED",
+                    scope + " override requires overrideReasonCode");
+        }
+        if (request.getOverrideJustification() == null || request.getOverrideJustification().isBlank()) {
+            result.addError(scope + "_OVERRIDE_JUSTIFICATION_REQUIRED",
+                    scope + " override requires a non-empty overrideJustification");
+        }
     }
 }

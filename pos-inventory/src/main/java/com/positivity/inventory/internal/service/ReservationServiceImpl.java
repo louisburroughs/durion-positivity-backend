@@ -16,11 +16,8 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import com.positivity.inventory.service.ReservationService;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +30,6 @@ public class ReservationServiceImpl implements ReservationService {
     private final AllocationRepository allocationRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
-    private final Map<UUID, ReservationEntity> reservationStoreByWorkorderLineId = new ConcurrentHashMap<>();
-    private final Map<UUID, AllocationEntity> allocationStoreById = new ConcurrentHashMap<>();
-
-    ReservationServiceImpl() {
-        this(null, null, null);
-    }
-
-    @Autowired
     public ReservationServiceImpl(
             ReservationRepository reservationRepository,
             AllocationRepository allocationRepository,
@@ -52,10 +41,6 @@ public class ReservationServiceImpl implements ReservationService {
 
     @Override
     public @NonNull ReservationResponse createOrUpdateReservation(@NonNull CreateReservationRequest request) {
-        if (isInMemoryMode()) {
-            return createOrUpdateReservationInMemory(request);
-        }
-
         ReservationEntity reservation = reservationRepository.findByWorkorderLineId(request.getWorkorderLineId())
                 .map(existing -> updateExistingReservation(existing, request))
                 .orElseGet(() -> createReservationWithSoftAllocation(request));
@@ -67,10 +52,6 @@ public class ReservationServiceImpl implements ReservationService {
     public @NonNull ReservationResponse promoteToHard(
             @NonNull UUID allocationId,
             @NonNull PromoteAllocationRequest request) {
-        if (isInMemoryMode()) {
-            return promoteToHardInMemory(allocationId, request);
-        }
-
         AllocationEntity allocation = allocationRepository.findById(allocationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Allocation", allocationId.toString()));
 
@@ -113,11 +94,6 @@ public class ReservationServiceImpl implements ReservationService {
 
     @Override
     public void cancelReservation(@NonNull UUID workorderLineId) {
-        if (isInMemoryMode()) {
-            cancelReservationInMemory(workorderLineId);
-            return;
-        }
-
         ReservationEntity reservation = reservationRepository.findByWorkorderLineId(workorderLineId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reservation", workorderLineId.toString()));
 
@@ -172,76 +148,5 @@ public class ReservationServiceImpl implements ReservationService {
                 .allocatedQuantity(reservation.getAllocatedQuantity())
                 .status(reservation.getStatus().name())
                 .build();
-    }
-
-    private boolean isInMemoryMode() {
-        return reservationRepository == null || allocationRepository == null;
-    }
-
-    private ReservationResponse createOrUpdateReservationInMemory(CreateReservationRequest request) {
-        ReservationEntity reservation = reservationStoreByWorkorderLineId.get(request.getWorkorderLineId());
-        if (reservation != null) {
-            reservation.setRequiredQuantity(request.getRequiredQuantity());
-            return toResponse(reservation);
-        }
-
-        ReservationEntity created = ReservationEntity.builder()
-                .reservationId(UUID.randomUUID())
-                .workorderLineId(request.getWorkorderLineId())
-                .sku(request.getSku())
-                .requiredQuantity(request.getRequiredQuantity())
-                .allocatedQuantity(request.getRequiredQuantity())
-                .status(ReservationStatus.PENDING)
-                .build();
-
-        AllocationEntity allocation = AllocationEntity.builder()
-                .allocationId(UUID.randomUUID())
-                .reservation(created)
-                .locationId(null)
-                .allocatedQuantity(request.getRequiredQuantity())
-                .allocationState(AllocationState.SOFT)
-                .status(AllocationStatus.ALLOCATED)
-                .build();
-
-        created.setAllocations(List.of(allocation));
-        reservationStoreByWorkorderLineId.put(created.getWorkorderLineId(), created);
-        allocationStoreById.put(allocation.getAllocationId(), allocation);
-        return toResponse(created);
-    }
-
-    private ReservationResponse promoteToHardInMemory(UUID allocationId, PromoteAllocationRequest request) {
-        AllocationEntity allocation = allocationStoreById.get(allocationId);
-        if (allocation == null) {
-            if (request.getHardenedReason() != null && request.getHardenedReason().toLowerCase().contains("urgent")) {
-                throw new InsufficientAtpException(allocationId, 1, 0);
-            }
-            ReservationEntity synthetic = ReservationEntity.builder()
-                    .reservationId(UUID.randomUUID())
-                    .workorderLineId(UUID.randomUUID())
-                    .sku("SKU-001")
-                    .requiredQuantity(1)
-                    .allocatedQuantity(1)
-                    .status(ReservationStatus.FULFILLED)
-                    .build();
-            return toResponse(synthetic);
-        }
-
-        allocation.setAllocationState(AllocationState.HARD);
-        allocation.setHardenedAt(Instant.now());
-        allocation.setHardenedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
-        allocation.setHardenedReason(request.getHardenedReason());
-        ReservationEntity reservation = allocation.getReservation();
-        reservation.setStatus(ReservationStatus.FULFILLED);
-        return toResponse(reservation);
-    }
-
-    private void cancelReservationInMemory(UUID workorderLineId) {
-        ReservationEntity reservation = reservationStoreByWorkorderLineId.get(workorderLineId);
-        if (reservation == null) {
-            return;
-        }
-        reservation.getAllocations().forEach(allocation -> allocation.setStatus(AllocationStatus.RELEASED));
-        reservation.setAllocatedQuantity(0);
-        reservation.setStatus(ReservationStatus.CANCELLED);
     }
 }

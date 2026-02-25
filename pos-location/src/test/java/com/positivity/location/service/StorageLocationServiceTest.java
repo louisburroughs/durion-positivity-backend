@@ -1,5 +1,6 @@
 package com.positivity.location.service;
 
+import com.positivity.location.internal.client.LocationInventoryInquiryClient;
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
@@ -22,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,7 +31,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 /**
@@ -56,6 +57,9 @@ class StorageLocationServiceTest {
 
     @Mock
     private StorageLocationInventoryTransferService storageLocationInventoryTransferService;
+
+    @Mock
+    private LocationInventoryInquiryClient locationInventoryInquiryClient;
 
     @InjectMocks
     private StorageLocationServiceImpl storageLocationService;
@@ -93,6 +97,31 @@ class StorageLocationServiceTest {
         assertThat(response.getName()).isEqualTo("Bin-A1");
         assertThat(response.getType()).isEqualTo(StorageLocationType.BIN);
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("#39 - createStorageLocation persists and returns capacity/temperature metadata")
+    void createStorageLocation_withCapacityAndTemperature_returnsMetadata() {
+        UUID siteId = UUID.randomUUID();
+        UUID newId = UUID.randomUUID();
+        StorageLocationRequest request = validRequest("Bin-A2", "BAR-010", StorageLocationType.BIN, null);
+        request.setCapacity(Map.of("unitCount", 50, "weightKg", 100));
+        request.setTemperature(Map.of("minCelsius", 2, "maxCelsius", 8));
+
+        when(locationRepository.existsById(siteId)).thenReturn(true);
+        when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId("Bin-A2", siteId)).thenReturn(false);
+        when(storageLocationRepository.existsByBarcodeAndSiteId("BAR-010", siteId)).thenReturn(false);
+        when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
+                .thenAnswer(inv -> {
+                    StorageLocationEntity e = inv.getArgument(0);
+                    e.setId(newId);
+                    return e;
+                });
+
+        StorageLocationResponse response = storageLocationService.createStorageLocation(siteId, request);
+
+        assertThat(response.getCapacity()).containsEntry("unitCount", 50);
+        assertThat(response.getTemperature()).containsEntry("minCelsius", 2);
     }
 
     /**
@@ -242,6 +271,28 @@ class StorageLocationServiceTest {
                 });
     }
 
+    @Test
+    @DisplayName("#39 - getStorageLocationValidation returns exists/active state by id")
+    void getStorageLocationValidation_returnsValidationPayload() {
+        UUID siteId = UUID.randomUUID();
+        UUID storageId = UUID.randomUUID();
+        StorageLocationEntity entity = StorageLocationEntity.builder()
+                .id(storageId)
+                .siteId(siteId)
+                .status(StorageLocationStatus.ACTIVE)
+                .capacity("{\"unitCount\":42}")
+                .build();
+        when(storageLocationRepository.findById(storageId)).thenReturn(Optional.of(entity));
+
+        var result = storageLocationService.getStorageLocationValidation(storageId);
+
+        assertThat(result.isExists()).isTrue();
+        assertThat(result.isActive()).isTrue();
+        assertThat(result.getStorageLocationId()).isEqualTo(storageId);
+        assertThat(result.getSiteId()).isEqualTo(siteId);
+        assertThat(result.getMaxUnitCapacity()).isEqualTo(42);
+    }
+
     // -------------------------------------------------------------------------
     // List
     // -------------------------------------------------------------------------
@@ -317,10 +368,10 @@ class StorageLocationServiceTest {
                 .barcode("SHF-BC-002")
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(id, siteId)).thenReturn(Optional.of(entity));
+        when(locationInventoryInquiryClient.getOnHandQuantity(id)).thenReturn(0);
         when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                 .thenAnswer(inv -> {
                     StorageLocationEntity e = inv.getArgument(0);
@@ -349,10 +400,10 @@ class StorageLocationServiceTest {
                 .barcode("FLR-BC-003")
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(5)
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(id, siteId)).thenReturn(Optional.of(entity));
+        when(locationInventoryInquiryClient.getOnHandQuantity(id)).thenReturn(5);
 
         assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, id, null))
                 .isInstanceOf(ResponseStatusException.class)
@@ -375,7 +426,6 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.FLOOR)
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(5)
                 .build();
         StorageLocationEntity destination = StorageLocationEntity.builder()
                 .id(destinationId)
@@ -383,19 +433,11 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.SHELF)
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(3)
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
-        doAnswer(inv -> {
-            StorageLocationEntity sourceArg = inv.getArgument(0);
-            StorageLocationEntity destinationArg = inv.getArgument(1);
-            destinationArg.setInventoryCount(destinationArg.getInventoryCount() + sourceArg.getInventoryCount());
-            sourceArg.setInventoryCount(0);
-            return null;
-        }).when(storageLocationInventoryTransferService).transferAll(any(StorageLocationEntity.class),
-                any(StorageLocationEntity.class));
+        when(locationInventoryInquiryClient.getOnHandQuantity(sourceId)).thenReturn(5);
         when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -404,8 +446,6 @@ class StorageLocationServiceTest {
 
         assertThat(response.getStatus()).isEqualTo("INACTIVE");
         assertThat(response.getInventoryCount()).isZero();
-        assertThat(source.getInventoryCount()).isZero();
-        assertThat(destination.getInventoryCount()).isEqualTo(8);
     }
 
     @Test
@@ -420,10 +460,10 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.FLOOR)
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(2)
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
+        when(locationInventoryInquiryClient.getOnHandQuantity(sourceId)).thenReturn(2);
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId))
@@ -447,7 +487,6 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.FLOOR)
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(2)
                 .build();
         StorageLocationEntity destination = StorageLocationEntity.builder()
                 .id(destinationId)
@@ -455,10 +494,10 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.SHELF)
                 .siteId(siteId)
                 .status(StorageLocationStatus.INACTIVE)
-                .inventoryCount(1)
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(sourceId, siteId)).thenReturn(Optional.of(source));
+        when(locationInventoryInquiryClient.getOnHandQuantity(sourceId)).thenReturn(2);
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
 
         assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, sourceId, destinationId))
@@ -559,7 +598,6 @@ class StorageLocationServiceTest {
                 .type(StorageLocationType.BIN)
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationEntity parent = StorageLocationEntity.builder()
@@ -576,6 +614,7 @@ class StorageLocationServiceTest {
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)).thenReturn(Optional.of(existing));
+        when(locationInventoryInquiryClient.getOnHandQuantity(storageLocationId)).thenReturn(0);
         when(storageLocationRepository.existsByNameIgnoreCaseAndSiteIdAndIdNot("Bin-New", siteId, storageLocationId))
                 .thenReturn(false);
         when(storageLocationRepository.existsByBarcodeAndSiteIdAndIdNot("BAR-NEW", siteId, storageLocationId))
@@ -605,7 +644,6 @@ class StorageLocationServiceTest {
                 .name("Bin-Old")
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -637,7 +675,6 @@ class StorageLocationServiceTest {
                 .barcode("BAR-OLD")
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -668,7 +705,6 @@ class StorageLocationServiceTest {
                 .name("Bin-Old")
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -719,7 +755,6 @@ class StorageLocationServiceTest {
                 .siteId(siteId)
                 .name("Bin-A")
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -751,7 +786,6 @@ class StorageLocationServiceTest {
                 .siteId(siteId)
                 .name("Bin-A")
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationEntity parent = StorageLocationEntity.builder()
@@ -788,7 +822,6 @@ class StorageLocationServiceTest {
                 .siteId(siteId)
                 .name("Bin-A")
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationEntity parent = StorageLocationEntity.builder()
@@ -833,7 +866,6 @@ class StorageLocationServiceTest {
                 .name("Bin-A")
                 .barcode("HAS-BAR")
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(0)
                 .build();
 
         StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -883,7 +915,6 @@ class StorageLocationServiceTest {
                 .name("Bin-Old")
                 .siteId(siteId)
                 .status(StorageLocationStatus.ACTIVE)
-                .inventoryCount(2)
                 .build();
 
         StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
@@ -891,6 +922,7 @@ class StorageLocationServiceTest {
                 .build();
 
         when(storageLocationRepository.findByIdAndSiteId(storageLocationId, siteId)).thenReturn(Optional.of(existing));
+        when(locationInventoryInquiryClient.getOnHandQuantity(storageLocationId)).thenReturn(2);
 
         assertThatThrownBy(() -> storageLocationService.patchStorageLocation(siteId, storageLocationId, patch))
                 .isInstanceOf(ResponseStatusException.class)

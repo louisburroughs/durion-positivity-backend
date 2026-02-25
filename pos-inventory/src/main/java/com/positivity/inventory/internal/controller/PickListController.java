@@ -1,14 +1,16 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.dto.picklist.ConfirmPickTaskRequest;
 import com.positivity.inventory.internal.dto.picklist.CreatePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
+import com.positivity.inventory.internal.dto.picklist.UpdatePickListStatusRequest;
 import com.positivity.inventory.internal.enums.PickListStatus;
 import com.positivity.inventory.service.PickListService;
+import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +35,7 @@ public class PickListController {
 
     @PostMapping
     @EmitEvent(id = "INVENTORY_PICK_LIST_CREATE", apiVersion = "1")
-    public ResponseEntity<PickListResponse> createPickList(@RequestBody CreatePickListRequest request) {
+    public ResponseEntity<PickListResponse> createPickList(@Valid @RequestBody CreatePickListRequest request) {
         PickListResponse response = pickListService.createPickList(request);
         return ResponseEntity.created(URI.create("/v1/inventory/pick-lists/" + response.getPickListId()))
                 .body(response);
@@ -60,7 +62,7 @@ public class PickListController {
     public ResponseEntity<PickTaskResponse> confirmPickTask(
             @PathVariable UUID pickListId,
             @PathVariable UUID taskId,
-            @RequestBody ConfirmPickTaskRequest request) {
+            @Valid @RequestBody ConfirmPickTaskRequest request) {
         return ResponseEntity.ok(pickListService.confirmPickTask(
                 pickListId,
                 taskId,
@@ -78,8 +80,8 @@ public class PickListController {
     @EmitEvent(id = "INVENTORY_PICK_LIST_STATUS_UPDATE", apiVersion = "1")
     public ResponseEntity<PickListResponse> updatePickListStatus(
             @PathVariable UUID pickListId,
-            @RequestBody Map<String, PickListStatus> request) {
-        PickListStatus status = request.get("status");
+            @Valid @RequestBody UpdatePickListStatusRequest request) {
+        PickListStatus status = request.getStatus();
         if (status == null) {
             throw new IllegalArgumentException("status is required");
         }
@@ -91,12 +93,5 @@ public class PickListController {
     public ResponseEntity<Void> cancelPickList(@PathVariable UUID pickListId) {
         pickListService.cancelPickList(pickListId);
         return ResponseEntity.noContent().build();
-    }
-
-    @lombok.Data
-    public static class ConfirmPickTaskRequest {
-        private UUID scannedSkuId;
-        private UUID scannedLocationId;
-        private int quantityPicked;
     }
 }
