@@ -97,7 +97,6 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         normalized.setNormalizationPolicyVersion(POLICY_VERSION);
         normalized.setRawLeadTime(item.getRawLeadTime());
         normalized.setRawShipFromRegion(item.getRawShipFromRegion());
-        normalized.setLastUpdatedAt(eventTime);
 
         distributorNormalizedInventoryRepository.save(normalized);
     }
@@ -110,7 +109,6 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
                 .distributorSku(item.getDistributorSku())
                 .reason(reason)
                 .rawPayload(serializeRawPayload(item))
-                .createdAt(eventTime)
                 .build();
 
         distributorFeedExceptionRepository.save(exception);

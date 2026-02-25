@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -16,6 +17,7 @@ import com.positivity.shared.id.UUIDv7Id;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Tracks manufacturer part numbers that could not be mapped to a product.
@@ -28,6 +30,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class UnmappedManufacturerPart {
 
     @Id

@@ -11,6 +11,10 @@ import com.positivity.inventory.internal.exception.ReturnQuantityExceededExcepti
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryReturnRepository;
 import com.positivity.security.common.SecurityContextHelper;
+
+import lombok.RequiredArgsConstructor;
+
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,17 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ReturnServiceImpl implements ReturnService {
 
     private final InventoryReturnRepository inventoryReturnRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
-
-    public ReturnServiceImpl(
-            InventoryReturnRepository inventoryReturnRepository,
-            InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
-        this.inventoryReturnRepository = inventoryReturnRepository;
-        this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
-    }
+    private final Clock clock;
 
     @Override
     public @NonNull ReturnResponse returnItemsToStock(@NonNull ReturnItemsRequest request) {
@@ -47,8 +46,9 @@ public class ReturnServiceImpl implements ReturnService {
         }
 
         InventoryReturnEntity inventoryReturn = buildReturnEntity(request, items);
-        InventoryReturnEntity savedReturn = inventoryReturnRepository.save(inventoryReturn);
-        InventoryReturnEntity persistedReturn = savedReturn != null ? savedReturn : inventoryReturn;
+        InventoryReturnEntity savedReturn = Objects.requireNonNull(
+                inventoryReturnRepository.save(inventoryReturn),
+                "inventoryReturnRepository.save(...) returned null");
 
         List<InventoryLedgerEntry> ledgerEntries = new ArrayList<>();
         for (ReturnItemLine item : items) {
@@ -61,8 +61,9 @@ public class ReturnServiceImpl implements ReturnService {
                 .filter(Objects::nonNull)
                 .toList();
 
-        UUID returnId = persistedReturn.getReturnId() != null ? persistedReturn.getReturnId() : UUID.randomUUID();
-        Instant createdAt = persistedReturn.getCreatedAt() != null ? persistedReturn.getCreatedAt() : Instant.now();
+        UUID returnId = savedReturn.getReturnId() != null ? savedReturn.getReturnId() : UUID.randomUUID();
+        Instant createdAt = savedReturn.getCreatedAt() != null ? savedReturn.getCreatedAt()
+                : Instant.now(clock);
 
         return new ReturnResponse(
                 returnId,
@@ -104,7 +105,6 @@ public class ReturnServiceImpl implements ReturnService {
                 .changeInQuantity(Math.abs(item.getQuantityReturned()))
                 .quantityAfter(0)
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
-                .timestamp(Instant.now())
                 .notes("Returned to stock from workorder "
                         + request.getWorkorderId()
                         + ": "

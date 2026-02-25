@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,9 +19,12 @@ import com.positivity.inventory.internal.entity.InventoryReturnEntity;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryReturnRepository;
+
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,12 +69,20 @@ class ReturnServiceImplTest {
     @Captor
     private ArgumentCaptor<InventoryReturnEntity> entityCaptor;
 
+    private Clock clock = Clock.fixed(Instant.parse("2026-02-25T03:00:00Z"), Clock.systemUTC().getZone());
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(inventoryReturnRepository.save(any(InventoryReturnEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
     private ReturnServiceImpl service() {
-        return new ReturnServiceImpl(inventoryReturnRepository, inventoryLedgerEntryRepository);
+        return new ReturnServiceImpl(inventoryReturnRepository, inventoryLedgerEntryRepository, clock);
     }
 
     private ReturnServiceImpl serviceWithLedgerRepository() {
-        return new ReturnServiceImpl(inventoryReturnRepository, inventoryLedgerEntryRepository);
+        return new ReturnServiceImpl(inventoryReturnRepository, inventoryLedgerEntryRepository, clock);
     }
 
     // ─── RS1: returnItemsToStock — valid request → ReturnResponse fields ─────────
@@ -98,8 +110,12 @@ class ReturnServiceImplTest {
                 List.of(new ReturnItemLine(skuId, 2)));
 
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
-                anyString(), any(), anyString()))
+                eq(skuId.toString()),
+                eq(InventoryLedgerEventType.WORKORDER_CONSUMPTION),
+                eq(workorderId.toString())))
                 .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
+        when(inventoryLedgerEntryRepository.saveAll(anyList())).thenReturn(List.of(
+                InventoryLedgerEntry.builder().ledgerEntryId(UUID.randomUUID()).build()));
 
         ReturnResponse result = service().returnItemsToStock(request);
 
@@ -314,8 +330,8 @@ class ReturnServiceImplTest {
     }
 
     @Test
-    @DisplayName("save fallback uses generated response values when repository returns null")
-    void returnItemsToStock_saveReturnsNull_usesGeneratedResponseValues() {
+    @DisplayName("save returning null fails fast")
+    void returnItemsToStock_saveReturnsNull_throwsNullPointerException() {
         UUID workorderId = UUID.randomUUID();
         ReturnItemsRequest request = new ReturnItemsRequest(
                 workorderId,
@@ -325,15 +341,11 @@ class ReturnServiceImplTest {
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                 anyString(), any(), anyString()))
                 .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
-        when(inventoryLedgerEntryRepository.saveAll(anyList())).thenReturn(List.of(
-                InventoryLedgerEntry.builder().ledgerEntryId(UUID.randomUUID()).build()));
-        when(inventoryReturnRepository.save(entityCaptor.capture())).thenReturn(null);
+        when(inventoryReturnRepository.save(any(InventoryReturnEntity.class))).thenReturn(null);
 
-        ReturnResponse result = service().returnItemsToStock(request);
-
-        assertThat(result.getReturnId()).isNotNull();
-        assertThat(result.getCreatedAt()).isNotNull();
-        assertThat(result.getLedgerEntryIds()).hasSize(1).doesNotContainNull();
+        assertThatThrownBy(() -> service().returnItemsToStock(request))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("inventoryReturnRepository.save(...) returned null");
     }
 
     @Test

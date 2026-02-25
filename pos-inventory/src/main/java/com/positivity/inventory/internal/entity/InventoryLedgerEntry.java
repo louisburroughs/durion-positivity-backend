@@ -12,6 +12,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 /**
  * Immutable ledger entry representing a single inventory transaction.
  * 
@@ -25,6 +29,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class InventoryLedgerEntry {
 
     @Id
@@ -82,6 +87,7 @@ public class InventoryLedgerEntry {
      * The exact time this transaction was posted to the ledger.
      * This is the authoritative timestamp for ordering transactions.
      */
+    @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant timestamp;
 
@@ -96,10 +102,18 @@ public class InventoryLedgerEntry {
     @Column(length = 2000)
     private String notes;
 
-    @PrePersist
-    protected void onCreate() {
-        if (timestamp == null) {
-            timestamp = Instant.now();
-        }
-    }
+    /**
+     * Timestamp when the task was created.
+     */
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /**
+     * Timestamp of the last update to this task.
+     */
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
 }
