@@ -109,7 +109,7 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
                 .put("costAtTimeOfAdjustment", 12.50)
                 .put("createdByUserId", "user-creator");
 
-        String createResponse = mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/cycleCountAdjustments"))
+        String createResponse = mockMvc.perform(withGatewayAuth(post("/v1/inventory/cycleCountAdjustments"))
                 .header("X-User", "user-creator")
                 .header("X-User-Id", "user-creator")
                 .header("X-Authorities", "inventory:adjustment:create,inventory:adjustment:approve")
@@ -130,7 +130,7 @@ class InventoryAuditEventContractBehaviorIT extends BaseContractIntegrationTest 
                 .put("notes", "approve adjustment for audit event contract test");
 
         mockMvc.perform(
-                withGatewayAuth(post("/api/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve", adjustmentId))
+                withGatewayAuth(post("/v1/inventory/cycleCountAdjustments/{adjustmentId}/approve", adjustmentId))
                         .header("X-User", "user-approver")
                         .header("X-User-Id", "user-approver")
                         .header("X-Authorities", "inventory:adjustment:approve")

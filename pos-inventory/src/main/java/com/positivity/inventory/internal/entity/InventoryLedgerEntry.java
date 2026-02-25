@@ -6,11 +6,16 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.shared.id.UUIDv7Id;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable ledger entry representing a single inventory transaction.
@@ -25,6 +30,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class InventoryLedgerEntry {
 
     @Id
@@ -87,8 +93,53 @@ public class InventoryLedgerEntry {
 
     // Issue #48: Add location-level inventory tracking for per-location
     // availability.
+    /**
+     * Posting bucket for the ledger row, used for location-level availability
+     * reads.
+     *
+     * <p>
+     * This is distinct from directional metadata (`fromLocationId`,
+     * `toLocationId`). For example, a TRANSFER_IN row posts to the destination, so
+     * `locationId` and `toLocationId` are intentionally the same value.
+     */
     @Column
-    private String locationId;
+    private UUID locationId;
+
+    /**
+     * Source location for TRANSFER movements.
+     * Issue: CAP-215 Story #37
+     */
+    @Column
+    private UUID fromLocationId;
+
+    /**
+     * Destination location for TRANSFER movements.
+     * Issue: CAP-215 Story #37
+     */
+    @Column
+    private UUID toLocationId;
+
+    /**
+     * Mandatory reason code for ADJUST movements.
+     * Issue: CAP-215 Story #37
+     */
+    @Column(length = 100)
+    private String reasonCode;
+
+    /**
+     * Optional reference to originating transaction (e.g., purchase order, work
+     * order).
+     * Issue: CAP-215 Story #37
+     */
+    @Column(length = 255)
+    private String sourceTransactionId;
+
+    /**
+     * Unit of measure code for the quantity (e.g. EACH, KG, L).
+     * Issue: CAP-215 Story #37
+     */
+    @Column(length = 50)
+    private String unitOfMeasure;
 
     /**
      * Optional notes or context for this transaction.
@@ -96,10 +147,18 @@ public class InventoryLedgerEntry {
     @Column(length = 2000)
     private String notes;
 
-    @PrePersist
-    protected void onCreate() {
-        if (timestamp == null) {
-            timestamp = Instant.now();
-        }
-    }
+    /**
+     * Timestamp when this configuration was created.
+     */
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /**
+     * Timestamp when this configuration was last updated.
+     */
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
+
 }

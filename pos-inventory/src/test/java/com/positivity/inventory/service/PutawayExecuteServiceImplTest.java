@@ -49,16 +49,20 @@ class PutawayExecuteServiceImplTest {
     private PutawayTask task;
     private UUID taskId;
     private String actorId;
+    private UUID sourceLocationId;
+    private UUID destinationLocationId;
 
     @BeforeEach
     void setUp() {
         taskId = UUID.randomUUID();
         actorId = "user-123";
+        sourceLocationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        destinationLocationId = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
         request = new PutawayExecutionRequest(
                 "sku-abc",
-                "source-loc",
-                "dest-loc",
+                sourceLocationId,
+                destinationLocationId,
                 10);
 
         task = PutawayTask.builder()
@@ -71,6 +75,10 @@ class PutawayExecuteServiceImplTest {
     void executePutaway_happyPath() {
         // Given
         when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("sku-abc", sourceLocationId))
+                .thenReturn(50);
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("sku-abc", destinationLocationId))
+                .thenReturn(5);
         when(inventoryLedgerEntryRepository.save(any(InventoryLedgerEntry.class)))
                 .thenAnswer(invocation -> {
                     InventoryLedgerEntry entry = invocation.getArgument(0);
@@ -92,8 +100,9 @@ class PutawayExecuteServiceImplTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("No source decrement entry found"));
         assertThat(sourceEntry.getStockItemId()).isEqualTo("sku-abc");
-        assertThat(sourceEntry.getLocationId()).isEqualTo("source-loc");
+        assertThat(sourceEntry.getLocationId()).isEqualTo(sourceLocationId);
         assertThat(sourceEntry.getTransactionUserId()).isEqualTo(actorId);
+        assertThat(sourceEntry.getQuantityAfter()).isEqualTo(40);
 
         // Destination credit entry
         InventoryLedgerEntry destinationEntry = allCaptured.stream()
@@ -101,15 +110,16 @@ class PutawayExecuteServiceImplTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("No destination credit entry found"));
         assertThat(destinationEntry.getStockItemId()).isEqualTo("sku-abc");
-        assertThat(destinationEntry.getLocationId()).isEqualTo("dest-loc");
+        assertThat(destinationEntry.getLocationId()).isEqualTo(destinationLocationId);
         assertThat(destinationEntry.getTransactionUserId()).isEqualTo(actorId);
+        assertThat(destinationEntry.getQuantityAfter()).isEqualTo(15);
 
         ArgumentCaptor<PutawayTask> taskCaptor = ArgumentCaptor.forClass(PutawayTask.class);
         verify(putawayTaskRepository).save(taskCaptor.capture());
         PutawayTask savedTask = taskCaptor.getValue();
 
         assertThat(savedTask.getStatus()).isEqualTo(PutawayTaskStatus.COMPLETED);
-        assertThat(savedTask.getActualDestinationLocationId()).isEqualTo("dest-loc");
+        assertThat(savedTask.getActualDestinationLocationId()).isEqualTo(destinationLocationId);
 
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.COMPLETED.name());
@@ -133,7 +143,7 @@ class PutawayExecuteServiceImplTest {
     void executePutaway_throwsLocationNotValidForSkuException() {
         // Given
         when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
-        doThrow(new LocationNotValidForSkuException("dest-loc", "sku-abc", "reason"))
+        doThrow(new LocationNotValidForSkuException(destinationLocationId, "sku-abc", "reason"))
                 .when(putawayValidationService).validatePutawayExecution(request);
 
         // When & Then
@@ -146,7 +156,7 @@ class PutawayExecuteServiceImplTest {
     void executePutaway_throwsLocationAtCapacityException() {
         // Given
         when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
-        doThrow(new LocationAtCapacityException("dest-loc", 100, 100))
+        doThrow(new LocationAtCapacityException(destinationLocationId, 100, 100))
                 .when(putawayValidationService).validatePutawayExecution(request);
 
         // When & Then
@@ -159,7 +169,7 @@ class PutawayExecuteServiceImplTest {
     void executePutaway_throwsNoOnHandAtSourceLocationException() {
         // Given
         when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
-        doThrow(new NoOnHandAtSourceLocationException("source-loc", "sku-abc"))
+        doThrow(new NoOnHandAtSourceLocationException(sourceLocationId, "sku-abc"))
                 .when(putawayValidationService).validatePutawayExecution(request);
 
         // When & Then

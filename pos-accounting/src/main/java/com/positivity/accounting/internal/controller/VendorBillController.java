@@ -64,7 +64,7 @@ public class VendorBillController {
     /**
      * Process vendor invoice and perform three-way match.
      * 
-     * POST /api/v1/accounting/vendor-bills/match
+     * POST /v1/accounting/vendor-bills/match
      * 
      * @param event the vendor invoice received event payload
      * @return bill response with match result (201 if successful, 400 if exception)
@@ -85,7 +85,7 @@ public class VendorBillController {
     /**
      * Resolve a bill match exception (ACCEPT/VOID/CORRECT).
      * 
-     * POST /api/v1/accounting/vendor-bills/{billId}/resolve-exception
+     * POST /v1/accounting/vendor-bills/{billId}/resolve-exception
      * 
      * @param billId  the vendor bill ID
      * @param request the exception resolution request
@@ -112,7 +112,7 @@ public class VendorBillController {
     /**
      * Get vendor bill by bill ID.
      * 
-     * GET /api/v1/accounting/vendor-bills/{billId}
+     * GET /v1/accounting/vendor-bills/{billId}
      * 
      * @param billId the vendor bill ID
      * @return bill response with 200 status, or 404 if not found
@@ -132,7 +132,7 @@ public class VendorBillController {
     /**
      * Get vendor bill by origin event ID.
      * 
-     * GET /api/v1/accounting/vendor-bills/event/{eventId}
+     * GET /v1/accounting/vendor-bills/event/{eventId}
      * 
      * @param eventId the origin event ID (from GoodsReceivedEvent)
      * @return bill response with 200 status, or 404 if not found

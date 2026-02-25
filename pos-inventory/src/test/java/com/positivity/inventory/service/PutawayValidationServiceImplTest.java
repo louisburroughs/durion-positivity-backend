@@ -10,10 +10,13 @@ import com.positivity.inventory.internal.service.PutawayValidationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 
 /**
@@ -22,6 +25,8 @@ import static org.mockito.Mockito.doReturn;
  * Issue: CAP-221
  */
 class PutawayValidationServiceImplTest {
+        private static final UUID SRC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        private static final UUID DEST_1 = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
         @Test
         void validatePutawayExecution_returnsValidWhenNoOverridesAndChecksPass() {
@@ -52,9 +57,9 @@ class PutawayValidationServiceImplTest {
                 PutawayValidationServiceImpl service = Mockito.spy(new PutawayValidationServiceImpl());
                 PutawayExecutionRequest request = baseRequest();
 
-                Mockito.doThrow(new NoOnHandAtSourceLocationException("SRC-1", "SKU-1"))
+                Mockito.doThrow(new NoOnHandAtSourceLocationException(SRC_1, "SKU-1"))
                                 .when(service)
-                                .validateSourceOnHand(anyString(), anyString(), anyInt());
+                                .validateSourceOnHand(any(), anyString(), anyInt());
 
                 assertThatThrownBy(() -> service.validatePutawayExecution(request))
                                 .isInstanceOf(NoOnHandAtSourceLocationException.class);
@@ -66,9 +71,9 @@ class PutawayValidationServiceImplTest {
                 PutawayExecutionRequest request = baseRequest();
                 request.setOverrideLocationCompatibility(true);
 
-                Mockito.doThrow(new NoOnHandAtSourceLocationException("SRC-1", "SKU-1"))
+                Mockito.doThrow(new NoOnHandAtSourceLocationException(SRC_1, "SKU-1"))
                                 .when(service)
-                                .validateSourceOnHand(anyString(), anyString(), anyInt());
+                                .validateSourceOnHand(any(), anyString(), anyInt());
 
                 ValidationResult result = service.validatePutawayExecution(request);
 
@@ -81,9 +86,9 @@ class PutawayValidationServiceImplTest {
                 PutawayValidationServiceImpl service = Mockito.spy(new PutawayValidationServiceImpl());
                 PutawayExecutionRequest request = baseRequest();
 
-                Mockito.doThrow(new LocationNotValidForSkuException("DEST-1", "SKU-1", "incompatible"))
+                Mockito.doThrow(new LocationNotValidForSkuException(DEST_1, "SKU-1", "incompatible"))
                                 .when(service)
-                                .validateLocationCompatibility(anyString(), anyString());
+                                .validateLocationCompatibility(any(), anyString());
 
                 assertThatThrownBy(() -> service.validatePutawayExecution(request))
                                 .isInstanceOf(LocationNotValidForSkuException.class);
@@ -94,9 +99,9 @@ class PutawayValidationServiceImplTest {
                 PutawayValidationServiceImpl service = Mockito.spy(new PutawayValidationServiceImpl());
                 PutawayExecutionRequest request = baseRequest();
 
-                Mockito.doThrow(new LocationAtCapacityException("DEST-1", 100, 100))
+                Mockito.doThrow(new LocationAtCapacityException(DEST_1, 100, 100))
                                 .when(service)
-                                .validateLocationCapacity(anyString(), anyInt());
+                                .validateLocationCapacity(any(), anyInt());
 
                 assertThatThrownBy(() -> service.validatePutawayExecution(request))
                                 .isInstanceOf(LocationAtCapacityException.class);
@@ -112,9 +117,9 @@ class PutawayValidationServiceImplTest {
                 ValidationResult capacityWarning = ValidationResult.success();
                 capacityWarning.addWarning("CAPACITY_NEAR_LIMIT", "near capacity");
 
-                doReturn(sourceFailure).when(service).validateSourceOnHand(anyString(), anyString(), anyInt());
-                doReturn(compatFailure).when(service).validateLocationCompatibility(anyString(), anyString());
-                doReturn(capacityWarning).when(service).validateLocationCapacity(anyString(), anyInt());
+                doReturn(sourceFailure).when(service).validateSourceOnHand(any(), anyString(), anyInt());
+                doReturn(compatFailure).when(service).validateLocationCompatibility(any(), anyString());
+                doReturn(capacityWarning).when(service).validateLocationCapacity(any(), anyInt());
 
                 ValidationResult result = service.validatePutawayExecution(request);
 
@@ -126,7 +131,7 @@ class PutawayValidationServiceImplTest {
         }
 
         private PutawayExecutionRequest baseRequest() {
-                PutawayExecutionRequest request = new PutawayExecutionRequest("SKU-1", "SRC-1", "DEST-1", 3);
+                PutawayExecutionRequest request = new PutawayExecutionRequest("SKU-1", SRC_1, DEST_1, 3);
                 request.setOverrideReasonCode(OverrideReasonCode.OTHER);
                 request.setOverrideJustification("test");
                 request.setApprovedBy("manager-1");

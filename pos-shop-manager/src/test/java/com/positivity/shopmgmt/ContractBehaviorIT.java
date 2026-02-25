@@ -33,7 +33,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateAppointment_HappyPath() throws Exception {
                 String payload = createAppointmentPayload("WO-001", "WORKORDER", "LOC-001",
                                 "2026-01-27T14:30:00-05:00", "2026-01-27T15:30:00-05:00", "BAY");
-                mockMvc.perform(post("/api/v1/appointments")
+                mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-001"))
@@ -48,7 +48,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testGetAppointment_HappyPath() throws Exception {
                 String payload = createAppointmentPayload("EST-002", "ESTIMATE", "LOC-002",
                                 "2026-02-15T10:00:00-05:00", "2026-02-15T11:30:00-05:00", "MOBILE_UNIT");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/appointments")
+                MvcResult createResult = mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-002"))
@@ -57,7 +57,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 String appointmentId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
                                 .asString();
-                mockMvc.perform(get("/api/v1/appointments/{id}", appointmentId)
+                mockMvc.perform(get("/v1/appointments/{id}", appointmentId)
                                 .header("X-Correlation-Id", "test-002"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(appointmentId))
@@ -70,7 +70,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateAppointment_InvalidSourceType() throws Exception {
                 String invalidPayload = createAppointmentPayload("INV-001", "INVALID_TYPE", "LOC-003",
                                 "2026-03-01T09:00:00-05:00", "2026-03-01T10:00:00-05:00", "BAY");
-                mockMvc.perform(post("/api/v1/appointments")
+                mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-001"))
@@ -83,7 +83,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateAppointment_InvalidTimeRange() throws Exception {
                 String invalidPayload = createAppointmentPayload("WO-003", "WORKORDER", "LOC-004",
                                 "2026-03-15T15:00:00-05:00", "2026-03-15T14:00:00-05:00", "BAY");
-                mockMvc.perform(post("/api/v1/appointments")
+                mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-002"))
@@ -96,7 +96,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testCreateAppointment_InvalidAssignmentType() throws Exception {
                 String invalidPayload = createAppointmentPayload("EST-004", "ESTIMATE", "LOC-005",
                                 "2026-04-01T13:00:00-05:00", "2026-04-01T14:00:00-05:00", "INVALID_ASSIGNMENT");
-                mockMvc.perform(post("/api/v1/appointments")
+                mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-003"))
@@ -112,7 +112,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 String payload = createAppointmentPayload("WO-005", "WORKORDER", "LOC-006",
                                 "2026-04-20T11:00:00-05:00", "2026-04-20T12:30:00-05:00", "BAY");
 
-                MvcResult result1 = mockMvc.perform(post("/api/v1/appointments")
+                MvcResult result1 = mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
@@ -122,7 +122,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 String id1 = objectMapper.readTree(result1.getResponse().getContentAsString()).get("id").asString();
 
-                MvcResult result2 = mockMvc.perform(post("/api/v1/appointments")
+                MvcResult result2 = mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
@@ -141,7 +141,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 String payload1 = createAppointmentPayload("WO-006", "WORKORDER", "LOC-007",
                                 "2026-05-01T09:00:00-05:00", "2026-05-01T10:00:00-05:00", "BAY");
 
-                mockMvc.perform(post("/api/v1/appointments")
+                mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload1)
                                 .header("X-Correlation-Id", "test-cc-001"))
@@ -150,7 +150,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 String payload2 = createAppointmentPayload("WO-007", "WORKORDER", "LOC-007",
                                 "2026-05-01T09:30:00-05:00", "2026-05-01T10:30:00-05:00", "BAY");
 
-                mockMvc.perform(post("/api/v1/appointments")
+                mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload2)
                                 .header("X-Correlation-Id", "test-cc-001"))
@@ -163,7 +163,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testUpdateAppointment_StateTransition() throws Exception {
                 String payload = createAppointmentPayload("WO-008", "WORKORDER", "LOC-008",
                                 "2026-05-15T14:00:00-05:00", "2026-05-15T15:00:00-05:00", "MOBILE_UNIT");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/appointments")
+                MvcResult createResult = mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-cc-002"))
@@ -174,7 +174,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .asString();
                 String confirmPayload = "{\"status\":\"CONFIRMED\"}";
 
-                mockMvc.perform(patch("/api/v1/appointments/{id}/status", appointmentId)
+                mockMvc.perform(patch("/v1/appointments/{id}/status", appointmentId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(confirmPayload)
                                 .header("X-Correlation-Id", "test-cc-002"))
@@ -188,7 +188,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testAppointment_TimestampFormatWithTimezone() throws Exception {
                 String payload = createAppointmentPayload("EST-009", "ESTIMATE", "LOC-009",
                                 "2026-06-01T10:30:00-05:00", "2026-06-01T11:30:00-05:00", "BAY");
-                MvcResult result = mockMvc.perform(post("/api/v1/appointments")
+                MvcResult result = mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-ff-001"))
@@ -206,7 +206,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         void testAppointment_ValidEnumValues() throws Exception {
                 String payload = createAppointmentPayload("WO-010", "WORKORDER", "LOC-010",
                                 "2026-06-15T16:00:00-05:00", "2026-06-15T17:00:00-05:00", "BAY");
-                MvcResult result = mockMvc.perform(post("/api/v1/appointments")
+                MvcResult result = mockMvc.perform(post("/v1/appointments")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-ff-002"))

@@ -16,6 +16,6 @@ public interface ReplenishmentTaskRepository extends JpaRepository<Replenishment
 
     boolean existsByItemSKUAndDestinationLocationIdAndStatusIn(
             String itemSKU,
-            String destinationLocationId,
+            UUID destinationLocationId,
             List<ReplenishmentStatus> statuses);
 }

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,11 +67,12 @@ class CycleCountAdjustmentServiceImplTest {
     private static final String ACTOR_USER_ID = "actor-person-id-001";
     private static final String ACTOR_USERNAME = "manager-user";
     private static final String STOCK_ITEM_ID = "SKU-001";
+    private Clock clock = Clock.systemDefaultZone();
 
     @BeforeEach
     void setUp() {
         service = new CycleCountAdjustmentServiceImpl(
-                adjustmentRepository, ledgerRepository, thresholdEvaluator, eventPublisher);
+                adjustmentRepository, ledgerRepository, thresholdEvaluator, eventPublisher, clock);
     }
 
     @AfterEach
