@@ -1,6 +1,6 @@
 package com.positivity.inventory.internal.dto.cyclecount;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import lombok.AllArgsConstructor;
@@ -25,6 +25,6 @@ public class CountEntryResponse {
     private Integer variance;
     private Integer recountSequenceNumber;
     private UUID recountOfCountEntryId;
-    private LocalDateTime countedAt;
+    private Instant countedAt;
     private boolean recount;
 }

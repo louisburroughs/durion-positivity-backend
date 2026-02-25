@@ -32,7 +32,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-001: Successfully create order with valid items and totals")
         void testCreateOrder_HappyPath() throws Exception {
                 String payload = createOrderPayload("CUST-001", "100.00", "10.00", "110.00");
-                mockMvc.perform(post("/api/v1/orders")
+                mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-001"))
@@ -46,7 +46,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CP-002: Successfully retrieve order by ID")
         void testGetOrder_HappyPath() throws Exception {
                 String payload = createOrderPayload("CUST-002", "250.50", "25.05", "275.55");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/orders")
+                MvcResult createResult = mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-002"))
@@ -55,7 +55,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 String orderId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id")
                                 .asString();
-                mockMvc.perform(get("/api/v1/orders/{id}", orderId)
+                mockMvc.perform(get("/v1/orders/{id}", orderId)
                                 .header("X-Correlation-Id", "test-002"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.id").value(orderId))
@@ -67,7 +67,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("VE-001: Reject order with missing customerId")
         void testCreateOrder_MissingCustomerId() throws Exception {
                 String invalidPayload = "{\"subtotal\":\"100.00\",\"taxAmount\":\"10.00\",\"total\":\"110.00\"}";
-                mockMvc.perform(post("/api/v1/orders")
+                mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-001"))
@@ -79,7 +79,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("VE-002: Reject order with totals mismatch")
         void testCreateOrder_TotalsMismatch() throws Exception {
                 String invalidPayload = createOrderPayload("CUST-003", "100.00", "10.00", "99.99");
-                mockMvc.perform(post("/api/v1/orders")
+                mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-002"))
@@ -91,7 +91,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("VE-003: Reject order with negative subtotal")
         void testCreateOrder_NegativeSubtotal() throws Exception {
                 String invalidPayload = createOrderPayload("CUST-004", "-50.00", "0.00", "-50.00");
-                mockMvc.perform(post("/api/v1/orders")
+                mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(invalidPayload)
                                 .header("X-Correlation-Id", "test-ve-003"))
@@ -106,7 +106,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 String idempotencyKey = "idem-order-" + System.currentTimeMillis();
                 String payload = createOrderPayload("CUST-005", "500.00", "50.00", "550.00");
 
-                MvcResult result1 = mockMvc.perform(post("/api/v1/orders")
+                MvcResult result1 = mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
@@ -116,7 +116,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
                 String id1 = objectMapper.readTree(result1.getResponse().getContentAsString()).get("id").asString();
 
-                MvcResult result2 = mockMvc.perform(post("/api/v1/orders")
+                MvcResult result2 = mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-id-001")
@@ -133,7 +133,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CC-001: Optimistic locking prevents concurrent updates with stale version")
         void testUpdateOrder_OptimisticLockingConflict() throws Exception {
                 String payload = createOrderPayload("CUST-006", "300.00", "30.00", "330.00");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/orders")
+                MvcResult createResult = mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-cc-001"))
@@ -144,7 +144,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .asString();
                 String updatePayload = "{\"subtotal\":\"350.00\",\"taxAmount\":\"35.00\",\"total\":\"385.00\",\"version\":0}";
 
-                mockMvc.perform(patch("/api/v1/orders/{id}", orderId)
+                mockMvc.perform(patch("/v1/orders/{id}", orderId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(updatePayload)
                                 .header("X-Correlation-Id", "test-cc-001"))
@@ -156,7 +156,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("CC-002: Order state transition respects business rules")
         void testUpdateOrder_ValidStateTransition() throws Exception {
                 String payload = createOrderPayload("CUST-007", "400.00", "40.00", "440.00");
-                MvcResult createResult = mockMvc.perform(post("/api/v1/orders")
+                MvcResult createResult = mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-cc-002"))
@@ -167,7 +167,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                                 .asString();
                 String confirmPayload = "{\"status\":\"CONFIRMED\"}";
 
-                mockMvc.perform(patch("/api/v1/orders/{id}/status", orderId)
+                mockMvc.perform(patch("/v1/orders/{id}/status", orderId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(confirmPayload)
                                 .header("X-Correlation-Id", "test-cc-002"))
@@ -180,7 +180,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("FF-001: ISO 8601 timestamp format validation for createdAt")
         void testOrder_TimestampFormat() throws Exception {
                 String payload = createOrderPayload("CUST-008", "150.00", "15.00", "165.00");
-                MvcResult result = mockMvc.perform(post("/api/v1/orders")
+                MvcResult result = mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-ff-001"))
@@ -197,7 +197,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         @DisplayName("FF-002: Valid order status enum values")
         void testOrder_ValidStatusEnums() throws Exception {
                 String payload = createOrderPayload("CUST-009", "200.00", "20.00", "220.00");
-                MvcResult result = mockMvc.perform(post("/api/v1/orders")
+                MvcResult result = mockMvc.perform(post("/v1/orders")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                                 .header("X-Correlation-Id", "test-ff-002"))

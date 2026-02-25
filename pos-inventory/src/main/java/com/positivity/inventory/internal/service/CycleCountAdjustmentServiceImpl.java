@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -18,9 +19,9 @@ import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.event.AuditActorRef;
 import com.positivity.inventory.internal.event.AuditAggregateRef;
 import com.positivity.inventory.internal.event.InventoryAuditEvent;
@@ -49,6 +50,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         private final InventoryLedgerEntryRepository ledgerRepository;
         private final ApprovalThresholdEvaluator thresholdEvaluator;
         private final ApplicationEventPublisher eventPublisher;
+        private final Clock clock;
 
         @Override
         @Transactional
@@ -86,7 +88,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 } else {
                         adjustment.setStatus(AdjustmentStatus.AUTO_APPROVED);
                         adjustment.setApprovedByUserId("SYSTEM");
-                        adjustment.setApprovedAt(Instant.now());
+                        adjustment.setApprovedAt(Instant.now(clock));
                         adjustment = adjustmentRepository.save(adjustment);
 
                         log.info("Adjustment {} auto-approved (below thresholds)", adjustment.getAdjustmentId());
@@ -114,7 +116,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                                         "Cannot approve adjustment in status: " + adjustment.getStatus());
                 }
 
-                Instant occurredAt = Instant.now();
+                Instant occurredAt = Instant.now(clock);
                 adjustment.setStatus(AdjustmentStatus.APPROVED);
                 adjustment.setApprovedByUserId(actorUserId);
                 adjustment.setApprovedAt(occurredAt);
@@ -144,7 +146,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 adjustment.setStatus(AdjustmentStatus.REJECTED);
                 adjustment.setRejectedByUserId(request.getRejectorUserId());
                 adjustment.setRejectionReason(request.getRejectionReason());
-                adjustment.setRejectedAt(Instant.now());
+                adjustment.setRejectedAt(Instant.now(clock));
                 adjustment = adjustmentRepository.save(adjustment);
 
                 log.info("Adjustment {} rejected by {}", adjustmentId, request.getRejectorUserId());
@@ -200,7 +202,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                         ledgerEntry = ledgerRepository.save(ledgerEntry);
                         adjustment.setLedgerEntryId(ledgerEntry.getLedgerEntryId());
                         adjustment.setStatus(AdjustmentStatus.POSTED);
-                        adjustment.setPostedAt(Instant.now());
+                        adjustment.setPostedAt(Instant.now(clock));
                         adjustmentRepository.save(adjustment);
 
                         log.info("Adjustment {} posted to ledger as entry {}. New on-hand for {}: {}",
@@ -234,7 +236,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                                 "MovementAdjusted",
                                 "inventory.v1.movements",
                                 occurredAt,
-                                Instant.now(),
+                                Instant.now(clock),
                                 "inventory",
                                 new AuditActorRef(actorPersonId, actorUsername),
                                 resolvedCorrelationId,

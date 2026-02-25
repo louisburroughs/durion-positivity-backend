@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepositor
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.service.ReplenishmentService;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -60,7 +61,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         @Transactional(readOnly = true)
         public @NonNull ReplenishmentTaskResponse evaluatePickFaceForReplenishment(
                         @NonNull String productId,
-                        @NonNull String pickFaceLocationId) {
+                        @NonNull UUID pickFaceLocationId) {
                 boolean policyExists = replenishmentPolicyRepository.findByLocationId(pickFaceLocationId)
                                 .stream()
                                 .findFirst()

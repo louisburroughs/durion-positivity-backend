@@ -28,6 +28,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class PutawayGenerationServiceImplTest {
+    private static final UUID DEST_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID DEFAULT_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Mock
     private PutawayRuleRepository putawayRuleRepository;
@@ -50,7 +52,7 @@ class PutawayGenerationServiceImplTest {
                 .quantity(5)
                 .build();
         PutawayRule rule = new PutawayRule();
-        rule.setDestinationLocationId("DEST-A");
+        rule.setDestinationLocationId(DEST_A);
         when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
         when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -59,7 +61,7 @@ class PutawayGenerationServiceImplTest {
         assertThat(responses).hasSize(1);
         PutawayTaskResponse response = responses.get(0);
         assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.UNASSIGNED.toString());
-        assertThat(response.getSuggestedDestinationLocationId()).isEqualTo("DEST-A");
+        assertThat(response.getSuggestedDestinationLocationId()).isEqualTo(DEST_A);
     }
 
     @Test
@@ -77,7 +79,7 @@ class PutawayGenerationServiceImplTest {
         assertThat(responses).hasSize(1);
         PutawayTaskResponse response = responses.get(0);
         assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.UNASSIGNED.toString());
-        assertThat(response.getSuggestedDestinationLocationId()).isEqualTo("DEFAULT-LOCATION");
+        assertThat(response.getSuggestedDestinationLocationId()).isEqualTo(DEFAULT_LOCATION);
     }
 
     @Test

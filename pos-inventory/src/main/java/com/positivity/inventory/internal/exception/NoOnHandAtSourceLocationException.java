@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.exception;
 
+import java.util.UUID;
+
 /**
  * Thrown when source location is scanned but system shows zero quantity.
  * This indicates a data consistency error.
@@ -12,10 +14,10 @@ package com.positivity.inventory.internal.exception;
 public class NoOnHandAtSourceLocationException extends PutawayValidationException {
     public static final String ERROR_CODE = "NO_ON_HAND_AT_SOURCE_LOCATION";
     
-    private final String locationId;
+    private final UUID locationId;
     private final String skuId;
     
-    public NoOnHandAtSourceLocationException(String locationId, String skuId) {
+    public NoOnHandAtSourceLocationException(UUID locationId, String skuId) {
         super(ERROR_CODE, String.format(
             "No on-hand inventory found for SKU %s at source location %s. " +
             "Data consistency error - reconciliation required.", 
@@ -24,7 +26,7 @@ public class NoOnHandAtSourceLocationException extends PutawayValidationExceptio
         this.skuId = skuId;
     }
     
-    public String getLocationId() {
+    public UUID getLocationId() {
         return locationId;
     }
     

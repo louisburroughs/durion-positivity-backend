@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -7,24 +8,19 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import com.positivity.shared.id.UUIDv7Id;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.UUID;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Normalized manufacturer availability snapshot.
- *
- * Issue: CAP-170 (#46)
  */
 @Entity
 @Table(name = "normalized_availability", uniqueConstraints = @UniqueConstraint(columnNames = { "product_id",
@@ -45,7 +41,7 @@ public class NormalizedAvailability {
     private UUID productId;
 
     @Column(nullable = false)
-    private String manufacturerId;
+    private UUID manufacturerId;
 
     @Column(nullable = false)
     private String manufacturerPartNumber;
@@ -87,5 +83,4 @@ public class NormalizedAvailability {
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
-
 }

@@ -18,7 +18,20 @@ public abstract class BaseContractIntegrationTest {
                                 "inventory:availability:read",
                                 "inventory:adjustment:create",
                                 "inventory:adjustment:approve",
+                                "inventory:movement:create",
                                 "inventory:location:write",
                                 "inventory:picking:manage"));
+    }
+
+    protected MockHttpServletRequestBuilder withApproveOnlyAuth(MockHttpServletRequestBuilder requestBuilder) {
+        return requestBuilder
+                .header("X-User", "contract-test-user")
+                .header("X-Authorities", "inventory:adjustment:approve");
+    }
+
+    protected MockHttpServletRequestBuilder withCreateOnlyAuth(MockHttpServletRequestBuilder requestBuilder) {
+        return requestBuilder
+                .header("X-User", "contract-test-user")
+                .header("X-Authorities", "inventory:adjustment:create");
     }
 }

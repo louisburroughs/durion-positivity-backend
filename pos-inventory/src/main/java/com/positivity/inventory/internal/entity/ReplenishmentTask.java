@@ -44,10 +44,10 @@ public class ReplenishmentTask {
     private Integer quantity;
 
     @Column(nullable = false)
-    private String sourceLocationId;
+    private UUID sourceLocationId;
 
     @Column(nullable = false)
-    private String destinationLocationId;
+    private UUID destinationLocationId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

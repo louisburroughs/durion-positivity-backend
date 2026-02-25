@@ -1,4 +1,8 @@
-package com.positivity.inventory.internal.entity;
+package com.positivity.inventory.internal.enums;
+
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Defines inventory ledger event types for tracking stock movements.
@@ -185,6 +189,10 @@ public enum InventoryLedgerEventType {
      */
     PICK_TASK_COMPLETED(EventDirection.NEUTRAL, false);
 
+    private static final Set<InventoryLedgerEventType> ON_HAND_AFFECTING_TYPES = Arrays.stream(values())
+            .filter(InventoryLedgerEventType::affectsOnHand)
+            .collect(Collectors.toUnmodifiableSet());
+
     private final EventDirection direction;
     private final boolean affectsOnHand;
 
@@ -209,6 +217,19 @@ public enum InventoryLedgerEventType {
      */
     public boolean affectsOnHand() {
         return affectsOnHand;
+    }
+
+    /**
+     * Returns all event types that affect physical on-hand inventory.
+     *
+     * <p>
+     * This set is derived from {@link #affectsOnHand()} so repository calculations
+     * and service logic can stay aligned with ADR-0001 semantics.
+     *
+     * @return immutable set of on-hand-affecting event types
+     */
+    public static Set<InventoryLedgerEventType> onHandAffectingTypes() {
+        return ON_HAND_AFFECTING_TYPES;
     }
 
     /**

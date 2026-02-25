@@ -12,18 +12,18 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReplenishmentPolicyRepository extends JpaRepository<ReplenishmentPolicy, UUID> {
 
-    Optional<ReplenishmentPolicy> findByItemSKUAndLocationId(String itemSKU, String locationId);
+    Optional<ReplenishmentPolicy> findByItemSKUAndLocationId(String itemSKU, UUID locationId);
 
-    List<ReplenishmentPolicy> findByLocationId(String locationId);
+    List<ReplenishmentPolicy> findByLocationId(UUID locationId);
 
     boolean existsByItemSKU(String itemSKU);
 
-    boolean existsByItemSKUAndLocationId(String itemSKU, String locationId);
+    boolean existsByItemSKUAndLocationId(String itemSKU, UUID locationId);
 
     @Query("""
             SELECT COALESCE(SUM(r.maximumQuantity), 0)
             FROM ReplenishmentPolicy r
             WHERE r.locationId = :locationId
             """)
-    Integer sumMaximumQuantityByLocationId(@Param("locationId") String locationId);
+    Integer sumMaximumQuantityByLocationId(@Param("locationId") UUID locationId);
 }

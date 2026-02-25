@@ -32,7 +32,7 @@ public class ReplenishmentPolicy {
     private UUID policyId;
 
     @Column(nullable = false)
-    private String locationId;
+    private UUID locationId;
 
     @Column(nullable = false)
     private String itemSKU;

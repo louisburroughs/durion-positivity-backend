@@ -66,7 +66,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         void generatePutawayTasks_validReceiptId_returns201WithUnassignedTasks() throws Exception {
                 // Issue #32: mock service to return a task with product/category rule match
                 String receiptId = UUID.randomUUID().toString();
-                String destinationId = UUID.randomUUID().toString();
+                UUID destinationId = UUID.randomUUID();
 
                 PutawayTaskResponse task = PutawayTaskResponse.builder()
                                 .taskId(UUID.randomUUID().toString())
@@ -88,7 +88,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                                 .put("productId", UUID.randomUUID().toString())
                                                 .put("quantity", 5));
 
-                mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/generate"))
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isCreated())
@@ -110,7 +110,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         void generatePutawayTasks_noMatchingRule_returns201WithFallbackDestination() throws Exception {
                 // Issue #32: even with no specific rule, fallback destination must be non-null
                 String receiptId = UUID.randomUUID().toString();
-                String fallbackDestinationId = UUID.randomUUID().toString();
+                UUID fallbackDestinationId = UUID.randomUUID();
 
                 PutawayTaskResponse task = PutawayTaskResponse.builder()
                                 .taskId(UUID.randomUUID().toString())
@@ -132,7 +132,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                                 .put("productId", UUID.randomUUID().toString())
                                                 .put("quantity", 5));
 
-                mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/generate"))
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isCreated())
@@ -155,8 +155,8 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                 // Issue #32: auto-fallback path must populate originalSuggestedLocationId,
                 // finalSuggestedLocationId (different), and fallbackReason
                 String receiptId = UUID.randomUUID().toString();
-                String originalLocationId = UUID.randomUUID().toString();
-                String finalLocationId = UUID.randomUUID().toString();
+                UUID originalLocationId = UUID.randomUUID();
+                UUID finalLocationId = UUID.randomUUID();
 
                 PutawayTaskResponse task = PutawayTaskResponse.builder()
                                 .taskId(UUID.randomUUID().toString())
@@ -181,12 +181,13 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                                 .put("productId", UUID.randomUUID().toString())
                                                 .put("quantity", 5));
 
-                mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/generate"))
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$[0].originalSuggestedLocationId").value(originalLocationId))
-                                .andExpect(jsonPath("$[0].finalSuggestedLocationId").value(finalLocationId))
+                                .andExpect(jsonPath("$[0].originalSuggestedLocationId")
+                                                .value(originalLocationId.toString()))
+                                .andExpect(jsonPath("$[0].finalSuggestedLocationId").value(finalLocationId.toString()))
                                 .andExpect(jsonPath("$[0].fallbackReason").isNotEmpty());
         }
 
@@ -224,7 +225,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                                 .put("productId", UUID.randomUUID().toString())
                                                 .put("quantity", 5));
 
-                mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/generate"))
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                                 .andExpect(status().isCreated())
@@ -234,7 +235,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
         // ─── AC5: Get available tasks ─────────────────────────────────────────────
 
         /**
-         * Verifies that GET /api/v1/inventory/putaway/tasks returns 200 with a
+         * Verifies that GET /v1/inventory/putaway/tasks returns 200 with a
          * list of available putaway tasks.
          *
          * Issue: #32
@@ -261,7 +262,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
 
                 when(putawayGenerationService.getAvailableTasks()).thenReturn(List.of(task1, task2));
 
-                mockMvc.perform(withGatewayAuth(get("/api/v1/inventory/putaway/tasks")))
+                mockMvc.perform(withGatewayAuth(get("/v1/inventory/putaway/tasks")))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$").isArray())
                                 .andExpect(jsonPath("$.length()").value(2));
@@ -294,7 +295,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                 when(putawayGenerationService.claimTask(eq(taskId), any(String.class)))
                                 .thenReturn(claimedTask);
 
-                mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/{taskId}/claim", taskId)))
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/claim", taskId)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.taskId").value(taskId))
                                 .andExpect(jsonPath("$.status").value("ASSIGNED"));
@@ -318,7 +319,7 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                                                 .put("productId", UUID.randomUUID().toString())
                                                 .put("quantity", 5));
 
-                mockMvc.perform(post("/api/v1/inventory/putaway/tasks/generate")
+                mockMvc.perform(post("/v1/inventory/putaway/tasks/generate")
                                 .header("X-User", "unauthorized-user")
                                 // Deliberately omit X-Authorities to trigger 403
                                 .contentType(MediaType.APPLICATION_JSON)

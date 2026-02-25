@@ -1,17 +1,9 @@
 package com.positivity.inventory.internal.service;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
 import com.positivity.inventory.internal.client.StorageLocationValidationClient;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.ValidationResult;
-import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
@@ -22,24 +14,16 @@ import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepositor
 import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.service.PutawayValidationService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 /**
  * Default implementation of PutawayValidationService.
- * 
- * <p>
- * This implementation enforces the business rules defined in clarification
- * #229.
- * 
- * <p>
- * <strong>Note:</strong> This is a stub implementation that demonstrates the
- * validation
- * logic structure. In a production system, this would integrate with:
- * <ul>
- * <li>Location master data repository</li>
- * <li>SKU/Product repository with compatibility rules</li>
- * <li>Inventory on-hand repository</li>
- * <li>Permission/authorization service</li>
- * </ul>
  */
 @Service
 public class PutawayValidationServiceImpl implements PutawayValidationService {
@@ -76,7 +60,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validateLocationCompatibility(String destinationLocationId, String skuId) {
+    public ValidationResult validateLocationCompatibility(UUID destinationLocationId, String skuId) {
         if (log.isDebugEnabled()) {
             log.debug("Validating location compatibility: location(mask)={}, sku(mask)={}",
                     maskForLog(destinationLocationId), maskForLog(skuId));
@@ -111,10 +95,10 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validateLocationCapacity(String destinationLocationId, int quantity) {
+    public ValidationResult validateLocationCapacity(UUID destinationLocationId, int quantity) {
         if (log.isDebugEnabled()) {
-            log.debug("Validating location capacity: location(mask)={}, quantity={}", maskForLog(destinationLocationId),
-                    quantity);
+            log.debug("Validating location capacity: location(mask)={}, quantity={}",
+                    maskForLog(destinationLocationId), quantity);
         }
 
         ValidationResult result = ValidationResult.success();
@@ -125,7 +109,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         StorageLocationValidationClient.StorageLocationValidation locationValidation = null;
         if (storageLocationValidationClient != null) {
             locationValidation = storageLocationValidationClient
-                    .getStorageLocationValidation(destinationLocationId);
+                    .getStorageLocationValidation(destinationLocationId.toString());
 
             if (!locationValidation.isExists()) {
                 throw new IllegalArgumentException("Destination storage location does not exist");
@@ -183,7 +167,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validateSourceOnHand(String sourceLocationId, String skuId, int quantity) {
+    public ValidationResult validateSourceOnHand(UUID sourceLocationId, String skuId, int quantity) {
         log.debug("Validating source on-hand: location={}, sku={}, quantity={}",
                 sourceLocationId, skuId, quantity);
 
@@ -352,11 +336,11 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         return result;
     }
 
-    private String maskForLog(String value) {
+    private String maskForLog(Object value) {
         if (value == null) {
             return "null";
         }
-        String sanitized = value
+        String sanitized = value.toString()
                 .replace('\r', '_')
                 .replace('\n', '_')
                 .replace('\t', '_');
