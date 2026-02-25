@@ -40,8 +40,10 @@ import tools.jackson.databind.ObjectMapper;
  * ADR compliance:
  * <ul>
  * <li>ADR-0011: gateway auth headers (X-User, X-Authorities) required</li>
- * <li>ADR-0014: internal service security — all endpoints require gateway auth</li>
- * <li>ADR-0017: HTTP response codes: 201 Created, 200 OK, 204 No Content, 403</li>
+ * <li>ADR-0014: internal service security — all endpoints require gateway
+ * auth</li>
+ * <li>ADR-0017: HTTP response codes: 201 Created, 200 OK, 204 No Content,
+ * 403</li>
  * <li>ADR-0023: no tenantId in request or response</li>
  * </ul>
  *
@@ -73,7 +75,8 @@ class PickListContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("POST /v1/inventory/pick-lists with valid body + gateway auth → 201 Created")
     void CH1_createPickList_validBodyAndAuth_returns201() throws Exception {
-        // Issue #28: CH1 — create endpoint must return 201 with pickListId and status=DRAFT
+        // Issue #28: CH1 — create endpoint must return 201 with pickListId and
+        // status=DRAFT
         UUID workorderId = UUID.randomUUID();
         UUID pickListId = UUID.randomUUID();
 

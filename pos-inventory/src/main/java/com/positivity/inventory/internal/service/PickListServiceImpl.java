@@ -77,11 +77,11 @@ public class PickListServiceImpl implements PickListService {
     @Override
     public @NonNull PickListResponse updatePickListStatus(@NonNull UUID pickListId, @NonNull PickListStatus status) {
         PickListEntity pickList = pickListRepository.findById(pickListId)
-            .orElseGet(() -> PickListEntity.builder()
-                .pickListId(pickListId)
-                .status(PickListStatus.DRAFT)
-                .priority(0)
-                .build());
+                .orElseGet(() -> PickListEntity.builder()
+                        .pickListId(pickListId)
+                        .status(PickListStatus.DRAFT)
+                        .priority(0)
+                        .build());
 
         pickList.setStatus(status);
         PickListEntity saved = pickListRepository.save(pickList);
@@ -124,7 +124,8 @@ public class PickListServiceImpl implements PickListService {
         }
 
         if (quantityPicked > task.getQuantityRequired()) {
-            throw new IllegalArgumentException("Quantity exceeds required: " + task.getQuantityRequired() + " (quantity)");
+            throw new IllegalArgumentException(
+                    "Quantity exceeds required: " + task.getQuantityRequired() + " (quantity)");
         }
 
         task.setStatus(PickTaskStatus.PICKED);

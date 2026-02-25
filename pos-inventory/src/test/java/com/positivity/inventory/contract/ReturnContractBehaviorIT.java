@@ -24,32 +24,41 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Contract behavior integration tests for POST /v1/inventory/returns — Story #177:
+ * Contract behavior integration tests for POST /v1/inventory/returns — Story
+ * #177:
  * Return Unused Items to Stock with Reason.
  *
- * <p>RC1 is intentionally RED: {@code ReturnService} is not stubbed in that test;
+ * <p>
+ * RC1 is intentionally RED: {@code ReturnService} is not stubbed in that test;
  * Mockito returns {@code null} by default; the controller wraps null in a
- * 201-Created body, so the {@code $.returnId} assertion fails to find the expected
+ * 201-Created body, so the {@code $.returnId} assertion fails to find the
+ * expected
  * UUID value.
  *
- * <p>RC2, RC3, and RC4 are GREEN-in-RED-phase because the infrastructure is already
+ * <p>
+ * RC2, RC3, and RC4 are GREEN-in-RED-phase because the infrastructure is
+ * already
  * in place:
  * <ul>
- *   <li>RC2: {@code ReturnController} carries {@code @PreAuthorize}</li>
- *   <li>RC3: {@code ReturnItemsRequest.returnReason} is {@code @NotBlank} and
- *       the controller uses {@code @Valid}</li>
- *   <li>RC4: {@code InventoryGlobalExceptionHandler} already maps
- *       {@code ReturnQuantityExceededException} → 422</li>
+ * <li>RC2: {@code ReturnController} carries {@code @PreAuthorize}</li>
+ * <li>RC3: {@code ReturnItemsRequest.returnReason} is {@code @NotBlank} and
+ * the controller uses {@code @Valid}</li>
+ * <li>RC4: {@code InventoryGlobalExceptionHandler} already maps
+ * {@code ReturnQuantityExceededException} → 422</li>
  * </ul>
  *
- * <p>ADR compliance:
+ * <p>
+ * ADR compliance:
  * <ul>
- *   <li>ADR-0011: gateway auth headers (X-User, X-Authorities) required</li>
- *   <li>ADR-0014: internal service security — all state-changing endpoints require
- *       gateway auth</li>
- *   <li>ADR-0017: HTTP response codes: 201 Created, 400 Bad Request, 403 Forbidden,
- *       422 Unprocessable Entity</li>
- *   <li>ADR-0018: transactionUserId sourced from X-User header via security context</li>
+ * <li>ADR-0011: gateway auth headers (X-User, X-Authorities) required</li>
+ * <li>ADR-0014: internal service security — all state-changing endpoints
+ * require
+ * gateway auth</li>
+ * <li>ADR-0017: HTTP response codes: 201 Created, 400 Bad Request, 403
+ * Forbidden,
+ * 422 Unprocessable Entity</li>
+ * <li>ADR-0018: transactionUserId sourced from X-User header via security
+ * context</li>
  * </ul>
  *
  * Issue: #177
@@ -69,12 +78,15 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
     // ─── RC1: POST /v1/inventory/returns — 201 Created with service returnId ─────
 
     /**
-     * RC1: Verifies POST /v1/inventory/returns with a valid request body and gateway
+     * RC1: Verifies POST /v1/inventory/returns with a valid request body and
+     * gateway
      * auth returns 201 Created, and that the {@code returnId} in the response
      * originates from {@code ReturnService} (not a controller-generated value).
      *
-     * <p>RED: {@code returnService} is not stubbed; Mockito returns {@code null} by
-     * default; the controller sets a null response body → {@code $.returnId} is absent
+     * <p>
+     * RED: {@code returnService} is not stubbed; Mockito returns {@code null} by
+     * default; the controller sets a null response body → {@code $.returnId} is
+     * absent
      * and the assertion fails.
      *
      * Issue: #177
@@ -82,7 +94,8 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("POST /v1/inventory/returns with valid body + auth → 201 Created with service returnId")
     void RC1_returnItemsToStock_validBodyAndAuth_returns201WithServiceReturnId() throws Exception {
-        // Issue #177: RC1 — controller must delegate to ReturnService and surface its returnId.
+        // Issue #177: RC1 — controller must delegate to ReturnService and surface its
+        // returnId.
 
         UUID workorderId = UUID.randomUUID();
         UUID expectedReturnId = UUID.fromString("00000000-0000-0000-0000-000000000042");
@@ -117,7 +130,8 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
      * RC2: Verifies POST /v1/inventory/returns without the required
      * {@code X-Authorities} header returns 403 Forbidden per ADR-0011 and ADR-0014.
      *
-     * <p>GREEN in RED phase: {@code ReturnController} already carries
+     * <p>
+     * GREEN in RED phase: {@code ReturnController} already carries
      * {@code @PreAuthorize("hasAnyAuthority('inventory:availability:read','inventory:adjustment:create')")}.
      *
      * Issue: #177
@@ -145,7 +159,8 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
      * RC3: Verifies POST /v1/inventory/returns returns 400 Bad Request when
      * {@code returnReason} is blank.
      *
-     * <p>GREEN in RED phase: {@code ReturnItemsRequest.returnReason} is annotated
+     * <p>
+     * GREEN in RED phase: {@code ReturnItemsRequest.returnReason} is annotated
      * {@code @NotBlank} and the controller uses {@code @Valid @RequestBody}.
      *
      * Issue: #177
@@ -156,7 +171,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
         // Issue #177: RC3 — blank reason must be rejected by @NotBlank bean validation
         ReturnItemsRequest requestBody = new ReturnItemsRequest(
                 UUID.randomUUID(),
-                "   ",  // blank — violates @NotBlank
+                "   ", // blank — violates @NotBlank
                 List.of(new ReturnItemLine(UUID.randomUUID(), 1)));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/returns"))
@@ -168,10 +183,12 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
     // ─── RC4: POST /v1/inventory/returns — 422 for quantity exceeded ─────────────
 
     /**
-     * RC4: Verifies POST /v1/inventory/returns returns 422 Unprocessable Entity when
+     * RC4: Verifies POST /v1/inventory/returns returns 422 Unprocessable Entity
+     * when
      * the service throws {@link ReturnQuantityExceededException}.
      *
-     * <p>GREEN in RED phase: {@code InventoryGlobalExceptionHandler} already maps
+     * <p>
+     * GREEN in RED phase: {@code InventoryGlobalExceptionHandler} already maps
      * {@code ReturnQuantityExceededException} → 422 UNPROCESSABLE_ENTITY.
      *
      * Issue: #177

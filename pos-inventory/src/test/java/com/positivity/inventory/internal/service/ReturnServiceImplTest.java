@@ -32,16 +32,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * Unit tests for {@link ReturnServiceImpl} — Story #177:
  * Return Unused Items to Stock with Reason.
  *
- * <p>All tests are intentionally RED: {@code ReturnServiceImpl.returnItemsToStock}
- * currently throws {@link UnsupportedOperationException}. Tests RS1–RS3 fail when
- * the exception propagates uncaught. Tests RS4–RS5 fail because the wrong exception
+ * <p>
+ * All tests are intentionally RED: {@code ReturnServiceImpl.returnItemsToStock}
+ * currently throws {@link UnsupportedOperationException}. Tests RS1–RS3 fail
+ * when
+ * the exception propagates uncaught. Tests RS4–RS5 fail because the wrong
+ * exception
  * type ({@code UnsupportedOperationException}) is thrown instead of the domain
  * exception each test expects.
  *
- * <p>ADR compliance:
+ * <p>
+ * ADR compliance:
  * <ul>
- *   <li>ADR-0017: HTTP response codes (tested via contract layer)</li>
- *   <li>ADR-0018: transactionUserId sourced from security context (service layer)</li>
+ * <li>ADR-0017: HTTP response codes (tested via contract layer)</li>
+ * <li>ADR-0018: transactionUserId sourced from security context (service
+ * layer)</li>
  * </ul>
  *
  * Issue: #177
@@ -74,7 +79,8 @@ class ReturnServiceImplTest {
      * a non-null returnId, matching workorderId, correct totalItemsReturned count,
      * and non-null createdAt.
      *
-     * <p>RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException}
+     * <p>
+     * RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException}
      * before constructing any response.
      *
      * Issue: #177
@@ -106,7 +112,8 @@ class ReturnServiceImplTest {
      * two child {@code InventoryReturnLineEntity} lines via cascade) through
      * {@code InventoryReturnRepository.save}.
      *
-     * <p>RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException}
+     * <p>
+     * RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException}
      * before invoking {@code save}; the subsequent {@code verify} is never reached.
      *
      * Issue: #177
@@ -114,7 +121,8 @@ class ReturnServiceImplTest {
     @Test
     @DisplayName("two-item request saves InventoryReturnEntity containing two lines via cascade")
     void returnItemsToStock_twoItemRequest_savesReturnEntityWithTwoLines() {
-        // Issue #177: RS2 — one header entity + one line per returned item must be persisted
+        // Issue #177: RS2 — one header entity + one line per returned item must be
+        // persisted
         UUID workorderId = UUID.randomUUID();
         UUID skuId1 = UUID.randomUUID();
         UUID skuId2 = UUID.randomUUID();
@@ -138,18 +146,23 @@ class ReturnServiceImplTest {
     // ─── RS3: returnItemsToStock — creates RETURN_TO_STOCK ledger entry per item ─
 
     /**
-     * RS3: A two-item request must create one {@code RETURN_TO_STOCK} ledger entry for
-     * each returned item and include the resulting ledger entry IDs in the response.
+     * RS3: A two-item request must create one {@code RETURN_TO_STOCK} ledger entry
+     * for
+     * each returned item and include the resulting ledger entry IDs in the
+     * response.
      *
-     * <p>RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException}
-     * before constructing any ledger entries; {@code getLedgerEntryIds()} is never reached.
+     * <p>
+     * RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException}
+     * before constructing any ledger entries; {@code getLedgerEntryIds()} is never
+     * reached.
      *
      * Issue: #177
      */
     @Test
     @DisplayName("two-item request populates response with two non-null RETURN_TO_STOCK ledger entry IDs")
     void returnItemsToStock_twoItemRequest_returnsTwoLedgerEntryIds() {
-        // Issue #177: RS3 — one RETURN_TO_STOCK ledger entry per line; IDs surfaced in response
+        // Issue #177: RS3 — one RETURN_TO_STOCK ledger entry per line; IDs surfaced in
+        // response
         UUID workorderId = UUID.randomUUID();
         ReturnItemsRequest request = new ReturnItemsRequest(
                 workorderId,
@@ -171,7 +184,8 @@ class ReturnServiceImplTest {
      * Bean Validation) must raise a {@link NullPointerException} or
      * {@link IllegalArgumentException}.
      *
-     * <p>RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException},
+     * <p>
+     * RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException},
      * which is not an instance of either expected type.
      *
      * Issue: #177
@@ -179,7 +193,8 @@ class ReturnServiceImplTest {
     @Test
     @DisplayName("null returnReason throws NullPointerException or IllegalArgumentException")
     void returnItemsToStock_nullReturnReason_throwsNullOrIllegalArgument() {
-        // Issue #177: RS4 — runtime guard required; @NotBlank may not run outside MVC layer
+        // Issue #177: RS4 — runtime guard required; @NotBlank may not run outside MVC
+        // layer
         ReturnItemsRequest request = new ReturnItemsRequest(
                 UUID.randomUUID(),
                 null,
@@ -190,13 +205,16 @@ class ReturnServiceImplTest {
                 .isInstanceOfAny(NullPointerException.class, IllegalArgumentException.class);
     }
 
-    // ─── RS5: returnItemsToStock — quantity > consumedQuantity → exception ────────
+    // ─── RS5: returnItemsToStock — quantity > consumedQuantity → exception
+    // ────────
 
     /**
-     * RS5: When a returned quantity exceeds the previously consumed quantity for a given
+     * RS5: When a returned quantity exceeds the previously consumed quantity for a
+     * given
      * SKU, the service must throw {@link ReturnQuantityExceededException}.
      *
-     * <p>RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException},
+     * <p>
+     * RED: {@code ReturnServiceImpl} throws {@code UnsupportedOperationException},
      * which is not a {@code ReturnQuantityExceededException}.
      *
      * Issue: #177
@@ -211,30 +229,31 @@ class ReturnServiceImplTest {
                 "Over-return attempt",
                 List.of(new ReturnItemLine(skuId, 999)));
 
-        // RED: UnsupportedOperationException is thrown, not ReturnQuantityExceededException
+        // RED: UnsupportedOperationException is thrown, not
+        // ReturnQuantityExceededException
         assertThatThrownBy(() -> service().returnItemsToStock(request))
                 .isInstanceOf(ReturnQuantityExceededException.class)
                 .hasMessageContaining(skuId.toString());
     }
 
-        @Test
-        @DisplayName("ledger-enabled path sums returned quantities and filters null ledger IDs")
-        void returnItemsToStock_withLedgerRepository_sumsQuantitiesAndFiltersNullLedgerIds() {
+    @Test
+    @DisplayName("ledger-enabled path sums returned quantities and filters null ledger IDs")
+    void returnItemsToStock_withLedgerRepository_sumsQuantitiesAndFiltersNullLedgerIds() {
         UUID workorderId = UUID.randomUUID();
         UUID skuId1 = UUID.randomUUID();
         UUID skuId2 = UUID.randomUUID();
         ReturnItemsRequest request = new ReturnItemsRequest(
-            workorderId,
-            "  Completed workorder return  ",
-            List.of(new ReturnItemLine(skuId1, 3), new ReturnItemLine(skuId2, 1)));
+                workorderId,
+                "  Completed workorder return  ",
+                List.of(new ReturnItemLine(skuId1, 3), new ReturnItemLine(skuId2, 1)));
 
         InventoryReturnEntity saved = InventoryReturnEntity.builder()
-            .returnId(UUID.randomUUID())
-            .workorderId(workorderId)
-            .returnReason("Completed workorder return")
-            .totalItemsReturned(4)
-            .createdAt(Instant.parse("2026-02-25T03:00:00Z"))
-            .build();
+                .returnId(UUID.randomUUID())
+                .workorderId(workorderId)
+                .returnReason("Completed workorder return")
+                .totalItemsReturned(4)
+                .createdAt(Instant.parse("2026-02-25T03:00:00Z"))
+                .build();
         when(inventoryReturnRepository.save(entityCaptor.capture())).thenReturn(saved);
 
         InventoryLedgerEntry consumedOne = InventoryLedgerEntry.builder().changeInQuantity(-5).build();
@@ -243,7 +262,7 @@ class ReturnServiceImplTest {
                 anyString(),
                 eq(InventoryLedgerEventType.WORKORDER_CONSUMPTION),
                 eq(workorderId.toString())))
-            .thenReturn(List.of(consumedOne, consumedTwo));
+                .thenReturn(List.of(consumedOne, consumedTwo));
 
         UUID firstLedgerId = UUID.randomUUID();
         InventoryLedgerEntry savedLedgerOne = InventoryLedgerEntry.builder().ledgerEntryId(firstLedgerId).build();
@@ -259,37 +278,37 @@ class ReturnServiceImplTest {
         InventoryReturnEntity captured = entityCaptor.getValue();
         assertThat(captured.getTotalItemsReturned()).isEqualTo(4);
         assertThat(captured.getReturnReason()).isEqualTo("Completed workorder return");
-        }
+    }
 
-        @Test
-        @DisplayName("ledger-enabled path throws when requested return exceeds consumed")
-        void returnItemsToStock_withLedgerRepository_returnExceedsConsumed_throwsException() {
+    @Test
+    @DisplayName("ledger-enabled path throws when requested return exceeds consumed")
+    void returnItemsToStock_withLedgerRepository_returnExceedsConsumed_throwsException() {
         UUID workorderId = UUID.randomUUID();
         UUID skuId = UUID.randomUUID();
         ReturnItemsRequest request = new ReturnItemsRequest(
-            workorderId,
-            "Return attempt",
-            List.of(new ReturnItemLine(skuId, 3)));
+                workorderId,
+                "Return attempt",
+                List.of(new ReturnItemLine(skuId, 3)));
 
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                 eq(skuId.toString()),
                 eq(InventoryLedgerEventType.WORKORDER_CONSUMPTION),
                 eq(workorderId.toString())))
-            .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(1).build()));
+                .thenReturn(List.of(InventoryLedgerEntry.builder().changeInQuantity(1).build()));
 
         assertThatThrownBy(() -> serviceWithLedgerRepository().returnItemsToStock(request))
-            .isInstanceOf(ReturnQuantityExceededException.class)
-            .hasMessageContaining(skuId.toString());
-        }
+                .isInstanceOf(ReturnQuantityExceededException.class)
+                .hasMessageContaining(skuId.toString());
+    }
 
-        @Test
-        @DisplayName("save fallback uses generated response values when repository returns null")
-        void returnItemsToStock_saveReturnsNull_usesGeneratedResponseValues() {
+    @Test
+    @DisplayName("save fallback uses generated response values when repository returns null")
+    void returnItemsToStock_saveReturnsNull_usesGeneratedResponseValues() {
         UUID workorderId = UUID.randomUUID();
         ReturnItemsRequest request = new ReturnItemsRequest(
-            workorderId,
-            "Fallback return",
-            List.of(new ReturnItemLine(UUID.randomUUID(), 1)));
+                workorderId,
+                "Fallback return",
+                List.of(new ReturnItemLine(UUID.randomUUID(), 1)));
 
         when(inventoryReturnRepository.save(entityCaptor.capture())).thenReturn(null);
 
@@ -298,18 +317,18 @@ class ReturnServiceImplTest {
         assertThat(result.getReturnId()).isNotNull();
         assertThat(result.getCreatedAt()).isNotNull();
         assertThat(result.getLedgerEntryIds()).hasSize(1).doesNotContainNull();
-        }
+    }
 
-        @Test
-        @DisplayName("non-positive quantity throws IllegalArgumentException")
-        void returnItemsToStock_nonPositiveQuantity_throwsIllegalArgumentException() {
+    @Test
+    @DisplayName("non-positive quantity throws IllegalArgumentException")
+    void returnItemsToStock_nonPositiveQuantity_throwsIllegalArgumentException() {
         ReturnItemsRequest request = new ReturnItemsRequest(
-            UUID.randomUUID(),
-            "Invalid return",
-            List.of(new ReturnItemLine(UUID.randomUUID(), 0)));
+                UUID.randomUUID(),
+                "Invalid return",
+                List.of(new ReturnItemLine(UUID.randomUUID(), 0)));
 
         assertThatThrownBy(() -> service().returnItemsToStock(request))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("quantityReturned must be positive");
-        }
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("quantityReturned must be positive");
+    }
 }

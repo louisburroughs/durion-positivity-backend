@@ -39,7 +39,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * ADR compliance:
  * <ul>
  * <li>ADR-0013: UUIDv7 identifiers used for pickListId</li>
- * <li>ADR-0017: HTTP 201 for create, 200 for update (validated at contract layer)</li>
+ * <li>ADR-0017: HTTP 201 for create, 200 for update (validated at contract
+ * layer)</li>
  * <li>ADR-0023: no tenantId in request or response</li>
  * <li>ADR-0024: createdAt/updatedAt populated by @PrePersist on entity</li>
  * </ul>
@@ -74,12 +75,15 @@ class PickListServiceImplTest {
     @Test
     @DisplayName("SC1_createPickList: valid request → DRAFT status, workorderId set, pickListId non-null")
     void SC1_createPickList_validRequest_returnsDraftWithWorkorderId() {
-        // Issue #28: SC1 — createPickList must return DRAFT status and non-null pickListId
+        // Issue #28: SC1 — createPickList must return DRAFT status and non-null
+        // pickListId
         // Arrange
         UUID workorderId = UUID.randomUUID();
-        CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600), 1, UUID.randomUUID());
+        CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600), 1,
+                UUID.randomUUID());
 
-        // Act — RED: impl throws UnsupportedOperationException; assertions never reached
+        // Act — RED: impl throws UnsupportedOperationException; assertions never
+        // reached
         PickListResponse result = service.createPickList(request);
 
         // Assert
@@ -103,7 +107,8 @@ class PickListServiceImplTest {
         // Arrange
         UUID workorderId = UUID.randomUUID();
         UUID reservationId = UUID.randomUUID();
-        CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600), 1, reservationId);
+        CreatePickListRequest request = new CreatePickListRequest(workorderId, Instant.now().plusSeconds(3600), 1,
+                reservationId);
 
         // Act — RED: impl throws UnsupportedOperationException
         PickListResponse result = service.createPickList(request);
@@ -124,7 +129,8 @@ class PickListServiceImplTest {
     @Test
     @DisplayName("SC3_createPickList_nullWorkorderId: null workorderId → NullPointerException or IllegalArgumentException")
     void SC3_createPickList_nullWorkorderId_throwsNullOrIllegalArgument() {
-        // Issue #28: SC3 — null workorderId must be rejected; UnsupportedOperationException is RED proof
+        // Issue #28: SC3 — null workorderId must be rejected;
+        // UnsupportedOperationException is RED proof
         // Arrange
         CreatePickListRequest request = new CreatePickListRequest(null, null, 0, null);
 
@@ -181,7 +187,8 @@ class PickListServiceImplTest {
         // Arrange
         UUID unknownId = UUID.randomUUID();
 
-        // Act + Assert — RED: impl throws UnsupportedOperationException, not ResourceNotFoundException
+        // Act + Assert — RED: impl throws UnsupportedOperationException, not
+        // ResourceNotFoundException
         assertThatThrownBy(() -> service.getPickList(unknownId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("PickList not found");
@@ -221,7 +228,8 @@ class PickListServiceImplTest {
     @Test
     @DisplayName("SC7_updatePickListStatus: DRAFT → READY_TO_PICK returns updated PickListResponse")
     void SC7_updatePickListStatus_draftToReadyToPick_returnsUpdatedResponse() {
-        // Issue #28: SC7 — status transition DRAFT → READY_TO_PICK must be reflected in response
+        // Issue #28: SC7 — status transition DRAFT → READY_TO_PICK must be reflected in
+        // response
         // Arrange
         UUID pickListId = UUID.randomUUID();
 
@@ -263,10 +271,11 @@ class PickListServiceImplTest {
      * READY_TO_PICK, saves the entity, and returns a PickListResponse reflecting
      * the new status.
      *
-     * <p>ADR-0006: pos-inventory owns pick list state; workexec owns orchestration.
+     * <p>
+     * ADR-0006: pos-inventory owns pick list state; workexec owns orchestration.
      *
      * @see PickListServiceImpl#releasePickList(UUID)
-     * Issue: #179
+     *      Issue: #179
      */
     @Test
     @DisplayName("PS1_releasePickList: DRAFT pick list → status=READY_TO_PICK in response")
@@ -300,10 +309,12 @@ class PickListServiceImplTest {
      * and non-exceeding quantityPicked) sets task status to PICKED and returns a
      * PickTaskResponse with status=PICKED.
      *
-     * <p>ADR-0006: pos-inventory validates pick scan data; orchestration lives in workexec.
+     * <p>
+     * ADR-0006: pos-inventory validates pick scan data; orchestration lives in
+     * workexec.
      *
      * @see PickListServiceImpl#confirmPickTask(UUID, UUID, UUID, UUID, int)
-     * Issue: #179
+     *      Issue: #179
      */
     @Test
     @DisplayName("PS2_confirmPickTask: matching SKU + valid quantity → task status=PICKED")
@@ -348,16 +359,18 @@ class PickListServiceImplTest {
         assertThat(result.getQuantityPicked()).isEqualTo(quantityRequired);
     }
 
-    // ─── PS3: confirmPickTask — wrong SKU → PickScanMismatchException ─────────────
+    // ─── PS3: confirmPickTask — wrong SKU → PickScanMismatchException
+    // ─────────────
 
     /**
      * PS3: Verifies that confirmPickTask() with a scannedSkuId that does not match
      * the task's productId throws {@link PickScanMismatchException}.
      *
-     * <p>ADR-0017: 422 Unprocessable Entity for semantic domain-policy violations.
+     * <p>
+     * ADR-0017: 422 Unprocessable Entity for semantic domain-policy violations.
      *
      * @see PickListServiceImpl#confirmPickTask(UUID, UUID, UUID, UUID, int)
-     * Issue: #179
+     *      Issue: #179
      */
     @Test
     @DisplayName("PS3_confirmPickTask: wrong scannedSkuId → PickScanMismatchException")
@@ -396,16 +409,18 @@ class PickListServiceImplTest {
                 .isInstanceOf(PickScanMismatchException.class);
     }
 
-    // ─── PS4: confirmPickTask — quantity exceeds required → IllegalArgumentException
+    // ─── PS4: confirmPickTask — quantity exceeds required →
+    // IllegalArgumentException
 
     /**
      * PS4: Verifies that confirmPickTask() with a quantityPicked that exceeds the
      * task's quantityRequired throws {@link IllegalArgumentException}.
      *
-     * <p>ADR-0017: 400 Bad Request for input validation failures.
+     * <p>
+     * ADR-0017: 400 Bad Request for input validation failures.
      *
      * @see PickListServiceImpl#confirmPickTask(UUID, UUID, UUID, UUID, int)
-     * Issue: #179
+     *      Issue: #179
      */
     @Test
     @DisplayName("PS4_confirmPickTask: quantityPicked > quantityRequired → IllegalArgumentException")
@@ -446,22 +461,25 @@ class PickListServiceImplTest {
                 .hasMessageContaining("quantity");
     }
 
-    // ─── PS5: confirmPickTask — last task PICKED → pick list COMPLETED ────────────
+    // ─── PS5: confirmPickTask — last task PICKED → pick list COMPLETED
+    // ────────────
 
     /**
      * PS5: Verifies that when confirmPickTask() is called on the last PENDING task
      * and all other tasks are already PICKED, the pick list status transitions to
      * COMPLETED and the returned PickTaskResponse reflects status=PICKED.
      *
-     * <p>ADR-0006: pos-inventory owns the completion state transition.
+     * <p>
+     * ADR-0006: pos-inventory owns the completion state transition.
      *
      * @see PickListServiceImpl#confirmPickTask(UUID, UUID, UUID, UUID, int)
-     * Issue: #179
+     *      Issue: #179
      */
     @Test
     @DisplayName("PS5_confirmPickTask: last pending task confirmed → pick list status=COMPLETED")
     void PS5_confirmPickTask_lastPendingTask_triggersPickListCompleted() {
-        // Issue #179: PS5 — confirming last task must trigger pick list status=COMPLETED
+        // Issue #179: PS5 — confirming last task must trigger pick list
+        // status=COMPLETED
         // Arrange
         UUID pickListId = UUID.randomUUID();
         UUID taskId1 = UUID.randomUUID();
