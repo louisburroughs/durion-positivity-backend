@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import jakarta.validation.ConstraintViolationException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -35,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @RestControllerAdvice(basePackages = "com.positivity.inventory.internal.controller")
 @Slf4j
+@RequiredArgsConstructor
 public class InventoryGlobalExceptionHandler {
 
     private static final String SKU_ID = "skuId";
@@ -43,6 +46,7 @@ public class InventoryGlobalExceptionHandler {
     private static final String TIMESTAMP = "timestamp";
     private static final String CODE = "code";
     private static final String MESSAGE = "message";
+    private final Clock clock;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidationError(MethodArgumentNotValidException ex) {
@@ -149,7 +153,7 @@ public class InventoryGlobalExceptionHandler {
     private ResponseEntity<Map<String, String>> build(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status)
                 .body(Map.of(
-                        TIMESTAMP, Instant.now().toString(),
+                        TIMESTAMP, Instant.now(clock).toString(),
                         CODE, code,
                         MESSAGE, message != null ? message : ""));
     }
@@ -161,7 +165,7 @@ public class InventoryGlobalExceptionHandler {
             Map<String, Object> extra) {
         return ResponseEntity.status(status)
                 .body(Map.of(
-                        TIMESTAMP, Instant.now().toString(),
+                        TIMESTAMP, Instant.now(clock).toString(),
                         CODE, code,
                         MESSAGE, message != null ? message : "",
                         "context", extra));

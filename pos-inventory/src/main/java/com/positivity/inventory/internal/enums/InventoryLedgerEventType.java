@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.entity;
+package com.positivity.inventory.internal.enums;
 
 import java.util.Arrays;
 import java.util.Set;

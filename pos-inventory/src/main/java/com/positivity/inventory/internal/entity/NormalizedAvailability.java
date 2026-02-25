@@ -17,6 +17,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+
 /**
  * Normalized manufacturer availability snapshot.
  *
@@ -40,7 +43,7 @@ public class NormalizedAvailability {
     private UUID productId;
 
     @Column(nullable = false)
-    private String manufacturerId;
+    private UUID manufacturerId;
 
     @Column(nullable = false)
     private String manufacturerPartNumber;
@@ -75,4 +78,17 @@ public class NormalizedAvailability {
     @Column(nullable = false)
     private Integer schemaVersion;
 
+    /**
+     * Timestamp when this configuration was created.
+     */
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /**
+     * Timestamp when this configuration was last updated.
+     */
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
 }

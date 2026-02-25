@@ -58,21 +58,20 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         // Issue #47: Stub normalization with exception queue for unmapped or malformed
         // records.
         log.info("Processing distributor feed with {} items", feedItems.size());
-        Instant now = Instant.now();
 
         for (DistributorFeedItemDto item : feedItems) {
             if (item.getProductId() == null) {
-                queueException(item, DistributorExceptionReason.SKU_UNMAPPED, now);
+                queueException(item, DistributorExceptionReason.SKU_UNMAPPED);
             } else {
                 LeadTimeNormalizationResult leadTime = normalizeLeadTime(item.getRawLeadTime());
                 if (!leadTime.valid()) {
-                    queueException(item, DistributorExceptionReason.LEAD_TIME_UNPARSABLE, now);
+                    queueException(item, DistributorExceptionReason.LEAD_TIME_UNPARSABLE);
                 } else {
                     String normalizedRegion = normalizeRegion(item.getRawShipFromRegion());
                     if (normalizedRegion == null) {
-                        queueException(item, DistributorExceptionReason.REGION_UNMAPPED, now);
+                        queueException(item, DistributorExceptionReason.REGION_UNMAPPED);
                     } else {
-                        upsertNormalized(item, leadTime, normalizedRegion, now);
+                        upsertNormalized(item, leadTime, normalizedRegion);
                     }
                 }
             }
@@ -81,8 +80,7 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
 
     private void upsertNormalized(DistributorFeedItemDto item,
             LeadTimeNormalizationResult leadTime,
-            String normalizedRegion,
-            Instant eventTime) {
+            String normalizedRegion) {
         DistributorNormalizedInventory normalized = distributorNormalizedInventoryRepository
                 .findByDistributorIdAndDistributorSku(item.getDistributorId(), item.getDistributorSku())
                 .orElseGet(DistributorNormalizedInventory::new);
@@ -97,20 +95,17 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         normalized.setNormalizationPolicyVersion(POLICY_VERSION);
         normalized.setRawLeadTime(item.getRawLeadTime());
         normalized.setRawShipFromRegion(item.getRawShipFromRegion());
-        normalized.setLastUpdatedAt(eventTime);
 
         distributorNormalizedInventoryRepository.save(normalized);
     }
 
     private void queueException(DistributorFeedItemDto item,
-            DistributorExceptionReason reason,
-            Instant eventTime) {
+            DistributorExceptionReason reason) {
         DistributorFeedException exception = DistributorFeedException.builder()
                 .distributorId(item.getDistributorId() != null ? item.getDistributorId() : "UNKNOWN")
                 .distributorSku(item.getDistributorSku())
                 .reason(reason)
                 .rawPayload(serializeRawPayload(item))
-                .createdAt(eventTime)
                 .build();
 
         distributorFeedExceptionRepository.save(exception);

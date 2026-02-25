@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -10,8 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayExecutionResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
 import com.positivity.inventory.internal.entity.PutawayTask;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
@@ -28,6 +29,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
         private final PutawayTaskRepository putawayTaskRepository;
         private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
         private final PutawayValidationService putawayValidationService;
+        private final Clock clock;
 
         @Override
         @Transactional
@@ -43,14 +45,22 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
 
                 putawayValidationService.validatePutawayExecution(request);
 
-                Instant now = Instant.now();
+                Instant now = Instant.now(clock);
+                int sourceOnHandBefore = onHandQuantityAtLocation(request.getSkuId(), request.getSourceLocationId());
+                int sourceOnHandAfter = sourceOnHandBefore - request.getQuantity();
+
+                int destinationOnHandBefore = onHandQuantityAtLocation(request.getSkuId(),
+                                request.getDestinationLocationId());
+                int destinationBaseOnHand = request.getSourceLocationId().equals(request.getDestinationLocationId())
+                                ? sourceOnHandAfter
+                                : destinationOnHandBefore;
+                int destinationOnHandAfter = destinationBaseOnHand + request.getQuantity();
+
                 InventoryLedgerEntry ledgerEntry = InventoryLedgerEntry.builder()
                                 .stockItemId(request.getSkuId())
                                 .eventType(InventoryLedgerEventType.PUTAWAY)
                                 .changeInQuantity(-request.getQuantity())
-                                // TODO(CAP-215): quantityAfter requires InventoryOnHand read model; 0 is a
-                                // placeholder
-                                .quantityAfter(0)
+                                .quantityAfter(sourceOnHandAfter)
                                 .transactionUserId(actorId)
                                 .locationId(request.getSourceLocationId())
                                 .notes("Putaway from " + request.getSourceLocationId() + " to "
@@ -64,9 +74,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
                                 .stockItemId(request.getSkuId())
                                 .eventType(InventoryLedgerEventType.PUTAWAY)
                                 .changeInQuantity(request.getQuantity())
-                                // TODO(CAP-215): quantityAfter requires InventoryOnHand read model; 0 is a
-                                // placeholder
-                                .quantityAfter(0)
+                                .quantityAfter(destinationOnHandAfter)
                                 .transactionUserId(actorId)
                                 .locationId(request.getDestinationLocationId())
                                 .notes("Putaway destination receipt from " + request.getSourceLocationId() + " to "
@@ -104,5 +112,11 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
                 } catch (IllegalArgumentException ex) {
                         throw new IllegalArgumentException(fieldName + " must be a valid UUID", ex);
                 }
+        }
+
+        private int onHandQuantityAtLocation(String skuId, UUID locationId) {
+                Integer currentOnHand = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(skuId,
+                                locationId);
+                return currentOnHand != null ? currentOnHand : 0;
         }
 }

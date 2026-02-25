@@ -6,11 +6,16 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.shared.id.UUIDv7Id;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable ledger entry representing a single inventory transaction.
@@ -25,6 +30,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class InventoryLedgerEntry {
 
     @Id
@@ -141,10 +147,18 @@ public class InventoryLedgerEntry {
     @Column(length = 2000)
     private String notes;
 
-    @PrePersist
-    protected void onCreate() {
-        if (timestamp == null) {
-            timestamp = Instant.now();
-        }
-    }
+    /**
+     * Timestamp when this configuration was created.
+     */
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    /**
+     * Timestamp when this configuration was last updated.
+     */
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
+
 }
