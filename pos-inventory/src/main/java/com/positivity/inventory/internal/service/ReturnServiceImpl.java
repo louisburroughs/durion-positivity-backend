@@ -4,7 +4,7 @@ import com.positivity.inventory.internal.dto.returns.ReturnItemLine;
 import com.positivity.inventory.internal.dto.returns.ReturnItemsRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.entity.InventoryReturnEntity;
 import com.positivity.inventory.internal.entity.InventoryReturnLineEntity;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
