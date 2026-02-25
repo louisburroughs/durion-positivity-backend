@@ -439,6 +439,26 @@
 				"mkdir -p .agent-tmp\nexport JAVA_HOME=\"$HOME/.sdkman/candidates/java/21.0.5-tem\"\nexport PATH=\"$JAVA_HOME/bin:$PATH\"\ncd /home/louisb/Projects/durion-positivity-backend\n./mvnw -pl pos-catalog -am clean verify > .agent-tmp/cap247-full-catalog-verify.log 2>&1\necho MVN_EXIT:$?\ntail -120 .agent-tmp/cap247-full-catalog-verify.log"
 			],
 			"isBackground": false
+		},
+		{
+			"label": "cap247-commit-and-push",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"export JAVA_HOME=\"$HOME/.sdkman/candidates/java/21.0.5-tem\"\nexport PATH=\"$JAVA_HOME/bin:$PATH\"\nbash /home/louisb/Projects/durion-positivity-backend/.agent-tmp/cap247-commit-push.sh"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "cap247-create-pr",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"cd /home/louisb/Projects/durion-positivity-backend && gh pr create --base main --head cap/CAP247 --title 'cap/CAP-247: Live price/availability on product detail + cursor-based catalog search' --body-file .agent-tmp/cap247-pr-body.md && echo PR_EXIT:0 || echo PR_EXIT:$?"
+			],
+			"isBackground": false
 		}
 	]
 }
