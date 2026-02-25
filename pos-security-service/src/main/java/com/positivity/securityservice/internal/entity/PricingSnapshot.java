@@ -13,6 +13,9 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable pricing snapshot for quote context and final calculated price.
@@ -23,6 +26,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
+@jakarta.persistence.EntityListeners(AuditingEntityListener.class)
 @Table(name = "pricing_snapshots")
 public class PricingSnapshot {
 
@@ -41,10 +45,24 @@ public class PricingSnapshot {
     @Column(name = "final_price", nullable = false, precision = 19, scale = 4, updatable = false)
     private BigDecimal finalPrice;
 
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {
             timestamp = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = timestamp;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

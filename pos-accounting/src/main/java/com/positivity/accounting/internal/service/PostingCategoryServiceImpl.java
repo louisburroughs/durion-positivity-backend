@@ -220,7 +220,7 @@ public class PostingCategoryServiceImpl implements PostingCategoryService {
                 category.getIsActive(),
                 category.getCreatedAt(),
                 category.getCreatedBy(),
-                category.getModifiedAt(),
+                category.getUpdatedAt(),
                 category.getModifiedBy());
     }
 }

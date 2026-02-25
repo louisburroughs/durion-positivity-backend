@@ -16,6 +16,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -55,6 +56,10 @@ public class WorkorderStateTransition {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     @Column(nullable = false)
     private String transitionedBy;
 
@@ -68,6 +73,12 @@ public class WorkorderStateTransition {
     protected void prePersist() {
         if (transitionedAt == null) {
             transitionedAt = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

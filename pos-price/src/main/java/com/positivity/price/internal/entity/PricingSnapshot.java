@@ -3,12 +3,16 @@ package com.positivity.price.internal.entity;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Immutable pricing snapshot persisted for pricing audit and replay.
@@ -16,13 +20,15 @@ import org.jspecify.annotations.Nullable;
  * Issue: #50
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "pricing_snapshot")
 public class PricingSnapshot {
 
     @Id
     private UUID snapshotId;
 
-    @Column(nullable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(columnDefinition = "TEXT")
@@ -45,6 +51,10 @@ public class PricingSnapshot {
     @Column(nullable = false)
     private String policyVersion;
 
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
     public void prePersist() {
         if (snapshotId == null) {
@@ -52,6 +62,9 @@ public class PricingSnapshot {
         }
         if (createdAt == null) {
             createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 
@@ -117,5 +130,13 @@ public class PricingSnapshot {
 
     public void setPolicyVersion(String policyVersion) {
         this.policyVersion = policyVersion;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

@@ -5,6 +5,9 @@ import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
@@ -12,6 +15,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_exception")
 @SuppressWarnings("java:S2166")
 public class TimeEntryException {
@@ -51,6 +55,14 @@ public class TimeEntryException {
 
     @Column(name = "resolved_at")
     private Instant resolvedAt;
+
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     @PrePersist
     public void generateIdAndTimestamp() {
@@ -149,5 +161,21 @@ public class TimeEntryException {
 
     public void setResolvedAt(Instant resolvedAt) {
         this.resolvedAt = resolvedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

@@ -104,7 +104,7 @@ class DefaultGLMappingServiceTest {
         savedMapping.setActive(true);
         savedMapping.setCreatedAt(Instant.now());
         savedMapping.setCreatedBy("test-user");
-        savedMapping.setModifiedAt(Instant.now());
+        savedMapping.setUpdatedAt(Instant.now());
         savedMapping.setModifiedBy("test-user");
 
         debitAccount = new GLAccount();
@@ -236,7 +236,7 @@ class DefaultGLMappingServiceTest {
             globalMapping.setActive(true);
             globalMapping.setCreatedAt(Instant.now());
             globalMapping.setCreatedBy("system");
-            globalMapping.setModifiedAt(Instant.now());
+            globalMapping.setUpdatedAt(Instant.now());
             globalMapping.setModifiedBy("system");
 
             doNothing().when(glAccountService).validateAccountForPosting(any(), any());
@@ -279,7 +279,7 @@ class DefaultGLMappingServiceTest {
             updatedMapping.setActive(true);
             updatedMapping.setCreatedAt(Instant.now());
             updatedMapping.setCreatedBy("test-user");
-            updatedMapping.setModifiedAt(Instant.now());
+            updatedMapping.setUpdatedAt(Instant.now());
             updatedMapping.setModifiedBy("test-user");
 
             when(repository.findById(MAPPING_ID)).thenReturn(Optional.of(savedMapping));
@@ -513,7 +513,7 @@ class DefaultGLMappingServiceTest {
             globalMapping.setActive(true);
             globalMapping.setCreatedAt(Instant.now());
             globalMapping.setCreatedBy("system");
-            globalMapping.setModifiedAt(Instant.now());
+            globalMapping.setUpdatedAt(Instant.now());
             globalMapping.setModifiedBy("system");
 
             when(repository.findActiveDefaultForEvent(EVENT_TYPE, null))
@@ -618,7 +618,7 @@ class DefaultGLMappingServiceTest {
             globalMapping.setActive(true);
             globalMapping.setCreatedAt(Instant.now());
             globalMapping.setCreatedBy("system");
-            globalMapping.setModifiedAt(Instant.now());
+            globalMapping.setUpdatedAt(Instant.now());
             globalMapping.setModifiedBy("system");
 
             when(repository.findAllGlobalDefaults())

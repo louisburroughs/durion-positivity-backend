@@ -9,6 +9,7 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.positivity.shared.id.UUIDv7Generator;
@@ -55,6 +56,12 @@ public class EventProcessingLog {
         if (logId == null) {
             logId = UUIDv7Generator.generate();
         }
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
     }
 
     @NonNull
@@ -91,6 +98,10 @@ public class EventProcessingLog {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     public enum ProcessingStatus {
         SUCCESS,

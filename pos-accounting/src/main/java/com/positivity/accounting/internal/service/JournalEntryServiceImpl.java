@@ -78,7 +78,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         // Set entry metadata
         entry.setStatus(JournalEntryStatus.DRAFT);
         entry.setCreatedAt(Instant.now());
-        entry.setModifiedAt(Instant.now());
+        entry.setUpdatedAt(Instant.now());
 
         JournalEntry saved = journalEntryRepository.save(entry);
         log.info("Created journal entry {} in DRAFT status with {} lines",
@@ -134,7 +134,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         // Allow description updates only
         entry.setDescription(updates.getDescription());
-        entry.setModifiedAt(Instant.now());
+        entry.setUpdatedAt(Instant.now());
 
         // Lines can be updated (add/remove as long as entry remains balanced)
         // For now, disallow line updates; require delete + recreate for complex changes
@@ -174,7 +174,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         entry.setStatus(JournalEntryStatus.POSTED);
         entry.setPostedAt(Instant.now());
-        entry.setModifiedAt(Instant.now());
+        entry.setUpdatedAt(Instant.now());
 
         JournalEntry saved = journalEntryRepository.save(entry);
         log.info("Posted journal entry {} with total debits/credits: {}",
@@ -211,7 +211,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         reversal.setStatus(JournalEntryStatus.POSTED); // Reversals post immediately
         reversal.setPostedAt(Instant.now());
         reversal.setCreatedAt(Instant.now());
-        reversal.setModifiedAt(Instant.now());
+        reversal.setUpdatedAt(Instant.now());
 
         // Invert all lines: debits become credits and vice versa
         List<JournalEntryLine> reversalLines = new java.util.ArrayList<>();

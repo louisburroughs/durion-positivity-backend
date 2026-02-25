@@ -7,6 +7,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.AccessLevel;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -22,6 +25,7 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "role_assignments")
 public class RoleAssignment {
     @Id
@@ -77,6 +81,7 @@ public class RoleAssignment {
     /**
      * When this assignment was created
      */
+    @CreatedDate
     @Column(nullable = false)
     private Instant createdAt;
 
@@ -85,6 +90,10 @@ public class RoleAssignment {
      */
     @Column(nullable = false, length = 255)
     private String createdBy;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     /**
      * Audit: When this assignment was last modified
@@ -102,6 +111,9 @@ public class RoleAssignment {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
         if (effectiveStartDate == null) {
             effectiveStartDate = LocalDateTime.now();
         }
@@ -109,7 +121,9 @@ public class RoleAssignment {
 
     @PreUpdate
     protected void onUpdate() {
-        lastModifiedAt = Instant.now();
+        Instant now = Instant.now();
+        updatedAt = now;
+        lastModifiedAt = now;
     }
 
     /**

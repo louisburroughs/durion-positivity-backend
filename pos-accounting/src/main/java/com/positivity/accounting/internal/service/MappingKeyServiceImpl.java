@@ -276,7 +276,7 @@ public class MappingKeyServiceImpl implements MappingKeyService {
                                 mappingKey.getIsActive(),
                                 mappingKey.getCreatedAt(),
                                 mappingKey.getCreatedBy(),
-                                mappingKey.getModifiedAt(),
+                                mappingKey.getUpdatedAt(),
                                 mappingKey.getModifiedBy());
         }
 

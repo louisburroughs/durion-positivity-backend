@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -17,6 +18,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -41,6 +45,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class WorkorderLaborEntry {
 
     @Id
@@ -53,6 +58,9 @@ public class WorkorderLaborEntry {
     public void generateId() {
         if (createdAt == null) {
             createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 
@@ -98,9 +106,15 @@ public class WorkorderLaborEntry {
     @Column(nullable = false, updatable = false, columnDefinition = "UUID")
     private UUID createdBy;
 
+    @CreatedDate
     @NonNull
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    @LastModifiedDate
+    @NonNull
+    @Column(nullable = false)
+    private Instant updatedAt;
 
     /**
      * Check if this labor session is still active (not stopped).

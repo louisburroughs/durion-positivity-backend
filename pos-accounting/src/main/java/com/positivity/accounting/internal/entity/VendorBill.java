@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.*;
@@ -57,7 +58,7 @@ public class VendorBill {
     public void onPrePersist() {
         Instant now = Instant.now();
         this.createdAt = now;
-        this.modifiedAt = now;
+        this.updatedAt = now;
     }
 
     @Column(name = "vendor_id", nullable = false)
@@ -110,8 +111,9 @@ public class VendorBill {
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
-    private Instant modifiedAt;
+    private Instant updatedAt;
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
@@ -143,6 +145,6 @@ public class VendorBill {
 
     @PreUpdate
     protected void onUpdate() {
-        this.modifiedAt = Instant.now();
+        this.updatedAt = Instant.now();
     }
 }

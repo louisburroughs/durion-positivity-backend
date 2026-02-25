@@ -52,7 +52,7 @@ public final class AccountingEventMapper {
         response.setJournalEntryId(entity.getJournalEntryId());
         response.setStatus("PROCESSED");
         response.setReceivedAt(entity.getCreatedAt());
-        response.setProcessedAt(entity.getPostedAt() != null ? entity.getPostedAt() : entity.getModifiedAt());
+        response.setProcessedAt(entity.getPostedAt() != null ? entity.getPostedAt() : entity.getUpdatedAt());
         return response;
     }
 }

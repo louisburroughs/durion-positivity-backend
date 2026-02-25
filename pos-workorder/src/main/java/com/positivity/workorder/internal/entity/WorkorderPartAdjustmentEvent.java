@@ -10,12 +10,17 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.PrePersist;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -46,6 +51,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "workorder_part_adjustment_event", indexes = {
         @Index(name = "idx_part_adjustment_original_part", columnList = "original_part_id"),
         @Index(name = "idx_part_adjustment_workorder", columnList = "workorder_id"),
@@ -118,10 +124,31 @@ public class WorkorderPartAdjustmentEvent {
     @NonNull
     private Instant performedAt;
 
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
+
     /**
      * Optional additional context.
      */
     @Column(columnDefinition = "TEXT")
     @Nullable
     private String notes;
+
+    @PrePersist
+    protected void prePersist() {
+        if (performedAt == null) {
+            performedAt = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = performedAt;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
+    }
 }

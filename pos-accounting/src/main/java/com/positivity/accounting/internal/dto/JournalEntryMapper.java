@@ -33,7 +33,7 @@ public final class JournalEntryMapper {
         response.setReversedByJournalEntryId(entity.getReversedByJournalEntryId());
         response.setCreatedAt(entity.getCreatedAt());
         response.setCreatedBy(entity.getCreatedBy());
-        response.setModifiedAt(entity.getModifiedAt());
+        response.setModifiedAt(entity.getUpdatedAt());
         response.setModifiedBy(entity.getModifiedBy());
         response.setPostedAt(entity.getPostedAt());
         response.setPostedBy(entity.getPostedBy());

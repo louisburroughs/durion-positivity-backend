@@ -6,12 +6,14 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.*;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import jakarta.persistence.PrePersist;
 
 @Entity
 @Data
@@ -36,6 +38,10 @@ public class WorkorderPart {
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "work_order_service_id", nullable = true) // Allow standalone parts not tied to a service
@@ -144,5 +150,15 @@ public class WorkorderPart {
      */
     public boolean canConsumeInventory() {
         return status != WorkorderItemStatus.PENDING_APPROVAL;
+    }
+
+    @PrePersist
+    protected void prePersist() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
     }
 }

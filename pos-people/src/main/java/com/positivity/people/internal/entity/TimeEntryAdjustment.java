@@ -8,6 +8,7 @@ import java.time.Instant;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.util.UUID;
 
@@ -48,6 +49,10 @@ public class TimeEntryAdjustment {
     @CreatedDate
     @Column(name = "created_at")
     private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     @Column(name = "decided_by")
     private String decidedBy;
@@ -141,6 +146,14 @@ public class TimeEntryAdjustment {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
     public String getDecidedBy() {

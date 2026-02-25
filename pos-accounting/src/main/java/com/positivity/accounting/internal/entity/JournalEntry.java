@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
 import com.positivity.security.common.SecurityContextHelper;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.*;
@@ -63,7 +64,7 @@ public class JournalEntry {
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";
         this.createdAt = now;
-        this.modifiedAt = now;
+        this.updatedAt = now;
         this.createdBy = currentUser;
         this.modifiedBy = currentUser;
         
@@ -153,8 +154,9 @@ public class JournalEntry {
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
-    private Instant modifiedAt;
+    private Instant updatedAt;
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
@@ -170,7 +172,7 @@ public class JournalEntry {
 
     @PreUpdate
     protected void onUpdate() {
-        this.modifiedAt = Instant.now();
+        this.updatedAt = Instant.now();
         this.modifiedBy = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";

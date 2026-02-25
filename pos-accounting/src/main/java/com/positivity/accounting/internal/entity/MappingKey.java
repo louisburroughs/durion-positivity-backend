@@ -77,9 +77,8 @@ public class MappingKey {
 
     @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
-    private Instant modifiedAt;
+    private Instant updatedAt;
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
-
 }

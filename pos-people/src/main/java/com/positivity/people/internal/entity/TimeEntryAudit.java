@@ -4,8 +4,12 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_audit")
 public class TimeEntryAudit {
 
@@ -30,6 +34,14 @@ public class TimeEntryAudit {
 
     @Column(name = "details", columnDefinition = "TEXT")
     private String details;
+
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     @PrePersist
     public void generateIdAndTimestamp() {
@@ -96,5 +108,21 @@ public class TimeEntryAudit {
 
     public void setDetails(String details) {
         this.details = details;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

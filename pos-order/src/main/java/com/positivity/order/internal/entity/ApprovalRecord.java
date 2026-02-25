@@ -6,6 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,6 +21,7 @@ import java.util.UUID;
  * Supports tracking approval workflow and compliance reporting.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "approval_record")
 @Data
 @NoArgsConstructor
@@ -67,6 +71,14 @@ public class ApprovalRecord {
     @Column(nullable = false, updatable = false)
     private Instant actionTimestamp;
 
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
+
     /**
      * IP address of the reviewer (for security audit).
      */
@@ -76,6 +88,12 @@ public class ApprovalRecord {
     protected void prePersist() {
         if (actionTimestamp == null) {
             actionTimestamp = Instant.now();
+        }
+        if (createdAt == null) {
+            createdAt = actionTimestamp;
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
         }
     }
 }

@@ -9,6 +9,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
 
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.Column;
@@ -68,14 +69,14 @@ public class DefaultGLMapping {
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";
         this.createdAt = now;
-        this.modifiedAt = now;
+        this.updatedAt = now;
         this.createdBy = currentUser;
         this.modifiedBy = currentUser;
     }
 
     @PreUpdate
     public void onPreUpdate() {
-        this.modifiedAt = Instant.now();
+        this.updatedAt = Instant.now();
         String currentUser = SecurityContextHelper.isAuthenticated()
                 ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
                 : "SYSTEM";
@@ -112,8 +113,9 @@ public class DefaultGLMapping {
     @Column(name = "created_by", length = 100, nullable = false, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
-    private Instant modifiedAt;
+    private Instant updatedAt;
 
     @Column(name = "modified_by", length = 100, nullable = false)
     private String modifiedBy;

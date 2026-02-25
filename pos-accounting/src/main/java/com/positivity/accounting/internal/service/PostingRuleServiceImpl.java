@@ -165,7 +165,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         ruleSet.setName(updates.getName());
         ruleSet.setEventType(updates.getEventType());
         ruleSet.setDescription(updates.getDescription());
-        ruleSet.setModifiedAt(Instant.now());
+        ruleSet.setUpdatedAt(Instant.now());
         PostingRuleSet saved = ruleSetRepository.save(ruleSet);
         log.info("Updated rule set: {}", saved.getName());
         return saved;
@@ -185,7 +185,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         version.setVersionNumber(maxVersion + 1);
         version.setState(PostingRuleSetState.DRAFT);
         version.setCreatedAt(Instant.now());
-        version.setModifiedAt(Instant.now());
+        version.setUpdatedAt(Instant.now());
 
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Created version {} for rule set: {}",
@@ -203,7 +203,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         }
 
         version.setRulesDefinition(updates.getRulesDefinition());
-        version.setModifiedAt(Instant.now());
+        version.setUpdatedAt(Instant.now());
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Updated version: {}", saved.getVersionId());
         return saved;
@@ -229,7 +229,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         for (PostingRuleVersion oldVersion : published) {
             oldVersion.setState(PostingRuleSetState.ARCHIVED);
             oldVersion.setArchivedAt(Instant.now());
-            oldVersion.setModifiedAt(Instant.now());
+            oldVersion.setUpdatedAt(Instant.now());
             versionRepository.save(oldVersion);
             log.info("Archived version: {}", oldVersion.getVersionId());
         }
@@ -237,7 +237,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         // Publish new version
         version.setState(PostingRuleSetState.PUBLISHED);
         version.setPublishedAt(Instant.now());
-        version.setModifiedAt(Instant.now());
+        version.setUpdatedAt(Instant.now());
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Published version: {}", saved.getVersionId());
         return saved;
@@ -254,7 +254,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
         version.setState(PostingRuleSetState.ARCHIVED);
         version.setArchivedAt(Instant.now());
-        version.setModifiedAt(Instant.now());
+        version.setUpdatedAt(Instant.now());
         PostingRuleVersion saved = versionRepository.save(version);
         log.info("Archived version: {}", saved.getVersionId());
         return saved;

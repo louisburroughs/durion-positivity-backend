@@ -445,7 +445,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     account.setCreatedBy("testuser");
     account.setCreatedAt(Instant.now());
     account.setModifiedBy("testuser");
-    account.setModifiedAt(Instant.now());
+    account.setUpdatedAt(Instant.now());
     account = glAccountRepository.save(account);
 
     String payload = """
@@ -484,7 +484,7 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
     account.setCreatedBy("testuser");
     account.setCreatedAt(Instant.now());
     account.setModifiedBy("testuser");
-    account.setModifiedAt(Instant.now());
+    account.setUpdatedAt(Instant.now());
     account = glAccountRepository.save(account);
 
     // Create the mapping first

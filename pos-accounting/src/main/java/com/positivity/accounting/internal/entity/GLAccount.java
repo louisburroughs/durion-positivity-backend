@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.shared.id.UUIDv7Generator;
 
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.Column;
@@ -104,8 +105,9 @@ public class GLAccount implements Persistable<UUID> {
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
+    @LastModifiedDate
     @Column(name = "modified_at", nullable = false)
-    private Instant modifiedAt;
+    private Instant updatedAt;
 
     @Column(name = "modified_by", length = 50, nullable = false)
     private String modifiedBy;
@@ -133,7 +135,7 @@ public class GLAccount implements Persistable<UUID> {
         }
         Instant now = Instant.now();
         this.createdAt = now;
-        this.modifiedAt = now;
+        this.updatedAt = now;
         if (this.activationDate == null) {
             this.activationDate = LocalDateTime.now();
         }
@@ -147,7 +149,7 @@ public class GLAccount implements Persistable<UUID> {
 
     @PreUpdate
     protected void onUpdate() {
-        this.modifiedAt = Instant.now();
+        this.updatedAt = Instant.now();
     }
 
     /**

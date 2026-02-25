@@ -37,7 +37,7 @@ public final class PostingRuleMapper {
                 .versions(versions)
                 .createdAt(entity.getCreatedAt())
                 .createdBy(entity.getCreatedBy())
-                .modifiedAt(entity.getModifiedAt())
+                .modifiedAt(entity.getUpdatedAt())
                 .modifiedBy(entity.getModifiedBy())
                 .build();
     }
@@ -59,7 +59,7 @@ public final class PostingRuleMapper {
                 .rulesDefinition(entity.getRulesDefinition())
                 .createdAt(entity.getCreatedAt())
                 .createdBy(entity.getCreatedBy())
-                .modifiedAt(entity.getModifiedAt())
+                .modifiedAt(entity.getUpdatedAt())
                 .modifiedBy(entity.getModifiedBy())
                 .build();
     }

@@ -4,6 +4,9 @@ import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -35,6 +38,7 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 public class JwtToken {
     @Id
     @GeneratedValue
@@ -60,6 +64,14 @@ public class JwtToken {
     @Column(nullable = false)
     private String subject;
 
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     /**
      * Version field for optimistic locking.
      *
@@ -79,5 +91,15 @@ public class JwtToken {
      */
     @Version
     private Long version;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
+    }
 
 }

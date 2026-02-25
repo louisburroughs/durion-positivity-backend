@@ -301,7 +301,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         entry.setStatus(JournalEntryStatus.DRAFT);
         entry.setDescription("Auto-generated from default GL mapping for " + event.getEventType());
         entry.setCreatedAt(Instant.now());
-        entry.setModifiedAt(Instant.now());
+        entry.setUpdatedAt(Instant.now());
 
         // Resolve amount from event payload
         BigDecimal amount = resolveAmount("payload.amount", event);
@@ -610,7 +610,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         entry.setStatus(JournalEntryStatus.DRAFT);
         entry.setDescription("Auto-generated from event " + event.getEventType());
         entry.setCreatedAt(Instant.now());
-        entry.setModifiedAt(Instant.now());
+        entry.setUpdatedAt(Instant.now());
 
         List<JournalEntryLine> lines = new ArrayList<>();
 

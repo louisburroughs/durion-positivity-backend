@@ -194,7 +194,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
 
                 // 7. Update payment unappliedAmount (apply actual applied amount)
                 payment.applyAmount(validation.actualTotalApplicationAmount());
-                payment.setModifiedAt(applicationTimestamp);
+                payment.setUpdatedAt(applicationTimestamp);
                 payment.setModifiedBy(currentUser);
 
                 // 8. Handle overpayment - create CustomerCredit if there's overpayment
@@ -291,7 +291,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
                                                                 + " not found"));
 
                 payment.reverseAmount(original.getAppliedAmount());
-                payment.setModifiedAt(Instant.now());
+                payment.setUpdatedAt(Instant.now());
                 payment.setModifiedBy(reversedBy);
                 receivablePaymentRepository.save(payment);
 
