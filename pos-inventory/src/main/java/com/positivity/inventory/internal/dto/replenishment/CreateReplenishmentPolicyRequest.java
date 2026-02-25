@@ -8,13 +8,15 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateReplenishmentPolicyRequest {
 
-    @NotBlank
-    private String locationId;
+    @NotNull
+    private UUID locationId;
 
     @NotBlank
     private String itemSKU;

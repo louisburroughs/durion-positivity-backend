@@ -13,10 +13,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.positivity.inventory.internal.enums.UnmappedPartStatus;
 import com.positivity.shared.id.UUIDv7Id;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -41,7 +46,7 @@ public class UnmappedManufacturerPart {
     private UUID id;
 
     @Column(nullable = false)
-    private String manufacturerId;
+    private UUID manufacturerId;
 
     @Column(nullable = false)
     private String manufacturerPartNumber;

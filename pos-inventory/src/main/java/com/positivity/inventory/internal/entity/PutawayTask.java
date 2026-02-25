@@ -45,15 +45,15 @@ public class PutawayTask {
     private Integer quantity;
 
     @Column(nullable = false)
-    private String sourceLocationId;
+    private UUID sourceLocationId;
 
-    private String suggestedDestinationLocationId;
+    private UUID suggestedDestinationLocationId;
 
-    private String originalSuggestedLocationId;
+    private UUID originalSuggestedLocationId;
 
-    private String finalSuggestedLocationId;
+    private UUID finalSuggestedLocationId;
 
-    private String actualDestinationLocationId;
+    private UUID actualDestinationLocationId;
 
     @Enumerated(EnumType.STRING)
     private PutawayFallbackReason fallbackReason;

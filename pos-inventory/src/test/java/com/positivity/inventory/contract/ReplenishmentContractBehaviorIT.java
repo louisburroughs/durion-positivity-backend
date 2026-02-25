@@ -46,181 +46,181 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Replenishment Contract Behavior")
 class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private ReplenishmentService replenishmentService;
+        @MockitoBean
+        private ReplenishmentService replenishmentService;
 
-    // ─── AC1: GET /replenishment/tasks returns 200 with task list ─────────────
+        // ─── AC1: GET /replenishment/tasks returns 200 with task list ─────────────
 
-    /**
-     * Verifies that a request for pending replenishment tasks returns 200 with the
-     * first task's itemSKU present, per story #30 AC1.
-     *
-     * Issue: #30
-     */
-    @Test
-    @DisplayName("AC1: GET /replenishment/tasks with pending tasks returns 200 with task list")
-    void getReplenishmentTasks_withPendingTasks_returns200WithTaskList() throws Exception {
-        // Issue #30: task list endpoint must return itemSKU for each queued task
-        String taskId = UUID.randomUUID().toString();
-        String itemSKU = "SKU-WIDGET-001";
-        String sourceLocationId = UUID.randomUUID().toString();
-        String destinationLocationId = UUID.randomUUID().toString();
+        /**
+         * Verifies that a request for pending replenishment tasks returns 200 with the
+         * first task's itemSKU present, per story #30 AC1.
+         *
+         * Issue: #30
+         */
+        @Test
+        @DisplayName("AC1: GET /replenishment/tasks with pending tasks returns 200 with task list")
+        void getReplenishmentTasks_withPendingTasks_returns200WithTaskList() throws Exception {
+                // Issue #30: task list endpoint must return itemSKU for each queued task
+                String taskId = UUID.randomUUID().toString();
+                String itemSKU = "SKU-WIDGET-001";
+                UUID sourceLocationId = UUID.randomUUID();
+                UUID destinationLocationId = UUID.randomUUID();
 
-        ReplenishmentTaskResponse task = ReplenishmentTaskResponse.builder()
-                .taskId(taskId)
-                .itemSKU(itemSKU)
-                .quantity(10)
-                .sourceLocationId(sourceLocationId)
-                .destinationLocationId(destinationLocationId)
-                .status("PENDING")
-                .triggerType("MIN_LEVEL")
-                .decisionReason("Stock below minimum threshold")
-                .createdAt(Instant.now().toString())
-                .build();
+                ReplenishmentTaskResponse task = ReplenishmentTaskResponse.builder()
+                                .taskId(taskId)
+                                .itemSKU(itemSKU)
+                                .quantity(10)
+                                .sourceLocationId(sourceLocationId)
+                                .destinationLocationId(destinationLocationId)
+                                .status("PENDING")
+                                .triggerType("MIN_LEVEL")
+                                .decisionReason("Stock below minimum threshold")
+                                .createdAt(Instant.now().toString())
+                                .build();
 
-        when(replenishmentService.getReplenishmentTasks()).thenReturn(List.of(task));
+                when(replenishmentService.getReplenishmentTasks()).thenReturn(List.of(task));
 
-        mockMvc.perform(withGatewayAuth(get("/api/v1/inventory/replenishment/tasks")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].itemSKU").value(itemSKU));
-    }
+                mockMvc.perform(withGatewayAuth(get("/v1/inventory/replenishment/tasks")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].itemSKU").value(itemSKU));
+        }
 
-    // ─── AC2: GET /replenishment/tasks returns 200 with empty list ────────────
+        // ─── AC2: GET /replenishment/tasks returns 200 with empty list ────────────
 
-    /**
-     * Verifies that when no replenishment tasks are queued the endpoint returns 200
-     * with an empty JSON array rather than 404 or 204, per ADR-0017.
-     *
-     * Issue: #30
-     */
-    @Test
-    @DisplayName("AC2: GET /replenishment/tasks with no pending tasks returns 200 with empty array")
-    void getReplenishmentTasks_withNoTasks_returns200WithEmptyArray() throws Exception {
-        // Issue #30: ADR-0017 — empty list resource must return 200, not 404/204
-        when(replenishmentService.getReplenishmentTasks()).thenReturn(Collections.emptyList());
+        /**
+         * Verifies that when no replenishment tasks are queued the endpoint returns 200
+         * with an empty JSON array rather than 404 or 204, per ADR-0017.
+         *
+         * Issue: #30
+         */
+        @Test
+        @DisplayName("AC2: GET /replenishment/tasks with no pending tasks returns 200 with empty array")
+        void getReplenishmentTasks_withNoTasks_returns200WithEmptyArray() throws Exception {
+                // Issue #30: ADR-0017 — empty list resource must return 200, not 404/204
+                when(replenishmentService.getReplenishmentTasks()).thenReturn(Collections.emptyList());
 
-        mockMvc.perform(withGatewayAuth(get("/api/v1/inventory/replenishment/tasks")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
-    }
+                mockMvc.perform(withGatewayAuth(get("/v1/inventory/replenishment/tasks")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$").isEmpty());
+        }
 
-    // ─── AC3: GET /replenishment/policies returns 200 with policy list ────────
+        // ─── AC3: GET /replenishment/policies returns 200 with policy list ────────
 
-    /**
-     * Verifies that the replenishment policies endpoint returns 200 with at least
-     * one policy entry containing a locationId, per story #30 AC3.
-     *
-     * Issue: #30
-     */
-    @Test
-    @DisplayName("AC3: GET /replenishment/policies returns 200 with policy list")
-    void getReplenishmentPolicies_withExistingPolicies_returns200WithPolicyList() throws Exception {
-        // Issue #30: policy list must include locationId for each configured policy
-        String policyId = UUID.randomUUID().toString();
-        String locationId = UUID.randomUUID().toString();
+        /**
+         * Verifies that the replenishment policies endpoint returns 200 with at least
+         * one policy entry containing a locationId, per story #30 AC3.
+         *
+         * Issue: #30
+         */
+        @Test
+        @DisplayName("AC3: GET /replenishment/policies returns 200 with policy list")
+        void getReplenishmentPolicies_withExistingPolicies_returns200WithPolicyList() throws Exception {
+                // Issue #30: policy list must include locationId for each configured policy
+                String policyId = UUID.randomUUID().toString();
+                UUID locationId = UUID.randomUUID();
 
-        ReplenishmentPolicyResponse policy = ReplenishmentPolicyResponse.builder()
-                .policyId(policyId)
-                .locationId(locationId)
-                .itemSKU("SKU-BOLT-M5")
-                .minimumQuantity(20)
-                .maximumQuantity(100)
-                .createdAt(Instant.now().toString())
-                .build();
+                ReplenishmentPolicyResponse policy = ReplenishmentPolicyResponse.builder()
+                                .policyId(policyId)
+                                .locationId(locationId)
+                                .itemSKU("SKU-BOLT-M5")
+                                .minimumQuantity(20)
+                                .maximumQuantity(100)
+                                .createdAt(Instant.now().toString())
+                                .build();
 
-        when(replenishmentService.getReplenishmentPolicies()).thenReturn(List.of(policy));
+                when(replenishmentService.getReplenishmentPolicies()).thenReturn(List.of(policy));
 
-        mockMvc.perform(withGatewayAuth(get("/api/v1/inventory/replenishment/policies")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].locationId").value(locationId));
-    }
+                mockMvc.perform(withGatewayAuth(get("/v1/inventory/replenishment/policies")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].locationId").value(locationId.toString()));
+        }
 
-    // ─── AC4: POST /replenishment/policies returns 201 with created policy ────
+        // ─── AC4: POST /replenishment/policies returns 201 with created policy ────
 
-    /**
-     * Verifies that submitting a valid policy creation request returns 201 with the
-     * newly created policy's non-null policyId, per story #30 AC4 and ADR-0017
-     * (201 for resource creation).
-     *
-     * Issue: #30
-     */
-    @Test
-    @DisplayName("AC4: POST /replenishment/policies with valid body returns 201 with created policy")
-    void createReplenishmentPolicy_withValidRequest_returns201WithCreatedPolicy() throws Exception {
-        // Issue #30: ADR-0017 — resource creation must return 201 with new resource ID
-        // ADR-0018 — actor header X-User populated from gateway into response actor
-        String policyId = UUID.randomUUID().toString();
-        String locationId = UUID.randomUUID().toString();
+        /**
+         * Verifies that submitting a valid policy creation request returns 201 with the
+         * newly created policy's non-null policyId, per story #30 AC4 and ADR-0017
+         * (201 for resource creation).
+         *
+         * Issue: #30
+         */
+        @Test
+        @DisplayName("AC4: POST /replenishment/policies with valid body returns 201 with created policy")
+        void createReplenishmentPolicy_withValidRequest_returns201WithCreatedPolicy() throws Exception {
+                // Issue #30: ADR-0017 — resource creation must return 201 with new resource ID
+                // ADR-0018 — actor header X-User populated from gateway into response actor
+                String policyId = UUID.randomUUID().toString();
+                UUID locationId = UUID.randomUUID();
 
-        ReplenishmentPolicyResponse created = ReplenishmentPolicyResponse.builder()
-                .policyId(policyId)
-                .locationId(locationId)
-                .itemSKU("SKU-NUT-M5")
-                .minimumQuantity(10)
-                .maximumQuantity(50)
-                .createdAt(Instant.now().toString())
-                .build();
+                ReplenishmentPolicyResponse created = ReplenishmentPolicyResponse.builder()
+                                .policyId(policyId)
+                                .locationId(locationId)
+                                .itemSKU("SKU-NUT-M5")
+                                .minimumQuantity(10)
+                                .maximumQuantity(50)
+                                .createdAt(Instant.now().toString())
+                                .build();
 
-        when(replenishmentService.createReplenishmentPolicy(any(CreateReplenishmentPolicyRequest.class)))
-                .thenReturn(created);
+                when(replenishmentService.createReplenishmentPolicy(any(CreateReplenishmentPolicyRequest.class)))
+                                .thenReturn(created);
 
-        String requestBody = buildCreatePolicyRequestBody(locationId, "SKU-NUT-M5", 10, 50);
+                String requestBody = buildCreatePolicyRequestBody(locationId.toString(), "SKU-NUT-M5", 10, 50);
 
-        mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/replenishment/policies"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(requestBody))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.policyId").isNotEmpty());
-    }
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/replenishment/policies"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.policyId").isNotEmpty());
+        }
 
-    // ─── AC5: POST /replenishment/policies with invalid body returns 400 ──────
+        // ─── AC5: POST /replenishment/policies with invalid body returns 400 ──────
 
-    /**
-     * Verifies that a policy creation request with missing required fields returns
-     * 400 Bad Request per ADR-0017 (input validation failure must yield 400, not
-     * 422 or 500).
-     *
-     * Issue: #30
-     */
-    @Test
-    @DisplayName("AC5: POST /replenishment/policies with missing required fields returns 400")
-    void createReplenishmentPolicy_withMissingRequiredFields_returns400() throws Exception {
-        // Issue #30: ADR-0017 — invalid/incomplete request body must return 400
-        // Empty body with no locationId or itemSKU — required fields absent
-        mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/replenishment/policies"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
-                .andExpect(status().isBadRequest());
-    }
+        /**
+         * Verifies that a policy creation request with missing required fields returns
+         * 400 Bad Request per ADR-0017 (input validation failure must yield 400, not
+         * 422 or 500).
+         *
+         * Issue: #30
+         */
+        @Test
+        @DisplayName("AC5: POST /replenishment/policies with missing required fields returns 400")
+        void createReplenishmentPolicy_withMissingRequiredFields_returns400() throws Exception {
+                // Issue #30: ADR-0017 — invalid/incomplete request body must return 400
+                // Empty body with no locationId or itemSKU — required fields absent
+                mockMvc.perform(withGatewayAuth(post("/v1/inventory/replenishment/policies"))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                                .andExpect(status().isBadRequest());
+        }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+        // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    /**
-     * Builds a JSON request body for creating a replenishment policy.
-     *
-     * @param locationId      the pick-face location the policy applies to
-     * @param itemSKU         the SKU code governed by this policy
-     * @param minimumQuantity replenishment trigger threshold
-     * @param maximumQuantity target fill level after replenishment
-     * @return serialized JSON request body
-     */
-    private String buildCreatePolicyRequestBody(
-            String locationId,
-            String itemSKU,
-            int minimumQuantity,
-            int maximumQuantity) throws Exception {
-        var node = objectMapper.createObjectNode();
-        node.put("locationId", locationId);
-        node.put("itemSKU", itemSKU);
-        node.put("minimumQuantity", minimumQuantity);
-        node.put("maximumQuantity", maximumQuantity);
-        return objectMapper.writeValueAsString(node);
-    }
+        /**
+         * Builds a JSON request body for creating a replenishment policy.
+         *
+         * @param locationId      the pick-face location the policy applies to
+         * @param itemSKU         the SKU code governed by this policy
+         * @param minimumQuantity replenishment trigger threshold
+         * @param maximumQuantity target fill level after replenishment
+         * @return serialized JSON request body
+         */
+        private String buildCreatePolicyRequestBody(
+                        String locationId,
+                        String itemSKU,
+                        int minimumQuantity,
+                        int maximumQuantity) throws Exception {
+                var node = objectMapper.createObjectNode();
+                node.put("locationId", locationId);
+                node.put("itemSKU", itemSKU);
+                node.put("minimumQuantity", minimumQuantity);
+                node.put("maximumQuantity", maximumQuantity);
+                return objectMapper.writeValueAsString(node);
+        }
 }

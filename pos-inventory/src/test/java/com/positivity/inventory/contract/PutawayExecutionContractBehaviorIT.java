@@ -71,8 +71,8 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         String taskId = UUID.randomUUID().toString();
         String ledgerEntryId = UUID.randomUUID().toString();
         String skuId = UUID.randomUUID().toString();
-        String sourceLocationId = UUID.randomUUID().toString();
-        String destinationLocationId = UUID.randomUUID().toString();
+        UUID sourceLocationId = UUID.randomUUID();
+        UUID destinationLocationId = UUID.randomUUID();
 
         PutawayExecutionResponse response = PutawayExecutionResponse.builder()
                 .ledgerEntryId(ledgerEntryId)
@@ -90,9 +90,13 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenReturn(response);
 
-        String requestBody = buildExecutionRequestBody(skuId, sourceLocationId, destinationLocationId, 5);
+        String requestBody = buildExecutionRequestBody(
+                skuId,
+                sourceLocationId.toString(),
+                destinationLocationId.toString(),
+                5);
 
-        mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
                 .andExpect(status().isOk())
@@ -123,16 +127,20 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         // No ledger entry must be created (throws before persistence)
         String taskId = UUID.randomUUID().toString();
         String skuId = UUID.randomUUID().toString();
-        String sourceLocationId = UUID.randomUUID().toString();
-        String destinationLocationId = UUID.randomUUID().toString();
+        UUID sourceLocationId = UUID.randomUUID();
+        UUID destinationLocationId = UUID.randomUUID();
 
         when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenThrow(new LocationNotValidForSkuException(
                         destinationLocationId, skuId, "temperature class mismatch"));
 
-        String requestBody = buildExecutionRequestBody(skuId, sourceLocationId, destinationLocationId, 3);
+        String requestBody = buildExecutionRequestBody(
+                skuId,
+                sourceLocationId.toString(),
+                destinationLocationId.toString(),
+                3);
 
-        mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
                 .andExpect(status().isUnprocessableEntity())
@@ -154,15 +162,19 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         // Issue #31: LocationAtCapacityException → 422 LOCATION_AT_CAPACITY
         String taskId = UUID.randomUUID().toString();
         String skuId = UUID.randomUUID().toString();
-        String sourceLocationId = UUID.randomUUID().toString();
-        String destinationLocationId = UUID.randomUUID().toString();
+        UUID sourceLocationId = UUID.randomUUID();
+        UUID destinationLocationId = UUID.randomUUID();
 
         when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenThrow(new LocationAtCapacityException(destinationLocationId, 100, 100));
 
-        String requestBody = buildExecutionRequestBody(skuId, sourceLocationId, destinationLocationId, 4);
+        String requestBody = buildExecutionRequestBody(
+                skuId,
+                sourceLocationId.toString(),
+                destinationLocationId.toString(),
+                4);
 
-        mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
                 .andExpect(status().isUnprocessableEntity())
@@ -191,15 +203,19 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         // System must NOT silently create inventory (data consistency error path)
         String taskId = UUID.randomUUID().toString();
         String skuId = UUID.randomUUID().toString();
-        String sourceLocationId = UUID.randomUUID().toString();
-        String destinationLocationId = UUID.randomUUID().toString();
+        UUID sourceLocationId = UUID.randomUUID();
+        UUID destinationLocationId = UUID.randomUUID();
 
         when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenThrow(new NoOnHandAtSourceLocationException(sourceLocationId, skuId));
 
-        String requestBody = buildExecutionRequestBody(skuId, sourceLocationId, destinationLocationId, 2);
+        String requestBody = buildExecutionRequestBody(
+                skuId,
+                sourceLocationId.toString(),
+                destinationLocationId.toString(),
+                2);
 
-        mockMvc.perform(withGatewayAuth(post("/api/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
                 .andExpect(status().isUnprocessableEntity())
@@ -227,7 +243,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                 UUID.randomUUID().toString(),
                 1);
 
-        mockMvc.perform(post("/api/v1/inventory/putaway/tasks/{taskId}/execute", taskId)
+        mockMvc.perform(post("/v1/inventory/putaway/tasks/{taskId}/execute", taskId)
                 .header("X-User", "unauthorized-user")
                 // Deliberately omit X-Authorities to trigger 403
                 .contentType(MediaType.APPLICATION_JSON)

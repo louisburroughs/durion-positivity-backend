@@ -3,7 +3,7 @@ package com.positivity.inventory.service;
 import com.positivity.inventory.internal.dto.ManufacturerFeedItemDto;
 import com.positivity.inventory.internal.entity.NormalizedAvailability;
 import com.positivity.inventory.internal.entity.UnmappedManufacturerPart;
-import com.positivity.inventory.internal.entity.UnmappedPartStatus;
+import com.positivity.inventory.internal.enums.UnmappedPartStatus;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import com.positivity.inventory.internal.repository.UnmappedManufacturerPartRepository;
 import com.positivity.inventory.internal.service.ManufacturerFeedServiceImpl;
@@ -16,7 +16,9 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,11 +46,14 @@ class ManufacturerFeedServiceImplTest {
         private ArgumentCaptor<UnmappedManufacturerPart> unmappedCaptor;
 
         private ManufacturerFeedServiceImpl service;
+        private Clock fixedClock;
 
         @BeforeEach
         void setUp() {
+                fixedClock = Clock.fixed(Instant.parse("2026-02-25T00:00:00Z"), ZoneOffset.UTC);
                 service = new ManufacturerFeedServiceImpl(normalizedAvailabilityRepository,
-                                unmappedManufacturerPartRepository);
+                                unmappedManufacturerPartRepository,
+                                fixedClock);
         }
 
         @Test
@@ -78,8 +83,8 @@ class ManufacturerFeedServiceImplTest {
                 assertThat(saved.getUom()).isEqualTo("EACH");
                 assertThat(saved.getPackSize()).isEqualTo(1);
                 assertThat(saved.getSchemaVersion()).isEqualTo(1);
-                assertThat(saved.getAsOf()).isNotNull();
-                assertThat(saved.getReceivedAt()).isNotNull();
+                assertThat(saved.getAsOf()).isEqualTo(Instant.parse("2026-02-25T00:00:00Z"));
+                assertThat(saved.getReceivedAt()).isEqualTo(Instant.parse("2026-02-25T00:00:00Z"));
         }
 
         @Test
@@ -106,6 +111,7 @@ class ManufacturerFeedServiceImplTest {
                 NormalizedAvailability saved = normalizedCaptor.getValue();
                 assertThat(saved).isSameAs(existing);
                 assertThat(saved.getAsOf()).isEqualTo(asOf);
+                assertThat(saved.getReceivedAt()).isEqualTo(Instant.parse("2026-02-25T00:00:00Z"));
                 assertThat(saved.getAvailableQty()).isEqualTo(25);
                 assertThat(saved.getUom()).isEqualTo("BOX");
                 assertThat(saved.getPackSize()).isEqualTo(4);
@@ -131,8 +137,8 @@ class ManufacturerFeedServiceImplTest {
                 assertThat(saved.getManufacturerPartNumber()).isEqualTo(item.getManufacturerPartNumber());
                 assertThat(saved.getStatus()).isEqualTo(UnmappedPartStatus.PENDING_REVIEW);
                 assertThat(saved.getOccurrenceCount()).isEqualTo(1);
-                assertThat(saved.getFirstSeen()).isNotNull();
-                assertThat(saved.getLastSeen()).isNotNull();
+                assertThat(saved.getFirstSeen()).isEqualTo(Instant.parse("2026-02-25T00:00:00Z"));
+                assertThat(saved.getLastSeen()).isEqualTo(Instant.parse("2026-02-25T00:00:00Z"));
         }
 
         @Test
@@ -169,7 +175,7 @@ class ManufacturerFeedServiceImplTest {
         private ManufacturerFeedItemDto.ManufacturerFeedItemDtoBuilder baseItemBuilder() {
                 return ManufacturerFeedItemDto.builder()
                                 .productId(UUID.randomUUID())
-                                .manufacturerId("MFG-1")
+                                .manufacturerId(UUID.fromString("11111111-1111-1111-1111-111111111111"))
                                 .manufacturerPartNumber("PART-1")
                                 .availableQty(10)
                                 .uom("EACH")

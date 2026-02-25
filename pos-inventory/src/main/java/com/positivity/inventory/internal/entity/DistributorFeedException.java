@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
+import com.positivity.inventory.internal.enums.DistributorExceptionReason;
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -8,24 +10,18 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import com.positivity.inventory.internal.enums.DistributorExceptionReason;
-import com.positivity.shared.id.UUIDv7Id;
-
-import java.time.Instant;
-import java.util.UUID;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Exception queue entry for distributor feed records that cannot be normalized.
- *
- * Issue: CAP-170 (#47)
  */
 @Entity
 @Table(name = "distributor_feed_exception")
@@ -35,11 +31,6 @@ import java.util.UUID;
 @Builder
 @EntityListeners(AuditingEntityListener.class)
 @SuppressWarnings("java:S2166")
-/**
- * The business process sees this as an exception, but it's really just a record
- * of a failed normalization attempt, so it should not be treated as a true
- * exception in the code logic.
- */
 public class DistributorFeedException {
 
     @Id
@@ -60,11 +51,10 @@ public class DistributorFeedException {
     private String rawPayload;
 
     @CreatedDate
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
-
 }

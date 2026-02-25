@@ -21,6 +21,8 @@ import com.positivity.inventory.internal.repository.CountEntryRepository;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.service.CycleCountService;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,14 +48,16 @@ public class CycleCountServiceImpl implements CycleCountService {
         private static final String PERMISSION_RECOUNT_SELF = "TRIGGER_RECOUNT_SELF";
         private static final String PERMISSION_RECOUNT_ANY = "TRIGGER_RECOUNT_ANY";
 
+        private final Clock clock;
         private final CycleCountTaskRepository taskRepository;
         private final CountEntryRepository countEntryRepository;
 
         public CycleCountServiceImpl(
                         CycleCountTaskRepository taskRepository,
-                        CountEntryRepository countEntryRepository) {
+                        CountEntryRepository countEntryRepository, Clock clock) {
                 this.taskRepository = taskRepository;
                 this.countEntryRepository = countEntryRepository;
+                this.clock = clock;
         }
 
         @Override
@@ -86,6 +90,7 @@ public class CycleCountServiceImpl implements CycleCountService {
                                 .variance(variance)
                                 .recountSequenceNumber(0) // Original count
                                 .recountOfCountEntryId(null)
+                                .countedAt(Instant.now(clock))
                                 .build();
 
                 countEntry = countEntryRepository.save(countEntry);
