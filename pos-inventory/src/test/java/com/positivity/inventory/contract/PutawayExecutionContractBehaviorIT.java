@@ -1,7 +1,6 @@
 package com.positivity.inventory.contract;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -88,7 +87,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
                 .actorId("contract-test-user")
                 .build();
 
-        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class), anyString()))
+        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenReturn(response);
 
         String requestBody = buildExecutionRequestBody(skuId, sourceLocationId, destinationLocationId, 5);
@@ -127,7 +126,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         String sourceLocationId = UUID.randomUUID().toString();
         String destinationLocationId = UUID.randomUUID().toString();
 
-        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class), anyString()))
+        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenThrow(new LocationNotValidForSkuException(
                         destinationLocationId, skuId, "temperature class mismatch"));
 
@@ -158,7 +157,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         String sourceLocationId = UUID.randomUUID().toString();
         String destinationLocationId = UUID.randomUUID().toString();
 
-        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class), anyString()))
+        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenThrow(new LocationAtCapacityException(destinationLocationId, 100, 100));
 
         String requestBody = buildExecutionRequestBody(skuId, sourceLocationId, destinationLocationId, 4);
@@ -195,7 +194,7 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         String sourceLocationId = UUID.randomUUID().toString();
         String destinationLocationId = UUID.randomUUID().toString();
 
-        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class), anyString()))
+        when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
                 .thenThrow(new NoOnHandAtSourceLocationException(sourceLocationId, skuId));
 
         String requestBody = buildExecutionRequestBody(skuId, sourceLocationId, destinationLocationId, 2);

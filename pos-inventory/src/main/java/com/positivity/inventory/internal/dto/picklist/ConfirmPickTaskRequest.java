@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.dto.reservation;
+package com.positivity.inventory.internal.dto.picklist;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -10,14 +10,15 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreateReservationRequest {
+public class ConfirmPickTaskRequest {
 
     @NotNull
-    private UUID workorderLineId;
+    private UUID scannedSkuId;
 
     @NotNull
-    private String sku;
+    private UUID scannedLocationId;
 
+    @NotNull
     @Positive
-    private int requiredQuantity;
+    private Integer quantityPicked;
 }

@@ -1,6 +1,7 @@
 package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
+import com.positivity.inventory.internal.dto.ValidationResult;
 import com.positivity.inventory.internal.dto.putaway.PutawayExecutionResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.PutawayTask;
@@ -8,6 +9,7 @@ import com.positivity.inventory.internal.enums.PutawayTaskStatus;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
+import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
@@ -48,12 +50,11 @@ class PutawayExecuteServiceImplTest {
     private PutawayExecutionRequest request;
     private PutawayTask task;
     private UUID taskId;
-    private String actorId;
+    private static final String DEFAULT_ACTOR = "System";
 
     @BeforeEach
     void setUp() {
         taskId = UUID.randomUUID();
-        actorId = "user-123";
 
         request = new PutawayExecutionRequest(
                 "sku-abc",
@@ -70,7 +71,8 @@ class PutawayExecuteServiceImplTest {
     @Test
     void executePutaway_happyPath() {
         // Given
-        when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
+        when(putawayValidationService.validatePutawayExecution(request)).thenReturn(ValidationResult.success());
         when(inventoryLedgerEntryRepository.save(any(InventoryLedgerEntry.class)))
                 .thenAnswer(invocation -> {
                     InventoryLedgerEntry entry = invocation.getArgument(0);
@@ -79,7 +81,7 @@ class PutawayExecuteServiceImplTest {
                 });
 
         // When
-        PutawayExecutionResponse response = putawayExecuteService.executePutaway(taskId.toString(), request, actorId);
+        PutawayExecutionResponse response = putawayExecuteService.executePutaway(taskId.toString(), request);
 
         // Then
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
@@ -93,7 +95,7 @@ class PutawayExecuteServiceImplTest {
                 .orElseThrow(() -> new AssertionError("No source decrement entry found"));
         assertThat(sourceEntry.getStockItemId()).isEqualTo("sku-abc");
         assertThat(sourceEntry.getLocationId()).isEqualTo("source-loc");
-        assertThat(sourceEntry.getTransactionUserId()).isEqualTo(actorId);
+        assertThat(sourceEntry.getTransactionUserId()).isEqualTo(DEFAULT_ACTOR);
 
         // Destination credit entry
         InventoryLedgerEntry destinationEntry = allCaptured.stream()
@@ -102,7 +104,7 @@ class PutawayExecuteServiceImplTest {
                 .orElseThrow(() -> new AssertionError("No destination credit entry found"));
         assertThat(destinationEntry.getStockItemId()).isEqualTo("sku-abc");
         assertThat(destinationEntry.getLocationId()).isEqualTo("dest-loc");
-        assertThat(destinationEntry.getTransactionUserId()).isEqualTo(actorId);
+        assertThat(destinationEntry.getTransactionUserId()).isEqualTo(DEFAULT_ACTOR);
 
         ArgumentCaptor<PutawayTask> taskCaptor = ArgumentCaptor.forClass(PutawayTask.class);
         verify(putawayTaskRepository).save(taskCaptor.capture());
@@ -115,56 +117,57 @@ class PutawayExecuteServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.COMPLETED.name());
         assertThat(response.getQuantityMoved()).isEqualTo(10);
         assertThat(response.getSkuId()).isEqualTo("sku-abc");
-        assertThat(response.getActorId()).isEqualTo(actorId);
+        assertThat(response.getActorId()).isEqualTo(DEFAULT_ACTOR);
     }
 
     @Test
     void executePutaway_throwsTaskNotFoundException() {
         // Given
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.empty());
         when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.empty());
 
         // When & Then
         assertThrows(TaskNotFoundException.class, () -> {
-            putawayExecuteService.executePutaway(taskId.toString(), request, actorId);
+            putawayExecuteService.executePutaway(taskId.toString(), request);
         });
     }
 
     @Test
     void executePutaway_throwsLocationNotValidForSkuException() {
         // Given
-        when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
         doThrow(new LocationNotValidForSkuException("dest-loc", "sku-abc", "reason"))
                 .when(putawayValidationService).validatePutawayExecution(request);
 
         // When & Then
         assertThrows(LocationNotValidForSkuException.class, () -> {
-            putawayExecuteService.executePutaway(taskId.toString(), request, actorId);
+            putawayExecuteService.executePutaway(taskId.toString(), request);
         });
     }
 
     @Test
     void executePutaway_throwsLocationAtCapacityException() {
         // Given
-        when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
         doThrow(new LocationAtCapacityException("dest-loc", 100, 100))
                 .when(putawayValidationService).validatePutawayExecution(request);
 
         // When & Then
         assertThrows(LocationAtCapacityException.class, () -> {
-            putawayExecuteService.executePutaway(taskId.toString(), request, actorId);
+            putawayExecuteService.executePutaway(taskId.toString(), request);
         });
     }
 
     @Test
     void executePutaway_throwsNoOnHandAtSourceLocationException() {
         // Given
-        when(putawayTaskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
         doThrow(new NoOnHandAtSourceLocationException("source-loc", "sku-abc"))
                 .when(putawayValidationService).validatePutawayExecution(request);
 
         // When & Then
         assertThrows(NoOnHandAtSourceLocationException.class, () -> {
-            putawayExecuteService.executePutaway(taskId.toString(), request, actorId);
+            putawayExecuteService.executePutaway(taskId.toString(), request);
         });
     }
 
@@ -172,7 +175,22 @@ class PutawayExecuteServiceImplTest {
     void executePutaway_throwsIllegalArgumentExceptionForInvalidUUID() {
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> {
-            putawayExecuteService.executePutaway("invalid-uuid", request, actorId);
+            putawayExecuteService.executePutaway("invalid-uuid", request);
         });
+    }
+
+    @Test
+    void executePutaway_throwsPutawayValidationExceptionWhenValidationResultContainsErrors() {
+        // Given
+        when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
+        when(putawayValidationService.validatePutawayExecution(request))
+                .thenReturn(ValidationResult.failure("INSUFFICIENT_QUANTITY", "not enough stock"));
+
+        // When & Then
+        assertThrows(PutawayValidationException.class, () -> {
+            putawayExecuteService.executePutaway(taskId.toString(), request);
+        });
+        verify(inventoryLedgerEntryRepository, never()).save(any(InventoryLedgerEntry.class));
+        verify(putawayTaskRepository, never()).save(any(PutawayTask.class));
     }
 }

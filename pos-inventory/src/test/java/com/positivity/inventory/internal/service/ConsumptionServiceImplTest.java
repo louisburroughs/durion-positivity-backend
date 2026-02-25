@@ -42,7 +42,7 @@ class ConsumptionServiceImplTest {
     private ArgumentCaptor<List<InventoryLedgerEntry>> entriesCaptor;
 
     private ConsumptionServiceImpl inMemoryService() {
-        return new ConsumptionServiceImpl();
+        return persistentService();
     }
 
     private ConsumptionServiceImpl persistentService() {
@@ -56,17 +56,29 @@ class ConsumptionServiceImplTest {
     void consumePickedItems_inMemoryMode_returnsPopulatedResponse() {
         UUID workorderId = UUID.randomUUID();
         UUID pickListId = UUID.randomUUID();
+        UUID pickTaskId1 = UUID.randomUUID();
+        UUID pickTaskId2 = UUID.randomUUID();
         List<ConsumeItemLine> items = List.of(
-                new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 2),
-                new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 4));
+                new ConsumeItemLine(pickTaskId1, UUID.randomUUID(), 2),
+                new ConsumeItemLine(pickTaskId2, UUID.randomUUID(), 4));
         ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, pickListId, items);
+
+        when(pickTaskRepository.findById(pickTaskId1)).thenReturn(Optional.of(
+                PickTaskEntity.builder().pickTaskId(pickTaskId1).status(PickTaskStatus.PICKED).quantityPicked(2)
+                        .build()));
+        when(pickTaskRepository.findById(pickTaskId2)).thenReturn(Optional.of(
+                PickTaskEntity.builder().pickTaskId(pickTaskId2).status(PickTaskStatus.PICKED).quantityPicked(4)
+                        .build()));
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of(
+                InventoryLedgerEntry.builder().ledgerEntryId(UUID.randomUUID()).build(),
+                InventoryLedgerEntry.builder().ledgerEntryId(UUID.randomUUID()).build()));
 
         ConsumptionResponse result = inMemoryService().consumePickedItems(request);
 
         assertThat(result.getConsumptionId()).isNotNull();
         assertThat(result.getWorkorderId()).isEqualTo(workorderId);
         assertThat(result.getPickListId()).isEqualTo(pickListId);
-        assertThat(result.getTotalItemsConsumed()).isEqualTo(2);
+        assertThat(result.getTotalItemsConsumed()).isEqualTo(6); // sum of quantities (2 + 4)
         assertThat(result.getCreatedAt()).isNotNull();
         assertThat(result.getLedgerEntryIds()).hasSize(2).doesNotContainNull();
     }
@@ -74,10 +86,12 @@ class ConsumptionServiceImplTest {
     // ─── CS2: consumePickedItems — ledger entries created per consumed item ──────
 
     @Test
-    @DisplayName("null items are treated as empty list in in-memory mode")
+    @DisplayName("null items are treated as empty list")
     void consumePickedItems_inMemoryMode_withNullItems_returnsEmptyLedgerIds() {
         UUID workorderId = UUID.randomUUID();
         ConsumeItemsRequest request = new ConsumeItemsRequest(workorderId, UUID.randomUUID(), null);
+
+        when(inventoryLedgerEntryRepository.saveAll(any())).thenReturn(List.of());
 
         ConsumptionResponse result = inMemoryService().consumePickedItems(request);
 
@@ -102,15 +116,19 @@ class ConsumptionServiceImplTest {
     }
 
     @Test
-    @DisplayName("in-memory mode rejects quantity above 100")
+    @DisplayName("rejects quantity that exceeds picked quantity")
     void consumePickedItems_inMemoryMode_withTooLargeQuantity_throwsIllegalArgumentException() {
+        UUID pickTaskId = UUID.randomUUID();
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(
+                PickTaskEntity.builder().pickTaskId(pickTaskId).status(PickTaskStatus.PICKED).quantityPicked(0)
+                        .build()));
         ConsumeItemsRequest request = new ConsumeItemsRequest(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                List.of(new ConsumeItemLine(UUID.randomUUID(), UUID.randomUUID(), 101)));
+                List.of(new ConsumeItemLine(pickTaskId, UUID.randomUUID(), 101)));
 
         assertThatThrownBy(() -> inMemoryService().consumePickedItems(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderConsumptionException.class)
                 .hasMessageContaining("exceeds picked quantity");
     }
 
@@ -118,6 +136,9 @@ class ConsumptionServiceImplTest {
     @DisplayName("in-memory mode with one quantity-1 item throws not picked exception")
     void consumePickedItems_inMemoryMode_withSingleQuantityOneItem_throwsNotPicked() {
         UUID pickTaskId = UUID.randomUUID();
+        when(pickTaskRepository.findById(pickTaskId)).thenReturn(Optional.of(
+                PickTaskEntity.builder().pickTaskId(pickTaskId).status(PickTaskStatus.PENDING).quantityPicked(10)
+                        .build()));
         ConsumeItemsRequest request = new ConsumeItemsRequest(
                 UUID.randomUUID(),
                 UUID.randomUUID(),

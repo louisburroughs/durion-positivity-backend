@@ -2,6 +2,7 @@ package com.positivity.location.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.positivity.location.internal.enums.StorageLocationType;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,4 +25,6 @@ public class StorageLocationRequest {
     private String barcode;
     private StorageLocationType type;
     private UUID parentStorageLocationId;
+    private Map<String, Object> capacity;
+    private Map<String, Object> temperature;
 }

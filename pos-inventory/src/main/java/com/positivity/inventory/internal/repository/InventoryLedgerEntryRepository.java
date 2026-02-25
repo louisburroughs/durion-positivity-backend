@@ -58,4 +58,41 @@ public interface InventoryLedgerEntryRepository extends JpaRepository<InventoryL
      */
     @Query("SELECT COALESCE(SUM(e.changeInQuantity), 0) FROM InventoryLedgerEntry e WHERE e.stockItemId = :stockItemId")
     Integer calculateOnHandQuantity(@Param("stockItemId") String stockItemId);
+
+    /**
+     * Calculate current on-hand quantity for a stock item at a specific location.
+     *
+     * @param stockItemId the stock item ID
+     * @param locationId the source location ID
+     * @param eventTypes event types that affect physical on-hand
+     * @return current on-hand quantity for stock item at location
+     */
+    @Query("""
+            SELECT COALESCE(SUM(e.changeInQuantity), 0)
+            FROM InventoryLedgerEntry e
+            WHERE e.stockItemId = :stockItemId
+              AND e.locationId = :locationId
+              AND e.eventType IN :eventTypes
+            """)
+    Integer calculateOnHandQuantityAtLocation(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationId") String locationId,
+            @Param("eventTypes") List<InventoryLedgerEventType> eventTypes);
+
+    /**
+     * Calculate on-hand quantity across all SKUs at a specific location.
+     *
+     * @param locationId destination/source location ID
+     * @param eventTypes event types that affect physical on-hand
+     * @return current on-hand quantity at location
+     */
+    @Query("""
+            SELECT COALESCE(SUM(e.changeInQuantity), 0)
+            FROM InventoryLedgerEntry e
+            WHERE e.locationId = :locationId
+              AND e.eventType IN :eventTypes
+            """)
+    Integer calculateOnHandQuantityAtLocation(
+            @Param("locationId") String locationId,
+            @Param("eventTypes") List<InventoryLedgerEventType> eventTypes);
 }

@@ -10,4 +10,6 @@ import org.springframework.stereotype.Repository;
 public interface PutawayRuleRepository extends JpaRepository<PutawayRule, UUID> {
 
     List<PutawayRule> findAllByIsEnabledTrueOrderByPriorityAsc();
+
+    boolean existsByDestinationLocationIdAndIsEnabledTrue(String destinationLocationId);
 }

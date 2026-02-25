@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import com.positivity.inventory.service.ConsumptionService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,11 +29,6 @@ public class ConsumptionServiceImpl implements ConsumptionService {
     private final PickTaskRepository pickTaskRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
-    ConsumptionServiceImpl() {
-        this(null, null);
-    }
-
-    @Autowired
     public ConsumptionServiceImpl(
             PickTaskRepository pickTaskRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
@@ -49,21 +43,6 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         }
 
         List<ConsumeItemLine> items = request.getItems() == null ? List.of() : request.getItems();
-
-        if (isInMemoryMode()) {
-            validateInMemory(items);
-            List<UUID> ledgerEntryIds = new ArrayList<>();
-            for (int index = 0; index < items.size(); index++) {
-                ledgerEntryIds.add(UUID.randomUUID());
-            }
-            return new ConsumptionResponse(
-                    UUID.randomUUID(),
-                    request.getWorkorderId(),
-                    request.getPickListId(),
-                    items.size(),
-                    Instant.now(),
-                    ledgerEntryIds);
-        }
 
         List<InventoryLedgerEntry> entriesToSave = new ArrayList<>();
         for (ConsumeItemLine item : items) {
@@ -109,21 +88,5 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 .timestamp(Instant.now())
                 .notes("Consumed from pick task " + item.getPickTaskId() + " for workorder " + request.getWorkorderId())
                 .build();
-    }
-
-    private boolean isInMemoryMode() {
-        return pickTaskRepository == null || inventoryLedgerEntryRepository == null;
-    }
-
-    private void validateInMemory(List<ConsumeItemLine> items) {
-        for (ConsumeItemLine item : items) {
-            if (item.getQuantity() > 100) {
-                throw new IllegalArgumentException("Requested quantity exceeds picked quantity");
-            }
-        }
-
-        if (items.size() == 1 && items.getFirst().getQuantity() == 1) {
-            throw new WorkorderConsumptionException("Item not picked: " + items.getFirst().getPickTaskId());
-        }
     }
 }
